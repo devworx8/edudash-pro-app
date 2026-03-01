@@ -60,6 +60,50 @@ const MATH_HINT = 'Use LaTeX for maths: \\frac{1}{2}  \\sqrt{x}  x^2  \\times  \
 const isOpenAnswer = (type: ExamQuestion['type']) =>
   type === 'short_answer' || type === 'essay' || type === 'fill_blank' || type === 'fill_in_blank';
 
+function sanitizeChoiceText(value: string): string {
+  return String(value || '')
+    .replace(/^(?:\s*[A-D]\s*[\.\)\-:]\s*)+/i, '')
+    .trim();
+}
+
+function normalizeChoiceText(value: string): string {
+  return sanitizeChoiceText(value)
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractChoiceLetter(value: string): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const exact = raw.match(/^\s*([A-D])\s*$/i);
+  if (exact?.[1]) return exact[1].toLowerCase();
+
+  const prefixed = raw.match(/^\s*([A-D])\s*[\.\)\-:]/i);
+  if (prefixed?.[1]) return prefixed[1].toLowerCase();
+
+  const labeled = raw.match(/\b(?:option|answer|correct(?:\s+answer)?)\s*[:\-]?\s*([A-D])\b/i);
+  if (labeled?.[1]) return labeled[1].toLowerCase();
+
+  return null;
+}
+
+function resolveChoiceLetter(value: string | undefined, options: string[] | undefined): string | null {
+  if (!value) return null;
+
+  const direct = extractChoiceLetter(value);
+  if (direct) return direct;
+  if (!Array.isArray(options) || options.length === 0) return null;
+
+  const normalized = normalizeChoiceText(value);
+  if (!normalized) return null;
+
+  const index = options.findIndex((option) => normalizeChoiceText(option) === normalized);
+  return index >= 0 ? String.fromCharCode(97 + index) : null;
+}
+
 function parseStandaloneMath(value: string): { expression: string; displayMode: boolean } | null {
   const trimmed = String(value || '').trim();
   if (!trimmed) return null;
@@ -133,6 +177,20 @@ export function ExamQuestionCard({
   const readingPassageMath = parseStandaloneMath(displayReadingPassage || '');
   const feedbackMath = parseStandaloneMath(studentAnswer?.feedback || '');
   const correctAnswerMath = parseStandaloneMath(question.correctAnswer || '');
+  const resolvedCorrectLetter = useMemo(
+    () => resolveChoiceLetter(question.correctAnswer, question.options),
+    [question.correctAnswer, question.options],
+  );
+  const resolvedCorrectAnswerDisplay = useMemo(() => {
+    const raw = String(question.correctAnswer || '').trim();
+    if (!raw) return '';
+    if (!Array.isArray(question.options) || question.options.length === 0) return raw;
+    if (!resolvedCorrectLetter) return raw;
+    const optionIndex = resolvedCorrectLetter.charCodeAt(0) - 97;
+    const option = question.options[optionIndex];
+    if (!option) return raw;
+    return `${resolvedCorrectLetter.toUpperCase()}. ${sanitizeChoiceText(option)}`;
+  }, [question.correctAnswer, question.options, resolvedCorrectLetter]);
 
   const translateTextToEnglish = useCallback(async (rawValue?: string): Promise<string> => {
     const value = String(rawValue || '').trim();
@@ -409,15 +467,20 @@ export function ExamQuestionCard({
               const translatedOption = displayOptions?.[index];
               const displayOption = String(translatedOption || cleanedOption).trim();
               const optionMath = parseStandaloneMath(displayOption);
+              const normalizedCurrentAnswer = String(currentAnswer || '').trim();
               const isSelected =
-                currentAnswer === option ||
-                currentAnswer === cleanedOption ||
-                currentAnswer === optionLetter;
+                normalizedCurrentAnswer === option ||
+                normalizedCurrentAnswer === cleanedOption ||
+                normalizedCurrentAnswer === optionLetter ||
+                normalizedCurrentAnswer.toLowerCase() === optionLetter.toLowerCase() ||
+                normalizeChoiceText(normalizedCurrentAnswer) === normalizeChoiceText(cleanedOption) ||
+                extractChoiceLetter(normalizedCurrentAnswer) === optionLetter.toLowerCase();
 
-              const isCorrectOption =
-                question.correctAnswer === cleanedOption ||
-                question.correctAnswer === option ||
-                question.correctAnswer === optionLetter;
+              const optionLetterLower = optionLetter.toLowerCase();
+              const isCorrectOption = Boolean(
+                (resolvedCorrectLetter && resolvedCorrectLetter === optionLetterLower) ||
+                  normalizeChoiceText(String(question.correctAnswer || '')) === normalizeChoiceText(cleanedOption),
+              );
 
               let lockedBg = theme.background;
               let lockedBorder = theme.border;
@@ -790,11 +853,15 @@ export function ExamQuestionCard({
                 </Text>
                 {correctAnswerMath ? (
                   <MathRenderer expression={correctAnswerMath.expression} displayMode={false} />
-                ) : containsMathDelimiters(question.correctAnswer || '') ? (
-                  renderRichMathText(question.correctAnswer || '', styles.correctAnswerValue, theme.text)
+                ) : containsMathDelimiters(resolvedCorrectAnswerDisplay || question.correctAnswer || '') ? (
+                  renderRichMathText(
+                    resolvedCorrectAnswerDisplay || question.correctAnswer || '',
+                    styles.correctAnswerValue,
+                    theme.text,
+                  )
                 ) : (
                   <Text style={[styles.correctAnswerValue, { color: theme.text }]}>
-                    {question.correctAnswer}
+                    {resolvedCorrectAnswerDisplay || question.correctAnswer}
                   </Text>
                 )}
               </View>

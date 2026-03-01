@@ -313,6 +313,60 @@ function calculateSectionMarks(questions: any[]): number {
   return questions.reduce((sum, q) => sum + (q.marks || 1), 0);
 }
 
+function sanitizeChoiceText(value: string): string {
+  return String(value || '')
+    .replace(/^(?:\s*[A-D]\s*[\.\)\-:]\s*)+/i, '')
+    .trim();
+}
+
+function extractChoiceLetter(value: string): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const exact = raw.match(/^\s*([A-D])\s*$/i);
+  if (exact?.[1]) return exact[1].toLowerCase();
+
+  const prefixed = raw.match(/^\s*([A-D])\s*[\.\)\-:]/i);
+  if (prefixed?.[1]) return prefixed[1].toLowerCase();
+
+  const labeled = raw.match(/\b(?:option|answer|correct(?:\s+answer)?)\s*[:\-]?\s*([A-D])\b/i);
+  if (labeled?.[1]) return labeled[1].toLowerCase();
+
+  return null;
+}
+
+function toChoiceLetter(index: number): string {
+  return String.fromCharCode(97 + index);
+}
+
+function resolveChoiceLetter(value: string, options?: string[]): string | null {
+  const direct = extractChoiceLetter(value);
+  if (direct) return direct;
+
+  if (!Array.isArray(options) || options.length === 0) return null;
+  const normalizedValue = normalizeComparableText(sanitizeChoiceText(value));
+  if (!normalizedValue) return null;
+
+  const idx = options.findIndex(
+    (option) => normalizeComparableText(sanitizeChoiceText(option)) === normalizedValue,
+  );
+  return idx >= 0 ? toChoiceLetter(idx) : null;
+}
+
+function formatCorrectChoice(question: ExamQuestion): string {
+  const raw = String(question.correctAnswer || '').trim();
+  if (!raw) return '';
+  if (!Array.isArray(question.options) || question.options.length === 0) return raw;
+
+  const letter = resolveChoiceLetter(raw, question.options);
+  if (!letter) return raw;
+
+  const optionIndex = letter.charCodeAt(0) - 97;
+  const option = question.options[optionIndex];
+  if (!option) return raw;
+  return `${letter.toUpperCase()}. ${sanitizeChoiceText(option)}`;
+}
+
 function normalizeComparableText(value: string): string {
   return String(value || '')
     .trim()
@@ -371,22 +425,27 @@ export function gradeAnswer(
     const correctRaw = question.correctAnswer;
     const correctNormalized = normalize(correctRaw);
     const answerNormalized = normalize(answer);
-    const answerLetter = answerNormalized.match(/^[a-d]$/)?.[0];
+    const answerLetter = resolveChoiceLetter(answer, question.options);
+    const correctLetter = resolveChoiceLetter(correctRaw, question.options);
 
-    let correctLetter = correctNormalized.match(/^[a-d]$/)?.[0];
-    if (!correctLetter && question.options?.length) {
-      const correctOptionIndex = question.options.findIndex(
-        (option) => normalize(option) === correctNormalized,
-      );
-      if (correctOptionIndex >= 0) {
-        correctLetter = String.fromCharCode(97 + correctOptionIndex);
-      }
-    }
+    const answerOptionIndex = answerLetter ? answerLetter.charCodeAt(0) - 97 : -1;
+    const correctOptionIndex = correctLetter ? correctLetter.charCodeAt(0) - 97 : -1;
+    const answerOptionText =
+      answerOptionIndex >= 0 && question.options?.[answerOptionIndex]
+        ? normalize(sanitizeChoiceText(question.options[answerOptionIndex]))
+        : '';
+    const correctOptionText =
+      correctOptionIndex >= 0 && question.options?.[correctOptionIndex]
+        ? normalize(sanitizeChoiceText(question.options[correctOptionIndex]))
+        : '';
 
     const isCorrect =
       answerNormalized === correctNormalized ||
       areMathEquivalent(answer, correctRaw) ||
-      (!!answerLetter && !!correctLetter && answerLetter === correctLetter);
+      (!!answerLetter && !!correctLetter && answerLetter === correctLetter) ||
+      (!!answerOptionText && !!correctOptionText && answerOptionText === correctOptionText);
+
+    const displayCorrect = formatCorrectChoice(question) || question.correctAnswer;
 
     return {
       isCorrect,
@@ -394,7 +453,7 @@ export function gradeAnswer(
         ? question.explanation || 'Correct!'
         : question.explanation
         ? `Incorrect. ${question.explanation}`
-        : `Incorrect. The correct answer is ${question.correctAnswer}.`,
+        : `Incorrect. The correct answer is ${displayCorrect}.`,
       marks: isCorrect ? question.marks : 0,
     };
   }

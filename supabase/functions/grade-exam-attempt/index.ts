@@ -129,6 +129,50 @@ function sanitizeOption(option: string): string {
     .trim();
 }
 
+function extractChoiceLetter(value: string): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const exact = raw.match(/^\s*([A-D])\s*$/i);
+  if (exact?.[1]) return exact[1].toLowerCase();
+
+  const prefixed = raw.match(/^\s*([A-D])\s*[\.\)\-:]/i);
+  if (prefixed?.[1]) return prefixed[1].toLowerCase();
+
+  const labeled = raw.match(/\b(?:option|answer|correct(?:\s+answer)?)\s*[:\-]?\s*([A-D])\b/i);
+  if (labeled?.[1]) return labeled[1].toLowerCase();
+
+  return null;
+}
+
+function optionLetterFromIndex(index: number): string {
+  return String.fromCharCode(97 + index);
+}
+
+function resolveChoiceLetter(value: string, options: string[]): string | null {
+  const direct = extractChoiceLetter(value);
+  if (direct) return direct;
+
+  const normalizedValue = normalizeText(sanitizeOption(value));
+  if (!normalizedValue) return null;
+
+  const idx = options.findIndex((option) => normalizeText(sanitizeOption(option)) === normalizedValue);
+  return idx >= 0 ? optionLetterFromIndex(idx) : null;
+}
+
+function formatCorrectChoice(correctRaw: string, options: string[]): string {
+  const raw = String(correctRaw || '').trim();
+  if (!raw || options.length === 0) return raw;
+
+  const letter = resolveChoiceLetter(raw, options);
+  if (!letter) return raw;
+
+  const idx = letter.charCodeAt(0) - 97;
+  const option = options[idx];
+  if (!option) return raw;
+  return `${letter.toUpperCase()}. ${sanitizeOption(option)}`;
+}
+
 function tokenSet(text: string): Set<string> {
   return new Set(
     normalizeText(text)
@@ -165,20 +209,25 @@ function gradeObjective(question: ExamQuestion, answerRaw: string): GradeFeedbac
 
   if (qType === 'multiple_choice') {
     const options = Array.isArray(question.options) ? question.options.map(sanitizeOption) : [];
-    const studentLetter = answer.match(/^[a-d]$/)?.[0];
-    let correctLetter = correct.match(/^[a-d]$/)?.[0];
+    const studentLetter = resolveChoiceLetter(answerRaw, options);
+    const correctLetter = resolveChoiceLetter(correctRaw, options);
 
-    if (!correctLetter && options.length > 0) {
-      const optionIndex = options.findIndex((option) => normalizeText(option) === correct);
-      if (optionIndex >= 0) {
-        correctLetter = String.fromCharCode(97 + optionIndex);
-      }
-    }
+    const studentOptionIndex = studentLetter ? studentLetter.charCodeAt(0) - 97 : -1;
+    const correctOptionIndex = correctLetter ? correctLetter.charCodeAt(0) - 97 : -1;
+    const studentOptionText =
+      studentOptionIndex >= 0 && options[studentOptionIndex]
+        ? normalizeText(options[studentOptionIndex])
+        : '';
+    const correctOptionText =
+      correctOptionIndex >= 0 && options[correctOptionIndex]
+        ? normalizeText(options[correctOptionIndex])
+        : '';
 
     const directMatch = answer === correct;
     const letterMatch = Boolean(studentLetter && correctLetter && studentLetter === correctLetter);
-    const optionMatch = options.some((option) => normalizeText(option) === answer && normalizeText(option) === correct);
+    const optionMatch = Boolean(studentOptionText && correctOptionText && studentOptionText === correctOptionText);
     const isCorrect = directMatch || letterMatch || optionMatch;
+    const displayCorrect = formatCorrectChoice(correctRaw, options) || correctRaw;
 
     return {
       isCorrect,
@@ -186,7 +235,7 @@ function gradeObjective(question: ExamQuestion, answerRaw: string): GradeFeedbac
       maxMarks,
       feedback: isCorrect
         ? explanation || 'Correct. Good job.'
-        : explanation || `Incorrect. The correct answer is ${correctRaw}.`,
+        : explanation || `Incorrect. The correct answer is ${displayCorrect}.`,
       explanation,
       gradingMode: 'deterministic',
     };
