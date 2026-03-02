@@ -138,6 +138,7 @@ export default function FinanceControlCenterScreen() {
           const categoryColor = CATEGORY_COLORS[categoryCode] || theme.primary;
           const displayMonth = resolveQueueDisplayMonth(item);
           const selectedMonth = queueMonthSelections[item.id];
+          const effectivePaymentMonth = selectedMonth || displayMonth;
           const pendingApproval = String(item.status || '').toLowerCase() === 'pending';
           const mismatch = isQueueMismatch(item);
           return (
@@ -181,7 +182,7 @@ export default function FinanceControlCenterScreen() {
               </Text>
               <Text style={styles.queueSubtext}>
                 Payment For:{' '}
-                {new Date(displayMonth).toLocaleDateString('en-ZA', {
+                {new Date(effectivePaymentMonth).toLocaleDateString('en-ZA', {
                   month: 'short',
                   year: 'numeric',
                 })}

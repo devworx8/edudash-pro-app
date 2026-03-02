@@ -592,10 +592,23 @@ export function ExamQuestionCard({
         {/* True / False */}
         {question.type === 'true_false' && (
           <View style={styles.optionsContainer}>
-            {['True', 'False'].map((option) => {
-              const isSelected = currentAnswer.toLowerCase() === option.toLowerCase();
-              const isCorrectOption =
-                question.correctAnswer?.toLowerCase() === option.toLowerCase();
+            {(displayOptions?.length
+              ? displayOptions
+              : question.options?.length
+              ? question.options.map((option) => sanitizeChoiceText(option))
+              : ['True', 'False']
+            ).map((option, index) => {
+              const optionLabel = sanitizeChoiceText(option);
+              const optionLetter = String.fromCharCode(65 + index);
+              const optionLetterLower = optionLetter.toLowerCase();
+              const normalizedCurrentAnswer = String(currentAnswer || '').trim();
+              const isSelected =
+                normalizeChoiceText(normalizedCurrentAnswer) === normalizeChoiceText(optionLabel) ||
+                extractChoiceLetter(normalizedCurrentAnswer) === optionLetterLower;
+              const isCorrectOption = Boolean(
+                (resolvedCorrectLetter && resolvedCorrectLetter === optionLetterLower) ||
+                  normalizeChoiceText(String(question.correctAnswer || '')) === normalizeChoiceText(optionLabel),
+              );
 
               let lockedBg = theme.background;
               let lockedBorder = theme.border;
@@ -623,7 +636,7 @@ export function ExamQuestionCard({
 
               return (
                 <TouchableOpacity
-                  key={option}
+                  key={`${optionLabel}-${index}`}
                   style={[
                     styles.optionButton,
                     {
@@ -636,7 +649,7 @@ export function ExamQuestionCard({
                       opacity: isLocked && !isSelected && !isCorrectOption ? 0.7 : 1,
                     },
                   ]}
-                  onPress={() => { if (!isLocked) onSelectOption(option); }}
+                  onPress={() => { if (!isLocked) onSelectOption(optionLabel); }}
                   disabled={isLocked}
                   activeOpacity={isLocked ? 1 : 0.7}
                 >
@@ -666,7 +679,7 @@ export function ExamQuestionCard({
                       },
                     ]}
                   >
-                    {option}
+                    {optionLabel}
                   </Text>
                 </TouchableOpacity>
               );

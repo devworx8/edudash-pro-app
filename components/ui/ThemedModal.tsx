@@ -6,7 +6,6 @@
 
 import React from 'react';
 import {
-  Modal,
   View,
   Text,
   TouchableOpacity,
@@ -18,6 +17,7 @@ import {
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedButton } from './ThemedButton';
+import { ModalLayer } from './ModalLayer';
 
 interface ThemedModalProps {
   visible: boolean;
@@ -120,9 +120,8 @@ export function ThemedModal({
   );
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       onRequestClose={onClose}
     >
@@ -160,7 +159,7 @@ export function ThemedModal({
           </TouchableOpacity>
         </TouchableOpacity>
       </KeyboardAvoidingView>
-    </Modal>
+    </ModalLayer>
   );
 }
 

@@ -173,6 +173,18 @@ function formatCorrectChoice(correctRaw: string, options: string[]): string {
   return `${letter.toUpperCase()}. ${sanitizeOption(option)}`;
 }
 
+function parseBooleanToken(value: string): 'true' | 'false' | null {
+  const token = normalizeText(value);
+  if (!token) return null;
+  if (['t', 'true', 'yes', 'y', 'correct', 'right', '1', 'waar', 'ewe', 'qiniso'].includes(token)) {
+    return 'true';
+  }
+  if (['f', 'false', 'no', 'n', 'incorrect', 'wrong', '0', 'onwaar', 'amanga'].includes(token)) {
+    return 'false';
+  }
+  return null;
+}
+
 function tokenSet(text: string): Set<string> {
   return new Set(
     normalizeText(text)
@@ -244,7 +256,11 @@ function gradeObjective(question: ExamQuestion, answerRaw: string): GradeFeedbac
   if (qType === 'true_false') {
     const normalizedStudent = answer === 't' ? 'true' : answer === 'f' ? 'false' : answer;
     const normalizedCorrect = correct === 't' ? 'true' : correct === 'f' ? 'false' : correct;
-    const isCorrect = normalizedStudent === normalizedCorrect;
+    const studentBool = parseBooleanToken(answerRaw);
+    const correctBool = parseBooleanToken(correctRaw);
+    const isCorrect =
+      normalizedStudent === normalizedCorrect ||
+      (studentBool !== null && correctBool !== null && studentBool === correctBool);
     return {
       isCorrect,
       marksAwarded: isCorrect ? maxMarks : 0,

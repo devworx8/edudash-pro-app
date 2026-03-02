@@ -97,6 +97,7 @@ export default function FeeManagementScreen() {
   const { showAlert, alertProps } = useAlertModal();
   const insets = useSafeAreaInsets();
   const organizationId = profile?.organization_id || profile?.preschool_id;
+  const schoolId = profile?.preschool_id || profile?.organization_id || null;
   const financeAccess = useFinanceAccessGuard();
   const modalPaddingBottom = Platform.OS === 'android'
     ? Math.max(insets.bottom, 32)
@@ -111,6 +112,7 @@ export default function FeeManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isGeneratingMonthlyFees, setIsGeneratingMonthlyFees] = useState(false);
   
   // Modal state
   const [showFeeModal, setShowFeeModal] = useState(false);
@@ -257,6 +259,78 @@ export default function FeeManagementScreen() {
   const onRefresh = () => {
     setRefreshing(true);
     fetchData();
+  };
+
+  const handleGenerateThisMonthFees = () => {
+    if (!organizationId) {
+      showAlert({ title: 'Error', message: 'Organization not found. Please re-login.', type: 'error' });
+      return;
+    }
+
+    const now = new Date();
+    const currentMonthIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const monthLabel = new Date(currentMonthIso).toLocaleDateString('en-ZA', {
+      month: 'long',
+      year: 'numeric',
+    });
+
+    showAlert({
+      title: 'Generate Monthly Fees',
+      message: `Generate missing ${monthLabel} tuition fees for all active students now? Existing rows will not be duplicated.`,
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Generate',
+          onPress: async () => {
+            setIsGeneratingMonthlyFees(true);
+            try {
+              const supabase = assertSupabase();
+              const { data, error } = await supabase.functions.invoke('generate-monthly-fees', {
+                body: {
+                  target_month: currentMonthIso,
+                  preschool_id: schoolId || organizationId,
+                },
+              });
+
+              if (error) throw error;
+              if (!data?.success) throw new Error(data?.error || 'Failed to generate monthly fees');
+
+              const feesCreated = Number(data.total_fees_created || 0);
+              const schoolsProcessed = Number(data.schools_processed || 0);
+              const totalErrors = Number(data.total_errors || 0);
+              const feeRowLabel = feesCreated === 1 ? 'fee row' : 'fee rows';
+
+              if (totalErrors > 0) {
+                showAlert({
+                  title: 'Generated With Warnings',
+                  message:
+                    `Created ${feesCreated} ${feeRowLabel} for ${monthLabel} across ${schoolsProcessed} school(s). ` +
+                    `${totalErrors} warning(s) were reported. Check edge logs if needed.`,
+                  type: 'warning',
+                });
+              } else {
+                showAlert({
+                  title: feesCreated > 0 ? 'Fees Generated' : 'No Missing Fees',
+                  message:
+                    feesCreated > 0
+                      ? `Created ${feesCreated} ${feeRowLabel} for ${monthLabel} across ${schoolsProcessed} school(s).`
+                      : `No missing ${monthLabel} fee rows were found.`,
+                  type: 'success',
+                });
+              }
+
+              await fetchData();
+            } catch (err: any) {
+              console.error('Generate monthly fees error:', err);
+              showAlert({ title: 'Generation Failed', message: err.message || 'Failed to generate monthly fees', type: 'error' });
+            } finally {
+              setIsGeneratingMonthlyFees(false);
+            }
+          },
+        },
+      ],
+    });
   };
 
   // Save fee structure
@@ -673,6 +747,27 @@ export default function FeeManagementScreen() {
               <Text style={[styles.addButtonText, { color: theme.onPrimary }]}>Add Fee</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={[
+              styles.generateNowButton,
+              { backgroundColor: theme.info || theme.primary, opacity: isGeneratingMonthlyFees ? 0.7 : 1 },
+            ]}
+            onPress={handleGenerateThisMonthFees}
+            disabled={isGeneratingMonthlyFees}
+          >
+            {isGeneratingMonthlyFees ? (
+              <EduDashSpinner size="small" color={theme.onPrimary} />
+            ) : (
+              <Ionicons name="refresh-circle-outline" size={18} color={theme.onPrimary} />
+            )}
+            <Text style={[styles.generateNowButtonText, { color: theme.onPrimary }]}>
+              {isGeneratingMonthlyFees ? 'Generating Fees...' : 'Generate This Month Fees Now'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.generateNowHint, { color: theme.textSecondary }]}>
+            Creates missing monthly tuition fees immediately without duplicating existing fee rows.
+          </Text>
           
           {fees.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: theme.surface }]}>
@@ -1107,6 +1202,18 @@ const createStyles = (theme: any) => StyleSheet.create({
     gap: 4,
   },
   addButtonText: { fontWeight: '600', fontSize: 14 },
+  generateNowButton: {
+    marginBottom: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  generateNowButtonText: { fontSize: 14, fontWeight: '700' },
+  generateNowHint: { fontSize: 12, marginBottom: 10 },
   emptyCard: {
     padding: 32,
     borderRadius: 12,

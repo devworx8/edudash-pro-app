@@ -8,9 +8,10 @@
  */
 
 import React, { useCallback } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 const toOpaqueColor = (input?: string, fallback = '#111827'): string => {
   const color = String(input || '').trim();
@@ -124,9 +125,15 @@ export const AlertModal: React.FC<AlertModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
+  const isWeb = Platform.OS === 'web';
 
   React.useEffect(() => {
     if (visible) {
+      if (isWeb) {
+        // RN Web + native-driver springs can leave scale at 0, causing a blank overlay.
+        scaleAnim.setValue(1);
+        return;
+      }
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 50,
@@ -136,7 +143,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
     } else {
       scaleAnim.setValue(0);
     }
-  }, [visible, scaleAnim]);
+  }, [visible, scaleAnim, isWeb]);
 
   const getTypeColor = useCallback(() => {
     switch (type) {
@@ -217,9 +224,8 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   });
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       statusBarTranslucent
       onRequestClose={onClose}
@@ -237,7 +243,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
             {
               backgroundColor: modalSurfaceColor,
               borderColor,
-              transform: [{ scale: scaleAnim }],
+              transform: [{ scale: isWeb ? 1 : scaleAnim }],
             },
           ]}
         >
@@ -287,7 +293,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
           </View>
         </Animated.View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 };
 

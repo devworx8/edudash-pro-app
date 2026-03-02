@@ -33,6 +33,22 @@ describe('examParser gradeAnswer', () => {
     expect(result.marks).toBe(1);
   });
 
+  it('accepts localized true/false answers such as Onwaar', () => {
+    const question: ExamQuestion = {
+      id: 'q_tf_afrikaans',
+      type: 'true_false',
+      question: 'Die kinders het huis toe gegaan voordat dit begin reen het.',
+      marks: 2,
+      options: ['Waar', 'Onwaar'],
+      correctAnswer: 'Onwaar',
+    };
+
+    const result = gradeAnswer(question, 'Onwaar');
+
+    expect(result.isCorrect).toBe(true);
+    expect(result.marks).toBe(2);
+  });
+
   it('accepts equivalent LaTeX fractions for fill in the blank answers', () => {
     const question: ExamQuestion = {
       id: 'q1',

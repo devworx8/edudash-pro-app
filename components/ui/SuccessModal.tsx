@@ -6,9 +6,10 @@
  */
 
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 interface SuccessModalProps {
   visible: boolean;
@@ -37,6 +38,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
   const { theme } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const isWeb = Platform.OS === 'web';
 
   // Get color based on type
   const getColor = () => {
@@ -56,6 +58,12 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
 
   React.useEffect(() => {
     if (visible) {
+      if (isWeb) {
+        // RN Web can keep modal scale at 0 with native-driver animations.
+        scaleAnim.setValue(1);
+        pulseAnim.setValue(1);
+        return;
+      }
       // Scale in animation
       Animated.spring(scaleAnim, {
         toValue: 1,
@@ -83,12 +91,11 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
       scaleAnim.setValue(0);
       pulseAnim.setValue(1);
     }
-  }, [visible]);
+  }, [visible, isWeb, scaleAnim, pulseAnim]);
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       statusBarTranslucent
       onRequestClose={onClose}
@@ -103,20 +110,20 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
         <Animated.View
           style={[
             styles.modalContainer,
-            {
-              backgroundColor: theme.surface,
-              borderColor: theme.border,
-              transform: [{ scale: scaleAnim }],
-            },
-          ]}
-        >
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+                transform: [{ scale: isWeb ? 1 : scaleAnim }],
+              },
+            ]}
+          >
           {/* Icon with pulse animation */}
           <Animated.View 
             style={[
               styles.iconContainer, 
               { 
                 backgroundColor: iconColor + '15',
-                transform: [{ scale: pulseAnim }],
+                transform: [{ scale: isWeb ? 1 : pulseAnim }],
               }
             ]}
           >
@@ -163,7 +170,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
           </View>
         </Animated.View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 };
 

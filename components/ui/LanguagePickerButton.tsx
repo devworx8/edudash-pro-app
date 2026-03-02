@@ -6,12 +6,13 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getCurrentLanguage, type SupportedLanguage } from '@/lib/i18n';
 import { useTheme } from '@/contexts/ThemeContext';
 import { LanguageSelector } from './LanguageSelector';
 import { track } from '@/lib/analytics';
+import { ModalLayer } from './ModalLayer';
 
 interface LanguagePickerButtonProps {
   variant?: 'compact' | 'full'; // compact shows flag+code, full shows flag+name
@@ -84,7 +85,7 @@ export const LanguagePickerButton: React.FC<LanguagePickerButtonProps> = ({
       </TouchableOpacity>
 
       {/* Language Selector Modal */}
-      <Modal
+      <ModalLayer
         visible={modalVisible}
         animationType="slide"
         onRequestClose={() => setModalVisible(false)}
@@ -111,7 +112,7 @@ export const LanguagePickerButton: React.FC<LanguagePickerButtonProps> = ({
             showComingSoon={true}
           />
         </View>
-      </Modal>
+      </ModalLayer>
     </>
   );
 };

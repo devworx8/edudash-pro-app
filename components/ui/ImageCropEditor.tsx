@@ -23,7 +23,6 @@ import {
   Animated,
   Dimensions,
   Image,
-  Modal,
   PanResponder,
   Platform,
   StyleSheet,
@@ -33,6 +32,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { ModalLayer } from './ModalLayer';
 
 // Safe spinner import
 let EduDashSpinner: React.FC<any> = () => null;
@@ -272,9 +272,8 @@ export const ImageCropEditor: React.FC<ImageCropEditorProps> = ({
   if (!visible || !imageUri) return null;
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="slide"
       statusBarTranslucent
       onRequestClose={onCancel}
@@ -354,7 +353,7 @@ export const ImageCropEditor: React.FC<ImageCropEditorProps> = ({
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 };
 

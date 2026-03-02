@@ -5,11 +5,12 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, TextInput, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StudentDetail, Transaction, formatCurrency } from './types';
 import type { ThemeColors } from '@/contexts/ThemeContext';
 import { AlertModal, type AlertButton } from '@/components/ui/AlertModal';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 interface FinancialStatusSectionProps {
   student: StudentDetail;
@@ -180,9 +181,8 @@ export const FinancialStatusSection: React.FC<FinancialStatusSectionProps> = ({
       )}
 
       {/* Payment Recording Modal */}
-      <Modal
+      <ModalLayer
         visible={showPaymentModal}
-        transparent
         animationType="slide"
         onRequestClose={() => setShowPaymentModal(false)}
       >
@@ -287,7 +287,7 @@ export const FinancialStatusSection: React.FC<FinancialStatusSectionProps> = ({
             </View>
           </View>
         </View>
-      </Modal>
+      </ModalLayer>
 
       <AlertModal
         visible={alertState.visible}

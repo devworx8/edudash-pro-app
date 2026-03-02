@@ -61,7 +61,7 @@ export function FinanceReceivablesTab({
       const { data: feeStructures } = await supabase
         .from('school_fee_structures')
         .select('amount_cents, amount')
-        .or(`preschool_id.eq.${organizationId},organization_id.eq.${organizationId}`)
+        .eq('preschool_id', organizationId)
         .ilike('category_code', '%tuition%')
         .eq('is_active', true)
         .limit(1);

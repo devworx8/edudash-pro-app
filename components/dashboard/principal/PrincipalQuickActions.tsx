@@ -71,6 +71,7 @@ const ROUTE_MAP: Record<string, string> = {
   waitlist: '/screens/waitlist-management',
   compliance: '/screens/compliance-dashboard',
   budget: '/screens/budget-management',
+  'cleaning-roster': '/screens/cleaning-roster',
 };
 
 interface PrincipalQuickActionsProps {
@@ -158,6 +159,7 @@ export const PrincipalQuickActions: React.FC<PrincipalQuickActionsProps> = ({
         { id: 'seat-management', title: t('dashboard.seat_management', { defaultValue: 'Seats' }), icon: 'people-circle', color: '#8B5CF6' },
         { id: 'waitlist', title: t('dashboard.waitlist', { defaultValue: 'Waitlist' }), icon: 'list', color: '#3B82F6' },
         { id: 'staff-leave', title: t('dashboard.staff_leave', { defaultValue: 'Staff Leave' }), icon: 'calendar-outline', color: '#F59E0B' },
+        { id: 'cleaning-roster', title: t('dashboard.cleaning_roster', { defaultValue: 'Cleaning Roster' }), icon: 'sparkles-outline', color: '#22C55E' },
       ],
       money: [
         ...(!hideFinancialActions ? [

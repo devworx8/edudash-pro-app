@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.214.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.48.1';
+import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts';
 
 /**
  * generate-monthly-fees Edge Function
@@ -8,7 +9,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.48.1';
  * For every active preschool, generates student_fees rows for all active
  * students who don't yet have a fee for the current billing month.
  *
- * Auth: CRON_SECRET or service_role JWT.
+ * Auth:
+ * - CRON_SECRET / service_role JWT (global run)
+ * - principal/admin (scoped to their own school)
  *
  * Also auto-applies any available family credits after fee generation.
  */
@@ -17,6 +20,35 @@ const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const CRON_SECRET = Deno.env.get('CRON_SECRET') || '';
 const FINANCE_MONTH_CUTOFF_DAY = parseInt(Deno.env.get('FINANCE_MONTH_CUTOFF_DAY') || '25', 10);
+const ALLOWED_SCOPED_ROLES = new Set([
+  'principal',
+  'principal_admin',
+  'admin',
+  'preschool_admin',
+  'super_admin',
+  'superadmin',
+]);
+const GLOBAL_RUN_ROLES = new Set(['super_admin', 'superadmin']);
+
+interface AuthorizationResult {
+  authorized: boolean;
+  status: number;
+  reason?: string;
+  scopedSchoolId: string | null;
+  scopedSchoolIds: string[];
+  actorRole: string | null;
+}
+
+function jsonResponse(
+  body: Record<string, unknown>,
+  status: number,
+  corsHeaders: Record<string, string>,
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
 
 // ── Age matching (port of lib/utils/feeStructureSelector.ts) ──────────────
 
@@ -183,70 +215,178 @@ function isTuitionFee(feeType?: string | null, name?: string | null, desc?: stri
   );
 }
 
+async function authorizeRequest(
+  req: Request,
+  supabaseAdmin: ReturnType<typeof createClient>,
+): Promise<AuthorizationResult> {
+  const authHeader = req.headers.get('Authorization') || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+  if (!token) {
+    return {
+      authorized: false,
+      status: 401,
+      reason: 'Missing Authorization header',
+      scopedSchoolId: null,
+      scopedSchoolIds: [],
+      actorRole: null,
+    };
+  }
+
+  const isServiceRole = token === SUPABASE_SERVICE_ROLE_KEY;
+  const isCronJob = CRON_SECRET && token === CRON_SECRET;
+  if (isServiceRole || isCronJob) {
+    return { authorized: true, status: 200, scopedSchoolId: null, scopedSchoolIds: [], actorRole: 'service_role' };
+  }
+
+  // Allow service_role JWTs coming through the Authorization header.
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1] || ''));
+    if (payload?.role === 'service_role') {
+      return { authorized: true, status: 200, scopedSchoolId: null, scopedSchoolIds: [], actorRole: 'service_role' };
+    }
+  } catch {
+    // ignore non-JWT tokens
+  }
+
+  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token);
+  if (authError || !authData?.user) {
+    return {
+      authorized: false,
+      status: 401,
+      reason: 'Invalid bearer token',
+      scopedSchoolId: null,
+      scopedSchoolIds: [],
+      actorRole: null,
+    };
+  }
+
+  const { data: profile, error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .select('role, preschool_id, organization_id')
+    .eq('id', authData.user.id)
+    .maybeSingle();
+
+  if (profileError || !profile) {
+    return {
+      authorized: false,
+      status: 403,
+      reason: 'Profile not found',
+      scopedSchoolId: null,
+      scopedSchoolIds: [],
+      actorRole: null,
+    };
+  }
+
+  const role = String(profile.role || '').toLowerCase();
+  if (!ALLOWED_SCOPED_ROLES.has(role)) {
+    return {
+      authorized: false,
+      status: 403,
+      reason: 'Role not allowed',
+      scopedSchoolId: null,
+      scopedSchoolIds: [],
+      actorRole: role || null,
+    };
+  }
+
+  if (GLOBAL_RUN_ROLES.has(role)) {
+    return { authorized: true, status: 200, scopedSchoolId: null, scopedSchoolIds: [], actorRole: role };
+  }
+
+  const scopedSchoolIds = Array.from(
+    new Set(
+      [profile.preschool_id, profile.organization_id]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
+    ),
+  );
+  const scopedSchoolId = scopedSchoolIds[0] || null;
+  if (!scopedSchoolId) {
+    return {
+      authorized: false,
+      status: 403,
+      reason: 'No school scope found for profile',
+      scopedSchoolId: null,
+      scopedSchoolIds: [],
+      actorRole: role,
+    };
+  }
+
+  return { authorized: true, status: 200, scopedSchoolId, scopedSchoolIds, actorRole: role };
+}
+
 // ── Main handler ──────────────────────────────────────────────────────────
 
 serve(async (req: Request): Promise<Response> => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
-    });
+    return handleCorsOptions(req);
+  }
+
+  if (req.method !== 'POST') {
+    return jsonResponse({ error: 'Method not allowed' }, 405, corsHeaders);
   }
 
   try {
-    // ── Auth ────────────────────────────────────────────────────────────
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '');
-    const isServiceRole = token === SUPABASE_SERVICE_ROLE_KEY;
-    const isCronJob = CRON_SECRET && token === CRON_SECRET;
-
-    let isValidServiceRole = false;
-    if (token && !isServiceRole && !isCronJob) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        isValidServiceRole = payload.role === 'service_role';
-      } catch { /* ignore */ }
-    }
-
-    if (!isCronJob && !isServiceRole && !isValidServiceRole) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const auth = await authorizeRequest(req, supabase);
+    if (!auth.authorized) {
+      return jsonResponse({ error: auth.reason || 'Unauthorized' }, auth.status, corsHeaders);
+    }
+
+    const body = await req.json().catch(() => ({} as Record<string, unknown>));
+    const targetMonthInput = typeof body.target_month === 'string' ? body.target_month : null;
+    const requestedSchoolIdRaw =
+      typeof body.preschool_id === 'string'
+        ? body.preschool_id
+        : typeof body.organization_id === 'string'
+          ? body.organization_id
+          : null;
+    const requestedSchoolId = requestedSchoolIdRaw?.trim() || null;
+
+    if (auth.scopedSchoolIds.length > 0 && requestedSchoolId && !auth.scopedSchoolIds.includes(requestedSchoolId)) {
+      return jsonResponse({ error: 'Cannot generate fees outside your school scope' }, 403, corsHeaders);
+    }
+
+    const schoolFilter = requestedSchoolId || auth.scopedSchoolId || null;
 
     // Parse optional body for target_month override
-    let targetMonth: Date;
-    try {
-      const body = await req.json().catch(() => ({}));
-      if (body.target_month) {
-        targetMonth = new Date(body.target_month);
-      } else {
-        targetMonth = new Date();
-      }
-    } catch {
-      targetMonth = new Date();
+    const targetMonth = targetMonthInput ? new Date(targetMonthInput) : new Date();
+    if (Number.isNaN(targetMonth.getTime())) {
+      return jsonResponse(
+        { error: 'Invalid target_month. Use ISO date format (YYYY-MM-DD).' },
+        400,
+        corsHeaders,
+      );
     }
 
     // Billing month = 1st of the current month
     const billingMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1);
     const billingMonthStr = billingMonth.toISOString().split('T')[0];
 
-    // ── Fetch all active preschools ────────────────────────────────────
-    const { data: schools, error: schoolErr } = await supabase
+    // ── Fetch target schools ───────────────────────────────────────────
+    const schoolsQuery = supabase
       .from('preschools')
       .select('id, name')
-      .eq('is_active', true);
+      .eq('is_active', true)
+      .order('name', { ascending: true });
+    const { data: schools, error: schoolErr } = schoolFilter
+      ? await schoolsQuery.eq('id', schoolFilter)
+      : await schoolsQuery;
 
     if (schoolErr) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Failed to fetch schools', details: schoolErr.message }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } }
+      return jsonResponse(
+        { success: false, error: 'Failed to fetch schools', details: schoolErr.message },
+        500,
+        corsHeaders,
+      );
+    }
+    if (schoolFilter && (!schools || schools.length === 0)) {
+      return jsonResponse(
+        { success: false, error: `School ${schoolFilter} not found or inactive` },
+        404,
+        corsHeaders,
       );
     }
 
@@ -480,10 +620,12 @@ serve(async (req: Request): Promise<Response> => {
     const totalCreditsApplied = results.reduce((s, r) => s + r.credits_applied, 0);
     const totalErrors = results.reduce((s, r) => s + r.errors.length, 0);
 
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: true,
         billing_month: billingMonthStr,
+        scoped_school_id: schoolFilter,
+        requested_by_role: auth.actorRole,
         cutoff_day: FINANCE_MONTH_CUTOFF_DAY,
         schools_processed: results.length,
         total_fees_created: totalFeesCreated,
@@ -491,16 +633,18 @@ serve(async (req: Request): Promise<Response> => {
         total_errors: totalErrors,
         results,
         completed_at: new Date().toISOString(),
-      }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      },
+      200,
+      corsHeaders,
     );
   } catch (error) {
-    return new Response(
-      JSON.stringify({
+    return jsonResponse(
+      {
         success: false,
         error: error instanceof Error ? error.message : String(error),
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      },
+      500,
+      corsHeaders,
     );
   }
 });

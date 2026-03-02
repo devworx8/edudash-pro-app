@@ -73,6 +73,15 @@ export const DEFAULT_ADMIN_TASK_PACKS: Record<AdminOrgTypeV1, AdminTaskPack> = {
         badgeKey: 'pending_ops',
       },
       {
+        id: 'cleaning_roster',
+        title: 'Cleaning Roster',
+        description: 'Assign teacher cleaning shifts and track completion.',
+        icon: 'sparkles-outline',
+        route: '/screens/cleaning-roster',
+        category: 'operations',
+        priority: 'normal',
+      },
+      {
         id: 'communications_ops',
         title: 'Comms Ops',
         description: 'Prepare announcements and policy communications.',
@@ -156,6 +165,15 @@ export const DEFAULT_ADMIN_TASK_PACKS: Record<AdminOrgTypeV1, AdminTaskPack> = {
         category: 'operations',
         priority: 'normal',
         badgeKey: 'pending_ops',
+      },
+      {
+        id: 'cleaning_roster',
+        title: 'Cleaning Roster',
+        description: 'Assign teacher cleaning shifts and track completion.',
+        icon: 'sparkles-outline',
+        route: '/screens/cleaning-roster',
+        category: 'operations',
+        priority: 'low',
       },
       {
         id: 'report_policy_comms',

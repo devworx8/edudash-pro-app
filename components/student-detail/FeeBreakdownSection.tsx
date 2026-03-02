@@ -11,13 +11,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   TextInput,
-  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { StudentDetail, StudentFee, formatCurrency } from './types';
 import { formatAge } from './types';
 import type { ThemeColors } from '@/contexts/ThemeContext';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 interface FeeBreakdownSectionProps {
   student: StudentDetail;
@@ -209,9 +209,8 @@ export const FeeBreakdownSection: React.FC<FeeBreakdownSectionProps> = ({
       )}
 
       {/* Edit Fee Modal */}
-      <Modal
+      <ModalLayer
         visible={editingFee !== null}
-        transparent
         animationType="slide"
         onRequestClose={() => setEditingFee(null)}
       >
@@ -284,7 +283,7 @@ export const FeeBreakdownSection: React.FC<FeeBreakdownSectionProps> = ({
             )}
           </View>
         </View>
-      </Modal>
+      </ModalLayer>
     </View>
   );
 };

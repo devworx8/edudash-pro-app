@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, TextInput, ScrollView, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, ScrollView, StyleSheet, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { DashToolShortcut } from '@/lib/ai/toolCatalog';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -123,7 +124,7 @@ export const DashToolsModal: React.FC<DashToolsModalProps> = ({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <ModalLayer visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
         <View style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.border }]}>
           <View style={styles.header}>
@@ -210,7 +211,7 @@ export const DashToolsModal: React.FC<DashToolsModalProps> = ({
           )}
         </View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 };
 

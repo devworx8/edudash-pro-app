@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -184,6 +184,7 @@ export default function PrincipalUniformsScreen() {
       return matchesSearch && matchesSize;
     });
   }, [displayRows, search, sizeFilter]);
+  const safeFiltered = useMemo(() => (Array.isArray(filtered) ? filtered : []), [filtered]);
 
   const handleExportPdf = useCallback(async () => {
     setExporting(true);
@@ -543,8 +544,13 @@ export default function PrincipalUniformsScreen() {
           )}
 
           <FlatList
-            data={filtered}
-            keyExtractor={(item) => item.id}
+            data={safeFiltered}
+            keyExtractor={(item, index) => item?.id || `uniform-row-${index}`}
+            style={styles.list}
+            contentContainerStyle={[styles.listContent, safeFiltered.length === 0 && styles.listContentEmpty]}
+            removeClippedSubviews={Platform.OS !== 'web'}
+            initialNumToRender={12}
+            windowSize={8}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
             ListEmptyComponent={
               loading ? <Text style={styles.muted}>Loading...</Text> : <Text style={styles.muted}>No uniform submissions found.</Text>
@@ -697,6 +703,9 @@ export default function PrincipalUniformsScreen() {
 
 const createStyles = (theme: any) => StyleSheet.create({
   container: { flex: 1, backgroundColor: theme?.background || '#0b1220', padding: 10 },
+  list: { flex: 1, minHeight: 0 },
+  listContent: { paddingBottom: 20 },
+  listContentEmpty: { flexGrow: 1, justifyContent: 'center' },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 10 },
   headerText: { flex: 1 },
   title: { color: theme?.text || '#fff', fontSize: 20, fontWeight: '800' },

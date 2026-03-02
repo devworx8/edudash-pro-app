@@ -22,6 +22,7 @@ import {
 } from '@/components/exam-prep/ExamPrepWizardSteps';
 import {
   GRADES,
+  LANGUAGE_OPTIONS,
   SUBJECTS_BY_PHASE,
   getPhaseFromGrade,
   type ExamContextSummary,
@@ -34,6 +35,7 @@ import { hasCapability, getRequiredTier, type Tier } from '@/lib/ai/capabilities
 import { getCapabilityTier, normalizeTierName } from '@/lib/tiers';
 import { assertSupabase } from '@/lib/supabase';
 import { stashExamGenerationDraft } from '@/lib/exam-prep/generationDraftStore';
+import { clampPercent } from '@/lib/progress/clampPercent';
 import {
   buildExamGenerationHref,
   buildExamRouteParams,
@@ -158,6 +160,53 @@ function isMaterialRateLimitedMessage(message: string): boolean {
   );
 }
 
+function stripStudyLinePrefix(line: string): string {
+  return line.replace(/^\(?\d+\)?[.)\-:\s]+/, '').trim();
+}
+
+function isStudyMetaLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  if (trimmed === '---') return true;
+  if (/^\d{6,}\.(?:jpg|jpeg|png|webp|pdf)$/i.test(trimmed)) return true;
+  if (/^source:\s*/i.test(trimmed)) return true;
+  if (/^page\s+\d+$/i.test(trimmed)) return true;
+  const normalized = stripStudyLinePrefix(trimmed).toLowerCase();
+  return [
+    'topics to revise',
+    'key facts/formulas',
+    'common mistakes',
+    'suggested question angles',
+  ].includes(normalized);
+}
+
+function sanitizeMaterialSummary(rawSummary: string): string {
+  const lines = String(rawSummary || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .map((line) =>
+      line
+        .replace(/\((?:teacher|class|translation|english)\s*:[^)]*\)/gi, '')
+        .replace(/\[(?:teacher|class|translation|english)\s*:[^\]]*\]/gi, '')
+        .trim(),
+    )
+    .map((line) => stripStudyLinePrefix(line))
+    .map((line) => line.replace(/^[-*•]\s*/, '').replace(/\s+/g, ' ').trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !isStudyMetaLine(line));
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const line of lines) {
+    const key = line.toLowerCase();
+    if (key.length < 4 || seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(line);
+  }
+
+  return deduped.join('\n').slice(0, 2400).trim();
+}
+
 function toQuotaMap(input: unknown): Record<string, number> {
   if (!input || typeof input !== 'object') return {};
   const map: Record<string, number> = {};
@@ -245,6 +294,7 @@ export function ExamPrepWizard(): React.ReactElement {
   const [customPromptText, setCustomPromptText] = useState('');
   const [studyMaterials, setStudyMaterials] = useState<StudyMaterial[]>([]);
   const [pdfSplitProgress, setPdfSplitProgress] = useState<PdfSplitProgress | null>(null);
+  const [materialSelectionBusy, setMaterialSelectionBusy] = useState(false);
   const contextRequestSeqRef = useRef(0);
 
   const phase = getPhaseFromGrade(selectedGrade);
@@ -309,6 +359,13 @@ export function ExamPrepWizard(): React.ReactElement {
     () => studyMaterials.some((material) => material.status === 'processing'),
     [studyMaterials],
   );
+  const isMaterialPipelineBusy = materialSelectionBusy || hasMaterialProcessing || Boolean(pdfSplitProgress);
+  const materialPipelineLabel = useMemo(() => {
+    if (materialSelectionBusy) return 'Preparing selected files...';
+    if (pdfSplitProgress) return 'Uploading PDF pages...';
+    if (hasMaterialProcessing) return 'Extracting study notes...';
+    return 'Please wait...';
+  }, [materialSelectionBusy, pdfSplitProgress, hasMaterialProcessing]);
   const splitProgressPercent = useMemo(() => {
     if (!pdfSplitProgress || pdfSplitProgress.totalParts <= 0) return 0;
     const raw = (pdfSplitProgress.completedParts / pdfSplitProgress.totalParts) * 100;
@@ -327,6 +384,7 @@ export function ExamPrepWizard(): React.ReactElement {
   const buildCustomPrompt = useCallback((): string | undefined => {
     const blocks: string[] = [];
     const trimmedPrompt = customPromptText.trim();
+    const selectedLanguageName = LANGUAGE_OPTIONS[selectedLanguage] || selectedLanguage;
     if (trimmedPrompt) {
       blocks.push(`Additional learner requirements:\n${trimmedPrompt}`);
     }
@@ -334,14 +392,20 @@ export function ExamPrepWizard(): React.ReactElement {
       blocks.push(
         `Study material extracted from uploaded images/PDFs:\n${readyMaterialSummaries.join('\n\n---\n\n')}`
       );
-      blocks.push(
-        'When generated content includes non-English terminology, include plain English support cues for the learner.'
-      );
+      if (selectedLanguage === 'en-ZA') {
+        blocks.push(
+          'When generated content includes non-English terminology, include plain English support cues for the learner.',
+        );
+      } else {
+        blocks.push(
+          `Keep ALL learner-facing content strictly in ${selectedLanguageName}. Do not include English translations in question text, options, instructions, or memorandum content.`,
+        );
+      }
     }
 
     if (blocks.length === 0) return undefined;
     return blocks.join('\n\n');
-  }, [customPromptText, readyMaterialSummaries]);
+  }, [customPromptText, readyMaterialSummaries, selectedLanguage]);
 
   const updateStudyMaterial = useCallback((id: string, patch: Partial<StudyMaterial>) => {
     setStudyMaterials((prev) =>
@@ -352,6 +416,7 @@ export function ExamPrepWizard(): React.ReactElement {
   const summarizeStudyMaterial = useCallback(
     async (payload: { base64: string; mimeType: string; fileName: string }): Promise<string> => {
       const supabase = assertSupabase();
+      const selectedLanguageName = LANGUAGE_OPTIONS[selectedLanguage] || selectedLanguage;
       for (let attempt = 0; attempt <= MATERIAL_OCR_RETRIES; attempt += 1) {
         const { data, error } = await supabase.functions.invoke('ai-proxy', {
           body: {
@@ -360,7 +425,7 @@ export function ExamPrepWizard(): React.ReactElement {
             // Keep OCR stable on projects where older quota mapping does not recognize image_analysis.
             service_type: 'chat_message',
             payload: {
-              prompt: `Extract exam-prep context from ${payload.fileName}. Provide concise bullet points under: (1) Topics to revise, (2) Key facts/formulas, (3) Common mistakes, (4) Suggested question angles. If the source language is not English, include short English translations for critical terms.`,
+              prompt: `Extract exam-prep context from ${payload.fileName}. Provide concise bullet points under: (1) Topics to revise, (2) Key facts/formulas, (3) Common mistakes, (4) Suggested question angles. Keep terms in the source language and add short clarifiers in ${selectedLanguageName} only when required for meaning.`,
               context:
                 'You process learner study material for CAPS exam prep. Return plain text bullet points only. Keep it concise and practical.',
               images: [{ data: payload.base64, media_type: payload.mimeType }],
@@ -403,15 +468,16 @@ export function ExamPrepWizard(): React.ReactElement {
             ? data.trim()
             : String(data?.content || data?.ocr?.analysis || '').trim();
 
-        if (!summary) {
+        const cleanedSummary = sanitizeMaterialSummary(summary);
+        if (!cleanedSummary) {
           throw new Error('No readable content detected in the selected file.');
         }
 
-        return summary;
+        return cleanedSummary;
       }
       throw new Error('Could not analyze study material.');
     },
-    [],
+    [selectedLanguage],
   );
 
   const analyzeStudyMaterialFile = useCallback(
@@ -567,6 +633,8 @@ export function ExamPrepWizard(): React.ReactElement {
   );
 
   const handlePickMaterialImage = useCallback(async () => {
+    if (isMaterialPipelineBusy) return;
+    setMaterialSelectionBusy(true);
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (permission.status !== 'granted') {
@@ -597,10 +665,14 @@ export function ExamPrepWizard(): React.ReactElement {
       }
     } catch {
       Alert.alert('Upload failed', 'Could not add image study material. Please try again.');
+    } finally {
+      setMaterialSelectionBusy(false);
     }
-  }, [processStudyMaterial]);
+  }, [processStudyMaterial, isMaterialPipelineBusy]);
 
   const handlePickMaterialPdf = useCallback(async () => {
+    if (isMaterialPipelineBusy) return;
+    setMaterialSelectionBusy(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['application/pdf'],
@@ -617,8 +689,10 @@ export function ExamPrepWizard(): React.ReactElement {
       });
     } catch {
       Alert.alert('Upload failed', 'Could not add PDF study material. Please try again.');
+    } finally {
+      setMaterialSelectionBusy(false);
     }
-  }, [processStudyMaterial]);
+  }, [processStudyMaterial, isMaterialPipelineBusy]);
 
   const handleRemoveMaterial = useCallback((materialId: string) => {
     setStudyMaterials((prev) => prev.filter((material) => material.id !== materialId));
@@ -667,6 +741,7 @@ export function ExamPrepWizard(): React.ReactElement {
           subject: selectedSubject,
           examType: selectedExamType,
           language: selectedLanguage,
+          allowFallback: false,
           studentId,
           classId,
           schoolId,
@@ -681,7 +756,8 @@ export function ExamPrepWizard(): React.ReactElement {
 
       const { data, error } = await supabase.functions.invoke('generate-exam', invokeOptions);
       if (error) {
-        throw new Error(error.message || 'Could not load teacher context');
+        const info = await parseFunctionInvokeError(error, 'Could not load teacher context');
+        throw new Error(info.message || 'Could not load teacher context');
       }
 
       const response = data as ExamGenerationResponse;
@@ -745,7 +821,7 @@ export function ExamPrepWizard(): React.ReactElement {
   const handleStartGeneration = useCallback(
     (withTeacherContext: boolean) => {
       if (!selectedGrade || !selectedSubject || !selectedExamType) return;
-      if (hasMaterialProcessing) {
+      if (isMaterialPipelineBusy) {
         Alert.alert(
           'Please wait',
           'We are still extracting content from your uploaded study material.',
@@ -788,7 +864,7 @@ export function ExamPrepWizard(): React.ReactElement {
       selectedSubject,
       selectedExamType,
       selectedLanguage,
-      hasMaterialProcessing,
+      isMaterialPipelineBusy,
       examQuotaLimit,
       examQuotaRemaining,
       buildCustomPrompt,
@@ -1020,7 +1096,13 @@ export function ExamPrepWizard(): React.ReactElement {
                     <View
                       style={[
                         styles.materialSplitFill,
-                        { width: `${splitProgressPercent}%`, backgroundColor: theme.primary },
+                        {
+                          width: `${clampPercent(splitProgressPercent, {
+                            source: 'ExamPrepWizard.materialSplitProgress',
+                            suppressTelemetry: true,
+                          })}%`,
+                          backgroundColor: theme.primary,
+                        },
                       ]}
                     />
                   </View>
@@ -1031,15 +1113,25 @@ export function ExamPrepWizard(): React.ReactElement {
                 <TouchableOpacity
                   style={[styles.materialActionBtn, { borderColor: theme.border, backgroundColor: theme.background }]}
                   onPress={handlePickMaterialImage}
+                  disabled={isMaterialPipelineBusy}
                 >
-                  <Ionicons name="image-outline" size={14} color={theme.primary} />
+                  {isMaterialPipelineBusy ? (
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  ) : (
+                    <Ionicons name="image-outline" size={14} color={theme.primary} />
+                  )}
                   <Text style={[styles.materialActionText, { color: theme.text }]}>Add Image</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.materialActionBtn, { borderColor: theme.border, backgroundColor: theme.background }]}
                   onPress={handlePickMaterialPdf}
+                  disabled={isMaterialPipelineBusy}
                 >
-                  <Ionicons name="document-text-outline" size={14} color={theme.primary} />
+                  {isMaterialPipelineBusy ? (
+                    <ActivityIndicator size="small" color={theme.primary} />
+                  ) : (
+                    <Ionicons name="document-text-outline" size={14} color={theme.primary} />
+                  )}
                   <Text style={[styles.materialActionText, { color: theme.text }]}>Add PDF</Text>
                 </TouchableOpacity>
               </View>
@@ -1101,22 +1193,22 @@ export function ExamPrepWizard(): React.ReactElement {
             </View>
 
             <View style={styles.generateButtonBlock}>
-              {hasMaterialProcessing ? (
+              {isMaterialPipelineBusy ? (
                 <View style={[styles.generateButtonDisabled, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                   <ActivityIndicator size="small" color={theme.primary} />
                   <Text style={[styles.generateButtonDisabledText, { color: theme.muted }]}>
-                    Waiting for uploads to complete...
+                    {materialPipelineLabel}
                   </Text>
                 </View>
               ) : null}
               <TouchableOpacity
                 style={[
                   styles.generateButton,
-                  hasMaterialProcessing ? styles.generateButtonInactive : {},
-                  hasMaterialProcessing ? { backgroundColor: theme.border, opacity: 0.7 } : { backgroundColor: '#22c55e' },
+                  isMaterialPipelineBusy ? styles.generateButtonInactive : {},
+                  isMaterialPipelineBusy ? { backgroundColor: theme.border, opacity: 0.7 } : { backgroundColor: '#22c55e' },
                 ]}
-                onPress={hasMaterialProcessing ? undefined : () => handleStartGeneration(useTeacherContext)}
-                disabled={hasMaterialProcessing}
+                onPress={isMaterialPipelineBusy ? undefined : () => handleStartGeneration(useTeacherContext)}
+                disabled={isMaterialPipelineBusy}
               >
                 <Ionicons name="sparkles" size={22} color="#ffffff" />
                 <Text style={styles.generateButtonText}>Generate {selectedExamTypeLabel}</Text>
@@ -1125,10 +1217,10 @@ export function ExamPrepWizard(): React.ReactElement {
                 style={[
                   styles.secondaryGenerateButton,
                   { borderColor: theme.border, backgroundColor: theme.surface },
-                  hasMaterialProcessing ? { opacity: 0.6 } : {},
+                  isMaterialPipelineBusy ? { opacity: 0.6 } : {},
                 ]}
-                onPress={hasMaterialProcessing ? undefined : () => handleStartGeneration(false)}
-                disabled={hasMaterialProcessing}
+                onPress={isMaterialPipelineBusy ? undefined : () => handleStartGeneration(false)}
+                disabled={isMaterialPipelineBusy}
               >
                 <Text style={[styles.secondaryGenerateText, { color: theme.text }]}>
                   Generate without teacher context

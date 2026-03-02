@@ -660,7 +660,8 @@ export default function POPReviewScreen() {
     const reviewNotes = categoryWasCorrected
       ? `Payment verified and approved. Category corrected from ${CATEGORY_META[originalCategory].label} to ${CATEGORY_META[selectedCategory].label}.`
       : `Payment verified and approved. Category confirmed as ${CATEGORY_META[selectedCategory].label}.`;
-    const paymentForLabel = formatMonth(resolveQueueDisplayMonth(upload));
+    const effectivePaymentMonth = selectedMonth || resolveQueueDisplayMonth(upload);
+    const paymentForLabel = formatMonth(effectivePaymentMonth);
     const selectedMonthLabel = formatMonth(selectedMonth);
 
     showAlert({
@@ -958,7 +959,7 @@ export default function POPReviewScreen() {
       return name || (item.uploader as { email?: string }).email || 'School admin';
     })();
     const selectedMonth = queueMonthSelections[item.id];
-    const paymentForMonth = resolveQueueDisplayMonth(item);
+    const paymentForMonth = selectedMonth || resolveQueueDisplayMonth(item);
     const categoryMeta = getCategoryMeta(item);
 
     return (

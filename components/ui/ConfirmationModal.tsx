@@ -6,10 +6,10 @@
  */
 
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
-import { BlurView } from 'expo-blur';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 interface ConfirmationModalProps {
   visible: boolean;
@@ -42,9 +42,15 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
+  const isWeb = Platform.OS === 'web';
 
   React.useEffect(() => {
     if (visible) {
+      if (isWeb) {
+        // Prevent blank modal overlay state on RN Web.
+        scaleAnim.setValue(1);
+        return;
+      }
       Animated.spring(scaleAnim, {
         toValue: 1,
         tension: 50,
@@ -54,7 +60,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
     } else {
       scaleAnim.setValue(0);
     }
-  }, [visible]);
+  }, [visible, isWeb, scaleAnim]);
 
   const getTypeColor = () => {
     switch (type) {
@@ -78,9 +84,8 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   const finalConfirmColor = confirmColor || getTypeColor();
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       statusBarTranslucent
       onRequestClose={onCancel}
@@ -98,7 +103,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             {
               backgroundColor: theme.surface,
               borderColor: theme.border,
-              transform: [{ scale: scaleAnim }],
+              transform: [{ scale: isWeb ? 1 : scaleAnim }],
             },
           ]}
         >
@@ -159,7 +164,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
           </View>
         </Animated.View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 };
 

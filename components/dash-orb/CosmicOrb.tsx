@@ -12,15 +12,12 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, Easing, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Defs, RadialGradient, Stop, G } from 'react-native-svg';
 
 interface CosmicOrbProps {
   size: number;
   isProcessing: boolean;
   isSpeaking: boolean;
 }
-
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 export const CosmicOrb: React.FC<CosmicOrbProps> = ({ size, isProcessing, isSpeaking }) => {
   // Animations
@@ -149,8 +146,8 @@ export const CosmicOrb: React.FC<CosmicOrbProps> = ({ size, isProcessing, isSpea
   });
 
   const radius = size / 2;
-  const centerX = size / 2;
-  const centerY = size / 2;
+  const ringDiameter = size * 0.7;
+  const ringOffset = (size - ringDiameter) / 2;
 
   return (
     <View style={{ width: size, height: size }}>
@@ -173,55 +170,49 @@ export const CosmicOrb: React.FC<CosmicOrbProps> = ({ size, isProcessing, isSpea
         ))}
       </View>
 
-      {/* Ripple rings */}
-      <Svg width={size} height={size} style={{ position: 'absolute' }}>
-        <Defs>
-          <RadialGradient id="ring1" cx="50%" cy="50%">
-            <Stop offset="0%" stopColor="#8b5cf6" stopOpacity="0" />
-            <Stop offset="70%" stopColor="#8b5cf6" stopOpacity="0.6" />
-            <Stop offset="100%" stopColor="#8b5cf6" stopOpacity="0" />
-          </RadialGradient>
-          <RadialGradient id="ring2" cx="50%" cy="50%">
-            <Stop offset="0%" stopColor="#06b6d4" stopOpacity="0" />
-            <Stop offset="70%" stopColor="#06b6d4" stopOpacity="0.4" />
-            <Stop offset="100%" stopColor="#06b6d4" stopOpacity="0" />
-          </RadialGradient>
-          <RadialGradient id="ring3" cx="50%" cy="50%">
-            <Stop offset="0%" stopColor="#fbbf24" stopOpacity="0" />
-            <Stop offset="70%" stopColor="#fbbf24" stopOpacity="0.3" />
-            <Stop offset="100%" stopColor="#fbbf24" stopOpacity="0" />
-          </RadialGradient>
-        </Defs>
-
-        {/* Animated Ripple Rings */}
-        <AnimatedCircle
-          cx={centerX}
-          cy={centerY}
-          r={radius * 0.7}
-          fill="url(#ring1)"
-          opacity={ring1Opacity}
-          scale={ring1Scale}
-          origin={`${centerX}, ${centerY}`}
-        />
-        <AnimatedCircle
-          cx={centerX}
-          cy={centerY}
-          r={radius * 0.7}
-          fill="url(#ring2)"
-          opacity={ring2Opacity}
-          scale={ring2Scale}
-          origin={`${centerX}, ${centerY}`}
-        />
-        <AnimatedCircle
-          cx={centerX}
-          cy={centerY}
-          r={radius * 0.7}
-          fill="url(#ring3)"
-          opacity={ring3Opacity}
-          scale={ring3Scale}
-          origin={`${centerX}, ${centerY}`}
-        />
-      </Svg>
+      {/* Ripple rings (web-safe, avoids SVG transform-origin warnings) */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: ringDiameter,
+          height: ringDiameter,
+          top: ringOffset,
+          left: ringOffset,
+          borderRadius: ringDiameter / 2,
+          borderWidth: 2,
+          borderColor: '#8b5cf6',
+          opacity: ring1Opacity,
+          transform: [{ scale: ring1Scale }],
+        }}
+      />
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: ringDiameter,
+          height: ringDiameter,
+          top: ringOffset,
+          left: ringOffset,
+          borderRadius: ringDiameter / 2,
+          borderWidth: 2,
+          borderColor: '#06b6d4',
+          opacity: ring2Opacity,
+          transform: [{ scale: ring2Scale }],
+        }}
+      />
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: ringDiameter,
+          height: ringDiameter,
+          top: ringOffset,
+          left: ringOffset,
+          borderRadius: ringDiameter / 2,
+          borderWidth: 2,
+          borderColor: '#fbbf24',
+          opacity: ring3Opacity,
+          transform: [{ scale: ring3Scale }],
+        }}
+      />
 
       {/* Rotating aurora bands */}
       <Animated.View

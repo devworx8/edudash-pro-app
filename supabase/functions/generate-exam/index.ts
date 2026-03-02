@@ -6,10 +6,34 @@
  * - Access checks by role scope (parent/student/staff)
  * - Canonical persistence to exam_generations
  */
-
 import { serve } from 'https://deno.land/std@0.214.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts';
+import {
+  augmentQuestionVisuals,
+  buildArtifactFromExam,
+  buildLocalFallbackExam,
+  buildStudyCoachPack,
+  computeBlueprintAudit,
+  computeTeacherAlignmentSummary,
+  enforceQuestionUpperBound,
+  ensureLanguageReadingPassage,
+  ensureMinimumQuestionCoverage,
+  extractJsonBlock,
+  getQuestionCountPolicy,
+  normalizeExamShape,
+  normalizeLanguageLocale,
+  normalizeText,
+  parseExamJson,
+  recalculateExamMarks,
+  resolveArtifactType,
+  toUserFacingGenerationWarning,
+  stripMetaPromptQuestions,
+  validateComprehensionIntegrity,
+  validateLearnerLanguageConsistency,
+} from './examUtils.ts';
+import { buildUserPrompt } from './promptBuilder.ts';
+import { resolveTeacherContext } from './teacherContext.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -35,6 +59,9 @@ const ANTHROPIC_EXAM_MODEL_FALLBACKS = String(Deno.env.get('ANTHROPIC_EXAM_MODEL
   .map((value) => value.trim())
   .filter(Boolean);
 const FREEMIUM_PREMIUM_EXAM_LIMIT = 5;
+const STUDY_MATERIAL_MARKER = 'study material extracted from uploaded images/pdfs:';
+const MAX_STUDY_MATERIAL_BLOCKS = 5;
+const MAX_STUDY_MATERIAL_SUMMARY_LENGTH = 2400;
 
 if (!SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('SUPABASE_SERVICE_ROLE_KEY is required');
@@ -65,138 +92,6 @@ type StudentRow = {
   last_name: string | null;
 };
 
-type HomeworkRow = {
-  id: string;
-  title: string | null;
-  subject: string | null;
-  instructions: string | null;
-  description: string | null;
-  metadata: unknown;
-  due_date: string | null;
-  created_at: string | null;
-  assigned_at: string | null;
-  class_id: string | null;
-  lesson_id: string | null;
-  is_published: boolean | null;
-  is_active: boolean | null;
-  status: string | null;
-  preschool_id: string | null;
-};
-
-type HomeworkSubmissionRow = {
-  assignment_id: string | null;
-  homework_assignment_id: string | null;
-  grade: number | null;
-  feedback: string | null;
-  ai_feedback: string | null;
-  status: string | null;
-  submitted_at: string | null;
-};
-
-type LessonRow = {
-  id: string;
-  title: string | null;
-  subject: string | null;
-  objectives: string[] | null;
-  content: string | null;
-  description: string | null;
-};
-
-type LessonAssignmentRow = {
-  id: string;
-  lesson_id: string | null;
-  due_date: string | null;
-  assigned_at: string | null;
-  status: string | null;
-  class_id: string | null;
-  student_id: string | null;
-  preschool_id: string | null;
-  notes: string | null;
-  lessons: LessonRow | LessonRow[] | null;
-};
-
-type ExamContextSummary = {
-  assignmentCount: number;
-  lessonCount: number;
-  focusTopics: string[];
-  weakTopics: string[];
-  sourceAssignmentIds: string[];
-  sourceLessonIds: string[];
-  intentTaggedCount?: number;
-};
-
-type ExamTeacherAlignmentSummary = {
-  assignmentCount: number;
-  lessonCount: number;
-  intentTaggedCount: number;
-  coverageScore: number;
-};
-
-type ExamBlueprintAudit = {
-  minQuestions: number;
-  maxQuestions: number;
-  actualQuestions: number;
-  totalMarks: number;
-  objectiveMarks: number;
-  shortMarks: number;
-  extendedMarks: number;
-  objectiveRatio: number;
-  shortRatio: number;
-  extendedRatio: number;
-};
-
-type StudyCoachDayPlan = {
-  day: string;
-  focus: string;
-  readingPiece: string;
-  paperWritingDrill: string;
-  memoryActivity: string;
-  parentTip: string;
-};
-
-type StudyCoachPack = {
-  mode: 'guided_first';
-  planTitle: string;
-  days: StudyCoachDayPlan[];
-  testDayChecklist: string[];
-};
-
-type ExamArtifactType = 'practice_test' | 'flashcards' | 'revision_notes' | 'study_guide';
-
-type FlashcardItem = {
-  id: string;
-  front: string;
-  back: string;
-  hint?: string;
-};
-
-type FlashcardsArtifact = {
-  title: string;
-  cards: FlashcardItem[];
-};
-
-type RevisionNotesSection = {
-  title: string;
-  bullets: string[];
-};
-
-type RevisionNotesArtifact = {
-  title: string;
-  keyPoints: string[];
-  sections: RevisionNotesSection[];
-};
-
-type StudyGuideArtifact = {
-  title: string;
-  days: Array<{ day: string; focus: string; tasks: string[] }>;
-  checklist: string[];
-};
-
-type ExamArtifact =
-  | { type: 'flashcards'; flashcards: FlashcardsArtifact }
-  | { type: 'revision_notes'; revisionNotes: RevisionNotesArtifact }
-  | { type: 'study_guide'; studyGuide: StudyGuideArtifact };
-
 type AuthorizedRequestScope = {
   profile: ProfileRow;
   role: string;
@@ -216,6 +111,16 @@ type ScopeDiagnostics = {
   useTeacherContext: boolean;
 };
 
+type UploadedStudyMaterial = {
+  sourceName: string;
+  summary: string;
+};
+
+type StoredStudyMaterialRow = {
+  source_name: string | null;
+  summary_text: string | null;
+};
+
 const STAFF_ROLES = new Set([
   'teacher',
   'principal',
@@ -227,13 +132,6 @@ const STAFF_ROLES = new Set([
 
 const PARENT_ROLES = new Set(['parent', 'guardian', 'sponsor']);
 const STUDENT_ROLES = new Set(['student', 'learner']);
-
-const SUPPORTED_QUESTION_TYPES = new Set([
-  'multiple_choice',
-  'true_false',
-  'short_answer',
-  'fill_in_blank',
-]);
 
 const EXAM_SYSTEM_PROMPT = `You are an expert South African CAPS/DBE exam generator.
 Return ONLY valid JSON and no markdown.
@@ -349,1224 +247,387 @@ function isCreditOrBillingError(status: number, responseText: string): boolean {
   );
 }
 
-function buildLocalFallbackExam(
-  grade: string,
-  subject: string,
-  examType: string,
-  language: string,
-  contextSummary: ExamContextSummary,
-) {
-  if (isLanguageSubject(subject)) {
-    const readingFallback = getLanguageReadingFallback(language);
-    const langLabel = resolveLanguageName(language);
+function toBooleanFlag(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
+function mapUnhandledError(message: string): {
+  status: number;
+  error: string;
+  message: string;
+} {
+  const normalized = String(message || '').toLowerCase();
+
+  if (normalized.includes('ai service is busy')) {
     return {
-      title: `${subject} ${examType.replace(/_/g, ' ')} (Fallback)`,
-      grade,
-      subject,
-      duration: '60 minutes',
-      totalMarks: 50,
-      sections: [
-        {
-          name: 'Section A: Reading Comprehension',
-          instructions: `Grade: ${grade}. ${readingFallback.instruction}`,
-          readingPassage: `${readingFallback.passage}\n\n${readingFallback.instruction}`,
-          questions: [
-            {
-              id: 'A1',
-              type: 'multiple_choice',
-              marks: 2,
-              question: 'Where did Mia and Tumi go on Saturday morning?',
-              options: ['To a beach', "To their grandfather's farm", 'To a shopping mall', 'To a school hall'],
-              correctAnswer: 'B',
-              explanation: 'The passage says they went to help on their grandfather\'s farm.',
-            },
-            {
-              id: 'A2',
-              type: 'multiple_choice',
-              marks: 2,
-              question: 'Which task did they do first?',
-              options: ['Planted vegetables', 'Listened to stories', 'Fed the chickens', 'Cooked soup'],
-              correctAnswer: 'C',
-              explanation: 'The first task in the story is feeding the chickens.',
-            },
-            {
-              id: 'A3',
-              type: 'multiple_choice',
-              marks: 2,
-              question: 'Why did they sit under the veranda/stoop?',
-              options: ['They were tired', 'It started raining', 'They were hiding', 'It was too hot'],
-              correctAnswer: 'B',
-              explanation: 'The passage explains that they sat there because it started raining.',
-            },
-            {
-              id: 'A4',
-              type: 'short_answer',
-              marks: 3,
-              question: 'Write one sentence describing how the family worked together in the story.',
-              correctAnswer: 'Any accurate sentence describing shared tasks and family support in the passage.',
-              explanation: 'A correct response references at least one shared activity from the passage.',
-            },
-            {
-              id: 'A5',
-              type: 'short_answer',
-              marks: 3,
-              question: `Summarize the passage in ${langLabel} using 2-3 sentences.`,
-              correctAnswer: 'A concise, accurate summary of key events from the passage.',
-              explanation: 'A strong answer includes sequence, key actions, and ending.',
-            },
-          ],
-        },
-        {
-          name: 'Section B: Language Skills',
-          questions: [
-            {
-              id: 'B1',
-              type: 'multiple_choice',
-              marks: 2,
-              question: 'Choose the best synonym for "carefully".',
-              options: ['Quickly', 'Carelessly', 'With attention', 'Loudly'],
-              correctAnswer: 'C',
-              explanation: 'Carefully means doing something with attention.',
-            },
-            {
-              id: 'B2',
-              type: 'fill_in_blank',
-              marks: 2,
-              question: 'Complete the sentence: They _____ the chickens before planting vegetables.',
-              correctAnswer: 'fed',
-              explanation: 'The passage states they fed the chickens first.',
-            },
-            {
-              id: 'B3',
-              type: 'true_false',
-              marks: 2,
-              question: 'The children went home before it started raining.',
-              options: ['True', 'False'],
-              correctAnswer: 'False',
-              explanation: 'Rain started while they were still at the farm.',
-            },
-            {
-              id: 'B4',
-              type: 'short_answer',
-              marks: 3,
-              question: 'Write one sentence using the word "together".',
-              correctAnswer: 'Any grammatical sentence that correctly uses "together".',
-              explanation: 'The sentence should be meaningful and grammatically correct.',
-            },
-            {
-              id: 'B5',
-              type: 'short_answer',
-              marks: 3,
-              question: 'Explain the mood at the end of the story.',
-              correctAnswer: 'The ending mood is warm/happy as they shared soup and laughter.',
-              explanation: 'The final lines show comfort and family joy.',
-            },
-          ],
-        },
-      ],
+      status: 429,
+      error: 'provider_rate_limited',
+      message: 'AI provider is temporarily rate-limited. Please retry shortly.',
     };
   }
 
-  const focusTopics = contextSummary.focusTopics.length > 0
-    ? contextSummary.focusTopics.slice(0, 10)
-    : [
-        `${subject} fundamentals`,
-        `core ${subject} concepts`,
-        `problem solving in ${subject}`,
-      ];
+  if (
+    normalized.includes('organization membership required') ||
+    normalized.includes('school membership required') ||
+    normalized.includes('outside staff access') ||
+    normalized.includes('outside staff school scope') ||
+    normalized.includes('parent can only generate exams for linked children') ||
+    normalized.includes('student can only generate for self') ||
+    normalized.includes('staff can only access students in their own school scope')
+  ) {
+    return {
+      status: 403,
+      error: 'forbidden_scope',
+      message,
+    };
+  }
 
-  const weakTopics = contextSummary.weakTopics.slice(0, 3);
-  const revisionTopics = [...new Set([...weakTopics, ...focusTopics])].slice(0, 10);
+  if (
+    normalized.includes('requested student record was not found') ||
+    normalized.includes('requested class was not found')
+  ) {
+    return {
+      status: 404,
+      error: 'scope_not_found',
+      message,
+    };
+  }
 
-  const sectionAQuestions = focusTopics.slice(0, 10).map((topic, index) => ({
-    id: `A${index + 1}`,
-    type: 'multiple_choice',
-    marks: 2,
-    question: `Which option best matches a correct CAPS-level understanding of ${topic} in ${subject}?`,
-    options: [
-      `A basic fact without clear reasoning`,
-      `A concept explained with correct terms and a clear example`,
-      `An unrelated idea from another topic`,
-      `A guess without subject vocabulary`,
-    ],
-    correctAnswer: 'B',
-    explanation: `A strong CAPS-aligned answer should include accurate terminology and an example tied to ${topic}.`,
-  }));
-
-  const sectionBQuestions = revisionTopics.slice(0, 10).map((topic, index) => ({
-    id: `B${index + 1}`,
-    type: 'short_answer',
-    marks: 3,
-    question: `Write a short answer explaining one key idea about ${topic} and how it applies in ${subject}.`,
-    correctAnswer: `A valid answer should define ${topic}, include one correct subject example, and use grade-appropriate vocabulary.`,
-    explanation: `Use one definition, one worked/contextual example, and one sentence linking the idea back to ${subject}.`,
-  }));
+  if (normalized.includes('linked learner is required')) {
+    return {
+      status: 400,
+      error: 'missing_linked_learner',
+      message,
+    };
+  }
 
   return {
-    title: `${subject} ${examType.replace(/_/g, ' ')} (Fallback)`,
-    grade,
-    subject,
-    duration: '60 minutes',
-    totalMarks: 50,
-    sections: [
-      {
-        name: 'Section A: Multiple Choice',
-        questions: sectionAQuestions,
-      },
-      {
-        name: 'Section B: Short Answers',
-        questions: sectionBQuestions,
-      },
-    ],
+    status: 500,
+    error: 'internal_server_error',
+    message,
   };
 }
 
-function parseGradeNumber(grade: string): number {
-  const normalized = String(grade || '').toLowerCase().trim();
-  if (!normalized) return 6;
-  if (normalized === 'grade_r' || normalized === 'grader' || normalized === 'r') return 0;
-  const match = normalized.match(/grade[_\s-]*(\d{1,2})/);
-  if (match?.[1]) {
-    const value = Number(match[1]);
-    if (Number.isFinite(value)) return value;
-  }
-  return 6;
+function stripNumberPrefix(line: string): string {
+  return line.replace(/^\(?\d+\)?[.)\-:\s]+/, '').trim();
 }
 
-function getQuestionCountPolicy(grade: string, examType: string): { min: number; max: number } {
-  const level = parseGradeNumber(grade);
-  const type = String(examType || 'practice_test').toLowerCase();
-
-  if (type === 'practice_test') {
-    if (level >= 10) return { min: 28, max: 40 };
-    if (level >= 7) return { min: 22, max: 30 };
-    if (level >= 4) return { min: 20, max: 24 };
-    return { min: 20, max: 24 };
-  }
-
-  if (type === 'flashcards') {
-    if (level >= 10) return { min: 20, max: 32 };
-    if (level >= 7) return { min: 20, max: 24 };
-    return { min: 20, max: 24 };
-  }
-
-  if (type === 'study_guide') {
-    if (level >= 10) return { min: 20, max: 24 };
-    return { min: 20, max: 24 };
-  }
-
-  if (type === 'revision_notes') {
-    if (level >= 10) return { min: 20, max: 24 };
-    if (level >= 7) return { min: 20, max: 24 };
-    return { min: 20, max: 24 };
-  }
-
-  return { min: 20, max: 24 };
+function stripInlineTranslationNoise(line: string): string {
+  return line
+    .replace(/\((?:teacher|class|translation|english)\s*:[^)]*\)/gi, '')
+    .replace(/\[(?:teacher|class|translation|english)\s*:[^\]]*\]/gi, '')
+    .trim();
 }
 
-function getMinimumQuestionCount(grade: string, examType: string): number {
-  return getQuestionCountPolicy(grade, examType).min;
+function isMaterialHeadingLine(line: string): boolean {
+  const normalized = stripNumberPrefix(line).toLowerCase();
+  return [
+    'topics to revise',
+    'key facts/formulas',
+    'common mistakes',
+    'suggested question angles',
+  ].includes(normalized);
 }
 
-function resolveArtifactType(examType: string): ExamArtifactType {
-  const normalized = String(examType || 'practice_test').toLowerCase();
-  if (normalized === 'flashcards') return 'flashcards';
-  if (normalized === 'revision_notes') return 'revision_notes';
-  if (normalized === 'study_guide') return 'study_guide';
-  return 'practice_test';
+function isLikelyMaterialMetaLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true;
+  if (trimmed === '---') return true;
+  if (/^\d{6,}\.(?:jpg|jpeg|png|webp|pdf)$/i.test(trimmed)) return true;
+  if (/^page\s+\d+$/i.test(trimmed)) return true;
+  if (/^part\s+\d+$/i.test(trimmed)) return true;
+  return isMaterialHeadingLine(trimmed);
 }
 
-function flattenExamQuestionsForArtifact(exam: any): Array<{
-  id: string;
-  question: string;
-  answer: string;
-  explanation: string;
-}> {
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-  const out: Array<{ id: string; question: string; answer: string; explanation: string }> = [];
+function extractStudyMaterialBody(customPrompt?: string): string | null {
+  const raw = String(customPrompt || '').trim();
+  if (!raw) return null;
 
-  sections.forEach((section: any, sectionIndex: number) => {
-    const questions = Array.isArray(section?.questions) ? section.questions : [];
-    questions.forEach((question: any, questionIndex: number) => {
-      const id = String(question?.id || `q_${sectionIndex + 1}_${questionIndex + 1}`);
-      const questionText = String(question?.question || question?.text || '').trim();
-      const answer = String(question?.correctAnswer || question?.answer || '').trim();
-      const explanation = String(question?.explanation || '').trim();
-      out.push({
-        id,
-        question: questionText || `Concept ${questionIndex + 1}`,
-        answer,
-        explanation,
-      });
-    });
-  });
+  const markerIndex = raw.toLowerCase().indexOf(STUDY_MATERIAL_MARKER);
+  if (markerIndex === -1) return null;
 
-  return out;
-}
+  let block = raw.slice(markerIndex + STUDY_MATERIAL_MARKER.length);
+  const lowerBlock = block.toLowerCase();
+  const stopMarkers = [
+    '\n\nkeep all learner-facing content strictly in',
+    '\n\nwhen generated content includes non-english terminology',
+    '\n\nadditional learner requirements:',
+  ];
 
-function buildArtifactFromExam(params: {
-  artifactType: ExamArtifactType;
-  exam: any;
-  grade: string;
-  subject: string;
-  contextSummary: ExamContextSummary;
-  studyCoachPack: StudyCoachPack;
-}): ExamArtifact | null {
-  if (params.artifactType === 'practice_test') return null;
-
-  const questions = flattenExamQuestionsForArtifact(params.exam);
-
-  if (params.artifactType === 'flashcards') {
-    const cards: FlashcardItem[] = questions.slice(0, 40).map((item, index) => ({
-      id: item.id || `card_${index + 1}`,
-      front: item.question,
-      back: item.answer || item.explanation || 'Review this concept with class notes.',
-      hint: item.explanation || undefined,
-    }));
-
-    return {
-      type: 'flashcards',
-      flashcards: {
-        title: `${params.subject} Flashcards`,
-        cards,
-      },
-    };
+  let cutIndex = block.length;
+  for (const stopMarker of stopMarkers) {
+    const idx = lowerBlock.indexOf(stopMarker);
+    if (idx >= 0) cutIndex = Math.min(cutIndex, idx);
   }
+  block = block.slice(0, cutIndex).trim();
+  return block || null;
+}
 
-  if (params.artifactType === 'revision_notes') {
-    const sections = (Array.isArray(params.exam?.sections) ? params.exam.sections : []).map((section: any, sectionIndex: number) => {
-      const sectionQuestions = Array.isArray(section?.questions) ? section.questions : [];
-      const bullets = sectionQuestions
-        .slice(0, 6)
-        .map((question: any) => String(question?.explanation || question?.correctAnswer || question?.question || '').trim())
-        .filter(Boolean);
+function parseUploadedStudyMaterials(customPrompt?: string): UploadedStudyMaterial[] {
+  const block = extractStudyMaterialBody(customPrompt);
+  if (!block) return [];
 
-      return {
-        title: String(section?.title || section?.name || `Topic ${sectionIndex + 1}`),
-        bullets: bullets.length > 0 ? bullets : ['Review this topic using classwork and homework examples.'],
-      };
-    });
+  const chunks = block
+    .split(/\n\s*---\s*\n/g)
+    .map((chunk) => chunk.trim())
+    .filter(Boolean);
 
-    const keyPoints = questions
-      .slice(0, 10)
-      .map((item) => item.answer || item.explanation || item.question)
+  const materialBlocks: UploadedStudyMaterial[] = [];
+  for (const chunk of chunks) {
+    const lines = chunk
+      .split(/\r?\n/)
+      .map((line) => line.trim())
       .filter(Boolean);
 
-    return {
-      type: 'revision_notes',
-      revisionNotes: {
-        title: `${params.subject} Revision Notes`,
-        keyPoints,
-        sections,
-      },
-    };
+    if (lines.length === 0) continue;
+
+    let sourceName = 'Uploaded material';
+    const contentLines: string[] = [];
+
+    for (const line of lines) {
+      if (/^source:\s*/i.test(line)) {
+        const parsedSource = line.replace(/^source:\s*/i, '').trim();
+        if (parsedSource) sourceName = parsedSource;
+        continue;
+      }
+
+      const cleaned = stripInlineTranslationNoise(stripNumberPrefix(line))
+        .replace(/^[-*•]\s*/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (!cleaned || isLikelyMaterialMetaLine(cleaned)) continue;
+      contentLines.push(cleaned);
+    }
+
+    const deduped: string[] = [];
+    const seen = new Set<string>();
+    for (const line of contentLines) {
+      const normalized = normalizeText(line);
+      if (!normalized || normalized.length < 4 || seen.has(normalized)) continue;
+      seen.add(normalized);
+      deduped.push(line);
+    }
+
+    if (deduped.length === 0) continue;
+
+    materialBlocks.push({
+      sourceName: sourceName.slice(0, 120),
+      summary: deduped.join('\n').slice(0, MAX_STUDY_MATERIAL_SUMMARY_LENGTH),
+    });
+
+    if (materialBlocks.length >= MAX_STUDY_MATERIAL_BLOCKS) break;
   }
 
-  const fallbackChecklist = [
-    'Revise key formulas/definitions',
-    'Practice at least one timed section daily',
-    'Review mistakes from homework and classwork',
-    'Sleep early before exam day',
-  ];
+  return materialBlocks;
+}
 
-  const daysFromCoach = Array.isArray(params.studyCoachPack?.days)
-    ? params.studyCoachPack.days.map((day) => ({
-        day: String(day.day || ''),
-        focus: String(day.focus || ''),
-        tasks: [
-          `Reading: ${day.readingPiece || 'Read topic summary notes.'}`,
-          `Paper drill: ${day.paperWritingDrill || 'Write one timed practice section.'}`,
-          `Memory: ${day.memoryActivity || 'Summarize core terms from memory.'}`,
-          `Parent tip: ${day.parentTip || 'Review progress and ask confidence questions.'}`,
-        ],
-      }))
-    : [];
+function formatStudyMaterialPromptBlock(materials: UploadedStudyMaterial[]): string | null {
+  if (materials.length === 0) return null;
+  const chunks = materials.map((material) => `Source: ${material.sourceName}\n${material.summary}`);
+  return `Study material extracted from uploaded images/PDFs:\n${chunks.join('\n\n---\n\n')}`;
+}
 
-  const derivedDays = daysFromCoach.length > 0
-    ? daysFromCoach
-    : ['Day 1', 'Day 2', 'Day 3', 'Day 4', 'Day 5'].map((dayLabel, index) => {
-        const question = questions[index] || questions[0];
-        const weakTopic = params.contextSummary.weakTopics[index] || params.contextSummary.focusTopics[index];
-        return {
-          day: dayLabel,
-          focus: weakTopic || `Reinforce ${params.subject} core concepts`,
-          tasks: [
-            `Practice: ${question?.question || `Complete one ${params.subject} mixed practice set.`}`,
-            `Memo check: ${question?.answer || question?.explanation || 'Mark and correct one section.'}`,
-            'Review your notes and write a short summary from memory.',
-          ],
-        };
-      });
+async function sha256Hex(input: string): Promise<string> {
+  const encoded = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
 
-  return {
-    type: 'study_guide',
-    studyGuide: {
-      title: `${params.subject} Study Guide`,
-      days: derivedDays,
-      checklist: params.studyCoachPack?.testDayChecklist?.length
-        ? params.studyCoachPack.testDayChecklist
-        : fallbackChecklist,
-    },
+async function loadStoredStudyMaterials(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    authUserId: string;
+    studentScope: string;
+    subject: string;
+    grade: string;
+  },
+): Promise<UploadedStudyMaterial[]> {
+  const queryRows = async (scopeKey: string): Promise<StoredStudyMaterialRow[]> => {
+    const { data, error } = await supabase
+      .from('exam_study_materials')
+      .select('source_name, summary_text')
+      .eq('auth_user_id', params.authUserId)
+      .eq('student_scope', scopeKey)
+      .eq('subject', params.subject)
+      .eq('grade', params.grade)
+      .eq('is_active', true)
+      .order('updated_at', { ascending: false })
+      .limit(12);
+
+    if (error) {
+      console.warn('[generate-exam] study material memory query failed', error.message);
+      return [];
+    }
+
+    return (data || []) as StoredStudyMaterialRow[];
   };
-}
 
-function buildSupplementQuestion(
-  index: number,
-  subject: string,
-  topic: string,
-): {
-  id: string;
-  question: string;
-  text: string;
-  type: string;
-  marks: number;
-  options?: string[];
-  correctAnswer: string;
-  explanation: string;
-} {
-  const slot = index % 4;
-  const safeTopic = sanitizeTopic(topic) || `${subject} concept`;
-
-  if (slot === 0) {
-    const question = `Which statement best describes ${safeTopic} in ${subject}?`;
-    return {
-      id: `q_auto_${index + 1}`,
-      question,
-      text: question,
-      type: 'multiple_choice',
-      marks: 2,
-      options: [
-        'A fact that is unrelated to the topic',
-        'A concept explained with correct vocabulary and context',
-        'A random guess with no evidence',
-        'A misconception from another topic',
-      ],
-      correctAnswer: 'B',
-      explanation: `The best answer uses correct subject terminology and applies it directly to ${safeTopic}.`,
-    };
+  let rows = await queryRows(params.studentScope);
+  if (rows.length === 0 && params.studentScope) {
+    rows = await queryRows('');
   }
 
-  if (slot === 1) {
-    const question = `${safeTopic} is always applied without checking context.`;
-    return {
-      id: `q_auto_${index + 1}`,
-      question,
-      text: question,
-      type: 'true_false',
-      marks: 2,
-      options: ['True', 'False'],
-      correctAnswer: 'False',
-      explanation: `In ${subject}, learners must apply ${safeTopic} using context and reasoned steps.`,
-    };
+  const materials: UploadedStudyMaterial[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const summary = String(row.summary_text || '').trim();
+    if (!summary) continue;
+    const normalized = normalizeText(summary);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    materials.push({
+      sourceName: String(row.source_name || 'Saved study material').slice(0, 120),
+      summary: summary.slice(0, MAX_STUDY_MATERIAL_SUMMARY_LENGTH),
+    });
+    if (materials.length >= 3) break;
   }
 
-  if (slot === 2) {
-    const question = `Fill in the blank: A key idea in ${safeTopic} is ________.`;
-    return {
-      id: `q_auto_${index + 1}`,
-      question,
-      text: question,
-      type: 'fill_in_blank',
-      marks: 2,
-      correctAnswer: `${safeTopic}`,
-      explanation: `A valid answer identifies a core concept related to ${safeTopic} using grade-appropriate language.`,
-    };
-  }
-
-  const question = `Write a short response showing how ${safeTopic} can be used to solve a problem in ${subject}.`;
-  return {
-    id: `q_auto_${index + 1}`,
-    question,
-    text: question,
-    type: 'short_answer',
-    marks: 3,
-    correctAnswer: `A complete answer should define ${safeTopic}, apply it correctly, and justify the result with one clear example.`,
-    explanation: `Use one definition, one correct example, and one reason why the method works.`,
-  };
+  return materials;
 }
 
-function recalculateExamMarks(exam: any) {
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-  let totalMarks = 0;
-
-  sections.forEach((section: any) => {
-    const sectionQuestions = Array.isArray(section?.questions) ? section.questions : [];
-    const sectionMarks = sectionQuestions.reduce((sum: number, question: any) => {
-      const marks = Number(question?.marks ?? question?.points ?? 1);
-      return sum + (Number.isFinite(marks) ? Math.max(1, marks) : 1);
-    }, 0);
-
-    section.totalMarks = sectionMarks;
-    totalMarks += sectionMarks;
-  });
-
-  exam.totalMarks = totalMarks;
-  return exam;
-}
-
-function ensureMinimumQuestionCoverage(
-  exam: any,
-  payload: {
+async function persistUploadedStudyMaterials(
+  supabase: ReturnType<typeof createClient>,
+  params: {
+    authUserId: string;
+    studentId: string | null;
+    schoolId: string | null;
     grade: string;
     subject: string;
-    examType: string;
-    contextSummary: ExamContextSummary;
-    minQuestionCount?: number;
+    language: string;
+    examId: string | null;
+    materials: UploadedStudyMaterial[];
   },
-) {
-  const minQuestions = Number.isFinite(Number(payload.minQuestionCount))
-    ? Math.max(1, Number(payload.minQuestionCount))
-    : getMinimumQuestionCount(payload.grade, payload.examType);
-  const sections = Array.isArray(exam?.sections)
-    ? exam.sections.filter((section: any) => section && Array.isArray(section.questions))
-    : [];
-
-  if (sections.length === 0) return exam;
-
-  const currentQuestionCount = sections.reduce(
-    (sum: number, section: any) => sum + section.questions.length,
-    0,
-  );
-
-  if (currentQuestionCount >= minQuestions) {
-    return recalculateExamMarks(exam);
-  }
-
-  const needed = minQuestions - currentQuestionCount;
-  const topics = [
-    ...payload.contextSummary.weakTopics,
-    ...payload.contextSummary.focusTopics,
-    `${payload.subject} fundamentals`,
-    `${payload.subject} applications`,
-    `${payload.subject} problem solving`,
-  ].filter((topic) => sanitizeTopic(topic));
-
-  const topicPool = topics.length > 0 ? topics : [payload.subject];
-
-  let supplementSection = sections.find((section: any) =>
-    normalizeText(String(section?.name || section?.title || '')).includes('extended practice'),
-  );
-
-  if (!supplementSection) {
-    supplementSection = {
-      id: `section_${sections.length + 1}`,
-      name: 'Section C: Extended Practice',
-      title: 'Section C: Extended Practice',
-      questions: [],
-      totalMarks: 0,
-    };
-    sections.push(supplementSection);
-    exam.sections = sections;
-  }
-
-  for (let i = 0; i < needed; i += 1) {
-    const topic = String(topicPool[i % topicPool.length] || payload.subject);
-    supplementSection.questions.push(
-      buildSupplementQuestion(currentQuestionCount + i, payload.subject, topic),
-    );
-  }
-
-  return recalculateExamMarks(exam);
-}
-
-function normalizeText(value: string | null | undefined): string {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s&]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function matchesSubject(candidate: string | null | undefined, requested: string): boolean {
-  const c = normalizeText(candidate);
-  const r = normalizeText(requested);
-
-  if (!c || !r) return false;
-  if (c.includes(r) || r.includes(c)) return true;
-
-  const tokens = r.split(' ').filter((token) => token.length >= 4);
-  if (tokens.length === 0) return false;
-  return tokens.some((token) => c.includes(token));
-}
-
-function parseDateValue(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function isRecent(row: { due_date?: string | null; assigned_at?: string | null; created_at?: string | null }, lookbackMs: number): boolean {
-  const values = [
-    parseDateValue(row.due_date || null),
-    parseDateValue(row.assigned_at || null),
-    parseDateValue(row.created_at || null),
-  ].filter((item): item is number => item !== null);
-
-  if (values.length === 0) return true;
-  return values.some((value) => value >= lookbackMs);
-}
-
-function sanitizeTopic(value: string | null | undefined): string | null {
-  const cleaned = String(value || '')
-    .replace(/[\n\r]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (!cleaned || cleaned.length < 3) return null;
-  if (cleaned.length > 80) return `${cleaned.slice(0, 77)}...`;
-  return cleaned;
-}
-
-function pickTopTopics(map: Map<string, number>, limit: number): string[] {
-  return [...map.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([topic]) => topic);
-}
-
-function normalizeQuestionType(type: string | null | undefined): string {
-  const raw = String(type || 'short_answer').toLowerCase();
-  if (raw === 'fill_blank') return 'fill_in_blank';
-  if (raw === 'fill-in-the-blank') return 'fill_in_blank';
-  if (raw === 'fillintheblank') return 'fill_in_blank';
-  if (SUPPORTED_QUESTION_TYPES.has(raw)) return raw;
-  if (raw.includes('true')) return 'true_false';
-  if (raw.includes('multiple')) return 'multiple_choice';
-  return 'short_answer';
-}
-
-function normalizeExamShape(rawExam: any, grade: string, subject: string, examType: string) {
-  const rawSections = Array.isArray(rawExam?.sections)
-    ? rawExam.sections
-    : Array.isArray(rawExam?.questions)
-    ? [{ name: 'Section A', questions: rawExam.questions }]
-    : [];
-
-  let questionCounter = 0;
-  const sections = rawSections.map((section: any, sectionIndex: number) => {
-    const rawQuestions = Array.isArray(section?.questions) ? section.questions : [];
-    const normalizedQuestions = rawQuestions.map((question: any, questionIndex: number) => {
-      questionCounter += 1;
-      const marks = Number(question?.marks ?? question?.points ?? question?.score ?? 1);
-      const type = normalizeQuestionType(question?.type);
-      const options = Array.isArray(question?.options)
-        ? [...new Set(
-            question.options
-              .map((item: unknown) =>
-                String(item || '')
-                  .replace(/^(?:\s*[A-D]\s*[\.\)\-:]\s*)+/i, '')
-                  .trim(),
-              )
-              .filter((item: string) => item.length > 0),
-          )]
-        : undefined;
-      const prompt = String(question?.question ?? question?.text ?? '').trim();
-
-      return {
-        id: String(question?.id || `q_${sectionIndex + 1}_${questionIndex + 1}`),
-        question: prompt,
-        text: prompt,
-        type,
-        marks: Number.isFinite(marks) ? Math.max(1, marks) : 1,
-        options,
-        correctAnswer: String(question?.correctAnswer ?? question?.correct_answer ?? question?.answer ?? ''),
-        explanation: String(question?.explanation || '').trim() || undefined,
-        visual:
-          question?.visual && typeof question.visual === 'object'
-            ? question.visual
-            : undefined,
-      };
-    });
-
-    const sectionMarks = normalizedQuestions.reduce((sum: number, question: any) => sum + Number(question.marks || 0), 0);
-
-    return {
-      id: String(section?.id || `section_${sectionIndex + 1}`),
-      name: String(section?.name || section?.title || `Section ${sectionIndex + 1}`),
-      title: String(section?.title || section?.name || `Section ${sectionIndex + 1}`),
-      instructions: String(section?.instructions || '').trim() || undefined,
-      readingPassage:
-        String(section?.readingPassage || section?.reading_passage || '').trim() || undefined,
-      questions: normalizedQuestions,
-      totalMarks: sectionMarks,
-    };
-  });
-
-  const totalMarks = sections.reduce((sum: number, section: any) => sum + Number(section.totalMarks || 0), 0);
-
-  return {
-    title: String(rawExam?.title || `${subject} ${examType.replace(/_/g, ' ')}`),
-    grade,
-    subject,
-    duration: String(rawExam?.duration || '90 minutes'),
-    totalMarks,
-    sections,
-  };
-}
-
-function countQuestions(exam: any): number {
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-  return sections.reduce(
-    (sum: number, section: any) => sum + (Array.isArray(section?.questions) ? section.questions.length : 0),
-    0,
-  );
-}
-
-function enforceQuestionUpperBound(exam: any, maxQuestions: number) {
-  if (!Number.isFinite(maxQuestions) || maxQuestions <= 0) return exam;
-  let remaining = countQuestions(exam) - maxQuestions;
-  if (remaining <= 0) return exam;
-
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-  for (let i = sections.length - 1; i >= 0 && remaining > 0; i -= 1) {
-    const questions = Array.isArray(sections[i]?.questions) ? sections[i].questions : [];
-    if (questions.length === 0) continue;
-
-    const cutCount = Math.min(remaining, Math.max(0, questions.length - 1));
-    if (cutCount > 0) {
-      sections[i].questions = questions.slice(0, questions.length - cutCount);
-      remaining -= cutCount;
-    }
-  }
-
-  if (remaining > 0) {
-    for (let i = sections.length - 1; i >= 0 && remaining > 0; i -= 1) {
-      const questions = Array.isArray(sections[i]?.questions) ? sections[i].questions : [];
-      if (questions.length === 0) continue;
-      const cutCount = Math.min(remaining, questions.length);
-      sections[i].questions = questions.slice(0, Math.max(0, questions.length - cutCount));
-      remaining -= cutCount;
-    }
-  }
-
-  return recalculateExamMarks(exam);
-}
-
-function isLanguageSubject(subject: string): boolean {
-  const normalized = normalizeText(subject);
-  return (
-    normalized.includes('language') ||
-    normalized.includes('english') ||
-    normalized.includes('afrikaans') ||
-    normalized.includes('isizulu') ||
-    normalized.includes('isixhosa') ||
-    normalized.includes('sepedi')
-  );
-}
-
-function isMathSubject(subject: string): boolean {
-  const normalized = normalizeText(subject);
-  return (
-    normalized.includes('mathematic') ||
-    normalized.includes('algebra') ||
-    normalized.includes('geometry') ||
-    normalized.includes('trigonometry') ||
-    normalized.includes('calculus')
-  );
-}
-
-const LANGUAGE_ALIASES_TO_BCP47: Record<string, string> = {
-  en: 'en-ZA',
-  'en-za': 'en-ZA',
-  english: 'en-ZA',
-  af: 'af-ZA',
-  'af-za': 'af-ZA',
-  afrikaans: 'af-ZA',
-  zu: 'zu-ZA',
-  'zu-za': 'zu-ZA',
-  isizulu: 'zu-ZA',
-  xh: 'xh-ZA',
-  'xh-za': 'xh-ZA',
-  isixhosa: 'xh-ZA',
-  nso: 'nso-ZA',
-  'nso-za': 'nso-ZA',
-  sepedi: 'nso-ZA',
-  tn: 'tn-ZA',
-  'tn-za': 'tn-ZA',
-  setswana: 'tn-ZA',
-  st: 'st-ZA',
-  'st-za': 'st-ZA',
-  sesotho: 'st-ZA',
-  nr: 'nr-ZA',
-  'nr-za': 'nr-ZA',
-  ss: 'ss-ZA',
-  'ss-za': 'ss-ZA',
-  ve: 've-ZA',
-  've-za': 've-ZA',
-  ts: 'ts-ZA',
-  'ts-za': 'ts-ZA',
-};
-
-const LOCALE_TO_LANGUAGE_NAME: Record<string, string> = {
-  'en-ZA': 'English',
-  'af-ZA': 'Afrikaans',
-  'zu-ZA': 'isiZulu',
-  'xh-ZA': 'isiXhosa',
-  'nso-ZA': 'Sepedi',
-  'tn-ZA': 'Setswana',
-  'st-ZA': 'Sesotho',
-  'nr-ZA': 'isiNdebele',
-  'ss-ZA': 'Siswati',
-  've-ZA': 'Tshivenda',
-  'ts-ZA': 'Xitsonga',
-};
-
-const LANGUAGE_MARKERS: Record<string, string[]> = {
-  'en-ZA': ['the', 'and', 'with', 'they', 'read', 'answer', 'questions', 'story'],
-  'af-ZA': ['die', 'en', 'met', 'hulle', 'lees', 'beantwoord', 'vrae', 'storie'],
-  'zu-ZA': ['funda', 'umbhalo', 'indaba', 'imibuzo', 'kanye', 'bona', 'ngoba', 'kule'],
-  'xh-ZA': ['funda', 'ibali', 'imibuzo', 'kwaye', 'bona', 'kuba', 'kule', 'ngoko'],
-  'nso-ZA': ['bala', 'kanegelo', 'dipotso', 'gomme', 'bona', 'ka', 'go', 'le'],
-  'tn-ZA': ['bala', 'potso', 'mme', 'bona', 'go', 'le', 'leina', 'palo'],
-  'st-ZA': ['bala', 'dipotso', 'mme', 'bona', 'ho', 'le', 'pale', 'kahoo'],
-  'nr-ZA': ['funda', 'ibali', 'imibuzo', 'kanye', 'ngaphambi', 'ekhaya', 'bahleka', 'ndawonye'],
-  'ss-ZA': ['fundza', 'indzaba', 'imibuto', 'kanye', 'babuya', 'ekhaya', 'bahleka', 'ndzawonye'],
-  've-ZA': ['vhala', 'bugu', 'mbudziso', 'na', 'hayani', 'murahu', 'vho', 'fhedza'],
-  'ts-ZA': ['hlaya', 'xitori', 'swivutiso', 'naswona', 'ekhaya', 'va', 'endzhaku', 'hlekile'],
-};
-const STRICT_LANGUAGE_VALIDATION_LOCALES = new Set(Object.keys(LANGUAGE_MARKERS));
-
-const META_QUESTION_PATTERNS = [
-  /read (the )?(passage|story|text)/i,
-  /answer (the )?questions? (that )?follow/i,
-  /lees die (storie|teks)/i,
-  /beantwoord die vrae wat volg/i,
-  /funda (umbhalo|ibali)/i,
-  /phendula imibuzo/i,
-  /bala kanegelo/i,
-  /arabja dipotso/i,
-];
-
-const COMMON_STOP_WORDS = new Set([
-  'the', 'and', 'with', 'from', 'that', 'this', 'then', 'they', 'were', 'their', 'have', 'has', 'had',
-  'for', 'into', 'over', 'under', 'after', 'before', 'while', 'when', 'what', 'which', 'where',
-  'die', 'het', 'vir', 'hulle', 'ons', 'was', 'met', 'wat', 'wie', 'waar',
-  'funda', 'bala', 'story', 'passage', 'storie', 'teks', 'question', 'questions', 'vrae', 'imibuzo', 'dipotso',
-]);
-
-function normalizeLanguageLocale(language: string): string {
-  const raw = String(language || '').trim();
-  if (!raw) return 'en-ZA';
-  if (LOCALE_TO_LANGUAGE_NAME[raw]) return raw;
-  const lower = raw.toLowerCase();
-  return LANGUAGE_ALIASES_TO_BCP47[lower] || 'en-ZA';
-}
-
-function resolveLanguageName(language: string): string {
-  const locale = normalizeLanguageLocale(language);
-  return LOCALE_TO_LANGUAGE_NAME[locale] || 'English';
-}
-
-function getLanguageReadingFallback(language: string): { passage: string; instruction: string } {
-  const locale = normalizeLanguageLocale(language);
-  const safeLanguageLabel = resolveLanguageName(locale);
-
-  if (locale === 'af-ZA') {
-    return {
-      passage: `Lees die storie hieronder en beantwoord die vrae wat volg.
-
-Mia en haar broer, Tumi, het Saterdag vroeg op hul oupa se plaas gaan help. Hulle het eers die hoenders gevoer, daarna groente geplant en later saam met Oupa die kraal skoongemaak. Teen die middag het dit begin reen, maar hulle het onder die stoep gesit en stories geluister. Voor hulle huis toe is, het Ouma vir hulle warm sop gegee en almal het saam gelag.`,
-      instruction: 'Lees die teks sorgvuldig en antwoord in Afrikaans.',
-    };
-  }
-
-  if (locale === 'zu-ZA') {
-    return {
-      passage: `Funda indaba engezansi bese uphendula imibuzo elandelayo.
-
-UMia nomfowabo uTumi bavuke ekuseni ngoMgqibelo bayosiza epulazini likakhokho wabo. Baqale ngokondla izinkukhu, base betshala imifino, kwathi kamuva bahlanza isibaya noKhokho. Emini kwaqala ukuna, ngakho bahlala ngaphansi kweveranda balalela izindaba. Ngaphambi kokubuya ekhaya, uGogo wabanika isobho esishisayo, bonke bahleka ndawonye.`,
-      instruction: 'Funda umbhalo kahle bese uphendula ngesiZulu.',
-    };
-  }
-
-  if (locale === 'xh-ZA') {
-    return {
-      passage: `Funda ibali elingezantsi uze uphendule imibuzo elandelayo.
-
-UMia nomntakwabo uTumi baye kusasa ngoMgqibelo ukuyokunceda kwifama katatomkhulu wabo. Baqale ngokondla iinkukhu, emva koko batyala imifuno, baza kamva bacoca isibaya noTat'omkhulu. Emva kwemini kwaqala ukuna, ngoko bahlala phantsi kweveranda belalela amabali. Phambi kokuba bagoduke, uMakhulu wabanika isuphu eshushu, bonke bahleka kunye.`,
-      instruction: 'Funda umbhalo ngononophelo uze uphendule ngesiXhosa.',
-    };
-  }
-
-  if (locale === 'nso-ZA') {
-    return {
-      passage: `Bala kanegelo ye e lego ka tlase gomme o arabe dipotso tše di latelago.
-
-Mia le ngwanabo Tumi ba ile ka pela ka Mokibelo go thuša polaseng ya rakgolo wa bona. Ba thomile ka go fepa dikgoho, ka morago ba bjala merogo, gomme ka morago ba hlwekiša lesaka le Rakgolo. Ka bohareng bja mosegare pula ya thoma, ka gona ba dula ka tlase ga veranda ba theeletša dikanegelo. Pele ba boela gae, Koko o ba file sopho ye e fišago, gomme bohle ba sega mmogo.`,
-      instruction: 'Bala sengwalwa ka tlhokomelo gomme o arabe ka Sepedi.',
-    };
-  }
-
-  if (locale === 'tn-ZA') {
-    return {
-      passage: `Bala kgang e e fa tlase mme o arabe dipotso tse di latelang.
-
-Mia le mogolowe Tumi ba ne ba ya ka moso ka Matlhatso go thusa kwa polasing ya rremogolo. Ba simolotse ka go fepa dikoko, ba bo ba jala merogo, mme morago ba phepafatsa lesaka le Rremogolo. Fa pula e simolola motshegare, ba ne ba nna fa tlase ga veranda ba reetsa dikgang. Pele ba boela gae, Nkoko o ne a ba naya sopho e e mogote mme botlhe ba tshega mmogo.`,
-      instruction: 'Bala temana ka kelotlhoko mme o arabe ka Setswana.',
-    };
-  }
-
-  if (locale === 'st-ZA') {
-    return {
-      passage: `Bala pale e ka tlase ebe o araba dipotso tse latelang.
-
-Mia le ngwanabo Tumi ba ile hoseng ka Moqebelo ho ya thusa polasing ya ntatemoholo. Ba ile ba qala ka ho fepa dikgoho, ba nto jala meroho, mme hamorao ba hloekisa lesaka le Ntatemoholo. Ha pula e qala motshehare, ba dula tlasa veranda ba mametse dipale. Pele ba kgutlela hae, Nkgono o ba file sopho e chesang mme bohle ba tsheha mmoho.`,
-      instruction: 'Bala temana ka hloko ebe o araba ka Sesotho.',
-    };
-  }
-
-  if (locale === 'nr-ZA') {
-    return {
-      passage: `Funda indatjana engezansi bese uphendula imibuzo elandelako.
-
-UMia nomfowabo uTumi baphume ekuseni ngoMgqibelo bayokusiza epulazini likabamkhulu. Bathome ngokondla iinkukhu, ngemva kwalokho batjala imifino, begodu kamuva bahlanza isibaya noBamkhulu. Emini kwaqala ukuna, ngakho bahlala ngaphasi kweveranda balalela iindatjana. Ngaphambi kokubuyela ekhaya, uGogo wabanikela isobho esifuthumeleko, boke bahleka ndawonye.`,
-      instruction: 'Funda umbhalo kuhle bese uphendula ngesiNdebele.',
-    };
-  }
-
-  if (locale === 'ss-ZA') {
-    return {
-      passage: `Fundza indzaba lengentasi bese uphendvula imibuto lelandzelako.
-
-UMia nemfowabo Tumi bavuke ekuseni ngaMgcibelo bayewusita epulazini lakabomkhulu. Bacale ngokondla tinkhukhu, base batjala imifino, bese kamuva bahlanza sibaya naMkhulu. Emini kwacala lina, ngako bahlala ngaphansi kweveranda balalela tindzaba. Ngaphambi kwekubuyela ekhaya, Gogo wabanika sobho lesishisako, bonkhe bahleka ndzawonye.`,
-      instruction: 'Fundza umbhalo kahle bese uphendvula ngesiSwati.',
-    };
-  }
-
-  if (locale === 've-ZA') {
-    return {
-      passage: `Vhalani tshiṱori tshi re fhasi ni dovhe ni fhindule mbudziso dzi tevhelaho.
-
-Mia na murathu wawe Tumi vho vuwa nga matsheloni nga Mugivhela vha ya u thusa polasini ya makhulu wavho. Vho thoma nga u ṋea huku zwiliwa, nga murahu vha ṱavha miroho, vha dovha vha kunakisa tshisima na Makhulu. Nga masiari mvula ya thoma, ngauralo vha dzula fhasi ha veranda vha tshi thetshelesa zwiṱori. Musi vha sa athu u humela hayani, Gogo o vha ṋea suphu i dudaho, vhoṱhe vha sea vho takala.`,
-      instruction: 'Vhalani zwavhuḓi ni fhindule nga Tshivenda.',
-    };
-  }
-
-  if (locale === 'ts-ZA') {
-    return {
-      passage: `Hlaya xitori lexi nga laha hansi kutani u hlamula swivutiso leswi landzelaka.
-
-Mia na makwavo Tumi va pfuke nimixo hi Mugqivela va ya pfuna epurasini ra kokwana wa vona. Va sungule hi ku phamela tihuku, endzhaku va byala miroho, kutani va tlhela va basisa xibaya na Kokwana. Hi nkarhi wa nhlikanhi mpfula yi sungule ku na, hikwalaho va tshamile ehansi ka veranda va yingisela switori. Va nga si tlhela ekaya, Gogo u va nyike supu yo hisa, kutani hinkwavo va hleka swin'we.`,
-      instruction: 'Hlaya rungula hi vukheta kutani u hlamula hi Xitsonga.',
-    };
-  }
-
-  return {
-    passage: `Read the story below and answer the questions that follow.
-
-Mia and her brother, Tumi, went early on Saturday to help on their grandfather's farm. They first fed the chickens, then planted vegetables, and later cleaned the cattle pen with Grandpa. By midday it started raining, so they sat under the veranda and listened to stories. Before going home, Grandma gave them warm soup and everyone laughed together.`,
-    instruction: `Read the passage carefully and answer in ${safeLanguageLabel}.`,
-  };
-}
-
-function ensureLanguageReadingPassage(exam: any, subject: string, grade: string, language: string) {
-  if (!isLanguageSubject(subject)) return exam;
-
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-  if (sections.length === 0) return exam;
-
-  const first = sections[0];
-  const sectionTitle = normalizeText(first?.title || first?.name || '');
-  const needsPassage =
-    sectionTitle.includes('lees') ||
-    sectionTitle.includes('read') ||
-    sectionTitle.includes('comprehension') ||
-    sectionTitle.includes('begrip') ||
-    sections.some((section: any) => normalizeText(section?.title || '').includes('lees')) ||
-    sections.some((section: any) => normalizeText(section?.title || '').includes('read'));
-
-  if (!needsPassage) return exam;
-
-  const existingPassage = String(first?.readingPassage || first?.reading_passage || first?.instructions || '').trim();
-  if (existingPassage.length >= 120) return exam;
-
-  const fallback = getLanguageReadingFallback(language);
-  first.readingPassage = `${fallback.passage}\n\n${fallback.instruction}`;
-  first.instructions = `Grade: ${grade}. ${fallback.instruction}`;
-  return exam;
-}
-
-function tokenizeLanguageText(value: string): string[] {
-  return String(value || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length >= 3);
-}
-
-function detectLikelyLocale(text: string): string | null {
-  const tokens = new Set(tokenizeLanguageText(text));
-  let bestLocale: string | null = null;
-  let bestScore = 0;
-
-  Object.entries(LANGUAGE_MARKERS).forEach(([locale, markers]) => {
-    const score = markers.reduce((sum, marker) => sum + (tokens.has(marker) ? 1 : 0), 0);
-    if (score > bestScore) {
-      bestScore = score;
-      bestLocale = locale;
-    }
-  });
-
-  return bestScore >= 2 ? bestLocale : null;
-}
-
-function getPassageKeywords(passage: string): Set<string> {
-  return new Set(
-    tokenizeLanguageText(passage).filter((token) => token.length >= 4 && !COMMON_STOP_WORDS.has(token)),
-  );
-}
-
-function hasKeywordOverlap(text: string, keywords: Set<string>): boolean {
-  if (!keywords.size) return true;
-  const tokens = tokenizeLanguageText(text);
-  return tokens.some((token) => keywords.has(token));
-}
-
-function validateComprehensionIntegrity(exam: any, subject: string, language: string): string[] {
-  const issues: string[] = [];
-  if (!isLanguageSubject(subject)) return issues;
-
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-  if (sections.length === 0) return ['No sections found for language exam.'];
-
-  const first = sections[0];
-  const sectionTitle = normalizeText(first?.title || first?.name || '');
-  const isComprehensionSection =
-    sectionTitle.includes('comprehension') ||
-    sectionTitle.includes('lees') ||
-    sectionTitle.includes('read') ||
-    sectionTitle.includes('begrip') ||
-    sectionTitle.includes('funda') ||
-    sectionTitle.includes('bala');
-
-  const passage = String(first?.readingPassage || first?.reading_passage || '').trim();
-  if (isComprehensionSection && passage.length < 120) {
-    issues.push('Comprehension section is missing a valid reading passage.');
-  }
-
-  if (passage.length >= 120) {
-    const expectedLocale = normalizeLanguageLocale(language);
-    const detectedLocale = detectLikelyLocale(passage);
-    if (
-      STRICT_LANGUAGE_VALIDATION_LOCALES.has(expectedLocale) &&
-      detectedLocale &&
-      detectedLocale !== expectedLocale
-    ) {
-      issues.push(`Reading passage language mismatch: expected ${expectedLocale}, detected ${detectedLocale}.`);
-    }
-
-    const passageKeywords = getPassageKeywords(passage);
-    const questions = Array.isArray(first?.questions) ? first.questions.slice(0, 6) : [];
-
-    questions.forEach((question: any, index: number) => {
-      const qText = String(question?.question || question?.text || '').trim();
-      if (!qText) {
-        issues.push(`Question ${index + 1} in comprehension section is empty.`);
-        return;
-      }
-
-      if (META_QUESTION_PATTERNS.some((pattern) => pattern.test(qText))) {
-        issues.push(`Question ${index + 1} is an instruction/meta prompt, not a real comprehension item.`);
-      }
-
-      const options = Array.isArray(question?.options) ? question.options : [];
-      if (options.length > 0) {
-        const combined = `${qText} ${options.map((option: unknown) => String(option || '')).join(' ')}`;
-        if (!hasKeywordOverlap(combined, passageKeywords)) {
-          issues.push(`Question ${index + 1} options are not grounded in the reading passage context.`);
-        }
-      }
+): Promise<void> {
+  if (params.materials.length === 0) return;
+
+  const studentScope = params.studentId || '';
+  const nowIso = new Date().toISOString();
+  const rows = [];
+
+  for (const material of params.materials.slice(0, MAX_STUDY_MATERIAL_BLOCKS)) {
+    const summary = String(material.summary || '').trim();
+    if (summary.length < 40) continue;
+    const hashInput = `${normalizeText(summary)}|${normalizeText(material.sourceName)}|${params.grade}|${params.subject}`;
+    const contentHash = await sha256Hex(hashInput);
+    rows.push({
+      auth_user_id: params.authUserId,
+      student_id: params.studentId,
+      school_id: params.schoolId,
+      student_scope: studentScope,
+      grade: params.grade,
+      subject: params.subject,
+      language: params.language,
+      source_name: material.sourceName,
+      summary_text: summary,
+      content_hash: contentHash,
+      last_used_at: nowIso,
+      updated_at: nowIso,
+      metadata: {
+        saved_from: 'generate_exam',
+        generated_exam_id: params.examId,
+      },
     });
   }
 
-  return issues;
+  if (rows.length === 0) return;
+
+  const { error } = await supabase
+    .from('exam_study_materials')
+    .upsert(rows, { onConflict: 'auth_user_id,student_scope,content_hash' });
+
+  if (error) {
+    console.warn('[generate-exam] study material memory upsert failed', error.message);
+  }
 }
 
-function computeBlueprintAudit(exam: any, grade: string, examType: string): ExamBlueprintAudit {
-  const policy = getQuestionCountPolicy(grade, examType);
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-  let objectiveMarks = 0;
-  let shortMarks = 0;
-  let extendedMarks = 0;
-
-  sections.forEach((section: any) => {
-    const questions = Array.isArray(section?.questions) ? section.questions : [];
-    questions.forEach((question: any) => {
-      const marks = Number(question?.marks ?? 1);
-      const safeMarks = Number.isFinite(marks) ? Math.max(1, marks) : 1;
-      const type = normalizeQuestionType(question?.type);
-      if (type === 'multiple_choice' || type === 'true_false' || type === 'fill_in_blank') {
-        objectiveMarks += safeMarks;
-      } else if (type === 'short_answer') {
-        shortMarks += safeMarks;
-      } else {
-        extendedMarks += safeMarks;
-      }
-    });
-  });
-
-  const totalMarks = Number(exam?.totalMarks || objectiveMarks + shortMarks + extendedMarks || 1);
-  const actualQuestions = countQuestions(exam);
-  const denominator = totalMarks > 0 ? totalMarks : 1;
-
-  return {
-    minQuestions: policy.min,
-    maxQuestions: policy.max,
-    actualQuestions,
-    totalMarks,
-    objectiveMarks,
-    shortMarks,
-    extendedMarks,
-    objectiveRatio: Number((objectiveMarks / denominator).toFixed(3)),
-    shortRatio: Number((shortMarks / denominator).toFixed(3)),
-    extendedRatio: Number((extendedMarks / denominator).toFixed(3)),
-  };
-}
-
-function computeTeacherAlignmentSummary(contextSummary: ExamContextSummary): ExamTeacherAlignmentSummary {
-  const intentTaggedCount = Number(contextSummary.intentTaggedCount || 0);
-  const taughtSignals = contextSummary.assignmentCount + contextSummary.lessonCount + intentTaggedCount;
-  const weakSignals = contextSummary.weakTopics.length;
-  const coverageScore = Math.max(
-    0,
-    Math.min(100, Math.round((taughtSignals / Math.max(1, taughtSignals + weakSignals)) * 100)),
-  );
-
-  return {
-    assignmentCount: contextSummary.assignmentCount,
-    lessonCount: contextSummary.lessonCount,
-    intentTaggedCount,
-    coverageScore,
-  };
-}
-
-function buildStudyCoachPack(
-  grade: string,
-  subject: string,
-  language: string,
-  contextSummary: ExamContextSummary,
-): StudyCoachPack {
-  const focus = contextSummary.focusTopics.length > 0
-    ? contextSummary.focusTopics
-    : [`${subject} foundations`, `${subject} problem solving`, `${subject} vocabulary`];
-
-  const days: StudyCoachDayPlan[] = [
-    {
-      day: 'Day 1',
-      focus: `Understand core concepts: ${focus[0] || subject}`,
-      readingPiece: `Read a short ${subject} passage and underline 5 key words. Summarize it in 5 sentences in ${resolveLanguageName(language)}.`,
-      paperWritingDrill: 'Write definitions by hand, then explain one example in your own words.',
-      memoryActivity: 'Use 10-minute active recall: close notes and write everything remembered.',
-      parentTip: 'Ask the learner to teach you the concept in 2 minutes.',
-    },
-    {
-      day: 'Day 2',
-      focus: `Practice with guided questions: ${focus[1] || subject}`,
-      readingPiece: 'Read one worked example slowly and identify each solving step.',
-      paperWritingDrill: 'Do 8 mixed questions on paper with full working.',
-      memoryActivity: 'Create 6 flash cards and self-test twice (morning/evening).',
-      parentTip: 'Check if steps are written clearly, not only final answers.',
-    },
-    {
-      day: 'Day 3',
-      focus: `Fix weak areas: ${contextSummary.weakTopics[0] || focus[2] || subject}`,
-      readingPiece: 'Read a short explanatory text and answer 4 comprehension prompts.',
-      paperWritingDrill: 'Write one paragraph explaining a common mistake and how to avoid it.',
-      memoryActivity: 'Spaced recall block: 5-5-5 minute review (now, later, before sleep).',
-      parentTip: 'Encourage corrections in a different pen color to build reflection.',
-    },
-    {
-      day: 'Day 4',
-      focus: 'Timed exam rehearsal',
-      readingPiece: 'Skim instructions first, then read questions in order of confidence.',
-      paperWritingDrill: 'Complete a timed mini paper and mark with memo hints.',
-      memoryActivity: 'Rapid retrieval: list formulas/keywords without notes in 3 minutes.',
-      parentTip: 'Simulate a calm test environment with no interruptions.',
-    },
+async function attemptExamQualityRepair(params: {
+  modelUsed: string;
+  grade: string;
+  subject: string;
+  language: string;
+  issues: string[];
+  customPrompt?: string;
+  normalizedExam: unknown;
+}): Promise<string | null> {
+  const issueList = params.issues.map((issue, idx) => `${idx + 1}. ${issue}`).join('\n');
+  const promptLines = [
+    `The previous exam JSON draft failed quality checks for ${params.grade} ${params.subject}.`,
+    'Repair the draft and return a corrected full exam JSON only (no markdown).',
+    `Quality issues to fix:\n${issueList}`,
+    `Learner language must be strictly ${params.language}.`,
+    'If uploaded study material exists, keep questions strictly grounded in that material.',
+    'Do not include OCR labels/file names/translation annotations in learner-facing content.',
+    'Keep CAPS alignment and preserve realistic mark distribution.',
+    `Previous draft JSON:\n${JSON.stringify(params.normalizedExam)}`,
   ];
+  if (params.customPrompt) {
+    promptLines.push(`Original additional instructions:\n${params.customPrompt}`);
+  }
+  const repairPrompt = promptLines.join('\n\n');
 
-  return {
-    mode: 'guided_first',
-    planTitle: `${grade} ${subject} - 4 Day Study Coach + Test Day`,
-    days,
-    testDayChecklist: [
-      'Sleep early and review only summary notes.',
-      'Start with easiest section to build confidence.',
-      'Show full working and label answers clearly.',
-      'Leave 10 minutes to review skipped or uncertain questions.',
-    ],
-  };
-}
-
-function augmentQuestionVisuals(exam: any, visualMode: 'off' | 'hybrid') {
-  if (visualMode !== 'hybrid') return exam;
-  const sections = Array.isArray(exam?.sections) ? exam.sections : [];
-
-  sections.forEach((section: any) => {
-    const questions = Array.isArray(section?.questions) ? section.questions : [];
-    questions.forEach((question: any) => {
-      const text = normalizeText(question?.question || question?.text || '');
-      if (!text) return;
-
-      if (question?.visual) return;
-      if (!(text.includes('diagram') || text.includes('graph') || text.includes('chart') || text.includes('table'))) {
-        return;
-      }
-
-      question.visual = {
-        mode: 'diagram',
-        altText: `Supporting visual for question: ${String(question.question || '').slice(0, 90)}`,
-        diagramSpec: {
-          type: 'flow',
-          title: 'Concept Flow',
-          nodes: ['Input', 'Process', 'Output'],
-          edges: [
-            { from: 'Input', to: 'Process' },
-            { from: 'Process', to: 'Output' },
-          ],
-        },
-      };
+  if (params.modelUsed.startsWith('openai:') && OPENAI_API_KEY) {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: OPENAI_EXAM_MODEL,
+        temperature: 0.1,
+        max_tokens: 4096,
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: EXAM_SYSTEM_PROMPT },
+          { role: 'user', content: repairPrompt },
+        ],
+      }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn('[generate-exam] quality repair OpenAI failed', response.status, errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    return String(data?.choices?.[0]?.message?.content || '').trim() || null;
+  }
+
+  if (!ANTHROPIC_API_KEY) return null;
+
+  const repairModel = params.modelUsed.startsWith('openai:')
+    ? EXAM_PRIMARY_MODEL
+    : normalizeAnthropicModel(params.modelUsed || EXAM_PRIMARY_MODEL);
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: repairModel,
+      max_tokens: 4096,
+      system: EXAM_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: repairPrompt }],
+    }),
   });
 
-  return exam;
-}
-
-function extractJsonBlock(text: string): string {
-  const trimmed = text.trim();
-  if (trimmed.startsWith('{') && trimmed.endsWith('}')) return trimmed.trim();
-
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
-  if (fenced?.[1]) return fenced[1].trim();
-
-  const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
-  if (jsonMatch?.[0]) return jsonMatch[0].trim();
-
-  throw new Error('No JSON payload found in AI response');
-}
-
-/** Attempt to repair common LLM JSON issues (trailing commas, control chars) */
-function repairJsonForParse(raw: string): string {
-  let s = raw;
-  // Remove trailing commas before } or ] (common LLM mistake)
-  s = s.replace(/,\s*([}\]])/g, '$1');
-  // Remove control characters except newline and tab
-  s = s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
-  return s;
-}
-
-/** Parse exam JSON with repair attempts to avoid malformed fallback */
-function parseExamJson(raw: string): unknown {
-  try {
-    return JSON.parse(raw);
-  } catch {
-    try {
-      return JSON.parse(repairJsonForParse(raw));
-    } catch {
-      throw new Error('Parse failed after repair attempt');
-    }
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.warn('[generate-exam] quality repair Anthropic failed', response.status, errorText);
+    return null;
   }
+
+  const data = await response.json();
+  return String(data?.content?.[0]?.text || '').trim() || null;
 }
+
 
 async function fetchProfileByAuthUser(supabase: ReturnType<typeof createClient>, authUserId: string): Promise<ProfileRow | null> {
   const byAuth = await supabase
@@ -1781,474 +842,6 @@ async function resolveAuthorizedScope(
   };
 }
 
-function addWeightedTopic(map: Map<string, number>, topic: string | null | undefined, weight: number) {
-  const clean = sanitizeTopic(topic);
-  if (!clean) return;
-
-  const key = clean.toLowerCase();
-  const previous = map.get(key) || 0;
-  map.set(key, previous + weight);
-}
-
-function hydrateFocusFromMetadata(map: Map<string, number>, metadata: unknown, fallbackTitle: string | null, fallbackWeight: number) {
-  if (!metadata || typeof metadata !== 'object') {
-    addWeightedTopic(map, fallbackTitle, fallbackWeight);
-    return;
-  }
-
-  const record = metadata as Record<string, unknown>;
-  const topics = Array.isArray(record.topics)
-    ? record.topics
-    : Array.isArray(record.focus_topics)
-    ? record.focus_topics
-    : null;
-
-  if (topics && topics.length > 0) {
-    topics.forEach((item) => addWeightedTopic(map, String(item || ''), 4));
-    return;
-  }
-
-  addWeightedTopic(map, fallbackTitle, fallbackWeight);
-}
-
-async function resolveTeacherContext(
-  supabase: ReturnType<typeof createClient>,
-  scope: AuthorizedRequestScope,
-  payload: {
-    subject: string;
-    useTeacherContext: boolean;
-    lookbackDays: number;
-    examIntentMode: 'teacher_weighted' | 'caps_only';
-  },
-): Promise<ExamContextSummary> {
-  const emptySummary: ExamContextSummary = {
-    assignmentCount: 0,
-    lessonCount: 0,
-    focusTopics: [],
-    weakTopics: [],
-    sourceAssignmentIds: [],
-    sourceLessonIds: [],
-  };
-
-  if (!payload.useTeacherContext) return emptySummary;
-
-  const now = Date.now();
-  const lookbackMs = now - payload.lookbackDays * 24 * 60 * 60 * 1000;
-
-  let homeworkQuery = supabase
-    .from('homework_assignments')
-    .select('id, title, subject, instructions, description, metadata, due_date, created_at, assigned_at, class_id, lesson_id, is_published, is_active, status, preschool_id')
-    .order('created_at', { ascending: false })
-    .limit(150);
-
-  if (scope.effectiveClassId) {
-    homeworkQuery = homeworkQuery.eq('class_id', scope.effectiveClassId);
-  }
-
-  if (scope.effectiveSchoolId) {
-    homeworkQuery = homeworkQuery.eq('preschool_id', scope.effectiveSchoolId);
-  }
-
-  const { data: homeworkRowsRaw, error: homeworkError } = await homeworkQuery;
-  if (homeworkError) {
-    console.warn('[generate-exam] homework context query failed', homeworkError.message);
-  }
-
-  const homeworkRows = ((homeworkRowsRaw || []) as HomeworkRow[])
-    .filter((row) => {
-      if (!matchesSubject(row.subject || row.title || row.description, payload.subject)) return false;
-      if (!isRecent(row, lookbackMs)) return false;
-
-      const status = String(row.status || '').toLowerCase();
-      const published = row.is_published === true || row.is_active === true;
-      const statusActive = ['published', 'active', 'assigned', 'open', 'ongoing'].includes(status);
-      return published || statusActive;
-    })
-    .slice(0, 40);
-
-  const assignmentIds = homeworkRows.map((row) => row.id);
-
-  let submissionRows: HomeworkSubmissionRow[] = [];
-  if (scope.effectiveStudentId && assignmentIds.length > 0) {
-    let submissionQuery = supabase
-      .from('homework_submissions')
-      .select('assignment_id, homework_assignment_id, grade, feedback, ai_feedback, status, submitted_at')
-      .eq('student_id', scope.effectiveStudentId)
-      .in('assignment_id', assignmentIds)
-      .order('submitted_at', { ascending: false })
-      .limit(100);
-
-    if (scope.effectiveSchoolId) {
-      submissionQuery = submissionQuery.eq('preschool_id', scope.effectiveSchoolId);
-    }
-
-    const { data: submissionData, error: submissionError } = await submissionQuery;
-    if (submissionError) {
-      console.warn('[generate-exam] submission context query failed', submissionError.message);
-    } else {
-      submissionRows = (submissionData || []) as HomeworkSubmissionRow[];
-    }
-  }
-
-  let lessonQuery = supabase
-    .from('lesson_assignments')
-    .select('id, lesson_id, due_date, assigned_at, status, class_id, student_id, preschool_id, notes, lessons(id, title, subject, objectives, content, description)')
-    .order('assigned_at', { ascending: false })
-    .limit(150);
-
-  if (scope.effectiveClassId) {
-    lessonQuery = lessonQuery.eq('class_id', scope.effectiveClassId);
-  } else if (scope.effectiveStudentId) {
-    lessonQuery = lessonQuery.eq('student_id', scope.effectiveStudentId);
-  }
-
-  if (scope.effectiveSchoolId) {
-    lessonQuery = lessonQuery.eq('preschool_id', scope.effectiveSchoolId);
-  }
-
-  const { data: lessonRowsRaw, error: lessonError } = await lessonQuery;
-  if (lessonError) {
-    console.warn('[generate-exam] lesson context query failed', lessonError.message);
-  }
-
-  const lessonRows = ((lessonRowsRaw || []) as LessonAssignmentRow[])
-    .filter((row) => {
-      if (!isRecent(row, lookbackMs)) return false;
-      const status = String(row.status || '').toLowerCase();
-      const active = ['assigned', 'published', 'active', 'completed', 'in_progress'].includes(status) || !status;
-      if (!active) return false;
-
-      const lesson = Array.isArray(row.lessons) ? row.lessons[0] : row.lessons;
-      if (!lesson) return false;
-      return matchesSubject(lesson.subject || lesson.title || lesson.description || row.notes, payload.subject);
-    })
-    .slice(0, 40);
-
-  const focusMap = new Map<string, number>();
-  const weakMap = new Map<string, number>();
-  const intentTaggedIds = new Set<string>();
-
-  const assignmentById = new Map<string, HomeworkRow>();
-  homeworkRows.forEach((assignment) => {
-    assignmentById.set(assignment.id, assignment);
-    const metadata = assignment.metadata && typeof assignment.metadata === 'object'
-      ? (assignment.metadata as Record<string, unknown>)
-      : null;
-    const isExamIntent =
-      metadata?.is_test_relevant === true ||
-      metadata?.exam_intent === true ||
-      metadata?.test_relevant === true ||
-      metadata?.priority_weight === 'high';
-
-    if (isExamIntent) {
-      intentTaggedIds.add(assignment.id);
-    }
-
-    const baseTitleWeight =
-      payload.examIntentMode === 'teacher_weighted' && isExamIntent ? 8 : 5;
-    addWeightedTopic(focusMap, assignment.title, baseTitleWeight);
-    addWeightedTopic(focusMap, assignment.subject, 3);
-
-    if (metadata && Array.isArray(metadata.caps_topics)) {
-      metadata.caps_topics.forEach((topic) => addWeightedTopic(focusMap, String(topic || ''), 5));
-    }
-
-    hydrateFocusFromMetadata(
-      focusMap,
-      assignment.metadata,
-      assignment.title,
-      payload.examIntentMode === 'teacher_weighted' && isExamIntent ? 6 : 3,
-    );
-  });
-
-  lessonRows.forEach((assignment) => {
-    const lesson = Array.isArray(assignment.lessons) ? assignment.lessons[0] : assignment.lessons;
-    if (!lesson) return;
-    addWeightedTopic(focusMap, lesson.title, 4);
-    addWeightedTopic(focusMap, lesson.subject, 2);
-    if (Array.isArray(lesson.objectives)) {
-      lesson.objectives.forEach((objective) => addWeightedTopic(focusMap, objective, 3));
-    }
-  });
-
-  submissionRows.forEach((submission) => {
-    const grade = Number(submission.grade ?? NaN);
-    const sourceId = submission.assignment_id || submission.homework_assignment_id || '';
-    const linkedAssignment = assignmentById.get(sourceId);
-
-    if (Number.isFinite(grade) && grade < 60) {
-      addWeightedTopic(weakMap, linkedAssignment?.title || linkedAssignment?.subject || null, 4);
-    }
-
-    const status = String(submission.status || '').toLowerCase();
-    if (status.includes('late') || status.includes('missing')) {
-      addWeightedTopic(weakMap, linkedAssignment?.title || linkedAssignment?.subject || null, 2);
-    }
-  });
-
-  const lessonIds = lessonRows
-    .map((item) => {
-      const lesson = Array.isArray(item.lessons) ? item.lessons[0] : item.lessons;
-      return lesson?.id || item.lesson_id || item.id;
-    })
-    .filter((value): value is string => Boolean(value));
-
-  return {
-    assignmentCount: assignmentIds.length,
-    lessonCount: lessonIds.length,
-    focusTopics: pickTopTopics(focusMap, 8),
-    weakTopics: pickTopTopics(weakMap, 6),
-    sourceAssignmentIds: assignmentIds,
-    sourceLessonIds: lessonIds,
-    intentTaggedCount: intentTaggedIds.size,
-  };
-}
-
-/**
- * Returns CAPS-aligned subject-specific section structure instructions.
- * Used to ensure Dash generates exams in the same format as our reference designs.
- */
-function getSubjectSectionStructure(subject: string, grade: string, examType: string): string | null {
-  const s = normalizeText(subject);
-
-  // Afrikaans (Home Language & First Additional)
-  if (s.includes('afrikaans')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Afrikaans - CAPS/DBE):
-- Section A: Leesbegrip (Reading Comprehension) – include a short passage/story in section instructions, then comprehension questions. Target ~15 marks.
-- Section B: Taalstrukture en -konvensies (Language Structures and Conventions) – grammar, punctuation, sentence structure. Target ~15 marks.
-- Section C: Woordeskat (Vocabulary) – word meaning, synonyms, context, idioms. Target ~10 marks.
-- Section D: Skryfwerk (Writing) – short written task (paragraph, letter, or descriptive piece). Target ~10 marks.
-- Total ~50 marks, 60 minutes. Questions and passage in Afrikaans where appropriate. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // English (Home Language & First Additional)
-  if (s.includes('english')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (English - CAPS/DBE):
-- Section A: Reading Comprehension – include a short passage/story in section instructions, then comprehension questions. Target ~15 marks.
-- Section B: Language Structures and Conventions – grammar, punctuation, sentence structure. Target ~15 marks.
-- Section C: Vocabulary – word meaning, synonyms, context, idioms. Target ~10 marks.
-- Section D: Writing – short written task (paragraph, letter, or descriptive piece). Target ~10 marks.
-- Total ~50 marks, 60 minutes. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // isiZulu, isiXhosa, Sepedi (Home Language & First Additional)
-  if (s.includes('isizulu') || s.includes('isixhosa') || s.includes('sepedi')) {
-    const langName = s.includes('isizulu') ? 'isiZulu' : s.includes('isixhosa') ? 'isiXhosa' : 'Sepedi';
-    return `SUBJECT-SPECIFIC STRUCTURE (${langName} - CAPS/DBE):
-- Section A: Ukufunda nokuqonda / Ukuqonda okufundiweyo / Tlhaloso ya go bala (Reading Comprehension) – include a short passage/story in section instructions. Target ~15 marks.
-- Section B: Izakhiwo zolimi / Iindlela zolimi / Dikopano tša polelo (Language Structures and Conventions) – grammar, punctuation. Target ~15 marks.
-- Section C: Amagama / Amazwi / Mantšu (Vocabulary) – word meaning, context. Target ~10 marks.
-- Section D: Ukubhala / Ukubhala / Go ngwala (Writing) – short written task. Target ~10 marks.
-- Total ~50 marks, 60 minutes. Questions and passage in ${langName} where appropriate. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Mathematics & Mathematical Literacy
-  if (s.includes('mathematic') && !s.includes('literacy')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Mathematics - CAPS/DBE):
-- Section A: Multiple Choice – short objective questions covering core topics. Target ~40% of marks.
-- Section B: Short Questions – calculations, working must be shown. Target ~35% of marks.
-- Section C: Problem Solving / Long Questions – multi-step problems, reasoning, proofs where applicable. Target ~25% of marks.
-- Include mark allocation per question. Use age-appropriate cognitive level. Provide correctAnswer and explanation for each question.`;
-  }
-  if (s.includes('mathematical') && s.includes('literacy')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Mathematical Literacy - CAPS/DBE):
-- Section A: Multiple Choice – real-world contexts (budgets, maps, data). Target ~40% of marks.
-- Section B: Short Questions – calculations in context. Target ~35% of marks.
-- Section C: Long Questions – extended real-life scenarios. Target ~25% of marks.
-- Use South African contexts. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Natural Sciences, Physical Sciences, Life Sciences
-  if (s.includes('physical science') || s.includes('life science') || (s.includes('natural science') && !s.includes('technology'))) {
-    const subj = s.includes('physical') ? 'Physical Sciences' : s.includes('life science') ? 'Life Sciences' : 'Natural Sciences';
-    return `SUBJECT-SPECIFIC STRUCTURE (${subj} - CAPS/DBE):
-- Section A: Multiple Choice – concepts, definitions, recall. Target ~40% of marks.
-- Section B: Short Questions – calculations, diagrams, short explanations. Target ~35% of marks.
-- Section C: Long Questions / Data Response – extended reasoning, experiments, data analysis. Target ~25% of marks.
-- Include correctAnswer and explanation for each question. Use scientific terminology.`;
-  }
-  if (s.includes('natural science') && s.includes('technology')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Natural Sciences & Technology - CAPS/DBE):
-- Section A: Multiple Choice – science and technology concepts. Target ~40% of marks.
-- Section B: Short Questions – practical applications, simple investigations. Target ~35% of marks.
-- Section C: Design/Problem Solving – technology task or extended science question. Target ~25% of marks.
-- Provide correctAnswer and explanation for each question.`;
-  }
-
-  // History
-  if (s.includes('history')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (History - CAPS/DBE):
-- Section A: Source-based Questions – analyse sources (text, image, map). Target ~50% of marks.
-- Section B: Essay / Extended Writing – structured essay from given topics. Target ~50% of marks.
-- Include source material in section instructions where applicable. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Geography
-  if (s.includes('geography')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Geography - CAPS/DBE):
-- Section A: Map Work & Short Questions – map skills, calculations, short answers. Target ~45% of marks.
-- Section B: Data Response & Essay – data interpretation, extended writing. Target ~55% of marks.
-- Include map/data contexts. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Economic & Management Sciences (EMS - Senior Phase) - check before Economics
-  if (s.includes('economic') && s.includes('management')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Economic & Management Sciences - CAPS/DBE):
-- Section A: Multiple Choice – EMS concepts. Target ~30% of marks.
-- Section B: Short Questions – economy, entrepreneurship, accounting basics. Target ~40% of marks.
-- Section C: Case / Extended – integrated EMS task. Target ~30% of marks.
-- Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Accounting
-  if (s.includes('accounting')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Accounting - CAPS/DBE):
-- Section A: Multiple Choice – concepts, theory. Target ~25% of marks.
-- Section B: Short Questions – calculations, ledger entries, ratios. Target ~40% of marks.
-- Section C: Case Study / Long Questions – integrated tasks, financial statements. Target ~35% of marks.
-- Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Business Studies & Economics
-  if (s.includes('business study') || s.includes('economic')) {
-    const subj = s.includes('business') ? 'Business Studies' : 'Economics';
-    return `SUBJECT-SPECIFIC STRUCTURE (${subj} - CAPS/DBE):
-- Section A: Multiple Choice – concepts, definitions. Target ~30% of marks.
-- Section B: Short Questions – case snippets, calculations. Target ~40% of marks.
-- Section C: Essay / Extended – case study or essay. Target ~30% of marks.
-- Use South African business/economic contexts. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Technology, CAT, IT
-  if (s.includes('technology') || s.includes('computer application') || s.includes('information technology')) {
-    const subj = s.includes('computer') ? 'Computer Applications Technology' : s.includes('information') ? 'Information Technology' : 'Technology';
-    return `SUBJECT-SPECIFIC STRUCTURE (${subj} - CAPS/DBE):
-- Section A: Multiple Choice – theory, terminology, concepts. Target ~40% of marks.
-- Section B: Short Questions – practical applications, problem solving. Target ~35% of marks.
-- Section C: Extended / Scenario – real-world task or project-type question. Target ~25% of marks.
-- Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Life Orientation & Life Skills
-  if (s.includes('life orientation') || s.includes('life skill')) {
-    const subj = s.includes('orientation') ? 'Life Orientation' : 'Life Skills';
-    return `SUBJECT-SPECIFIC STRUCTURE (${subj} - CAPS/DBE):
-- Section A: Multiple Choice – development, health, citizenship, study skills. Target ~40% of marks.
-- Section B: Short Questions – scenario-based, reflective. Target ~35% of marks.
-- Section C: Extended – project-type or essay on life skills topics. Target ~25% of marks.
-- Use age-appropriate, inclusive contexts. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Creative Arts
-  if (s.includes('creative art')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Creative Arts - CAPS/DBE):
-- Section A: Multiple Choice – art forms, terminology, theory. Target ~40% of marks.
-- Section B: Short Questions – analysis, practical knowledge. Target ~35% of marks.
-- Section C: Extended – creative task or analysis. Target ~25% of marks.
-- Cover performing and visual arts. Provide correctAnswer and explanation for each question.`;
-  }
-
-  // Tourism
-  if (s.includes('tourism')) {
-    return `SUBJECT-SPECIFIC STRUCTURE (Tourism - CAPS/DBE):
-- Section A: Multiple Choice – tourism concepts, destinations. Target ~40% of marks.
-- Section B: Short Questions – map work, calculations, scenarios. Target ~35% of marks.
-- Section C: Extended – case study, itinerary, report. Target ~25% of marks.
-- Use South African and global contexts. Provide correctAnswer and explanation for each question.`;
-  }
-
-  return null;
-}
-
-function buildUserPrompt(payload: {
-  grade: string;
-  subject: string;
-  examType: string;
-  language: string;
-  customPrompt?: string;
-  contextSummary: ExamContextSummary;
-  useTeacherContext: boolean;
-  fullPaperMode: boolean;
-  guidedMode: 'guided_first' | 'memo_first';
-}) {
-  const countPolicy = getQuestionCountPolicy(payload.grade, payload.examType);
-  const locale = normalizeLanguageLocale(payload.language);
-  const languageName = resolveLanguageName(payload.language);
-  const base = [
-    `Generate a ${payload.examType} exam for ${payload.grade}.`,
-    `Subject: ${payload.subject}.`,
-    `Language: ${languageName} (${locale}).`,
-    `Write ALL learner-facing content in ${languageName} only (questions, options, section headings, instructions, and memorandum text).`,
-    `Minimum total questions required: ${countPolicy.min}.`,
-    `Maximum total questions allowed: ${countPolicy.max}.`,
-    'Align strictly to CAPS/DBE outcomes and cognitive level for this grade.',
-    'Include a balanced progression from foundational to challenging items.',
-    payload.fullPaperMode
-      ? 'Full-paper mode is ON: include formal section progression and realistic exam pacing.'
-      : 'Use compact paper mode with high quality question diversity.',
-    'Target mark distribution: objective 45-60%, short response 25-35%, extended response 10-20%.',
-    'For language subjects with comprehension, include a passage/story in section instructions.',
-    'Never use locale codes (like en-ZA/af-ZA) inside learner-facing instructions or questions.',
-    'Do not duplicate option letters inside option strings.',
-    'Always include explanation for each answer key item.',
-  ];
-
-  if (isMathSubject(payload.subject)) {
-    base.push(
-      'For mathematical notation, wrap inline maths in $...$ and display maths in $$...$$.',
-      'Use KaTeX-compatible LaTeX (e.g., \\frac{a}{b}, \\sqrt{x}, x^2, \\times, \\div).',
-      'Do not place plain-language words inside math delimiters.',
-    );
-  }
-
-  const subjectStructure = getSubjectSectionStructure(payload.subject, payload.grade, payload.examType);
-  if (subjectStructure) {
-    base.push(subjectStructure);
-  }
-
-  if (payload.useTeacherContext) {
-    const focus = payload.contextSummary.focusTopics.length > 0
-      ? payload.contextSummary.focusTopics.join(', ')
-      : 'No explicit focus topics available';
-    const weak = payload.contextSummary.weakTopics.length > 0
-      ? payload.contextSummary.weakTopics.join(', ')
-      : 'No weak-topic signals available';
-
-    base.push(
-      `Teacher artifacts discovered: ${payload.contextSummary.assignmentCount} assignments and ${payload.contextSummary.lessonCount} lessons.`,
-      `Prioritize these taught/assigned focus topics: ${focus}.`,
-      `Reinforce these weak topics with scaffolded questions: ${weak}.`,
-      'Weight about 70% of marks to taught artifacts and 30% to broader CAPS mastery checks.',
-    );
-  } else {
-    base.push('Teacher artifact context is disabled. Build from CAPS baseline only.');
-  }
-
-  base.push(
-    payload.guidedMode === 'guided_first'
-      ? 'Guided-first policy: hints should be prioritized before full memo style explanations.'
-      : 'Memo-first mode allowed.',
-  );
-
-  if (payload.customPrompt) {
-    const hasUploadedMaterial =
-      payload.customPrompt.includes('Study material extracted') ||
-      payload.customPrompt.includes('uploaded images') ||
-      payload.customPrompt.includes('uploaded material') ||
-      payload.customPrompt.includes('Study Notes');
-    if (hasUploadedMaterial) {
-      base.push(
-        'CRITICAL: You MUST base all questions STRICTLY on the provided study material, images, and PDFs. Do NOT introduce content from generic CAPS curriculum that is not present in the provided material. All questions must be answerable from the uploaded context alone. Prioritize the provided teacher context and uploaded material over general knowledge.',
-      );
-    }
-    base.push(`Additional instructions: ${payload.customPrompt}`);
-  }
-
-  base.push('Return only strict JSON matching the required schema. Do not use trailing commas. Output valid JSON with no markdown wrapping or extra text.');
-
-  return base.join('\n');
-}
-
 serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
@@ -2278,11 +871,21 @@ serve(async (req: Request) => {
       return jsonResponse({ error: 'Invalid session' }, 401, corsHeaders);
     }
 
-    const body = await req.json();
+    let body: Record<string, unknown>;
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch (parseErr) {
+      console.error('[generate-exam] Request body parse error:', parseErr);
+      return jsonResponse(
+        { error: 'Invalid request body', message: parseErr instanceof Error ? parseErr.message : 'Expected JSON' },
+        400,
+        corsHeaders,
+      );
+    }
     const grade = String(body?.grade || '').trim();
     const subject = String(body?.subject || '').trim();
     const examType = String(body?.examType || 'practice_test').trim();
-    const customPrompt = body?.customPrompt ? String(body.customPrompt) : undefined;
+    const requestCustomPrompt = body?.customPrompt ? String(body.customPrompt) : undefined;
     const rawModelOverride = body?.model ? String(body.model).trim() : undefined;
     const modelOverride = rawModelOverride ? normalizeAnthropicModel(rawModelOverride) : undefined;
     const language = normalizeLanguageLocale(body?.language ? String(body.language) : 'en-ZA');
@@ -2299,6 +902,11 @@ serve(async (req: Request) => {
     const fullPaperMode = body?.fullPaperMode !== false;
     const visualMode = body?.visualMode === 'hybrid' ? 'hybrid' : 'off';
     const guidedMode = body?.guidedMode === 'memo_first' ? 'memo_first' : 'guided_first';
+    // Production-safe default: always allow fallback so guardrail failures don't hard-fail UX.
+    // Internal QA can opt into strict behavior via `strictGuardrails=true`.
+    const requestedAllowFallback = toBooleanFlag(body?.allowFallback, true);
+    const strictGuardrails = body?.strictGuardrails === true;
+    const allowFallback = strictGuardrails ? requestedAllowFallback : true;
 
     if (rawModelOverride && modelOverride && rawModelOverride !== modelOverride) {
       console.warn('[generate-exam] remapped deprecated model override', {
@@ -2348,6 +956,21 @@ serve(async (req: Request) => {
         corsHeaders,
       );
     }
+
+    const uploadedStudyMaterials = parseUploadedStudyMaterials(requestCustomPrompt);
+    const storedStudyMaterials = uploadedStudyMaterials.length > 0
+      ? []
+      : await loadStoredStudyMaterials(supabase, {
+          authUserId: user.id,
+          studentScope: scope.effectiveStudentId || '',
+          subject,
+          grade,
+        });
+    const storedMaterialPrompt = formatStudyMaterialPromptBlock(storedStudyMaterials);
+    const customPrompt = [String(requestCustomPrompt || '').trim(), String(storedMaterialPrompt || '').trim()]
+      .filter((value) => value.length > 0)
+      .join('\n\n') || undefined;
+    const hasStudyMaterialContext = uploadedStudyMaterials.length > 0 || storedStudyMaterials.length > 0;
 
     const { data: tierData } = await supabase.rpc('get_user_subscription_tier', {
       user_id: scope.profile.id,
@@ -2453,6 +1076,9 @@ serve(async (req: Request) => {
       fullPaperMode,
       visualMode,
       guidedMode,
+      allowFallback,
+      requestedAllowFallback,
+      strictGuardrails,
       assignmentCount: contextSummary.assignmentCount,
       lessonCount: contextSummary.lessonCount,
     });
@@ -2463,6 +1089,17 @@ serve(async (req: Request) => {
     let anthropicCreditIssue = false;
 
     if (forceFreemiumFallback) {
+      if (!allowFallback) {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'premium_exam_limit_reached',
+            message: `Premium exam generation limit reached (${freemiumPremiumExamCount}/${FREEMIUM_PREMIUM_EXAM_LIMIT}) for this cycle.`,
+          },
+          429,
+          corsHeaders,
+        );
+      }
       localFallbackReason = `Freemium plan limit reached: you've used ${freemiumPremiumExamCount} premium exam generations. A basic fallback exam is being used. Upgrade to restore premium Sonnet exam generation.`;
       modelUsed = 'fallback:freemium-limit-v1';
     } else if (ANTHROPIC_API_KEY) {
@@ -2542,12 +1179,26 @@ serve(async (req: Request) => {
     let normalizedExam: any;
 
     if (!aiContent) {
+      if (!allowFallback) {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'ai_provider_unavailable',
+            message: anthropicCreditIssue
+              ? 'AI provider credits are currently depleted. Please try again later.'
+              : 'AI providers are currently unavailable. Please retry shortly.',
+          },
+          503,
+          corsHeaders,
+        );
+      }
+
       modelUsed = 'fallback:local-template-v1';
       localFallbackReason = anthropicCreditIssue
         ? 'AI provider credits are currently depleted. Generated a local fallback practice exam.'
         : 'AI providers are currently unavailable. Generated a local fallback practice exam.';
       normalizedExam = normalizeExamShape(
-        buildLocalFallbackExam(grade, subject, examType, language, contextSummary),
+        buildLocalFallbackExam(grade, subject, examType, language, contextSummary, customPrompt),
         grade,
         subject,
         examType,
@@ -2560,10 +1211,21 @@ serve(async (req: Request) => {
         normalizedExam = normalizeExamShape(parsedRawExam, grade, subject, examType);
       } catch (parseError) {
         console.error('[generate-exam] parse error', parseError);
+        if (!allowFallback) {
+          return jsonResponse(
+            {
+              success: false,
+              error: 'generation_parse_failed',
+              message: 'AI returned malformed exam JSON. Retry generation.',
+            },
+            502,
+            corsHeaders,
+          );
+        }
         modelUsed = 'fallback:local-template-v1';
         localFallbackReason = 'AI returned malformed exam JSON. Generated a local fallback practice exam.';
         normalizedExam = normalizeExamShape(
-          buildLocalFallbackExam(grade, subject, examType, language, contextSummary),
+          buildLocalFallbackExam(grade, subject, examType, language, contextSummary, customPrompt),
           grade,
           subject,
           examType,
@@ -2584,8 +1246,85 @@ serve(async (req: Request) => {
     normalizedExam = ensureLanguageReadingPassage(normalizedExam, subject, grade, language);
     normalizedExam = augmentQuestionVisuals(normalizedExam, visualMode);
     normalizedExam = recalculateExamMarks(normalizedExam);
-    const integrityIssues = validateComprehensionIntegrity(normalizedExam, subject, language);
+    const languageConsistencyIssues = validateLearnerLanguageConsistency(normalizedExam, subject, language);
+    let integrityIssues = [
+      ...validateComprehensionIntegrity(normalizedExam, subject, language),
+      ...languageConsistencyIssues,
+    ];
     if (integrityIssues.length > 0) {
+      const repairedExam = stripMetaPromptQuestions(normalizedExam);
+      const repairedComprehensionIssues = validateComprehensionIntegrity(repairedExam, subject, language);
+      const repairedLanguageIssues = validateLearnerLanguageConsistency(repairedExam, subject, language);
+      const repairedIssues = [...repairedComprehensionIssues, ...repairedLanguageIssues];
+      const hasEnoughQuestions =
+        repairedExam.sections?.some((s: any) => Array.isArray(s?.questions) && s.questions.length >= 2) ?? false;
+      if (repairedIssues.length === 0 && hasEnoughQuestions) {
+        normalizedExam = repairedExam;
+        normalizedExam = recalculateExamMarks(normalizedExam);
+        if (integrityIssues.some((i) => i.includes('instruction/meta prompt'))) {
+          localFallbackReason = 'Some instruction-only items were removed from the comprehension section.';
+        }
+        integrityIssues = [];
+      }
+    }
+    if (integrityIssues.length > 0 && aiContent && !modelUsed.startsWith('fallback:')) {
+      try {
+        const repairedContent = await attemptExamQualityRepair({
+          modelUsed,
+          grade,
+          subject,
+          language,
+          issues: integrityIssues,
+          customPrompt,
+          normalizedExam,
+        });
+
+        if (repairedContent) {
+          const repairedJson = extractJsonBlock(repairedContent);
+          const repairedRawExam = parseExamJson(repairedJson);
+          let aiRepairedExam = normalizeExamShape(repairedRawExam, grade, subject, examType);
+          aiRepairedExam = ensureMinimumQuestionCoverage(aiRepairedExam, {
+            grade,
+            subject,
+            examType,
+            contextSummary,
+            minQuestionCount: fullPaperMode ? countPolicy.min : Math.min(countPolicy.min, 16),
+          });
+          aiRepairedExam = enforceQuestionUpperBound(aiRepairedExam, countPolicy.max);
+          aiRepairedExam = ensureLanguageReadingPassage(aiRepairedExam, subject, grade, language);
+          aiRepairedExam = augmentQuestionVisuals(aiRepairedExam, visualMode);
+          aiRepairedExam = recalculateExamMarks(aiRepairedExam);
+
+          const postRepairIssues = [
+            ...validateComprehensionIntegrity(aiRepairedExam, subject, language),
+            ...validateLearnerLanguageConsistency(aiRepairedExam, subject, language),
+          ];
+          if (postRepairIssues.length === 0) {
+            normalizedExam = aiRepairedExam;
+            integrityIssues = [];
+            localFallbackReason = localFallbackReason || 'Dash applied an automatic quality repair pass to improve exam grounding.';
+          }
+        }
+      } catch (repairError) {
+        console.warn(
+          '[generate-exam] quality repair pass failed',
+          repairError instanceof Error ? repairError.message : String(repairError),
+        );
+      }
+    }
+    if (integrityIssues.length > 0) {
+      if (!allowFallback) {
+        return jsonResponse(
+          {
+            success: false,
+            error: 'generation_quality_guardrail_failed',
+            message: 'Generated exam failed language/comprehension guardrails.',
+            issues: integrityIssues,
+          },
+          422,
+          corsHeaders,
+        );
+      }
       console.warn('[generate-exam] integrity issues detected, switching to safe fallback', {
         subject,
         grade,
@@ -2595,7 +1334,7 @@ serve(async (req: Request) => {
       modelUsed = 'fallback:language-integrity-guardrail-v1';
       localFallbackReason = `Generated exam failed language/comprehension checks (${integrityIssues.join(' ')}). A safe fallback exam was used.`;
       normalizedExam = normalizeExamShape(
-        buildLocalFallbackExam(grade, subject, examType, language, contextSummary),
+        buildLocalFallbackExam(grade, subject, examType, language, contextSummary, customPrompt),
         grade,
         subject,
         examType,
@@ -2622,12 +1361,18 @@ serve(async (req: Request) => {
       studyCoachPack,
     });
 
+    const generationSource = localFallbackReason
+      ? 'local_fallback'
+      : uploadedStudyMaterials.length > 0
+      ? 'uploaded_study_material'
+      : storedStudyMaterials.length > 0
+      ? 'stored_study_material_memory'
+      : useTeacherContext
+      ? 'teacher_artifact_context'
+      : 'caps_baseline';
+
     const metadata = {
-      source: localFallbackReason
-        ? 'local_fallback'
-        : useTeacherContext
-        ? 'teacher_artifact_context'
-        : 'caps_baseline',
+      source: generationSource,
       artifactType,
       contextSummary,
       scopeDiagnostics,
@@ -2640,17 +1385,27 @@ serve(async (req: Request) => {
         lookbackDays,
         language,
       },
-      generationWarning: localFallbackReason || undefined,
+      studyMaterialContext: {
+        hasStudyMaterialContext,
+        uploadedCount: uploadedStudyMaterials.length,
+        reusedCount: storedStudyMaterials.length,
+      },
+      generationWarning: localFallbackReason
+        ? toUserFacingGenerationWarning(localFallbackReason)
+        : undefined,
     };
 
     let persistedExamId = `temp-${Date.now()}`;
     const warningParts: string[] = [];
-    if (localFallbackReason) warningParts.push(localFallbackReason);
+    if (localFallbackReason) warningParts.push(toUserFacingGenerationWarning(localFallbackReason));
     if (useTeacherContext && !scopeDiagnostics.effectiveSchoolId) {
       warningParts.push('Teacher context ran without a resolved school scope. Results may be generic.');
     }
     if (useTeacherContext && contextSummary.assignmentCount + contextSummary.lessonCount === 0) {
       warningParts.push('No recent teacher artifacts were found. Generated content leans on CAPS baseline.');
+    }
+    if (uploadedStudyMaterials.length === 0 && storedStudyMaterials.length > 0) {
+      warningParts.push('No new upload was provided, so Dash used previously saved study material for this learner.');
     }
 
     const persistedGeneratedContent =
@@ -2683,6 +1438,24 @@ serve(async (req: Request) => {
       warningParts.push('Exam generated, but cloud save failed. You can still continue with this attempt.');
     } else if (savedExam?.id) {
       persistedExamId = String(savedExam.id);
+    }
+
+    try {
+      await persistUploadedStudyMaterials(supabase, {
+        authUserId: user.id,
+        studentId: scope.effectiveStudentId || null,
+        schoolId: scope.effectiveSchoolId || null,
+        grade,
+        subject,
+        language,
+        examId: persistedExamId,
+        materials: uploadedStudyMaterials,
+      });
+    } catch (materialPersistError) {
+      console.warn(
+        '[generate-exam] study material persistence non-fatal error',
+        materialPersistError instanceof Error ? materialPersistError.message : String(materialPersistError),
+      );
     }
 
     // Record usage after successful generation
@@ -2719,13 +1492,12 @@ serve(async (req: Request) => {
       corsHeaders,
     );
   } catch (err) {
-    console.error('[generate-exam] Error:', err);
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    console.error('[generate-exam] Error:', message, err instanceof Error ? err.stack : '');
+    const mapped = mapUnhandledError(message);
     return jsonResponse(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : 'Internal server error',
-      },
-      500,
+      { success: false, error: mapped.error, message: mapped.message },
+      mapped.status,
       corsHeaders,
     );
   }

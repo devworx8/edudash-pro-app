@@ -20,7 +20,6 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { useRegistrations, Registration } from '@/hooks/useRegistrations';
 import { RegistrationCard, RegistrationHeader, RegistrationFilters } from '@/components/registrations';
-import { SuccessModal } from '@/components/ui/SuccessModal';
 import { AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
@@ -47,8 +46,6 @@ export default function PrincipalRegistrationsScreen() {
     setSearchTerm,
     statusFilter,
     setStatusFilter,
-    successModal,
-    setSuccessModal,
     rejectModalVisible,
     rejectionReason,
     setRejectionReason,
@@ -270,17 +267,6 @@ export default function PrincipalRegistrationsScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Success Modal */}
-      <SuccessModal
-        visible={successModal.visible}
-        title={successModal.title}
-        message={successModal.message}
-        icon={successModal.icon as any}
-        type={successModal.type}
-        buttonText={successModal.buttonText}
-        onClose={() => setSuccessModal(prev => ({ ...prev, visible: false }))}
-      />
 
       <AlertModal {...alertProps} />
     </View>

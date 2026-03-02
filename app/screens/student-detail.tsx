@@ -493,6 +493,7 @@ export default function StudentDetailScreen() {
           student={student}
           theme={theme}
           editMode={editMode}
+          canExpandPhoto={isPrincipal || isTeacher}
           editedStudent={editedStudent}
           onEditChange={setEditedStudent}
         />

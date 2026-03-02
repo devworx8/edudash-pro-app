@@ -208,17 +208,33 @@ export async function fetchStatsAndCounts(
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
 
+    const activeStudentsResult = await safe(
+      supabase
+        .from('students')
+        .select('id')
+        .eq('preschool_id', preschoolId)
+        .eq('status', 'active')
+        .eq('is_active', true)
+        .limit(5000)
+    );
+    const activeStudents = (v(activeStudentsResult).data || []) as Array<{ id: string }>;
+    const activeStudentIds = activeStudents.map((student) => student.id).filter(Boolean);
+
     const [feesResult, structResult] = await Promise.all([
-      safe(supabase
-        .from('student_fees')
-        .select('student_id, final_amount, amount, amount_paid, status')
-        .or(`organization_id.eq.${preschoolId},preschool_id.eq.${preschoolId}`)
-        .eq('billing_month', currentMonth)
-        .neq('status', 'waived')),
+      activeStudentIds.length > 0
+        ? safe(
+            supabase
+              .from('student_fees')
+              .select('student_id, final_amount, amount, amount_paid, status')
+              .in('student_id', activeStudentIds)
+              .eq('billing_month', currentMonth)
+              .neq('status', 'waived')
+          )
+        : Promise.resolve({ data: [] as any[] }),
       safe(supabase
         .from('school_fee_structures')
         .select('amount_cents, amount')
-        .or(`organization_id.eq.${preschoolId},preschool_id.eq.${preschoolId}`)
+        .eq('preschool_id', preschoolId)
         .ilike('category_code', '%tuition%')
         .eq('is_active', true)
         .limit(1)),

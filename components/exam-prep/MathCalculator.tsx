@@ -6,7 +6,15 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, type ViewStyle } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  type StyleProp,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
 
 interface MathCalculatorProps {
   theme: Record<string, string>;
@@ -148,8 +156,8 @@ function CalcBtn({
 }: {
   label: string;
   onPress: () => void;
-  style: ViewStyle;
-  textStyle: { color: string; fontWeight?: string };
+  style: StyleProp<ViewStyle>;
+  textStyle: StyleProp<TextStyle>;
 }) {
   return (
     <TouchableOpacity style={[styles.btn, style]} onPress={onPress} activeOpacity={0.7}>

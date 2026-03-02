@@ -52,15 +52,6 @@ export interface Registration {
 
 export type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
-export interface SuccessModalState {
-  visible: boolean;
-  title: string;
-  message: string;
-  icon?: string;
-  type?: 'success' | 'error' | 'warning' | 'info';
-  buttonText?: string;
-}
-
 export interface FeeStructureRow {
   id: string;
   amount: number;
@@ -94,8 +85,6 @@ export interface UseRegistrationsReturn {
   setSearchTerm: (term: string) => void;
   statusFilter: StatusFilter;
   setStatusFilter: (filter: StatusFilter) => void;
-  successModal: SuccessModalState;
-  setSuccessModal: React.Dispatch<React.SetStateAction<SuccessModalState>>;
   rejectModalVisible: boolean;
   rejectionReason: string;
   setRejectionReason: (reason: string) => void;

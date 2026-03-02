@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import {
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -9,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 interface AttachmentOptionsSheetProps {
   visible: boolean;
@@ -98,9 +98,8 @@ export function AttachmentOptionsSheet({
   }, [onClose]);
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       statusBarTranslucent
       onRequestClose={onClose}
@@ -158,7 +157,7 @@ export function AttachmentOptionsSheet({
           />
         </View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 }
 

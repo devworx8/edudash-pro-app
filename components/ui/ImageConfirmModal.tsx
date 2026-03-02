@@ -23,7 +23,6 @@
 
 import React, { useCallback, useEffect } from 'react';
 import {
-  Modal,
   View,
   Text,
   Image,
@@ -36,6 +35,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ImageCropEditor } from './ImageCropEditor';
 import { applySmartCrop, type SmartCropMode } from '@/lib/utils/smartCrop';
+import { ModalLayer } from './ModalLayer';
 
 // Safe spinner import
 let EduDashSpinner: React.FC<any> = ({ size, color }: any) => null;
@@ -136,9 +136,8 @@ export const ImageConfirmModal: React.FC<ImageConfirmModalProps> = ({
   if (!visible || !currentUri) return null;
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       onRequestClose={onCancel}
       statusBarTranslucent
@@ -219,7 +218,7 @@ export const ImageConfirmModal: React.FC<ImageConfirmModalProps> = ({
         onDone={handleCropDone}
         onCancel={() => setShowCropEditor(false)}
       />
-    </Modal>
+    </ModalLayer>
   );
 };
 

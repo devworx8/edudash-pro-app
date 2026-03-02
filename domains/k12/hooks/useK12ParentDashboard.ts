@@ -93,8 +93,10 @@ export function useK12ParentDashboard(
     if (!isHydrated || children.length === 0) return;
     if (globalActiveChildId) {
       const idx = children.findIndex((c) => c.id === globalActiveChildId);
-      if (idx >= 0 && idx !== activeChildIndex) {
-        setActiveChildIndex(idx);
+      if (idx >= 0) {
+        if (idx !== activeChildIndex) {
+          setActiveChildIndex(idx);
+        }
         return;
       }
     }

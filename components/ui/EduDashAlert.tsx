@@ -30,16 +30,15 @@
 
 import React, { useState, useCallback } from 'react';
 import {
-  Modal,
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -120,9 +119,8 @@ export const EduDashAlert: React.FC<EduDashAlertProps> = ({
   };
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       onRequestClose={onClose}
       statusBarTranslucent
@@ -175,7 +173,7 @@ export const EduDashAlert: React.FC<EduDashAlertProps> = ({
           </View>
         </View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 };
 

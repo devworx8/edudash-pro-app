@@ -463,14 +463,15 @@ export function gradeAnswer(
     const normalizedAnswer = normalize(answer);
     const normalizedCorrect = normalize(question.correctAnswer);
     const mapToBool = (s: string): 'true' | 'false' | null => {
-      if (['t', 'true', 'yes', 'y', 'correct', 'right', '1'].includes(s)) return 'true';
-      if (['f', 'false', 'no', 'n', 'incorrect', 'wrong', '0'].includes(s)) return 'false';
+      if (['t', 'true', 'yes', 'y', 'correct', 'right', '1', 'waar', 'ewe', 'qiniso'].includes(s)) return 'true';
+      if (['f', 'false', 'no', 'n', 'incorrect', 'wrong', '0', 'onwaar', 'amanga'].includes(s)) return 'false';
       return null;
     };
     const studentBool = mapToBool(normalizedAnswer);
     const targetBool = mapToBool(normalizedCorrect);
     const isCorrect =
-      studentBool !== null && targetBool !== null && studentBool === targetBool;
+      (studentBool !== null && targetBool !== null && studentBool === targetBool) ||
+      normalizedAnswer === normalizedCorrect;
 
     return {
       isCorrect,

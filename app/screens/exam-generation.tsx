@@ -49,6 +49,140 @@ function toBool(value: string | undefined, fallback: boolean): boolean {
   return value === '1' || value.toLowerCase() === 'true';
 }
 
+type InvokeErrorDetails = {
+  message: string;
+  code?: string;
+  status?: number;
+  retryAfterSeconds?: number;
+};
+
+async function extractInvokeErrorDetails(
+  error: any,
+  fallbackData?: unknown,
+): Promise<InvokeErrorDetails> {
+  const baseMessage =
+    typeof error?.message === 'string' && error.message.trim().length > 0
+      ? error.message.trim()
+      : 'Generation failed. Please retry.';
+
+  let payload: any = fallbackData;
+  let status: number | undefined;
+  let retryAfterSeconds: number | undefined;
+
+  const context = error?.context;
+  if (context && typeof context === 'object' && typeof context.text === 'function') {
+    try {
+      status = Number((context as Response).status);
+      const retryAfterHeader =
+        context.headers?.get?.('retry-after') || context.headers?.get?.('Retry-After');
+      const parsedRetry = Number(retryAfterHeader);
+      if (Number.isFinite(parsedRetry) && parsedRetry > 0) {
+        retryAfterSeconds = Math.max(1, Math.round(parsedRetry));
+      }
+
+      const contentType = String(context.headers?.get?.('content-type') || '').toLowerCase();
+      if (contentType.includes('application/json')) {
+        payload = await (context as Response).json();
+      } else {
+        const raw = await (context as Response).text();
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          payload = { message: raw };
+        }
+      }
+    } catch {
+      // Keep base message if response body is unavailable.
+    }
+  }
+
+  const code =
+    typeof payload?.code === 'string'
+      ? payload.code
+      : typeof payload?.error === 'string'
+      ? payload.error
+      : undefined;
+  const serverMessage =
+    typeof payload?.message === 'string'
+      ? payload.message
+      : typeof payload?.error_description === 'string'
+      ? payload.error_description
+      : undefined;
+  const issues = Array.isArray(payload?.issues)
+    ? payload.issues.filter((item: unknown) => typeof item === 'string').slice(0, 2)
+    : [];
+
+  if (code === 'generation_quality_guardrail_failed') {
+    return {
+      code,
+      status,
+      retryAfterSeconds,
+      message:
+        issues.length > 0
+          ? `Draft failed quality checks: ${issues.join(' ')}`
+          : 'Draft failed language/comprehension quality checks. Tap Retry to regenerate.',
+    };
+  }
+
+  if (code === 'ai_provider_unavailable') {
+    return {
+      code,
+      status,
+      retryAfterSeconds,
+      message:
+        retryAfterSeconds && retryAfterSeconds > 0
+          ? `AI provider is busy right now. Retry in about ${retryAfterSeconds} seconds.`
+          : 'AI provider is temporarily busy. Retry in about a minute.',
+    };
+  }
+
+  if (code === 'premium_exam_limit_reached') {
+    return {
+      code,
+      status,
+      retryAfterSeconds,
+      message: serverMessage || 'Premium exam generation limit reached for this cycle.',
+    };
+  }
+
+  if (code === 'generation_parse_failed') {
+    return {
+      code,
+      status,
+      retryAfterSeconds,
+      message: 'Exam draft came back malformed. Tap Retry to regenerate.',
+    };
+  }
+
+  if (typeof serverMessage === 'string' && serverMessage.trim().length > 0) {
+    return {
+      code,
+      status,
+      retryAfterSeconds,
+      message: serverMessage.trim(),
+    };
+  }
+
+  if (status === 429 || status === 503) {
+    return {
+      code,
+      status,
+      retryAfterSeconds,
+      message:
+        retryAfterSeconds && retryAfterSeconds > 0
+          ? `Service is rate-limited. Retry in about ${retryAfterSeconds} seconds.`
+          : 'Service is temporarily rate-limited. Retry in about a minute.',
+    };
+  }
+
+  return {
+    code,
+    status,
+    retryAfterSeconds,
+    message: baseMessage,
+  };
+}
+
 function toNumberMap(input: unknown): Record<string, number> {
   if (!input || typeof input !== 'object') return {};
   const map: Record<string, number> = {};
@@ -201,6 +335,7 @@ export default function ExamGenerationScreen() {
           subject,
           examType,
           language,
+          allowFallback: true,
           customPrompt: customPrompt || undefined,
           studentId,
           classId,
@@ -220,15 +355,8 @@ export default function ExamGenerationScreen() {
 
       const { data, error } = await supabase.functions.invoke('generate-exam', invokeOptions);
       if (error) {
-        const serverError =
-          typeof (data as any)?.error === 'string'
-            ? String((data as any).error)
-            : typeof (error as any)?.context?.error === 'string'
-            ? String((error as any).context.error)
-            : typeof (error as any)?.context === 'string'
-            ? String((error as any).context)
-            : '';
-        throw new Error(serverError || error.message || 'Failed to generate exam');
+        const details = await extractInvokeErrorDetails(error, data);
+        throw new Error(details.message || 'Failed to generate exam');
       }
 
       const response = data as ExamGenerationResponse;
@@ -374,18 +502,34 @@ export default function ExamGenerationScreen() {
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.readyContent}>
-          {hasGenerationWarning ? (
-            <View style={[styles.warningBanner, { borderColor: `${theme.warning}55`, backgroundColor: `${theme.warning}18` }]}>
-              <Ionicons name="cloud-offline-outline" size={16} color={theme.warning} />
-              <Text style={[styles.warningText, { color: theme.warning }]}>{persistenceWarning}</Text>
-            </View>
-          ) : null}
-          {usesUploadedMaterial ? (
-            <View style={[styles.warningBanner, { borderColor: `${theme.primary}55`, backgroundColor: `${theme.primary}18` }]}>
-              <Ionicons name="document-attach-outline" size={16} color={theme.primary} />
-              <Text style={[styles.warningText, { color: theme.primary }]}>
-                Using uploaded material / Images / PDFs / Study Notes
-              </Text>
+          {hasGenerationWarning || usesUploadedMaterial ? (
+            <View style={styles.statusPillsRow}>
+              {hasGenerationWarning ? (
+                <View
+                  style={[
+                    styles.statusPill,
+                    { borderColor: `${theme.warning}55`, backgroundColor: `${theme.warning}16` },
+                  ]}
+                >
+                  <Ionicons name="warning-outline" size={13} color={theme.warning} />
+                  <Text style={[styles.statusPillText, { color: theme.warning }]} numberOfLines={2}>
+                    {persistenceWarning}
+                  </Text>
+                </View>
+              ) : null}
+              {usesUploadedMaterial ? (
+                <View
+                  style={[
+                    styles.statusPill,
+                    { borderColor: `${theme.primary}55`, backgroundColor: `${theme.primary}16` },
+                  ]}
+                >
+                  <Ionicons name="document-attach-outline" size={13} color={theme.primary} />
+                  <Text style={[styles.statusPillText, { color: theme.primary }]} numberOfLines={1}>
+                    Uploaded material active
+                  </Text>
+                </View>
+              ) : null}
             </View>
           ) : null}
           {isPracticeArtifact && completionSummary ? (
@@ -622,23 +766,29 @@ const styles = StyleSheet.create({
   readyContent: {
     flex: 1,
   },
-  warningBanner: {
+  statusPillsRow: {
     marginHorizontal: 14,
     marginTop: 8,
-    marginBottom: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    marginBottom: 4,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  warningText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 18,
+  statusPill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
+  },
+  statusPillText: {
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '600',
+    flexShrink: 1,
   },
   completionBanner: {
     marginHorizontal: 14,

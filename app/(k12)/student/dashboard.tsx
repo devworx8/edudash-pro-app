@@ -425,7 +425,7 @@ export default function K12StudentDashboardScreen() {
               onPress={openExamBuilder}
             />
             <GradientActionCard
-              tone="blue"
+              tone="purple"
               icon="reader-outline"
               badgeLabel={t('dashboard.student.learning_hub.my_exams_badge', { defaultValue: 'My Exams' })}
               title={t('dashboard.student.learning_hub.my_exams_title', { defaultValue: 'My Practice Exams' })}

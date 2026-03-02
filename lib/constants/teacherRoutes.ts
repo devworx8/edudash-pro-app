@@ -130,6 +130,14 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     color: '#14B8A6',
     category: 'classroom',
   },
+  cleaning_tasks: {
+    path: '/screens/teacher-cleaning-tasks' as Href,
+    title: 'Cleaning Tasks',
+    titleKey: 'teacher.cleaning_tasks',
+    icon: 'sparkles-outline',
+    color: '#0EA5E9',
+    category: 'classroom',
+  },
   year_plan: {
     path: '/screens/teacher-year-plan-view' as Href,
     title: 'Year Plan',
@@ -356,6 +364,7 @@ export const TEACHER_QUICK_ACTIONS: (keyof typeof TEACHER_ROUTES)[] = [
   'assign_homework',
   'my_class',
   'daily_program',
+  'cleaning_tasks',
   'year_plan',
   'room_display_connect',
   'view_timetable',

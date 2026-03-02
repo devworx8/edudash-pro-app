@@ -7,7 +7,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { useAlertModal } from '@/components/ui/AlertModal';
 import { logger } from '@/lib/logger';
 
-import type { Registration, StatusFilter, SuccessModalState, UseRegistrationsReturn } from './types';
+import type { Registration, StatusFilter, UseRegistrationsReturn } from './types';
 import { canApprove, hasValidPopUrl, getStartMonthIso, EDUDASH_COMMUNITY_SCHOOL_ID, EDUDASH_MAIN_SCHOOL_ID } from './helpers';
 import { fetchRegistrationsData } from './fetchRegistrations';
 import { approveInAppRegistration } from './approveInApp';
@@ -41,11 +41,6 @@ export function useRegistrations(): UseRegistrationsReturn {
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectingRegistration, setRejectingRegistration] = useState<Registration | null>(null);
-  const [successModal, setSuccessModal] = useState<SuccessModalState>({ visible: false, title: '', message: '' });
-
-  const showModal = useCallback((config: Omit<SuccessModalState, 'visible'>) => {
-    setSuccessModal({ visible: true, ...config });
-  }, []);
 
   const { showAlert, alertProps } = useAlertModal();
 
@@ -129,7 +124,11 @@ export function useRegistrations(): UseRegistrationsReturn {
         if (isInApp) {
           const result = await approveInAppRegistration(registration, enrollmentDate, user?.id);
           const parentMessage = registration.parent_id ? '👤 Parent account linked\n📱 Parent notified' : '⚠️ Parent account not found - they need to register';
-          setSuccessModal({ visible: true, title: 'Success', message: `✅ Registration approved!\n\n👶 Student profile ${result.studentCreated ? 'created' : 'linked'}${result.studentIdCode ? ` (${result.studentIdCode})` : ''}\n${parentMessage}`, icon: 'checkmark-circle' });
+          showAlert({
+            title: 'Success',
+            message: `✅ Registration approved!\n\n👶 Student profile ${result.studentCreated ? 'created' : 'linked'}${result.studentIdCode ? ` (${result.studentIdCode})` : ''}\n${parentMessage}`,
+            type: 'success',
+          });
         } else {
           const result = await approveEdusiteRegistration(registration, enrollmentDate, user?.id);
           const parentMessage = result.parentId
@@ -137,13 +136,17 @@ export function useRegistrations(): UseRegistrationsReturn {
               ? result.parentLinked === true ? '👤 Parent account created & linked\n📱 Parent notified' : result.parentLinked === false ? '⚠️ Parent account created but is not linked to the school yet' : '👤 Parent account created\n📱 Parent notified'
               : result.parentLinked === false ? '⚠️ Parent account exists but is not linked to the school yet' : result.parentLinked === true ? '👤 Parent linked\n📱 Parent notified' : '👤 Parent account found\n📱 Parent notified'
             : '⚠️ Parent account not found - they need to register';
-          setSuccessModal({ visible: true, title: 'Success', message: `✅ Registration approved!\n\n👶 Student profile ${result.studentCreated ? 'created' : 'linked'}${result.studentIdCode ? ` (${result.studentIdCode})` : ''}\n${parentMessage}`, icon: 'checkmark-circle' });
+          showAlert({
+            title: 'Success',
+            message: `✅ Registration approved!\n\n👶 Student profile ${result.studentCreated ? 'created' : 'linked'}${result.studentIdCode ? ` (${result.studentIdCode})` : ''}\n${parentMessage}`,
+            type: 'success',
+          });
         }
         fetchRegistrations();
       } catch (err: unknown) {
         const e = err as { message?: string };
         logger.error('Registrations', 'Error approving registration', e);
-        showModal({ title: 'Approval Failed', message: e.message || 'Failed to approve registration', icon: 'alert-circle', type: 'error' });
+        showAlert({ title: 'Approval Failed', message: e.message || 'Failed to approve registration', type: 'error' });
       } finally {
         setProcessing(null);
       }
@@ -192,7 +195,7 @@ export function useRegistrations(): UseRegistrationsReturn {
     registrations, filteredRegistrations, alertProps, showAlert,
     loading, refreshing, syncing, processing, error, sendingReminder, sendingPopLink,
     searchTerm, setSearchTerm, statusFilter, setStatusFilter,
-    successModal, setSuccessModal, rejectModalVisible, rejectionReason, setRejectionReason, confirmReject, cancelReject, rejectingRegistration,
+    rejectModalVisible, rejectionReason, setRejectionReason, confirmReject, cancelReject, rejectingRegistration,
     fetchRegistrations, onRefresh, handleSyncWithEduSite, handleApprove, handleReject, handleVerifyPayment, sendPaymentReminder, sendPopUploadLink,
     canApprove, usesEdusiteSync,
     pendingCount, approvedCount, rejectedCount,

@@ -1,6 +1,5 @@
 import React, { useCallback } from 'react';
 import {
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -9,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 interface DashOptionsSheetProps {
   visible: boolean;
@@ -92,9 +92,8 @@ export function DashOptionsSheet({
   }, [onClose]);
 
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="fade"
       statusBarTranslucent
       onRequestClose={onClose}
@@ -187,7 +186,7 @@ export function DashOptionsSheet({
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
+    </ModalLayer>
   );
 }
 

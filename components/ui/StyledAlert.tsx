@@ -11,7 +11,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Modal,
   Animated,
   Dimensions,
   Platform,
@@ -19,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ModalLayer } from '@/components/ui/ModalLayer';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -87,12 +87,18 @@ export function StyledAlert({
   const { theme } = useTheme();
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const isWeb = Platform.OS === 'web';
   
   const config = ALERT_CONFIG[type];
   const displayIcon = icon || config.icon;
   
   useEffect(() => {
     if (visible) {
+      if (isWeb) {
+        scaleAnim.setValue(1);
+        opacityAnim.setValue(1);
+        return;
+      }
       Animated.parallel([
         Animated.spring(scaleAnim, {
           toValue: 1,
@@ -107,6 +113,11 @@ export function StyledAlert({
         }),
       ]).start();
     } else {
+      if (isWeb) {
+        scaleAnim.setValue(0);
+        opacityAnim.setValue(0);
+        return;
+      }
       Animated.parallel([
         Animated.timing(scaleAnim, {
           toValue: 0,
@@ -120,7 +131,7 @@ export function StyledAlert({
         }),
       ]).start();
     }
-  }, [visible, scaleAnim, opacityAnim]);
+  }, [visible, scaleAnim, opacityAnim, isWeb]);
   
   const handleButtonPress = (button: AlertButton) => {
     if (button.onPress) {
@@ -152,9 +163,8 @@ export function StyledAlert({
   };
   
   return (
-    <Modal
+    <ModalLayer
       visible={visible}
-      transparent
       animationType="none"
       onRequestClose={onDismiss}
     >
@@ -169,7 +179,7 @@ export function StyledAlert({
             styles.container,
             { 
               backgroundColor: theme.surface,
-              transform: [{ scale: scaleAnim }],
+              transform: [{ scale: isWeb ? 1 : scaleAnim }],
             },
           ]}
         >
@@ -236,7 +246,7 @@ export function StyledAlert({
           </View>
         </Animated.View>
       </Animated.View>
-    </Modal>
+    </ModalLayer>
   );
 }
 
