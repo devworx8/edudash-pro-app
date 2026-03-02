@@ -433,8 +433,8 @@ async function findTextbookReferences(
  */
 function calculateRelevance(resource: any, topic: string): number {
   const topicLower = topic.toLowerCase();
-  const titleMatch = resource.title?.toLowerCase().includes(topicLower);
-  const descMatch = resource.description?.toLowerCase().includes(topicLower);
+  const titleMatch = resource.title?.toLowerCase()?.includes(topicLower);
+  const descMatch = resource.description?.toLowerCase()?.includes(topicLower);
   const tagsMatch = resource.ai_generated_metadata?.tags?.some((tag: string) => 
     tag.toLowerCase().includes(topicLower)
   );

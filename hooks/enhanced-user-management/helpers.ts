@@ -117,8 +117,8 @@ export function applyUserFilters(
     filtered = filtered.filter(
       user =>
         user.email.toLowerCase().includes(searchLower) ||
-        user.fullName?.toLowerCase().includes(searchLower) ||
-        user.organizationName?.toLowerCase().includes(searchLower) ||
+        user.fullName?.toLowerCase()?.includes(searchLower) ||
+        user.organizationName?.toLowerCase()?.includes(searchLower) ||
         user.tags.some(tag => tag.toLowerCase().includes(searchLower))
     );
   }

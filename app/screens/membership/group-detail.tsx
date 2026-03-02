@@ -311,9 +311,9 @@ export default function GroupDetailScreen() {
     
     const query = searchQuery.toLowerCase();
     return availableMembers.filter((m: GroupMember) => 
-      m.first_name?.toLowerCase().includes(query) ||
-      m.last_name?.toLowerCase().includes(query) ||
-      m.email?.toLowerCase().includes(query)
+      m.first_name?.toLowerCase()?.includes(query) ||
+      m.last_name?.toLowerCase()?.includes(query) ||
+      m.email?.toLowerCase()?.includes(query)
     );
   }, [availableMembers, searchQuery]);
 

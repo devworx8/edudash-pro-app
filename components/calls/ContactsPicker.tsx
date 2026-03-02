@@ -132,7 +132,7 @@ export function ContactsPicker({ visible, onClose, onSelectContact }: ContactsPi
     const query = searchQuery.toLowerCase();
     return contacts.filter(c => 
       `${c.first_name} ${c.last_name}`.toLowerCase().includes(query) ||
-      c.role?.toLowerCase().includes(query)
+      c.role?.toLowerCase()?.includes(query)
     );
   }, [contacts, searchQuery]);
 

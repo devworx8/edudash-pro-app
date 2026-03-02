@@ -27,7 +27,7 @@ export default function LearnerConnectionsScreen() {
     const query = searchQuery.toLowerCase();
     return connections.filter((conn) => {
       const name = `${conn.connection?.first_name || ''} ${conn.connection?.last_name || ''}`.toLowerCase();
-      return name.includes(query) || conn.connection?.email?.toLowerCase().includes(query);
+      return name.includes(query) || conn.connection?.email?.toLowerCase()?.includes(query);
     });
   }, [connections, searchQuery]);
 

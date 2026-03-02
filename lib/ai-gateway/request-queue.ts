@@ -150,8 +150,8 @@ export function isRateLimitError(error: any): boolean {
   return (
     error?.status === 429 ||
     error?.statusCode === 429 ||
-    error?.message?.toLowerCase().includes('rate limit') ||
-    error?.message?.toLowerCase().includes('too many requests')
+    error?.message?.toLowerCase()?.includes('rate limit') ||
+    error?.message?.toLowerCase()?.includes('too many requests')
   );
 }
 

@@ -77,10 +77,10 @@ export function useRegistrations(): UseRegistrationsReturn {
       const q = searchTerm.toLowerCase();
       result = result.filter(
         (r) =>
-          r.student_first_name?.toLowerCase().includes(q) ||
-          r.student_last_name?.toLowerCase().includes(q) ||
-          r.guardian_name?.toLowerCase().includes(q) ||
-          r.guardian_email?.toLowerCase().includes(q),
+          r.student_first_name?.toLowerCase()?.includes(q) ||
+          r.student_last_name?.toLowerCase()?.includes(q) ||
+          r.guardian_name?.toLowerCase()?.includes(q) ||
+          r.guardian_email?.toLowerCase()?.includes(q),
       );
     }
     setFilteredRegistrations(result);

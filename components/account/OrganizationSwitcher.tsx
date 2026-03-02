@@ -257,7 +257,7 @@ export function OrganizationSwitcher({
         router.replace('/(tabs)');
       } else {
         // SOA organization dashboard
-        if (org.slug === 'soil-of-africa' || org.name?.toLowerCase().includes('soil')) {
+        if (org.slug === 'soil-of-africa' || org.name?.toLowerCase()?.includes('soil')) {
           router.replace('/screens/membership/dashboard');
         } else {
           router.replace('/(tabs)');

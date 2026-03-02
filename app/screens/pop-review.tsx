@@ -76,6 +76,7 @@ interface ReceiptDraft {
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 type ReviewQueue = 'payment_proofs' | 'petty_cash';
+type POPStatus = POPUpload['status'];
 
 const CATEGORY_META: Record<FeeCategoryCode, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
   tuition: { label: 'Tuition', color: '#3B82F6', icon: 'school-outline' },
@@ -112,6 +113,17 @@ const CATEGORY_ORDER: FeeCategoryCode[] = [
   'other',
   'ad_hoc',
 ];
+
+const normalizePOPStatus = (status: unknown): POPStatus => {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'approved' || normalized === 'rejected' || normalized === 'needs_revision') {
+    return normalized;
+  }
+  return 'pending';
+};
+
+const includesCaseInsensitive = (value: unknown, search: string): boolean =>
+  String(value ?? '').toLowerCase().includes(search);
 
 export default function POPReviewScreen() {
   const { theme } = useTheme();
@@ -231,6 +243,9 @@ export default function POPReviewScreen() {
 
         const uploadsWithProfiles = (data || []).map((upload) => ({
           ...upload,
+          status: normalizePOPStatus(upload.status),
+          title: String(upload.title || ''),
+          description: upload.description || '',
           uploader: upload.uploaded_by ? (profileMap[upload.uploaded_by] || null) : null,
         }));
         setUploads(uploadsWithProfiles);
@@ -496,12 +511,12 @@ export default function POPReviewScreen() {
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(u => 
-        u.student?.first_name?.toLowerCase().includes(search) ||
-        u.student?.last_name?.toLowerCase().includes(search) ||
-        u.uploader?.first_name?.toLowerCase().includes(search) ||
-        u.uploader?.last_name?.toLowerCase().includes(search) ||
-        u.payment_reference?.toLowerCase().includes(search) ||
-        u.title?.toLowerCase().includes(search)
+        includesCaseInsensitive(u.student?.first_name, search) ||
+        includesCaseInsensitive(u.student?.last_name, search) ||
+        includesCaseInsensitive(u.uploader?.first_name, search) ||
+        includesCaseInsensitive(u.uploader?.last_name, search) ||
+        includesCaseInsensitive(u.payment_reference, search) ||
+        includesCaseInsensitive(u.title, search)
       );
     }
     
@@ -518,10 +533,10 @@ export default function POPReviewScreen() {
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter((request) =>
-        request.requestor_name?.toLowerCase().includes(search) ||
-        request.category?.toLowerCase().includes(search) ||
-        request.description?.toLowerCase().includes(search) ||
-        request.justification?.toLowerCase().includes(search)
+        includesCaseInsensitive(request.requestor_name, search) ||
+        includesCaseInsensitive(request.category, search) ||
+        includesCaseInsensitive(request.description, search) ||
+        includesCaseInsensitive(request.justification, search)
       );
     }
 
@@ -913,7 +928,9 @@ export default function POPReviewScreen() {
 
   const formatDate = (date?: string) => {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-ZA', {
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return 'N/A';
+    return parsed.toLocaleDateString('en-ZA', {
       day: 'numeric',
       month: 'short',
       year: 'numeric',
@@ -922,14 +939,16 @@ export default function POPReviewScreen() {
 
   const formatMonth = (date?: string) => {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('en-ZA', {
+    const parsed = new Date(date);
+    if (Number.isNaN(parsed.getTime())) return 'N/A';
+    return parsed.toLocaleDateString('en-ZA', {
       month: 'short',
       year: 'numeric',
     });
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
+  const getStatusColor = (status?: string) => {
+    switch (normalizePOPStatus(status)) {
       case 'approved': return '#10B981';
       case 'rejected': return '#EF4444';
       case 'needs_revision': return '#F59E0B';
@@ -937,8 +956,8 @@ export default function POPReviewScreen() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
+  const getStatusIcon = (status?: string) => {
+    switch (normalizePOPStatus(status)) {
       case 'approved': return 'checkmark-circle';
       case 'rejected': return 'close-circle';
       case 'needs_revision': return 'alert-circle';
@@ -947,6 +966,7 @@ export default function POPReviewScreen() {
   };
 
   const renderUploadItem = ({ item }: { item: POPUpload }) => {
+    const status = normalizePOPStatus(item.status);
     const isProcessing = processing === item.id;
     const studentName = item.student 
       ? `${item.student.first_name} ${item.student.last_name}` 
@@ -967,10 +987,10 @@ export default function POPReviewScreen() {
         {/* Header */}
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderLeft}>
-            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
-              <Ionicons name={getStatusIcon(item.status) as any} size={16} color={getStatusColor(item.status)} />
-              <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-                {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(status) + '20' }]}>
+              <Ionicons name={getStatusIcon(status) as any} size={16} color={getStatusColor(status)} />
+              <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
               </Text>
             </View>
             <Text style={[styles.dateText, { color: theme.textSecondary }]}>
@@ -1004,14 +1024,14 @@ export default function POPReviewScreen() {
             </Text>
           </View>
 
-          {(paymentForMonth || item.status === 'pending') && (
+          {(paymentForMonth || status === 'pending') && (
             <View style={styles.infoRow}>
               <Ionicons name="calendar" size={16} color={theme.textSecondary} />
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>Payment For:</Text>
               <Text style={[styles.infoValue, { color: theme.text }]}>
                 {paymentForMonth ? formatMonth(paymentForMonth) : 'Not set'}
               </Text>
-              {item.status === 'pending' && (
+              {status === 'pending' && (
                 <TouchableOpacity
                   style={[styles.categoryEditButton, { borderColor: theme.border }]}
                   onPress={() => openQueueMonthPicker(item)}
@@ -1025,7 +1045,7 @@ export default function POPReviewScreen() {
             </View>
           )}
 
-          {item.status === 'pending' && (
+          {status === 'pending' && (
             <View style={styles.infoRow}>
               <Ionicons
                 name="calendar-outline"
@@ -1061,7 +1081,7 @@ export default function POPReviewScreen() {
               <Ionicons name={categoryMeta.icon} size={12} color={categoryMeta.color} />
               <Text style={[styles.categoryBadgeText, { color: categoryMeta.color }]}>{categoryMeta.label}</Text>
             </View>
-            {item.status === 'pending' && (
+            {status === 'pending' && (
               <TouchableOpacity
                 style={[styles.categoryEditButton, { borderColor: theme.border }]}
                 onPress={() => openCategoryPicker(item)}
@@ -1082,7 +1102,7 @@ export default function POPReviewScreen() {
         </View>
 
         {/* Actions for pending items */}
-        {item.status === 'pending' && (
+        {status === 'pending' && (
           <View style={styles.cardActions}>
             <TouchableOpacity
               style={[styles.actionButton, styles.rejectButton, { borderColor: theme.error }]}
@@ -1119,7 +1139,7 @@ export default function POPReviewScreen() {
         )}
 
         {/* Review notes for processed items */}
-        {item.review_notes && item.status !== 'pending' && (
+        {item.review_notes && status !== 'pending' && (
           <View style={[styles.reviewNotes, { backgroundColor: theme.surface }]}>
             <Text style={[styles.reviewNotesLabel, { color: theme.textSecondary }]}>Review Notes:</Text>
             <Text style={[styles.reviewNotesText, { color: theme.text }]}>{item.review_notes}</Text>
@@ -1140,7 +1160,7 @@ export default function POPReviewScreen() {
         : item.urgency === 'low'
           ? theme.textSecondary
           : theme.primary;
-    const statusLabel = item.status
+    const statusLabel = String(item.status || 'pending')
       .replace('_', ' ')
       .replace(/\b\w/g, (char) => char.toUpperCase());
 

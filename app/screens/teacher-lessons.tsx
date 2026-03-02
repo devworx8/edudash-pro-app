@@ -74,8 +74,8 @@ export default function TeacherLessonsScreen() {
       const query = searchQuery.toLowerCase();
       result = result.filter(l =>
         l.title.toLowerCase().includes(query) ||
-        l.subject?.toLowerCase().includes(query) ||
-        l.description?.toLowerCase().includes(query)
+        l.subject?.toLowerCase()?.includes(query) ||
+        l.description?.toLowerCase()?.includes(query)
       );
     }
 

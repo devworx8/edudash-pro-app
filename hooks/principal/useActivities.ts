@@ -133,7 +133,7 @@ export function useActivities({ organizationId, userId }: UseActivitiesOptions):
   // Filter activities by search query
   const filteredActivities = activities.filter(activity =>
     activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    activity.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    activity.description?.toLowerCase()?.includes(searchQuery.toLowerCase())
   );
 
   return {

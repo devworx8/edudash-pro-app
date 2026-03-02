@@ -111,7 +111,7 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
     }
     if (filters.school) {
       filtered = filtered.filter(u =>
-        u.school_name?.toLowerCase().includes(filters.school.toLowerCase()),
+        u.school_name?.toLowerCase()?.includes(filters.school.toLowerCase()),
       );
     }
     if (filters.schoolId) {
@@ -121,8 +121,8 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
       const s = filters.search.toLowerCase();
       filtered = filtered.filter(u =>
         u.email.toLowerCase().includes(s) ||
-        u.name?.toLowerCase().includes(s) ||
-        u.school_name?.toLowerCase().includes(s),
+        u.name?.toLowerCase()?.includes(s) ||
+        u.school_name?.toLowerCase()?.includes(s),
       );
     }
     setFilteredUsers(filtered);

@@ -34,6 +34,13 @@ import {
 } from './examUtils.ts';
 import { buildUserPrompt } from './promptBuilder.ts';
 import { resolveTeacherContext } from './teacherContext.ts';
+import {
+  canFallbackForReason,
+  mapUnhandledError,
+  normalizeFallbackPolicy,
+  normalizeQualityMode,
+  toBooleanFlag,
+} from './fallbackPolicy.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -245,70 +252,6 @@ function isCreditOrBillingError(status: number, responseText: string): boolean {
     text.includes('quota') && text.includes('exceeded') ||
     text.includes('billing')
   );
-}
-
-function toBooleanFlag(value: unknown, fallback: boolean): boolean {
-  if (typeof value === 'boolean') return value;
-  const raw = String(value || '').trim().toLowerCase();
-  if (!raw) return fallback;
-  return raw === '1' || raw === 'true' || raw === 'yes';
-}
-
-function mapUnhandledError(message: string): {
-  status: number;
-  error: string;
-  message: string;
-} {
-  const normalized = String(message || '').toLowerCase();
-
-  if (normalized.includes('ai service is busy')) {
-    return {
-      status: 429,
-      error: 'provider_rate_limited',
-      message: 'AI provider is temporarily rate-limited. Please retry shortly.',
-    };
-  }
-
-  if (
-    normalized.includes('organization membership required') ||
-    normalized.includes('school membership required') ||
-    normalized.includes('outside staff access') ||
-    normalized.includes('outside staff school scope') ||
-    normalized.includes('parent can only generate exams for linked children') ||
-    normalized.includes('student can only generate for self') ||
-    normalized.includes('staff can only access students in their own school scope')
-  ) {
-    return {
-      status: 403,
-      error: 'forbidden_scope',
-      message,
-    };
-  }
-
-  if (
-    normalized.includes('requested student record was not found') ||
-    normalized.includes('requested class was not found')
-  ) {
-    return {
-      status: 404,
-      error: 'scope_not_found',
-      message,
-    };
-  }
-
-  if (normalized.includes('linked learner is required')) {
-    return {
-      status: 400,
-      error: 'missing_linked_learner',
-      message,
-    };
-  }
-
-  return {
-    status: 500,
-    error: 'internal_server_error',
-    message,
-  };
 }
 
 function stripNumberPrefix(line: string): string {
@@ -902,11 +845,10 @@ serve(async (req: Request) => {
     const fullPaperMode = body?.fullPaperMode !== false;
     const visualMode = body?.visualMode === 'hybrid' ? 'hybrid' : 'off';
     const guidedMode = body?.guidedMode === 'memo_first' ? 'memo_first' : 'guided_first';
-    // Production-safe default: always allow fallback so guardrail failures don't hard-fail UX.
-    // Internal QA can opt into strict behavior via `strictGuardrails=true`.
     const requestedAllowFallback = toBooleanFlag(body?.allowFallback, true);
-    const strictGuardrails = body?.strictGuardrails === true;
-    const allowFallback = strictGuardrails ? requestedAllowFallback : true;
+    const fallbackPolicy = normalizeFallbackPolicy(body?.fallbackPolicy);
+    const qualityMode = normalizeQualityMode(body?.qualityMode);
+    const allowFallback = fallbackPolicy === 'never' ? false : requestedAllowFallback;
 
     if (rawModelOverride && modelOverride && rawModelOverride !== modelOverride) {
       console.warn('[generate-exam] remapped deprecated model override', {
@@ -1078,7 +1020,8 @@ serve(async (req: Request) => {
       guidedMode,
       allowFallback,
       requestedAllowFallback,
-      strictGuardrails,
+      fallbackPolicy,
+      qualityMode,
       assignmentCount: contextSummary.assignmentCount,
       lessonCount: contextSummary.lessonCount,
     });
@@ -1089,12 +1032,13 @@ serve(async (req: Request) => {
     let anthropicCreditIssue = false;
 
     if (forceFreemiumFallback) {
-      if (!allowFallback) {
+      if (!allowFallback || !canFallbackForReason(fallbackPolicy, 'freemium_limit')) {
         return jsonResponse(
           {
             success: false,
             error: 'premium_exam_limit_reached',
             message: `Premium exam generation limit reached (${freemiumPremiumExamCount}/${FREEMIUM_PREMIUM_EXAM_LIMIT}) for this cycle.`,
+            retryable: false,
           },
           429,
           corsHeaders,
@@ -1179,7 +1123,7 @@ serve(async (req: Request) => {
     let normalizedExam: any;
 
     if (!aiContent) {
-      if (!allowFallback) {
+      if (!allowFallback || !canFallbackForReason(fallbackPolicy, 'provider_unavailable')) {
         return jsonResponse(
           {
             success: false,
@@ -1187,6 +1131,7 @@ serve(async (req: Request) => {
             message: anthropicCreditIssue
               ? 'AI provider credits are currently depleted. Please try again later.'
               : 'AI providers are currently unavailable. Please retry shortly.',
+            retryable: true,
           },
           503,
           corsHeaders,
@@ -1211,12 +1156,13 @@ serve(async (req: Request) => {
         normalizedExam = normalizeExamShape(parsedRawExam, grade, subject, examType);
       } catch (parseError) {
         console.error('[generate-exam] parse error', parseError);
-        if (!allowFallback) {
+        if (!allowFallback || !canFallbackForReason(fallbackPolicy, 'parse_failed')) {
           return jsonResponse(
             {
               success: false,
               error: 'generation_parse_failed',
               message: 'AI returned malformed exam JSON. Retry generation.',
+              retryable: true,
             },
             502,
             corsHeaders,
@@ -1246,21 +1192,34 @@ serve(async (req: Request) => {
     normalizedExam = ensureLanguageReadingPassage(normalizedExam, subject, grade, language);
     normalizedExam = augmentQuestionVisuals(normalizedExam, visualMode);
     normalizedExam = recalculateExamMarks(normalizedExam);
-    const languageConsistencyIssues = validateLearnerLanguageConsistency(normalizedExam, subject, language);
+    const languageConsistencyIssues = validateLearnerLanguageConsistency(
+      normalizedExam,
+      subject,
+      language,
+      qualityMode,
+    );
     let integrityIssues = [
       ...validateComprehensionIntegrity(normalizedExam, subject, language),
       ...languageConsistencyIssues,
     ];
+    const initialIntegrityIssues = [...integrityIssues];
+    let qualityRepaired = false;
     if (integrityIssues.length > 0) {
       const repairedExam = stripMetaPromptQuestions(normalizedExam);
       const repairedComprehensionIssues = validateComprehensionIntegrity(repairedExam, subject, language);
-      const repairedLanguageIssues = validateLearnerLanguageConsistency(repairedExam, subject, language);
+      const repairedLanguageIssues = validateLearnerLanguageConsistency(
+        repairedExam,
+        subject,
+        language,
+        qualityMode,
+      );
       const repairedIssues = [...repairedComprehensionIssues, ...repairedLanguageIssues];
       const hasEnoughQuestions =
         repairedExam.sections?.some((s: any) => Array.isArray(s?.questions) && s.questions.length >= 2) ?? false;
       if (repairedIssues.length === 0 && hasEnoughQuestions) {
         normalizedExam = repairedExam;
         normalizedExam = recalculateExamMarks(normalizedExam);
+        qualityRepaired = true;
         if (integrityIssues.some((i) => i.includes('instruction/meta prompt'))) {
           localFallbackReason = 'Some instruction-only items were removed from the comprehension section.';
         }
@@ -1297,11 +1256,12 @@ serve(async (req: Request) => {
 
           const postRepairIssues = [
             ...validateComprehensionIntegrity(aiRepairedExam, subject, language),
-            ...validateLearnerLanguageConsistency(aiRepairedExam, subject, language),
+            ...validateLearnerLanguageConsistency(aiRepairedExam, subject, language, qualityMode),
           ];
           if (postRepairIssues.length === 0) {
             normalizedExam = aiRepairedExam;
             integrityIssues = [];
+            qualityRepaired = true;
             localFallbackReason = localFallbackReason || 'Dash applied an automatic quality repair pass to improve exam grounding.';
           }
         }
@@ -1313,13 +1273,19 @@ serve(async (req: Request) => {
       }
     }
     if (integrityIssues.length > 0) {
-      if (!allowFallback) {
+      if (!allowFallback || !canFallbackForReason(fallbackPolicy, 'quality_guardrail')) {
         return jsonResponse(
           {
             success: false,
             error: 'generation_quality_guardrail_failed',
             message: 'Generated exam failed language/comprehension guardrails.',
             issues: integrityIssues,
+            qualityReport: {
+              passed: false,
+              issues: integrityIssues,
+              repaired: false,
+            },
+            retryable: true,
           },
           422,
           corsHeaders,
@@ -1473,6 +1439,15 @@ serve(async (req: Request) => {
     }
 
     const persistenceWarning = warningParts.length > 0 ? warningParts.join(' ') : undefined;
+    const generationMode = modelUsed === 'fallback:local-template-v1' ? 'outage_fallback' : 'ai';
+    const qualityReport = {
+      passed:
+        initialIntegrityIssues.length === 0 ||
+        qualityRepaired ||
+        modelUsed.startsWith('fallback:'),
+      issues: initialIntegrityIssues,
+      repaired: qualityRepaired,
+    };
 
     return jsonResponse(
       {
@@ -1480,6 +1455,9 @@ serve(async (req: Request) => {
         exam: artifactType === 'practice_test' ? normalizedExam : undefined,
         artifactType,
         artifact,
+        generationMode,
+        qualityReport,
+        retryable: false,
         examId: persistedExamId,
         scopeDiagnostics,
         contextSummary,
@@ -1496,7 +1474,7 @@ serve(async (req: Request) => {
     console.error('[generate-exam] Error:', message, err instanceof Error ? err.stack : '');
     const mapped = mapUnhandledError(message);
     return jsonResponse(
-      { success: false, error: mapped.error, message: mapped.message },
+      { success: false, error: mapped.error, message: mapped.message, retryable: mapped.retryable },
       mapped.status,
       corsHeaders,
     );

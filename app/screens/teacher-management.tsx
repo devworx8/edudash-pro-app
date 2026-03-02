@@ -85,7 +85,7 @@ export default function TeacherManagementScreen() {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       result = result.filter((t: Teacher) =>
-        (`${t.firstName} ${t.lastName}`).toLowerCase().includes(q) || t.email?.toLowerCase().includes(q)
+        (`${t.firstName} ${t.lastName}`).toLowerCase().includes(q) || t.email?.toLowerCase()?.includes(q)
       );
     }
     return filterStatus !== 'all' ? result.filter((t: Teacher) => t.status === filterStatus) : result;

@@ -159,7 +159,7 @@ export class BiometricAuthService {
       let effectiveSecurityLevel: "weak" | "strong" = "weak";
       if (hasStrongBiometrics && isSecure) {
         effectiveSecurityLevel = "strong";
-      } else if (hasStrongBiometrics && (deviceInfo.brand?.toLowerCase().includes('oppo') || isAvailable)) {
+      } else if (hasStrongBiometrics && (deviceInfo.brand?.toLowerCase()?.includes('oppo') || isAvailable)) {
         // For OPPO and similar devices, be more permissive about security levels
         effectiveSecurityLevel = "strong";
         debug('Using permissive security assessment for OPPO/Android device');
@@ -397,7 +397,7 @@ export class BiometricAuthService {
       // Enhanced security check - be more permissive for Android devices, especially OPPO
       if (capabilities.securityLevel === "weak" && capabilities.supportedTypes.length === 0) {
         // Check if this is an OPPO device or similar where we should be more permissive
-        const isOPPODevice = deviceInfo.brand?.toLowerCase().includes('oppo');
+        const isOPPODevice = deviceInfo.brand?.toLowerCase()?.includes('oppo');
         if (!isOPPODevice) {
           return {
             success: false,

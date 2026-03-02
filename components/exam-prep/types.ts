@@ -430,6 +430,9 @@ export type ExamArtifactType =
   | 'revision_notes'
   | 'study_guide';
 
+export type ExamFallbackPolicy = 'provider_outage_only' | 'always' | 'never';
+export type ExamQualityMode = 'strict' | 'standard';
+
 export interface FlashcardItem {
   id: string;
   front: string;
@@ -486,6 +489,8 @@ export interface ExamGenerationRequest {
   examType: string;
   customPrompt?: string;
   language?: SouthAfricanLanguage;
+  fallbackPolicy?: ExamFallbackPolicy;
+  qualityMode?: ExamQualityMode;
   studentId?: string;
   classId?: string;
   schoolId?: string;
@@ -504,6 +509,13 @@ export interface ExamGenerationResponse {
   exam?: unknown;
   artifactType?: ExamArtifactType;
   artifact?: ExamArtifact;
+  generationMode?: 'ai' | 'outage_fallback';
+  qualityReport?: {
+    passed: boolean;
+    issues: string[];
+    repaired: boolean;
+  };
+  retryable?: boolean;
   scopeDiagnostics?: ExamScopeDiagnostics;
   contextSummary?: ExamContextSummary;
   teacherAlignment?: ExamTeacherAlignmentSummary;

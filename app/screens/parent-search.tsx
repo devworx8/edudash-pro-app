@@ -72,7 +72,7 @@ export default function ParentSearchScreen() {
       children
         .filter((child: any) =>
           `${child.first_name} ${child.last_name}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          child.grade?.toLowerCase().includes(searchQuery.toLowerCase())
+          child.grade?.toLowerCase()?.includes(searchQuery.toLowerCase())
         )
         .forEach((child: any) => {
           searchResults.push({

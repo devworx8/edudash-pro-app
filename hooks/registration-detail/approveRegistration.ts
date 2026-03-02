@@ -191,7 +191,7 @@ async function approveInApp(
     if (!error && data) { newStudent = { id: data.id }; break; }
     studentError = error;
 
-    const isConflict = error?.code === '23505' || error?.message?.toLowerCase().includes('duplicate');
+    const isConflict = error?.code === '23505' || error?.message?.toLowerCase()?.includes('duplicate');
     if (!isConflict) break;
 
     const canLookup = Boolean(studentPayload.first_name && studentPayload.last_name && studentPayload.date_of_birth);

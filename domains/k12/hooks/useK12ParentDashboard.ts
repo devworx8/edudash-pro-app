@@ -69,7 +69,7 @@ export function useK12ParentDashboard(
   userId: string | undefined,
   organizationId: string | undefined,
 ) {
-  const [activeChildIndex, setActiveChildIndex] = useState(0);
+  const [activeChildId, setActiveChildId] = useState<string | null>(null);
   const { setActiveChildId: setGlobalActiveChildId, activeChildId: globalActiveChildId, isHydrated } = useActiveChild();
 
   const {
@@ -82,34 +82,42 @@ export function useK12ParentDashboard(
 
   const { childrenProgress } = useParentProgress(userId);
 
+  const effectiveActiveChildId = activeChildId || globalActiveChildId || null;
+  const activeChildIndex = useMemo(() => {
+    if (children.length === 0) return 0;
+    if (!effectiveActiveChildId) return 0;
+    const idx = children.findIndex((child) => child.id === effectiveActiveChildId);
+    return idx >= 0 ? idx : 0;
+  }, [children, effectiveActiveChildId]);
+
   const activeChild: Child | null = useMemo(() => {
     if (children.length === 0) return null;
-    const idx = Math.min(activeChildIndex, children.length - 1);
-    return children[idx] ?? null;
+    return children[activeChildIndex] ?? null;
   }, [children, activeChildIndex]);
 
   // When children load, restore selection from the global context (AsyncStorage-backed)
   useEffect(() => {
     if (!isHydrated || children.length === 0) return;
-    if (globalActiveChildId) {
-      const idx = children.findIndex((c) => c.id === globalActiveChildId);
-      if (idx >= 0) {
-        if (idx !== activeChildIndex) {
-          setActiveChildIndex(idx);
-        }
-        return;
-      }
+    if (globalActiveChildId && children.some((child) => child.id === globalActiveChildId)) {
+      setActiveChildId(globalActiveChildId);
+      return;
+    }
+    if (activeChildId && children.some((child) => child.id === activeChildId)) {
+      return;
     }
     // No stored selection — persist the default (index 0)
     if (children[0]?.id) {
+      setActiveChildId(children[0].id);
       setGlobalActiveChildId(children[0].id);
     }
-  }, [isHydrated, children, globalActiveChildId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isHydrated, children, globalActiveChildId, activeChildId, setGlobalActiveChildId]);
 
   const switchChild = useCallback((index: number) => {
-    setActiveChildIndex(index);
     const id = children[index]?.id;
-    if (id) setGlobalActiveChildId(id);
+    if (id) {
+      setActiveChildId(id);
+      setGlobalActiveChildId(id);
+    }
   }, [children, setGlobalActiveChildId]);
 
   const dashboardSummary: DashboardSummary = useMemo(() => {

@@ -75,8 +75,8 @@ export function useFeeOverview() {
       result = result.filter(s =>
         s.first_name.toLowerCase().includes(q) ||
         s.last_name.toLowerCase().includes(q) ||
-        s.class_name?.toLowerCase().includes(q) ||
-        s.parent_name?.toLowerCase().includes(q)
+        s.class_name?.toLowerCase()?.includes(q) ||
+        s.parent_name?.toLowerCase()?.includes(q)
       );
     }
     return result;

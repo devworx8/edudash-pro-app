@@ -425,7 +425,7 @@ export function useChildRegistration() {
         
         if (errorCode === '23505' || errorMessage?.includes('duplicate')) {
           alert.showError('Duplicate Registration', `You have already submitted a registration for ${firstName} ${lastName} at this school.`);
-        } else if (errorCode === '42501' || errorMessage?.toLowerCase().includes('permission denied')) {
+        } else if (errorCode === '42501' || errorMessage?.toLowerCase()?.includes('permission denied')) {
           alert.showError('Permission Denied', `You don't have permission to register at this school.`);
         } else {
           alert.showError('Submission Failed', errorMessage || 'Unable to submit registration.');

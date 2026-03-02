@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 
 import type { SouthAfricanLanguage } from '@/components/exam-prep/types';
+import type { ExamFallbackPolicy, ExamQualityMode } from '@/components/exam-prep/types';
 
 export type WizardStep = 'grade' | 'subject' | 'type' | 'review';
 export type SubjectCategory = 'all' | 'core' | 'languages' | 'sciences' | 'social';
@@ -19,6 +20,8 @@ export type ExamRouteParams = {
   examType: string;
   language: SouthAfricanLanguage;
   useTeacherContext: '0' | '1';
+  fallbackPolicy?: ExamFallbackPolicy;
+  qualityMode?: ExamQualityMode;
   draftId?: string;
 } & ContextEntityIds;
 
@@ -97,6 +100,8 @@ export function buildExamRouteParams(input: {
   examType: string;
   language: SouthAfricanLanguage;
   useTeacherContext: boolean;
+  fallbackPolicy?: ExamFallbackPolicy;
+  qualityMode?: ExamQualityMode;
   draftId?: string;
   contextIds: ContextEntityIds;
 }): ExamRouteParams {
@@ -109,6 +114,8 @@ export function buildExamRouteParams(input: {
   };
 
   if (input.draftId) params.draftId = input.draftId;
+  if (input.fallbackPolicy) params.fallbackPolicy = input.fallbackPolicy;
+  if (input.qualityMode) params.qualityMode = input.qualityMode;
   if (input.contextIds.childName) params.childName = input.contextIds.childName;
   if (input.contextIds.studentId) params.studentId = input.contextIds.studentId;
   if (input.contextIds.classId) params.classId = input.contextIds.classId;

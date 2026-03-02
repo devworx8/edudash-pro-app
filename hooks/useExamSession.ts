@@ -14,6 +14,7 @@ import { logger } from '@/lib/logger';
 export interface StudentAnswer {
   questionId: string;
   answer: string;
+  selectedOptionId?: string;
   isCorrect?: boolean;
   feedback?: string;
   marks?: number;
@@ -233,7 +234,12 @@ export function useExamSession(options: UseExamSessionOptions) {
    * Update student answer
    */
   const submitAnswer = useCallback(
-    async (questionId: string, answer: string, autoGrade = true) => {
+    async (
+      questionId: string,
+      answer: string,
+      autoGrade = true,
+      selectedOptionId?: string,
+    ) => {
       if (!session) return;
 
       // Find question
@@ -249,12 +255,13 @@ export function useExamSession(options: UseExamSessionOptions) {
       let studentAnswer: StudentAnswer = {
         questionId,
         answer,
+        selectedOptionId,
         submittedAt: new Date().toISOString(),
       };
 
       // Auto-grade for immediate inline feedback.
       if (autoGrade) {
-        const gradeResult = gradeAnswer(question, answer);
+        const gradeResult = gradeAnswer(question, answer, { selectedOptionId });
         studentAnswer = {
           ...studentAnswer,
           isCorrect: gradeResult.isCorrect,
@@ -333,7 +340,13 @@ export function useExamSession(options: UseExamSessionOptions) {
             examId,
             exam,
             answers: Object.fromEntries(
-              Object.entries(session.answers).map(([questionId, value]) => [questionId, value.answer]),
+              Object.entries(session.answers).map(([questionId, value]) => [
+                questionId,
+                {
+                  answer: value.answer,
+                  selectedOptionId: value.selectedOptionId,
+                },
+              ]),
             ),
             studentId: studentId || undefined,
             classId: classId || undefined,

@@ -46,7 +46,9 @@ type ExamQuestion = {
   text?: string;
   marks?: number;
   points?: number;
-  options?: string[];
+  options?: Array<string | { id?: string; text?: string; label?: string; value?: string }>;
+  correctOptionId?: string;
+  correct_option_id?: string;
   correctAnswer?: string;
   correct_answer?: string;
   answer?: string;
@@ -96,6 +98,11 @@ type TopicFeedback = {
   priority: 'high' | 'medium' | 'low';
 };
 
+type ParsedAnswer = {
+  answer: string;
+  selectedOptionId?: string;
+};
+
 function jsonResponse(body: JsonRecord, status: number, headers: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
@@ -129,6 +136,44 @@ function sanitizeOption(option: string): string {
     .trim();
 }
 
+function optionIdFromIndex(index: number): string {
+  return String.fromCharCode(65 + index);
+}
+
+function normalizeOptionId(value: unknown): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const direct = raw.match(/^[A-Za-z0-9_-]{1,12}$/);
+  if (direct?.[0]) return direct[0].toUpperCase();
+  const letter = extractChoiceLetter(raw);
+  if (letter) return letter.toUpperCase();
+  return null;
+}
+
+function normalizeOptionObjects(rawOptions: ExamQuestion['options']) {
+  if (!Array.isArray(rawOptions)) return [] as Array<{ id: string; text: string }>;
+  return rawOptions
+    .map((item, index) => {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        const text = sanitizeOption(
+          String(item.text ?? item.label ?? item.value ?? ''),
+        );
+        if (!text) return null;
+        return {
+          id: normalizeOptionId(item.id) || optionIdFromIndex(index),
+          text,
+        };
+      }
+      const text = sanitizeOption(String(item || ''));
+      if (!text) return null;
+      return {
+        id: optionIdFromIndex(index),
+        text,
+      };
+    })
+    .filter((item): item is { id: string; text: string } => Boolean(item));
+}
+
 function extractChoiceLetter(value: string): string | null {
   const raw = String(value || '').trim();
   if (!raw) return null;
@@ -146,7 +191,7 @@ function extractChoiceLetter(value: string): string | null {
 }
 
 function optionLetterFromIndex(index: number): string {
-  return String.fromCharCode(97 + index);
+  return optionIdFromIndex(index).toLowerCase();
 }
 
 function resolveChoiceLetter(value: string, options: string[]): string | null {
@@ -198,17 +243,32 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
-function gradeObjective(question: ExamQuestion, answerRaw: string): GradeFeedback {
+function parseSubmittedAnswer(value: unknown): ParsedAnswer {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const payload = value as Record<string, unknown>;
+    return {
+      answer: String(payload.answer || ''),
+      selectedOptionId: normalizeOptionId(payload.selectedOptionId),
+    };
+  }
+  return {
+    answer: String(value || ''),
+  };
+}
+
+function gradeObjective(question: ExamQuestion, parsedAnswer: ParsedAnswer): GradeFeedback {
   const maxMarks = Math.max(1, Number(question.marks ?? question.points ?? 1) || 1);
   const qType = normalizeQuestionType(question.type);
+  const answerRaw = parsedAnswer.answer;
   const answer = normalizeText(answerRaw);
   const explanation = String(question.explanation || '').trim() || undefined;
+  const questionCorrectOptionId = normalizeOptionId(question.correctOptionId ?? question.correct_option_id);
 
   const correctRaw =
     String(question.correctAnswer || question.correct_answer || question.answer || '').trim();
   const correct = normalizeText(correctRaw);
 
-  if (!correct) {
+  if (!correct && !questionCorrectOptionId) {
     return {
       isCorrect: false,
       marksAwarded: 0,
@@ -220,9 +280,13 @@ function gradeObjective(question: ExamQuestion, answerRaw: string): GradeFeedbac
   }
 
   if (qType === 'multiple_choice') {
-    const options = Array.isArray(question.options) ? question.options.map(sanitizeOption) : [];
+    const optionObjects = normalizeOptionObjects(question.options);
+    const options = optionObjects.map((item) => item.text);
+    const selectedOptionId = normalizeOptionId(parsedAnswer.selectedOptionId);
+    const correctOptionId = questionCorrectOptionId;
+    const effectiveCorrectRaw = correctRaw || correctOptionId || '';
     const studentLetter = resolveChoiceLetter(answerRaw, options);
-    const correctLetter = resolveChoiceLetter(correctRaw, options);
+    const correctLetter = resolveChoiceLetter(effectiveCorrectRaw, options);
 
     const studentOptionIndex = studentLetter ? studentLetter.charCodeAt(0) - 97 : -1;
     const correctOptionIndex = correctLetter ? correctLetter.charCodeAt(0) - 97 : -1;
@@ -235,11 +299,14 @@ function gradeObjective(question: ExamQuestion, answerRaw: string): GradeFeedbac
         ? normalizeText(options[correctOptionIndex])
         : '';
 
-    const directMatch = answer === correct;
+    const directMatch = answer === normalizeText(effectiveCorrectRaw);
     const letterMatch = Boolean(studentLetter && correctLetter && studentLetter === correctLetter);
     const optionMatch = Boolean(studentOptionText && correctOptionText && studentOptionText === correctOptionText);
-    const isCorrect = directMatch || letterMatch || optionMatch;
-    const displayCorrect = formatCorrectChoice(correctRaw, options) || correctRaw;
+    const canonicalOptionMatch = Boolean(
+      selectedOptionId && correctOptionId && selectedOptionId === correctOptionId,
+    );
+    const isCorrect = canonicalOptionMatch || directMatch || letterMatch || optionMatch;
+    const displayCorrect = formatCorrectChoice(effectiveCorrectRaw, options) || effectiveCorrectRaw;
 
     return {
       isCorrect,
@@ -441,7 +508,7 @@ serve(async (req: Request) => {
     const body = (await req.json()) as {
       examId?: string;
       exam?: ExamPayload;
-      answers?: Record<string, string>;
+      answers?: Record<string, unknown>;
       studentId?: string;
       classId?: string;
       schoolId?: string;
@@ -545,12 +612,13 @@ serve(async (req: Request) => {
         const question = sectionQuestions[questionIndex];
         const qId = String(question.id || `q_${sectionIndex + 1}_${questionIndex + 1}`);
         const qType = normalizeQuestionType(question.type);
-        const answer = String(answerMap[qId] || '');
+        const parsedAnswer = parseSubmittedAnswer(answerMap[qId]);
+        const answer = parsedAnswer.answer;
         const marks = Math.max(1, Number(question.marks ?? question.points ?? 1) || 1);
 
         const feedback =
           qType === 'multiple_choice' || qType === 'true_false' || qType === 'fill_in_blank'
-            ? gradeObjective(question, answer)
+            ? gradeObjective(question, parsedAnswer)
             : gradeOpenResponse(question, answer);
 
         questionFeedback[qId] = feedback;

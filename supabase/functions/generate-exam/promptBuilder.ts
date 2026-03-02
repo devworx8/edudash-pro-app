@@ -186,6 +186,7 @@ export function buildUserPrompt(payload: {
     `Subject: ${payload.subject}.`,
     `Language: ${languageName} (${locale}).`,
     `Write ALL learner-facing content in ${languageName} only (questions, options, section headings, instructions, and memorandum text).`,
+    `Do not mix learner-facing languages. If target language is not English, avoid English filler words, labels, or prefixes.`,
     `Minimum total questions required: ${countPolicy.min}.`,
     `Maximum total questions allowed: ${countPolicy.max}.`,
     'Align strictly to CAPS/DBE outcomes and cognitive level for this grade.',

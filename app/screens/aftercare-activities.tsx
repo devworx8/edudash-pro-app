@@ -80,7 +80,7 @@ export default function AftercareActivitiesScreen() {
   const filteredActivities = activities.filter(activity => {
     const matchesSearch = !searchQuery || 
       activity.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      activity.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      activity.description?.toLowerCase()?.includes(searchQuery.toLowerCase());
     
     const matchesType = selectedType === 'all' || activity.activity_type === selectedType;
     

@@ -79,7 +79,7 @@ export function useSuperAdminOrganizations({
       const q = searchQuery.toLowerCase();
       filtered = filtered.filter(o =>
         o.name.toLowerCase().includes(q) || o.contact_email.toLowerCase().includes(q) ||
-        o.city?.toLowerCase().includes(q) || o.province?.toLowerCase().includes(q)
+        o.city?.toLowerCase()?.includes(q) || o.province?.toLowerCase()?.includes(q)
       );
     }
     setFilteredOrgs(filtered);

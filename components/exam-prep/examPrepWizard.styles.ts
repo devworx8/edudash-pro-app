@@ -517,6 +517,24 @@ export const examPrepWizardStyles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  materialQueueActions: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  materialQueueActionBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  materialQueueActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   materialActionBtn: {
     borderWidth: 1,
     borderRadius: 10,

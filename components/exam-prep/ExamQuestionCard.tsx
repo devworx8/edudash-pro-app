@@ -32,7 +32,7 @@ interface ExamQuestionCardProps {
   studentAnswer?: StudentAnswer;
   isLocked: boolean;
   onChangeAnswer: (text: string) => void;
-  onSelectOption: (option: string) => void;
+  onSelectOption: (option: string, optionId?: string) => void;
   theme: Record<string, string>;
 }
 
@@ -178,11 +178,17 @@ export function ExamQuestionCard({
   const feedbackMath = parseStandaloneMath(studentAnswer?.feedback || '');
   const correctAnswerMath = parseStandaloneMath(question.correctAnswer || '');
   const resolvedCorrectLetter = useMemo(
-    () => resolveChoiceLetter(question.correctAnswer, question.options),
-    [question.correctAnswer, question.options],
+    () => {
+      const explicit = String(question.correctOptionId || '').trim();
+      if (/^[A-D]$/i.test(explicit)) {
+        return explicit.toLowerCase();
+      }
+      return resolveChoiceLetter(question.correctAnswer, question.options);
+    },
+    [question.correctAnswer, question.correctOptionId, question.options],
   );
   const resolvedCorrectAnswerDisplay = useMemo(() => {
-    const raw = String(question.correctAnswer || '').trim();
+    const raw = String(question.correctAnswer || question.correctOptionId || '').trim();
     if (!raw) return '';
     if (!Array.isArray(question.options) || question.options.length === 0) return raw;
     if (!resolvedCorrectLetter) return raw;
@@ -190,7 +196,7 @@ export function ExamQuestionCard({
     const option = question.options[optionIndex];
     if (!option) return raw;
     return `${resolvedCorrectLetter.toUpperCase()}. ${sanitizeChoiceText(option)}`;
-  }, [question.correctAnswer, question.options, resolvedCorrectLetter]);
+  }, [question.correctAnswer, question.correctOptionId, question.options, resolvedCorrectLetter]);
 
   const translateTextToEnglish = useCallback(async (rawValue?: string): Promise<string> => {
     const value = String(rawValue || '').trim();
@@ -521,7 +527,7 @@ export function ExamQuestionCard({
                       opacity: isLocked && !isSelected && !isCorrectOption ? 0.7 : 1,
                     },
                   ]}
-                  onPress={() => { if (!isLocked) onSelectOption(cleanedOption); }}
+                  onPress={() => { if (!isLocked) onSelectOption(cleanedOption, optionLetter); }}
                   disabled={isLocked}
                   activeOpacity={isLocked ? 1 : 0.7}
                 >
@@ -649,7 +655,7 @@ export function ExamQuestionCard({
                       opacity: isLocked && !isSelected && !isCorrectOption ? 0.7 : 1,
                     },
                   ]}
-                  onPress={() => { if (!isLocked) onSelectOption(optionLabel); }}
+                  onPress={() => { if (!isLocked) onSelectOption(optionLabel, optionLetter); }}
                   disabled={isLocked}
                   activeOpacity={isLocked ? 1 : 0.7}
                 >
@@ -859,22 +865,22 @@ export function ExamQuestionCard({
                 {studentAnswer.feedback}
               </Text>
             )}
-            {!studentAnswer.isCorrect && question.correctAnswer && (
+            {!studentAnswer.isCorrect && (question.correctAnswer || question.correctOptionId) && (
               <View style={styles.correctAnswerRow}>
                 <Text style={[styles.correctAnswerLabel, { color: '#10b981' }]}>
                   Correct answer:
                 </Text>
                 {correctAnswerMath ? (
                   <MathRenderer expression={correctAnswerMath.expression} displayMode={false} />
-                ) : containsMathDelimiters(resolvedCorrectAnswerDisplay || question.correctAnswer || '') ? (
+                ) : containsMathDelimiters(resolvedCorrectAnswerDisplay || question.correctAnswer || question.correctOptionId || '') ? (
                   renderRichMathText(
-                    resolvedCorrectAnswerDisplay || question.correctAnswer || '',
+                    resolvedCorrectAnswerDisplay || question.correctAnswer || question.correctOptionId || '',
                     styles.correctAnswerValue,
                     theme.text,
                   )
                 ) : (
                   <Text style={[styles.correctAnswerValue, { color: theme.text }]}>
-                    {resolvedCorrectAnswerDisplay || question.correctAnswer}
+                    {resolvedCorrectAnswerDisplay || question.correctAnswer || question.correctOptionId}
                   </Text>
                 )}
               </View>

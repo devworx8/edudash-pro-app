@@ -194,9 +194,9 @@ export default function BrowseProgramsScreen() {
     const query = searchQuery.toLowerCase();
     return programs.filter(p => 
       p.title.toLowerCase().includes(query) ||
-      p.description?.toLowerCase().includes(query) ||
-      p.course_code?.toLowerCase().includes(query) ||
-      p.organization?.name?.toLowerCase().includes(query)
+      p.description?.toLowerCase()?.includes(query) ||
+      p.course_code?.toLowerCase()?.includes(query) ||
+      p.organization?.name?.toLowerCase()?.includes(query)
     );
   }, [programs, searchQuery]);
 

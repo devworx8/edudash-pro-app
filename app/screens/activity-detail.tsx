@@ -344,7 +344,7 @@ export default function ActivityDetailScreen() {
       filtered = filtered.filter(activity =>
         activity.title.toLowerCase().includes(searchLower) ||
         activity.description.toLowerCase().includes(searchLower) ||
-        activity.actorName?.toLowerCase().includes(searchLower)
+        activity.actorName?.toLowerCase()?.includes(searchLower)
       );
     }
 

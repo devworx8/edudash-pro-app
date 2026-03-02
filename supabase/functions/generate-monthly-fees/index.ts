@@ -65,6 +65,20 @@ interface FeeCandidate {
   age_max_months?: number | null;
 }
 
+interface SchoolFeeStructureRow {
+  id: string;
+  amount_cents: number;
+  fee_category: string | null;
+  name: string;
+  description: string | null;
+  age_group: string | null;
+  grade_level: string | null;
+  created_at: string | null;
+  created_by: string | null;
+  billing_frequency: string | null;
+  due_day_of_month: number | null;
+}
+
 interface StudentRow {
   id: string;
   date_of_birth?: string | null;
@@ -213,6 +227,127 @@ function isTuitionFee(feeType?: string | null, name?: string | null, desc?: stri
     ['tuition', 'school_fees', 'school_fee', 'monthly', 'monthly_fee'].includes(t) ||
     /tuition|school\s*fee|monthly\s*fee/.test(combined)
   );
+}
+
+function toLegacyFrequency(input?: string | null): 'one_time' | 'monthly' | 'quarterly' | 'yearly' {
+  const value = (input || '').toLowerCase();
+  if (value === 'one_time' || value === 'monthly' || value === 'quarterly' || value === 'yearly') {
+    return value;
+  }
+  return 'monthly';
+}
+
+function toLegacyFeeType(input?: string | null): 'registration' | 'tuition' | 'materials' | 'transport' | 'meals' | 'uniform' | 'uniform_tshirt' | 'uniform_shorts' | 'activity' | 'other' {
+  const value = (input || '').toLowerCase();
+  if (
+    value === 'registration' ||
+    value === 'tuition' ||
+    value === 'materials' ||
+    value === 'transport' ||
+    value === 'meals' ||
+    value === 'uniform' ||
+    value === 'uniform_tshirt' ||
+    value === 'uniform_shorts' ||
+    value === 'activity' ||
+    value === 'other'
+  ) {
+    return value;
+  }
+  // Canonical categories can include aliases such as school_fees/monthly_fee.
+  if (/tuition|school\s*fee|monthly\s*fee/.test(value)) {
+    return 'tuition';
+  }
+  return 'other';
+}
+
+async function resolveSchoolCreatorId(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  schoolId: string,
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .or(`preschool_id.eq.${schoolId},organization_id.eq.${schoolId}`)
+    .limit(1);
+
+  if (error || !Array.isArray(data) || data.length === 0) return null;
+  return typeof data[0]?.id === 'string' ? data[0].id : null;
+}
+
+async function ensureLegacyFeeStructureForCanonical(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  schoolId: string,
+  canonicalFee: SchoolFeeStructureRow,
+  fallbackCreatedBy: string | null,
+): Promise<{ legacyFeeId: string | null; warning?: string }> {
+  // Reuse an existing legacy fee structure by unique key (preschool_id, name).
+  const { data: existing, error: existingErr } = await supabaseAdmin
+    .from('fee_structures')
+    .select('id')
+    .eq('preschool_id', schoolId)
+    .eq('name', canonicalFee.name)
+    .limit(1)
+    .maybeSingle();
+
+  if (!existingErr && existing?.id) {
+    return { legacyFeeId: existing.id };
+  }
+
+  const createdBy = canonicalFee.created_by || fallbackCreatedBy;
+  if (!createdBy) {
+    return {
+      legacyFeeId: null,
+      warning: `Cannot mirror canonical fee "${canonicalFee.name}" to legacy fee_structures (missing created_by).`,
+    };
+  }
+
+  const normalizedAmount = Number(canonicalFee.amount_cents || 0) / 100;
+  const dueDay =
+    canonicalFee.due_day_of_month && canonicalFee.due_day_of_month >= 1 && canonicalFee.due_day_of_month <= 28
+      ? canonicalFee.due_day_of_month
+      : 1;
+
+  const payload = {
+    preschool_id: schoolId,
+    name: canonicalFee.name,
+    description: canonicalFee.description || null,
+    amount: normalizedAmount,
+    fee_type: toLegacyFeeType(canonicalFee.fee_category),
+    frequency: toLegacyFrequency(canonicalFee.billing_frequency),
+    due_day: dueDay,
+    grade_levels: canonicalFee.grade_level ? [canonicalFee.grade_level] : null,
+    is_active: true,
+    mandatory: true,
+    created_by: createdBy,
+  };
+
+  const { data: inserted, error: insertErr } = await supabaseAdmin
+    .from('fee_structures')
+    .insert(payload)
+    .select('id')
+    .maybeSingle();
+
+  if (!insertErr && inserted?.id) {
+    return { legacyFeeId: inserted.id };
+  }
+
+  // Retry lookup in case another process inserted the same unique (preschool_id, name) row.
+  const { data: retried } = await supabaseAdmin
+    .from('fee_structures')
+    .select('id')
+    .eq('preschool_id', schoolId)
+    .eq('name', canonicalFee.name)
+    .limit(1)
+    .maybeSingle();
+
+  if (retried?.id) {
+    return { legacyFeeId: retried.id };
+  }
+
+  return {
+    legacyFeeId: null,
+    warning: `Failed to mirror canonical fee "${canonicalFee.name}" to legacy fee_structures: ${insertErr?.message || 'unknown error'}`,
+  };
 }
 
 async function authorizeRequest(
@@ -431,11 +566,17 @@ serve(async (req: Request): Promise<Response> => {
 
         if (!tuitionFees.length) {
           // Try school_fee_structures as fallback
-          const { data: schoolFees } = await supabase
+          const { data: schoolFees, error: schoolFeesErr } = await supabase
             .from('school_fee_structures')
-            .select('id, amount_cents, fee_category, name, description, age_group, grade_level, created_at')
+            .select('id, amount_cents, fee_category, name, description, age_group, grade_level, created_at, created_by, billing_frequency, due_day_of_month')
             .eq('preschool_id', school.id)
             .eq('is_active', true);
+
+          if (schoolFeesErr) {
+            schoolResult.errors.push(`Canonical fee structure fetch error: ${schoolFeesErr.message}`);
+            results.push(schoolResult);
+            continue;
+          }
 
           const tuitionSchoolFees = (schoolFees || []).filter((sf) =>
             isTuitionFee(sf.fee_category, sf.name, sf.description)
@@ -447,10 +588,22 @@ serve(async (req: Request): Promise<Response> => {
             continue;
           }
 
-          // Map school_fee_structures to FeeCandidate format
+          // Map school_fee_structures to FeeCandidate format by first resolving/creating
+          // a compatible legacy fee_structure row (student_fees.fee_structure_id FK target).
+          const fallbackCreatedBy = await resolveSchoolCreatorId(supabase, school.id);
           for (const sf of tuitionSchoolFees) {
+            const { legacyFeeId, warning } = await ensureLegacyFeeStructureForCanonical(
+              supabase,
+              school.id,
+              sf as SchoolFeeStructureRow,
+              fallbackCreatedBy,
+            );
+            if (!legacyFeeId) {
+              schoolResult.errors.push(warning || `Failed to resolve legacy fee structure for ${sf.name}`);
+              continue;
+            }
             tuitionFees.push({
-              id: sf.id,
+              id: legacyFeeId,
               amount: sf.amount_cents / 100,
               fee_type: sf.fee_category,
               name: sf.name,

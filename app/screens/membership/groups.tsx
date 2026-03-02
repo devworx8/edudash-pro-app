@@ -161,7 +161,7 @@ export default function MemberGroupsScreen() {
     const query = searchQuery.toLowerCase();
     return groups.filter(g => 
       g.name.toLowerCase().includes(query) ||
-      g.description?.toLowerCase().includes(query)
+      g.description?.toLowerCase()?.includes(query)
     );
   }, [groups, searchQuery]);
 

@@ -12,6 +12,7 @@ import {
   derivePlanModeMeta,
   deriveSuggestedActions,
 } from './interactionHints.ts';
+import { extractRetryAfterSeconds, mapAiProxyErrorCode } from './errorContract.ts';
 
 type JsonRecord = Record<string, unknown>;
 
@@ -3388,8 +3389,10 @@ serve(async (req) => {
         if (quotaData && typeof quotaData.allowed === 'boolean' && !quotaData.allowed) {
           return new Response(JSON.stringify({
             error: 'quota_exceeded',
+            error_code: 'quota_exceeded',
             message: 'AI usage quota exceeded for this billing period',
             details: quotaData,
+            retryable: false,
           }), {
             status: 429,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -3878,11 +3881,16 @@ serve(async (req) => {
         } catch (fallbackError) {
           const fallbackMessage = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
           const fallbackStatus = mapProviderErrorStatus(fallbackMessage);
+          const fallbackErrorCode = mapAiProxyErrorCode(fallbackStatus, fallbackMessage);
+          const retryAfterSeconds = extractRetryAfterSeconds(fallbackMessage);
           console.error('[ai-proxy] Provider error:', providerMessage, 'Fallback error:', fallbackMessage);
           return new Response(JSON.stringify({
             error: 'provider_error',
+            error_code: fallbackErrorCode,
             message: providerMessage,
             fallback: fallbackMessage,
+            retryable: fallbackStatus === 429 || fallbackStatus >= 500,
+            retry_after_seconds: retryAfterSeconds,
           }), {
             status: fallbackStatus,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -3890,9 +3898,14 @@ serve(async (req) => {
         }
       } else {
         console.error('[ai-proxy] Provider error:', providerMessage);
+        const errorCode = mapAiProxyErrorCode(providerStatus, providerMessage);
+        const retryAfterSeconds = extractRetryAfterSeconds(providerMessage);
         return new Response(JSON.stringify({
           error: 'provider_error',
+          error_code: errorCode,
           message: providerMessage,
+          retryable: providerStatus === 429 || providerStatus >= 500,
+          retry_after_seconds: retryAfterSeconds,
         }), {
           status: providerStatus,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -4014,7 +4027,12 @@ serve(async (req) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    return new Response(JSON.stringify({ error: 'ai_proxy_error', message }), {
+    return new Response(JSON.stringify({
+      error: 'ai_proxy_error',
+      error_code: mapAiProxyErrorCode(500, message),
+      message,
+      retryable: true,
+    }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

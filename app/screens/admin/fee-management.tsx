@@ -102,6 +102,7 @@ export default function FeeManagementScreen() {
   const modalPaddingBottom = Platform.OS === 'android'
     ? Math.max(insets.bottom, 32)
     : Math.max(insets.bottom, 12);
+  const contentBottomInset = Math.max(insets.bottom, 16);
   
   // Create styles early to use in all render paths
   const styles = createStyles(theme);
@@ -300,13 +301,20 @@ export default function FeeManagementScreen() {
               const schoolsProcessed = Number(data.schools_processed || 0);
               const totalErrors = Number(data.total_errors || 0);
               const feeRowLabel = feesCreated === 1 ? 'fee row' : 'fee rows';
+              const warningDetails = Array.isArray((data as any)?.results)
+                ? ((data as any).results as Array<{ errors?: string[] }>)
+                    .flatMap((result) => Array.isArray(result?.errors) ? result.errors : [])
+                    .filter((msg) => typeof msg === 'string' && msg.trim().length > 0)
+                : [];
+              const firstWarning = warningDetails[0] || null;
 
               if (totalErrors > 0) {
                 showAlert({
                   title: 'Generated With Warnings',
                   message:
                     `Created ${feesCreated} ${feeRowLabel} for ${monthLabel} across ${schoolsProcessed} school(s). ` +
-                    `${totalErrors} warning(s) were reported. Check edge logs if needed.`,
+                    `${totalErrors} warning(s) were reported.` +
+                    (firstWarning ? ` First warning: ${firstWarning}` : ' Check edge logs if needed.'),
                   type: 'warning',
                 });
               } else {
@@ -732,8 +740,11 @@ export default function FeeManagementScreen() {
       </View>
       
       <ScrollView
-        style={styles.scrollView}
+        style={[styles.scrollView, Platform.OS === 'web' ? ({ overscrollBehavior: 'contain' } as any) : null]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: contentBottomInset + 24 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />}
+        keyboardShouldPersistTaps="handled"
+        bounces={false}
       >
         {/* Fee Structures Section */}
         <View style={styles.section}>
@@ -876,7 +887,6 @@ export default function FeeManagementScreen() {
           )}
         </View>
         
-        <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* Fee Modal */}
@@ -888,7 +898,7 @@ export default function FeeManagementScreen() {
             keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 12 : 0}
           >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-              <View style={[styles.modalContent, { backgroundColor: theme.background, paddingBottom: modalPaddingBottom }]}>
+              <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: theme.text }]}>
                     {editingFee ? 'Edit Fee' : 'Add New Fee'}
@@ -899,10 +909,11 @@ export default function FeeManagementScreen() {
                 </View>
                 
                 <ScrollView
-                  style={styles.modalBody}
-                  contentContainerStyle={[styles.modalBodyContent, { paddingBottom: modalPaddingBottom + 16 }]}
+                  style={[styles.modalBody, Platform.OS === 'web' ? ({ overscrollBehavior: 'contain' } as any) : null]}
+                  contentContainerStyle={[styles.modalBodyContent, { paddingBottom: 16 }]}
                   keyboardShouldPersistTaps="handled"
                   keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                  bounces={false}
                 >
               <Text style={[styles.label, { color: theme.text }]}>Fee Name *</Text>
               <TextInput
@@ -1032,7 +1043,7 @@ export default function FeeManagementScreen() {
             keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 12 : 0}
           >
             <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-              <View style={[styles.modalContent, { backgroundColor: theme.background, paddingBottom: modalPaddingBottom }]}>
+              <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: theme.text }]}>
                     {editingPromo ? 'Edit Promo' : 'Add New Promo'}
@@ -1043,10 +1054,11 @@ export default function FeeManagementScreen() {
                 </View>
                 
                 <ScrollView
-                  style={styles.modalBody}
-                  contentContainerStyle={[styles.modalBodyContent, { paddingBottom: modalPaddingBottom + 16 }]}
+                  style={[styles.modalBody, Platform.OS === 'web' ? ({ overscrollBehavior: 'contain' } as any) : null]}
+                  contentContainerStyle={[styles.modalBodyContent, { paddingBottom: 16 }]}
                   keyboardShouldPersistTaps="handled"
                   keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
+                  bounces={false}
                 >
               <Text style={[styles.label, { color: theme.text }]}>Promo Code *</Text>
               <TextInput
@@ -1185,6 +1197,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   backButton: { padding: 8 },
   headerTitle: { fontSize: 18, fontWeight: '700' },
   scrollView: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
   section: { padding: 16 },
   sectionHeader: {
     flexDirection: 'row',

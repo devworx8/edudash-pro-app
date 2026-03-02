@@ -142,12 +142,12 @@ export function ExamInteractiveView({
   /**
    * Core submit logic shared by explicit Submit and auto-submit.
    */
-  const doSubmitAnswer = useCallback(async (answer: string) => {
+  const doSubmitAnswer = useCallback(async (answer: string, selectedOptionId?: string) => {
     if (!currentQuestion || !answer.trim()) return;
 
     try {
       setSubmitting(true);
-      const result = await submitAnswer(currentQuestion.id, answer, true);
+      const result = await submitAnswer(currentQuestion.id, answer, true, selectedOptionId);
 
       setUiNotice({
         type: result?.isCorrect ? 'success' : 'info',
@@ -173,10 +173,10 @@ export function ExamInteractiveView({
   /**
    * Auto-submit for MC and True/False: select + grade immediately.
    */
-  const handleSelectOption = useCallback((option: string) => {
+  const handleSelectOption = useCallback((option: string, optionId?: string) => {
     setCurrentAnswer(option);
     if (currentQuestion && AUTO_SUBMIT_TYPES.includes(currentQuestion.type)) {
-      doSubmitAnswer(option);
+      doSubmitAnswer(option, optionId);
     }
   }, [currentQuestion, doSubmitAnswer]);
 

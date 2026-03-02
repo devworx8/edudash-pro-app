@@ -19,6 +19,7 @@ import { ExamInteractiveView, type ExamResults } from '@/components/exam-prep/Ex
 import { ExamFlashcardsView } from '@/components/exam-prep/ExamFlashcardsView';
 import { ExamRevisionNotesView } from '@/components/exam-prep/ExamRevisionNotesView';
 import { ExamStudyGuideView } from '@/components/exam-prep/ExamStudyGuideView';
+import { GenerationStatusChip } from '@/components/exam-prep/GenerationStatusChip';
 import {
   coerceExamArtifactType,
   parseExamGenerationPayload,
@@ -36,6 +37,7 @@ import type {
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { QuotaRingWithStatus } from '@/components/ui/CircularQuotaRing';
 import { useAIUserLimits } from '@/hooks/useAI';
+import { extractInvokeErrorDetails } from '@/components/exam-prep/generationErrorMapping';
 
 type GenerationState = 'loading' | 'error' | 'ready';
 
@@ -47,140 +49,6 @@ function toSafeParam(value: string | string[] | undefined): string | undefined {
 function toBool(value: string | undefined, fallback: boolean): boolean {
   if (!value) return fallback;
   return value === '1' || value.toLowerCase() === 'true';
-}
-
-type InvokeErrorDetails = {
-  message: string;
-  code?: string;
-  status?: number;
-  retryAfterSeconds?: number;
-};
-
-async function extractInvokeErrorDetails(
-  error: any,
-  fallbackData?: unknown,
-): Promise<InvokeErrorDetails> {
-  const baseMessage =
-    typeof error?.message === 'string' && error.message.trim().length > 0
-      ? error.message.trim()
-      : 'Generation failed. Please retry.';
-
-  let payload: any = fallbackData;
-  let status: number | undefined;
-  let retryAfterSeconds: number | undefined;
-
-  const context = error?.context;
-  if (context && typeof context === 'object' && typeof context.text === 'function') {
-    try {
-      status = Number((context as Response).status);
-      const retryAfterHeader =
-        context.headers?.get?.('retry-after') || context.headers?.get?.('Retry-After');
-      const parsedRetry = Number(retryAfterHeader);
-      if (Number.isFinite(parsedRetry) && parsedRetry > 0) {
-        retryAfterSeconds = Math.max(1, Math.round(parsedRetry));
-      }
-
-      const contentType = String(context.headers?.get?.('content-type') || '').toLowerCase();
-      if (contentType.includes('application/json')) {
-        payload = await (context as Response).json();
-      } else {
-        const raw = await (context as Response).text();
-        try {
-          payload = JSON.parse(raw);
-        } catch {
-          payload = { message: raw };
-        }
-      }
-    } catch {
-      // Keep base message if response body is unavailable.
-    }
-  }
-
-  const code =
-    typeof payload?.code === 'string'
-      ? payload.code
-      : typeof payload?.error === 'string'
-      ? payload.error
-      : undefined;
-  const serverMessage =
-    typeof payload?.message === 'string'
-      ? payload.message
-      : typeof payload?.error_description === 'string'
-      ? payload.error_description
-      : undefined;
-  const issues = Array.isArray(payload?.issues)
-    ? payload.issues.filter((item: unknown) => typeof item === 'string').slice(0, 2)
-    : [];
-
-  if (code === 'generation_quality_guardrail_failed') {
-    return {
-      code,
-      status,
-      retryAfterSeconds,
-      message:
-        issues.length > 0
-          ? `Draft failed quality checks: ${issues.join(' ')}`
-          : 'Draft failed language/comprehension quality checks. Tap Retry to regenerate.',
-    };
-  }
-
-  if (code === 'ai_provider_unavailable') {
-    return {
-      code,
-      status,
-      retryAfterSeconds,
-      message:
-        retryAfterSeconds && retryAfterSeconds > 0
-          ? `AI provider is busy right now. Retry in about ${retryAfterSeconds} seconds.`
-          : 'AI provider is temporarily busy. Retry in about a minute.',
-    };
-  }
-
-  if (code === 'premium_exam_limit_reached') {
-    return {
-      code,
-      status,
-      retryAfterSeconds,
-      message: serverMessage || 'Premium exam generation limit reached for this cycle.',
-    };
-  }
-
-  if (code === 'generation_parse_failed') {
-    return {
-      code,
-      status,
-      retryAfterSeconds,
-      message: 'Exam draft came back malformed. Tap Retry to regenerate.',
-    };
-  }
-
-  if (typeof serverMessage === 'string' && serverMessage.trim().length > 0) {
-    return {
-      code,
-      status,
-      retryAfterSeconds,
-      message: serverMessage.trim(),
-    };
-  }
-
-  if (status === 429 || status === 503) {
-    return {
-      code,
-      status,
-      retryAfterSeconds,
-      message:
-        retryAfterSeconds && retryAfterSeconds > 0
-          ? `Service is rate-limited. Retry in about ${retryAfterSeconds} seconds.`
-          : 'Service is temporarily rate-limited. Retry in about a minute.',
-    };
-  }
-
-  return {
-    code,
-    status,
-    retryAfterSeconds,
-    message: baseMessage,
-  };
 }
 
 function toNumberMap(input: unknown): Record<string, number> {
@@ -215,6 +83,8 @@ export default function ExamGenerationScreen() {
     schoolId?: string;
     childName?: string;
     useTeacherContext?: string;
+    fallbackPolicy?: string;
+    qualityMode?: string;
     draftId?: string;
     examId?: string;
     loadSaved?: string;
@@ -230,6 +100,8 @@ export default function ExamGenerationScreen() {
   const schoolId = toSafeParam(params.schoolId);
   const childName = toSafeParam(params.childName);
   const useTeacherContext = toBool(toSafeParam(params.useTeacherContext), true);
+  const fallbackPolicy = toSafeParam(params.fallbackPolicy) || 'provider_outage_only';
+  const qualityMode = toSafeParam(params.qualityMode) || 'standard';
   const draftId = toSafeParam(params.draftId);
   const savedExamId = toSafeParam(params.examId);
   const loadSaved = toBool(toSafeParam(params.loadSaved), false);
@@ -283,12 +155,23 @@ export default function ExamGenerationScreen() {
   const [teacherAlignment, setTeacherAlignment] = useState<ExamTeacherAlignmentSummary | null>(null);
   const [blueprintAudit, setBlueprintAudit] = useState<ExamBlueprintAudit | null>(null);
   const [studyCoachPack, setStudyCoachPack] = useState<ExamStudyCoachPack | null>(null);
+  const [generationMode, setGenerationMode] = useState<'ai' | 'outage_fallback'>('ai');
+  const [qualityReport, setQualityReport] = useState<ExamGenerationResponse['qualityReport'] | null>(null);
   const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
+  const [showGenerationStatus, setShowGenerationStatus] = useState(false);
   const [completionSummary, setCompletionSummary] = useState<string | null>(null);
   // Parents mainly care about the actual exam; keep the
   // audit + study coach collapsed by default on small screens.
   const [showAudit, setShowAudit] = useState(false);
-  const hasGenerationWarning = useMemo(() => Boolean(persistenceWarning && persistenceWarning.trim().length > 0), [persistenceWarning]);
+  const hasGenerationWarning = useMemo(
+    () =>
+      Boolean(
+        (persistenceWarning && persistenceWarning.trim().length > 0) ||
+          generationMode === 'outage_fallback' ||
+          qualityReport?.repaired,
+      ),
+    [persistenceWarning, generationMode, qualityReport],
+  );
   const isPracticeArtifact = artifactType === 'practice_test';
 
   const generationLabel = useMemo(() => {
@@ -335,7 +218,9 @@ export default function ExamGenerationScreen() {
           subject,
           examType,
           language,
-          allowFallback: true,
+          allowFallback: fallbackPolicy !== 'never',
+          fallbackPolicy,
+          qualityMode,
           customPrompt: customPrompt || undefined,
           studentId,
           classId,
@@ -399,7 +284,10 @@ export default function ExamGenerationScreen() {
       setTeacherAlignment(response.teacherAlignment || null);
       setBlueprintAudit(response.examBlueprintAudit || null);
       setStudyCoachPack(response.studyCoachPack || null);
+      setGenerationMode(response.generationMode || 'ai');
+      setQualityReport(response.qualityReport || null);
       setPersistenceWarning(response.persistenceWarning || null);
+      setShowGenerationStatus(false);
       setState('ready');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to generate exam';
@@ -416,6 +304,8 @@ export default function ExamGenerationScreen() {
     classId,
     schoolId,
     useTeacherContext,
+    fallbackPolicy,
+    qualityMode,
     parseExamPayload,
   ]);
 
@@ -503,34 +393,16 @@ export default function ExamGenerationScreen() {
         <Stack.Screen options={{ headerShown: false }} />
         <View style={styles.readyContent}>
           {hasGenerationWarning || usesUploadedMaterial ? (
-            <View style={styles.statusPillsRow}>
-              {hasGenerationWarning ? (
-                <View
-                  style={[
-                    styles.statusPill,
-                    { borderColor: `${theme.warning}55`, backgroundColor: `${theme.warning}16` },
-                  ]}
-                >
-                  <Ionicons name="warning-outline" size={13} color={theme.warning} />
-                  <Text style={[styles.statusPillText, { color: theme.warning }]} numberOfLines={2}>
-                    {persistenceWarning}
-                  </Text>
-                </View>
-              ) : null}
-              {usesUploadedMaterial ? (
-                <View
-                  style={[
-                    styles.statusPill,
-                    { borderColor: `${theme.primary}55`, backgroundColor: `${theme.primary}16` },
-                  ]}
-                >
-                  <Ionicons name="document-attach-outline" size={13} color={theme.primary} />
-                  <Text style={[styles.statusPillText, { color: theme.primary }]} numberOfLines={1}>
-                    Uploaded material active
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+            <GenerationStatusChip
+              theme={theme}
+              hasGenerationWarning={hasGenerationWarning}
+              showDetails={showGenerationStatus}
+              onToggle={() => setShowGenerationStatus((prev) => !prev)}
+              persistenceWarning={persistenceWarning}
+              usesUploadedMaterial={usesUploadedMaterial}
+              generationMode={generationMode}
+              qualityRepaired={Boolean(qualityReport?.repaired)}
+            />
           ) : null}
           {isPracticeArtifact && completionSummary ? (
             <View style={[styles.completionBanner, { borderColor: `${theme.success}55`, backgroundColor: `${theme.success}18` }]}>
@@ -765,30 +637,6 @@ const styles = StyleSheet.create({
   },
   readyContent: {
     flex: 1,
-  },
-  statusPillsRow: {
-    marginHorizontal: 14,
-    marginTop: 8,
-    marginBottom: 4,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  statusPill: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    maxWidth: '100%',
-  },
-  statusPillText: {
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
-    flexShrink: 1,
   },
   completionBanner: {
     marginHorizontal: 14,

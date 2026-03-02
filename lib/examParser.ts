@@ -7,6 +7,11 @@
  * Ported from web app for native app usage.
  */
 
+export interface ExamOption {
+  id: string;
+  text: string;
+}
+
 export interface ExamQuestion {
   id: string;
   type:
@@ -20,6 +25,8 @@ export interface ExamQuestion {
   question: string;
   marks: number;
   options?: string[];
+  optionObjects?: ExamOption[];
+  correctOptionId?: string;
   correctAnswer?: string;
   rubric?: string;
   explanation?: string;
@@ -227,13 +234,50 @@ function normalizeQuestion(partial: Partial<ExamQuestion>, id: number): ExamQues
   const normalizedMarks = Number(partial.marks ?? raw.points ?? 1);
 
   const rawOptions = partial.options ?? raw.options;
-  const options = Array.isArray(rawOptions)
-    ? rawOptions.map((item: unknown) =>
-        String(item || '')
-          .replace(/^(?:\s*[A-D]\s*[\.\)\-:]\s*)+/i, '')
-          .trim(),
-      )
+  const normalizedOptionObjects = Array.isArray(rawOptions)
+    ? rawOptions
+        .map((item: unknown, index: number) => {
+          if (item && typeof item === 'object' && !Array.isArray(item)) {
+            const rawId = (item as Record<string, unknown>).id;
+            const rawText =
+              (item as Record<string, unknown>).text ??
+              (item as Record<string, unknown>).label ??
+              (item as Record<string, unknown>).value;
+            const text = String(rawText || '')
+              .replace(/^(?:\s*[A-D]\s*[\.\)\-:]\s*)+/i, '')
+              .trim();
+            if (!text) return null;
+            return {
+              id: normalizeOptionId(rawId) || optionIdFromIndex(index),
+              text,
+            };
+          }
+
+          const text = String(item || '')
+            .replace(/^(?:\s*[A-D]\s*[\.\)\-:]\s*)+/i, '')
+            .trim();
+          if (!text) return null;
+          return {
+            id: optionIdFromIndex(index),
+            text,
+          };
+        })
+        .filter((item): item is ExamOption => Boolean(item))
+    : [];
+  const options = normalizedOptionObjects.length > 0
+    ? normalizedOptionObjects.map((item) => item.text)
     : undefined;
+  const optionObjects = normalizedOptionObjects.length > 0 ? normalizedOptionObjects : undefined;
+  const correctOptionIdRaw = partial.correctOptionId ?? raw.correct_option_id ?? raw.correctOptionId;
+  const explicitCorrectOptionId = normalizeOptionId(correctOptionIdRaw);
+  const inferredCorrectLetter = resolveChoiceLetter(
+    String(partial.correctAnswer ?? raw.correct_answer ?? raw.answer ?? ''),
+    options,
+  );
+  const inferredCorrectOptionId = inferredCorrectLetter
+    ? inferredCorrectLetter.toUpperCase()
+    : undefined;
+  const correctOptionId = explicitCorrectOptionId || inferredCorrectOptionId;
 
   return {
     id: partial.id || `q_${id}`,
@@ -241,6 +285,8 @@ function normalizeQuestion(partial: Partial<ExamQuestion>, id: number): ExamQues
     question: String(partial.question ?? raw.text ?? '').trim(),
     marks: Number.isFinite(normalizedMarks) ? normalizedMarks : 1,
     options,
+    optionObjects,
+    correctOptionId,
     correctAnswer: partial.correctAnswer ?? raw.correct_answer ?? raw.answer,
     rubric: partial.rubric,
     explanation: partial.explanation,
@@ -335,8 +381,24 @@ function extractChoiceLetter(value: string): string | null {
   return null;
 }
 
+function optionIdFromIndex(index: number): string {
+  return String.fromCharCode(65 + index);
+}
+
 function toChoiceLetter(index: number): string {
-  return String.fromCharCode(97 + index);
+  return optionIdFromIndex(index).toLowerCase();
+}
+
+function normalizeOptionId(value: unknown): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  const exact = raw.match(/^[A-Za-z0-9_-]{1,12}$/);
+  if (exact) return exact[0].toUpperCase();
+
+  const letter = extractChoiceLetter(raw);
+  if (letter) return letter.toUpperCase();
+  return null;
 }
 
 function resolveChoiceLetter(value: string, options?: string[]): string | null {
@@ -355,14 +417,18 @@ function resolveChoiceLetter(value: string, options?: string[]): string | null {
 
 function formatCorrectChoice(question: ExamQuestion): string {
   const raw = String(question.correctAnswer || '').trim();
-  if (!raw) return '';
-  if (!Array.isArray(question.options) || question.options.length === 0) return raw;
+  const options = Array.isArray(question.options) ? question.options : [];
+  const canonicalId = normalizeOptionId(question.correctOptionId);
+  if (!raw && !canonicalId) return '';
+  if (options.length === 0) return raw || (canonicalId || '');
 
-  const letter = resolveChoiceLetter(raw, question.options);
-  if (!letter) return raw;
+  const letter = canonicalId?.length === 1
+    ? canonicalId.toLowerCase()
+    : resolveChoiceLetter(raw || canonicalId || '', options);
+  if (!letter) return raw || (canonicalId || '');
 
   const optionIndex = letter.charCodeAt(0) - 97;
-  const option = question.options[optionIndex];
+  const option = options[optionIndex];
   if (!option) return raw;
   return `${letter.toUpperCase()}. ${sanitizeChoiceText(option)}`;
 }
@@ -407,7 +473,10 @@ function areMathEquivalent(a: string, b: string): boolean {
  */
 export function gradeAnswer(
   question: ExamQuestion,
-  studentAnswer: string
+  studentAnswer: string,
+  options?: {
+    selectedOptionId?: string;
+  }
 ): { isCorrect: boolean; feedback: string; marks: number } {
   if (!studentAnswer || !studentAnswer.trim()) {
     return {
@@ -427,6 +496,8 @@ export function gradeAnswer(
     const answerNormalized = normalize(answer);
     const answerLetter = resolveChoiceLetter(answer, question.options);
     const correctLetter = resolveChoiceLetter(correctRaw, question.options);
+    const selectedOptionId = normalizeOptionId(options?.selectedOptionId);
+    const correctOptionId = normalizeOptionId(question.correctOptionId);
 
     const answerOptionIndex = answerLetter ? answerLetter.charCodeAt(0) - 97 : -1;
     const correctOptionIndex = correctLetter ? correctLetter.charCodeAt(0) - 97 : -1;
@@ -440,6 +511,7 @@ export function gradeAnswer(
         : '';
 
     const isCorrect =
+      (!!selectedOptionId && !!correctOptionId && selectedOptionId === correctOptionId) ||
       answerNormalized === correctNormalized ||
       areMathEquivalent(answer, correctRaw) ||
       (!!answerLetter && !!correctLetter && answerLetter === correctLetter) ||
