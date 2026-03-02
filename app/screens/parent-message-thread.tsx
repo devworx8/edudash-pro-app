@@ -29,6 +29,7 @@ import { SwipeableMessageRow } from '@/components/messaging/SwipeableMessageRow'
 import { MessageScheduler } from '@/components/messaging/MessageScheduler';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useParentMessageThread, type ChatRow } from '@/hooks/useParentMessageThread';
+import { parseThemeFromMessage } from '@/lib/messaging/parseThemeFromMessage';
 import {
   messageThreadStyles as styles, defaultTheme,
   COMPOSER_FLOAT_GAP, COMPOSER_OVERLAY_HEIGHT,
@@ -123,13 +124,19 @@ export default function ParentMessageThreadScreen() {
     !!h.selectedMessage &&
     h.selectedMessage.sender_id !== user?.id;
   const handleAddToWeeklyProgram = useCallback(() => {
-    const content = (h.selectedMessage?.content ?? '');
-    const safe = typeof content === 'string' ? content.slice(0, 2000) : '';
+    const content = h.selectedMessage?.content ?? '';
+    const message = typeof content === 'string' ? content : '';
+    const parsedTheme = parseThemeFromMessage(message);
+    const safe = message.slice(0, 4000);
     h.setShowMessageActions(false);
     h.setSelectedMessage(null);
     router.push({
       pathname: '/screens/add-theme-from-message',
-      params: { message: safe },
+      params: {
+        message: safe,
+        title: parsedTheme.title ?? '',
+        objectives: parsedTheme.objectives.length ? JSON.stringify(parsedTheme.objectives) : '',
+      },
     });
   }, [h.selectedMessage, h.setShowMessageActions, h.setSelectedMessage]);
   // Call context

@@ -17,6 +17,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { extractOrganizationId } from '@/lib/tenant/compat';
@@ -55,10 +56,10 @@ export default function AddThemeFromMessageScreen() {
 
   const parsed = useMemo(() => {
     const msg = params.message ?? '';
-    if (msg) return parseThemeFromMessage(msg);
     const title = params.title ?? '';
     const objectivesStr = params.objectives ?? '';
-    const objectives = objectivesStr
+    const parsedFromMessage = msg ? parseThemeFromMessage(msg) : { title: null, objectives: [] as string[] };
+    const fallbackObjectives = objectivesStr
       ? (() => {
           try {
             const arr = JSON.parse(objectivesStr) as unknown;
@@ -68,7 +69,11 @@ export default function AddThemeFromMessageScreen() {
           }
         })()
       : [];
-    return { title: title || null, objectives };
+
+    return {
+      title: parsedFromMessage.title || title || null,
+      objectives: parsedFromMessage.objectives.length > 0 ? parsedFromMessage.objectives : fallbackObjectives,
+    };
   }, [params.message, params.title, params.objectives]);
 
   const [title, setTitle] = useState(parsed.title ?? '');
@@ -159,8 +164,9 @@ export default function AddThemeFromMessageScreen() {
   const styles = useMemo(
     () =>
       StyleSheet.create({
-        container: { flex: 1, backgroundColor: theme.background },
-        scroll: { flex: 1 },
+        safeArea: { flex: 1, backgroundColor: theme.background },
+        scroll: { flex: 1, backgroundColor: theme.background },
+        scrollContent: { flexGrow: 1 },
         inner: { padding: 16, paddingBottom: 32 },
         label: { fontSize: 14, fontWeight: '600', color: theme.textSecondary, marginBottom: 6 },
         input: {
@@ -197,49 +203,55 @@ export default function AddThemeFromMessageScreen() {
           headerBackTitle: 'Back',
         }}
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.scroll}>
-        <View style={styles.inner}>
-          <Text style={styles.label}>Theme title</Text>
-          <TextInput
-            style={styles.input}
-            value={title}
-            onChangeText={setTitle}
-            placeholder="e.g. Oral orientation"
-            placeholderTextColor={theme.textTertiary}
-          />
-          <Text style={[styles.label, { marginTop: 16 }]}>Learning objectives (one per line)</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={objectivesText}
-            onChangeText={setObjectivesText}
-            placeholder="e.g. please\ncan I have\nThank you\nmy Name and surname\nAge and gender"
-            placeholderTextColor={theme.textTertiary}
-            multiline
-          />
-          <Text style={[styles.label, { marginTop: 16 }]}>Week start (Monday)</Text>
-          <TextInput
-            style={styles.input}
-            value={weekStart}
-            onChangeText={setWeekStart}
-            placeholder="YYYY-MM-DD"
-            placeholderTextColor={theme.textTertiary}
-          />
-          <Text style={styles.hint}>Use the Monday of the week this theme applies to.</Text>
-          <TouchableOpacity
-            style={styles.row}
-            onPress={() => setPublishNow(!publishNow)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.checkbox, { borderColor: theme.primary, backgroundColor: publishNow ? theme.primary : 'transparent' }]}>
-              {publishNow && <Ionicons name="checkmark" size={16} color="#fff" />}
-            </View>
-            <Text style={{ color: theme.text, fontSize: 15 }}>Publish so teachers can use it for lesson generation</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
-            {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save theme</Text>}
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.inner}>
+            <Text style={styles.label}>Theme title</Text>
+            <TextInput
+              style={styles.input}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Oral orientation"
+              placeholderTextColor={theme.textTertiary}
+            />
+            <Text style={[styles.label, { marginTop: 16 }]}>Learning objectives (one per line)</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={objectivesText}
+              onChangeText={setObjectivesText}
+              placeholder="e.g. please\ncan I have\nThank you\nmy Name and surname\nAge and gender"
+              placeholderTextColor={theme.textTertiary}
+              multiline
+            />
+            <Text style={[styles.label, { marginTop: 16 }]}>Week start (Monday)</Text>
+            <TextInput
+              style={styles.input}
+              value={weekStart}
+              onChangeText={setWeekStart}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={theme.textTertiary}
+            />
+            <Text style={styles.hint}>Use the Monday of the week this theme applies to.</Text>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => setPublishNow(!publishNow)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, { borderColor: theme.primary, backgroundColor: publishNow ? theme.primary : 'transparent' }]}>
+                {publishNow && <Ionicons name="checkmark" size={16} color="#fff" />}
+              </View>
+              <Text style={{ color: theme.text, fontSize: 15 }}>Publish so teachers can use it for lesson generation</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Save theme</Text>}
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
       <AlertModal {...alertProps} />
     </>
   );
