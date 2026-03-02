@@ -216,14 +216,15 @@ export function buildLocalFallbackExam(
   if (isLanguageSubject(subject)) {
     const locale = normalizeLanguageLocale(language);
     const isAfrikaans = locale === 'af-ZA';
-    const readingFallback = getLanguageReadingFallback(language);
     const langLabel = resolveLanguageName(language);
     const materialTopics = extractUploadedMaterialFocusTopics(uploadedMaterialExcerpt);
     const fallbackFocusTopics = [...contextSummary.focusTopics, ...materialTopics]
       .map((topic) => sanitizeTopic(topic))
       .filter((topic): topic is string => Boolean(topic))
       .slice(0, 4);
-    const useMaterialDrivenComprehension = Boolean(uploadedMaterialExcerpt);
+    const hasLegacyUploadedPassage = looksLikeLegacyMiaTumiPassage(uploadedMaterialExcerpt);
+    const useMaterialDrivenComprehension = Boolean(uploadedMaterialExcerpt) && !hasLegacyUploadedPassage;
+    const readingFallback = getLanguageReadingFallback(language, { focusTopics: fallbackFocusTopics, grade });
     const comprehensionInstruction = useMaterialDrivenComprehension
       ? isAfrikaans
         ? 'Lees die klaswerkteks hieronder. Beantwoord die vrae met inligting uit die teks en jou klasnotas.'
@@ -324,59 +325,64 @@ export function buildLocalFallbackExam(
             type: 'multiple_choice',
             marks: 2,
             question: isAfrikaans
-              ? 'Waarheen het Mia en Tumi Saterdagoggend gegaan?'
-              : 'Where did Mia and Tumi go on Saturday morning?',
+              ? 'Wat is die hoofonderwerp van die leesstuk?'
+              : 'What is the main topic of the passage?',
             options: isAfrikaans
-              ? ["Na 'n strand", "Na hul oupa se plaas", "Na 'n winkelsentrum", "Na 'n skoolsaal"]
-              : ['To a beach', "To their grandfather's farm", 'To a shopping mall', 'To a school hall'],
+              ? ['Hoe om te reis', 'Klaswerk en samewerking', 'Sportuitslae', 'Winkelsentrum-reels']
+              : ['How to travel', 'Classwork and teamwork', 'Sports results', 'Shopping mall rules'],
             correctAnswer: 'B',
             explanation: isAfrikaans
-              ? 'Die teks se hulle het op hul oupa se plaas gaan help.'
-              : 'The passage says they went to help on their grandfather\'s farm.',
+              ? 'Die teks fokus op klasaktiwiteite, studiegewoontes en samewerking.'
+              : 'The passage focuses on classroom activities, study habits, and teamwork.',
           },
           {
             id: 'A2',
             type: 'multiple_choice',
             marks: 2,
             question: isAfrikaans
-              ? 'Watter taak het hulle eerste gedoen?'
-              : 'Which task did they do first?',
+              ? 'Wat gebeur eerste in die teks?'
+              : 'What happens first in the passage?',
             options: isAfrikaans
-              ? ['Groente geplant', 'Na stories geluister', 'Die hoenders gevoer', 'Sop gekook']
-              : ['Planted vegetables', 'Listened to stories', 'Fed the chickens', 'Cooked soup'],
-            correctAnswer: 'C',
+              ? ['Leerders hersien klaswerk', 'Leerders verlaat die klas', 'Leerders ontvang sertifikate', 'Leerders skryf eksamens klaar']
+              : ['Learners review classwork', 'Learners leave class', 'Learners receive certificates', 'Learners finish final exams'],
+            correctAnswer: 'A',
             explanation: isAfrikaans
-              ? 'Die eerste taak in die storie is om die hoenders te voer.'
-              : 'The first task in the story is feeding the chickens.',
+              ? 'Die leesstuk begin met voorbereiding en hersiening van klaswerk.'
+              : 'The reading starts with preparation and revision of classwork.',
           },
           {
             id: 'A3',
             type: 'multiple_choice',
             marks: 2,
             question: isAfrikaans
-              ? 'Waarom het hulle onder die stoep gesit?'
-              : 'Why did they sit under the veranda/stoop?',
+              ? 'Waarom werk die leerders in pare of groepe?'
+              : 'Why do learners work in pairs or groups?',
             options: isAfrikaans
-              ? ['Hulle was moeg', 'Dit het begin reen', 'Hulle het weggekruip', 'Dit was te warm']
-              : ['They were tired', 'It started raining', 'They were hiding', 'It was too hot'],
+              ? ['Om vinniger klaar te maak sonder begrip', 'Om idees te deel en mekaar te help verstaan', 'Om minder vrae te beantwoord', 'Om huiswerk te vermy']
+              : [
+                  'To finish quickly without understanding',
+                  'To share ideas and support understanding',
+                  'To answer fewer questions',
+                  'To avoid homework',
+                ],
             correctAnswer: 'B',
             explanation: isAfrikaans
-              ? 'Die teks verduidelik dat hulle daar gesit het omdat dit begin reen het.'
-              : 'The passage explains that they sat there because it started raining.',
+              ? 'Die teks beklemtoon samewerking en verduideliking van antwoorde.'
+              : 'The passage emphasizes collaboration and explaining answers.',
           },
           {
             id: 'A4',
             type: 'short_answer',
             marks: 3,
             question: isAfrikaans
-              ? 'Skryf een sin wat beskryf hoe die familie in die storie saamgewerk het.'
-              : 'Write one sentence describing how the family worked together in the story.',
+              ? 'Noem twee dinge wat die leerders doen om beter voor te berei.'
+              : 'Name two things learners do to prepare better.',
             correctAnswer: isAfrikaans
-              ? 'Enige akkurate sin wat gedeelde take en familie-ondersteuning in die teks beskryf.'
-              : 'Any accurate sentence describing shared tasks and family support in the passage.',
+              ? 'Enige twee korrekte antwoorde uit die teks, bv. hersiening, woordeskat-oefening, vrae beantwoord.'
+              : 'Any two correct actions from the text, e.g. revision, vocabulary practice, answering questions.',
             explanation: isAfrikaans
-              ? 'n Korrekte antwoord verwys na ten minste een gedeelde aktiwiteit in die teks.'
-              : 'A correct response references at least one shared activity from the passage.',
+              ? 'Antwoorde moet direk uit die leesstuk kom.'
+              : 'Answers must be directly grounded in the passage.',
           },
           {
             id: 'A5',
@@ -386,11 +392,11 @@ export function buildLocalFallbackExam(
               ? `Som die teks in ${langLabel} op in 2-3 sinne.`
               : `Summarize the passage in ${langLabel} using 2-3 sentences.`,
             correctAnswer: isAfrikaans
-              ? 'n Kort, akkurate opsomming van die hoofgebeure in die teks.'
-              : 'A concise, accurate summary of key events from the passage.',
+              ? 'n Kort, akkurate opsomming van die hoofpunte in die teks.'
+              : 'A concise, accurate summary of the key ideas in the passage.',
             explanation: isAfrikaans
-              ? "n Sterk antwoord sluit volgorde, kernaksies en die einde in."
-              : 'A strong answer includes sequence, key actions, and ending.',
+              ? "n Sterk antwoord noem voorbereiding, samewerking en taalgebruik."
+              : 'A strong answer mentions preparation, collaboration, and language use.',
           },
         ];
     const examTypeLabel = (() => {
@@ -445,25 +451,25 @@ export function buildLocalFallbackExam(
               type: 'fill_in_blank',
               marks: 2,
               question: isAfrikaans
-                ? 'Voltooi die sin: Hulle het die hoenders _____ voordat hulle groente geplant het.'
-                : 'Complete the sentence: They _____ the chickens before planting vegetables.',
-              correctAnswer: isAfrikaans ? 'gevoer' : 'fed',
+                ? 'Voltooi die sin: In die leesstuk werk leerders _____ om mekaar te help.'
+                : 'Complete the sentence: In the passage, learners work _____ to help one another.',
+              correctAnswer: isAfrikaans ? 'saam' : 'together',
               explanation: isAfrikaans
-                ? 'Die teks se hulle het eers die hoenders gevoer.'
-                : 'The passage states they fed the chickens first.',
+                ? 'Die korrekte woord wys samewerking in die klas.'
+                : 'The correct word reflects classroom collaboration.',
             },
             {
               id: 'B3',
               type: 'true_false',
               marks: 2,
               question: isAfrikaans
-                ? 'Die kinders het huis toe gegaan voordat dit begin reen het.'
-                : 'The children went home before it started raining.',
+                ? 'Die leesstuk wys dat beplanning en oefening belangrik is vir leer.'
+                : 'The passage shows that planning and practice are important for learning.',
               options: isAfrikaans ? ['Waar', 'Onwaar'] : ['True', 'False'],
-              correctAnswer: isAfrikaans ? 'Onwaar' : 'False',
+              correctAnswer: isAfrikaans ? 'Waar' : 'True',
               explanation: isAfrikaans
-                ? 'Die reen het begin terwyl hulle nog op die plaas was.'
-                : 'Rain started while they were still at the farm.',
+                ? 'Die teks koppel voorbereiding aan beter begrip.'
+                : 'The text links preparation to stronger understanding.',
             },
             {
               id: 'B4',
@@ -487,11 +493,11 @@ export function buildLocalFallbackExam(
                 ? 'Verduidelik die stemming aan die einde van die storie.'
                 : 'Explain the mood at the end of the story.',
               correctAnswer: isAfrikaans
-                ? 'Die stemming aan die einde is warm en gelukkig omdat hulle saam sop geniet en lag.'
-                : 'The ending mood is warm/happy as they shared soup and laughter.',
+                ? 'Die stemming is positief omdat die leerders selfvertroue bou en mekaar ondersteun.'
+                : 'The mood is positive because learners build confidence and support one another.',
               explanation: isAfrikaans
-                ? 'Die laaste reels wys troos en familie-vreugde.'
-                : 'The final lines show comfort and family joy.',
+                ? 'Krediet vir antwoorde wat toon hoe samewerking tot sukses lei.'
+                : 'Credit for answers showing how collaboration leads to progress.',
             },
           ],
         },
@@ -1376,109 +1382,81 @@ export function resolveLanguageName(language: string): string {
   return LOCALE_TO_LANGUAGE_NAME[locale] || 'English';
 }
 
-export function getLanguageReadingFallback(language: string): { passage: string; instruction: string } {
+const LEGACY_MIA_TUMI_MARKERS = [
+  'mia en haar broer, tumi',
+  'mia and her brother, tumi',
+  'oupa se plaas',
+  "grandfather's farm",
+  'waarheen het mia en tumi',
+  'where did mia and tumi',
+];
+
+function looksLikeLegacyMiaTumiPassage(value: string): boolean {
+  const normalized = normalizeText(value || '');
+  if (!normalized) return false;
+
+  if (LEGACY_MIA_TUMI_MARKERS.some((marker) => normalized.includes(marker))) {
+    return true;
+  }
+
+  const hasNames = normalized.includes('mia') && normalized.includes('tumi');
+  const hasLegacySetting =
+    normalized.includes('plaas')
+    || normalized.includes('farm')
+    || normalized.includes('veranda')
+    || normalized.includes('stoep');
+
+  return hasNames && hasLegacySetting;
+}
+
+function resolveFallbackFocusTopic(focusTopics: string[] | undefined, locale: string): string {
+  const candidate = (focusTopics || [])
+    .map((topic) => sanitizeTopic(topic))
+    .find((topic): topic is string => Boolean(topic && topic.length >= 3));
+
+  if (candidate) return candidate;
+  return locale === 'af-ZA' ? 'klaswerk en taalvaardighede' : 'classwork and language skills';
+}
+
+export function getLanguageReadingFallback(
+  language: string,
+  options?: { focusTopics?: string[]; grade?: string },
+): { passage: string; instruction: string } {
   const locale = normalizeLanguageLocale(language);
   const safeLanguageLabel = resolveLanguageName(locale);
+  const focusTopic = resolveFallbackFocusTopic(options?.focusTopics, locale);
+  const gradeLabel = String(options?.grade || '').replace(/_/g, ' ').trim();
 
   if (locale === 'af-ZA') {
+    const gradeSentence = gradeLabel
+      ? `Hierdie leesstuk is aangepas vir ${gradeLabel}.`
+      : 'Hierdie leesstuk is aangepas vir die leerder se graadvlak.';
     return {
-      passage: `Lees die storie hieronder en beantwoord die vrae wat volg.
+      passage: `Lees die klaswerkteks hieronder en beantwoord die vrae wat volg.
 
-Mia en haar broer, Tumi, het Saterdag vroeg op hul oupa se plaas gaan help. Hulle het eers die hoenders gevoer, daarna groente geplant en later saam met Oupa die kraal skoongemaak. Teen die middag het dit begin reen, maar hulle het onder die stoep gesit en stories geluister. Voor hulle huis toe is, het Ouma vir hulle warm sop gegee en almal het saam gelag.`,
+Die klas fokus hierdie week op ${focusTopic}. ${gradeSentence}
+Leerders hersien notas, oefen sleutelwoordeskat en verduidelik antwoorde in volledige sinne.
+Hulle werk saam in pare om antwoorde te vergelyk, foute reg te stel en beleefde klasgesprekke te oefen.
+Aan die einde van die les skryf elke leerder een kort refleksie oor wat verbeter het en wat nog hersien moet word.`,
       instruction: 'Lees die teks sorgvuldig en antwoord in Afrikaans.',
     };
   }
 
-  if (locale === 'zu-ZA') {
-    return {
-      passage: `Funda indaba engezansi bese uphendula imibuzo elandelayo.
-
-UMia nomfowabo uTumi bavuke ekuseni ngoMgqibelo bayosiza epulazini likakhokho wabo. Baqale ngokondla izinkukhu, base betshala imifino, kwathi kamuva bahlanza isibaya noKhokho. Emini kwaqala ukuna, ngakho bahlala ngaphansi kweveranda balalela izindaba. Ngaphambi kokubuya ekhaya, uGogo wabanika isobho esishisayo, bonke bahleka ndawonye.`,
-      instruction: 'Funda umbhalo kahle bese uphendula ngesiZulu.',
-    };
-  }
-
-  if (locale === 'xh-ZA') {
-    return {
-      passage: `Funda ibali elingezantsi uze uphendule imibuzo elandelayo.
-
-UMia nomntakwabo uTumi baye kusasa ngoMgqibelo ukuyokunceda kwifama katatomkhulu wabo. Baqale ngokondla iinkukhu, emva koko batyala imifuno, baza kamva bacoca isibaya noTat'omkhulu. Emva kwemini kwaqala ukuna, ngoko bahlala phantsi kweveranda belalela amabali. Phambi kokuba bagoduke, uMakhulu wabanika isuphu eshushu, bonke bahleka kunye.`,
-      instruction: 'Funda umbhalo ngononophelo uze uphendule ngesiXhosa.',
-    };
-  }
-
-  if (locale === 'nso-ZA') {
-    return {
-      passage: `Bala kanegelo ye e lego ka tlase gomme o arabe dipotso tše di latelago.
-
-Mia le ngwanabo Tumi ba ile ka pela ka Mokibelo go thuša polaseng ya rakgolo wa bona. Ba thomile ka go fepa dikgoho, ka morago ba bjala merogo, gomme ka morago ba hlwekiša lesaka le Rakgolo. Ka bohareng bja mosegare pula ya thoma, ka gona ba dula ka tlase ga veranda ba theeletša dikanegelo. Pele ba boela gae, Koko o ba file sopho ye e fišago, gomme bohle ba sega mmogo.`,
-      instruction: 'Bala sengwalwa ka tlhokomelo gomme o arabe ka Sepedi.',
-    };
-  }
-
-  if (locale === 'tn-ZA') {
-    return {
-      passage: `Bala kgang e e fa tlase mme o arabe dipotso tse di latelang.
-
-Mia le mogolowe Tumi ba ne ba ya ka moso ka Matlhatso go thusa kwa polasing ya rremogolo. Ba simolotse ka go fepa dikoko, ba bo ba jala merogo, mme morago ba phepafatsa lesaka le Rremogolo. Fa pula e simolola motshegare, ba ne ba nna fa tlase ga veranda ba reetsa dikgang. Pele ba boela gae, Nkoko o ne a ba naya sopho e e mogote mme botlhe ba tshega mmogo.`,
-      instruction: 'Bala temana ka kelotlhoko mme o arabe ka Setswana.',
-    };
-  }
-
-  if (locale === 'st-ZA') {
-    return {
-      passage: `Bala pale e ka tlase ebe o araba dipotso tse latelang.
-
-Mia le ngwanabo Tumi ba ile hoseng ka Moqebelo ho ya thusa polasing ya ntatemoholo. Ba ile ba qala ka ho fepa dikgoho, ba nto jala meroho, mme hamorao ba hloekisa lesaka le Ntatemoholo. Ha pula e qala motshehare, ba dula tlasa veranda ba mametse dipale. Pele ba kgutlela hae, Nkgono o ba file sopho e chesang mme bohle ba tsheha mmoho.`,
-      instruction: 'Bala temana ka hloko ebe o araba ka Sesotho.',
-    };
-  }
-
-  if (locale === 'nr-ZA') {
-    return {
-      passage: `Funda indatjana engezansi bese uphendula imibuzo elandelako.
-
-UMia nomfowabo uTumi baphume ekuseni ngoMgqibelo bayokusiza epulazini likabamkhulu. Bathome ngokondla iinkukhu, ngemva kwalokho batjala imifino, begodu kamuva bahlanza isibaya noBamkhulu. Emini kwaqala ukuna, ngakho bahlala ngaphasi kweveranda balalela iindatjana. Ngaphambi kokubuyela ekhaya, uGogo wabanikela isobho esifuthumeleko, boke bahleka ndawonye.`,
-      instruction: 'Funda umbhalo kuhle bese uphendula ngesiNdebele.',
-    };
-  }
-
-  if (locale === 'ss-ZA') {
-    return {
-      passage: `Fundza indzaba lengentasi bese uphendvula imibuto lelandzelako.
-
-UMia nemfowabo Tumi bavuke ekuseni ngaMgcibelo bayewusita epulazini lakabomkhulu. Bacale ngokondla tinkhukhu, base batjala imifino, bese kamuva bahlanza sibaya naMkhulu. Emini kwacala lina, ngako bahlala ngaphansi kweveranda balalela tindzaba. Ngaphambi kwekubuyela ekhaya, Gogo wabanika sobho lesishisako, bonkhe bahleka ndzawonye.`,
-      instruction: 'Fundza umbhalo kahle bese uphendvula ngesiSwati.',
-    };
-  }
-
-  if (locale === 've-ZA') {
-    return {
-      passage: `Vhalani tshiṱori tshi re fhasi ni dovhe ni fhindule mbudziso dzi tevhelaho.
-
-Mia na murathu wawe Tumi vho vuwa nga matsheloni nga Mugivhela vha ya u thusa polasini ya makhulu wavho. Vho thoma nga u ṋea huku zwiliwa, nga murahu vha ṱavha miroho, vha dovha vha kunakisa tshisima na Makhulu. Nga masiari mvula ya thoma, ngauralo vha dzula fhasi ha veranda vha tshi thetshelesa zwiṱori. Musi vha sa athu u humela hayani, Gogo o vha ṋea suphu i dudaho, vhoṱhe vha sea vho takala.`,
-      instruction: 'Vhalani zwavhuḓi ni fhindule nga Tshivenda.',
-    };
-  }
-
-  if (locale === 'ts-ZA') {
-    return {
-      passage: `Hlaya xitori lexi nga laha hansi kutani u hlamula swivutiso leswi landzelaka.
-
-Mia na makwavo Tumi va pfuke nimixo hi Mugqivela va ya pfuna epurasini ra kokwana wa vona. Va sungule hi ku phamela tihuku, endzhaku va byala miroho, kutani va tlhela va basisa xibaya na Kokwana. Hi nkarhi wa nhlikanhi mpfula yi sungule ku na, hikwalaho va tshamile ehansi ka veranda va yingisela switori. Va nga si tlhela ekaya, Gogo u va nyike supu yo hisa, kutani hinkwavo va hleka swin'we.`,
-      instruction: 'Hlaya rungula hi vukheta kutani u hlamula hi Xitsonga.',
-    };
-  }
-
+  const gradeSentence = gradeLabel
+    ? `This passage is aligned to ${gradeLabel}.`
+    : 'This passage is aligned to the learner grade level.';
   return {
-    passage: `Read the story below and answer the questions that follow.
+    passage: `Read the classwork passage below and answer the questions that follow.
 
-Mia and her brother, Tumi, went early on Saturday to help on their grandfather's farm. They first fed the chickens, then planted vegetables, and later cleaned the cattle pen with Grandpa. By midday it started raining, so they sat under the veranda and listened to stories. Before going home, Grandma gave them warm soup and everyone laughed together.`,
+This week the class is focusing on ${focusTopic}. ${gradeSentence}
+Learners review notes, practise key vocabulary, and explain answers using full sentences.
+They work in pairs to compare ideas, correct mistakes, and improve respectful classroom communication.
+At the end of the lesson, each learner writes a brief reflection on what improved and what still needs revision.`,
     instruction: `Read the passage carefully and answer in ${safeLanguageLabel}.`,
   };
 }
 
-export function ensureLanguageReadingPassage(exam: any, subject: string, _grade: string, language: string) {
+export function ensureLanguageReadingPassage(exam: any, subject: string, grade: string, language: string) {
   if (!isLanguageSubject(subject)) return exam;
 
   const sections = Array.isArray(exam?.sections) ? exam.sections : [];
@@ -1497,9 +1475,22 @@ export function ensureLanguageReadingPassage(exam: any, subject: string, _grade:
   if (!needsPassage) return exam;
 
   const existingPassage = String(first?.readingPassage || first?.reading_passage || first?.instructions || '').trim();
-  if (existingPassage.length >= 120) return exam;
+  const hasLegacyPassage = looksLikeLegacyMiaTumiPassage(existingPassage);
+  if (existingPassage.length >= 120 && !hasLegacyPassage) return exam;
 
-  const fallback = getLanguageReadingFallback(language);
+  const topicSeedText = [
+    String(first?.title || first?.name || ''),
+    String(first?.instructions || ''),
+    ...(Array.isArray(first?.questions)
+      ? first.questions
+          .slice(0, 6)
+          .map((question: any) => String(question?.question || question?.text || ''))
+      : []),
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const fallbackTopics = extractUploadedMaterialFocusTopics(topicSeedText);
+  const fallback = getLanguageReadingFallback(language, { focusTopics: fallbackTopics, grade });
   first.readingPassage = `${fallback.passage}\n\n${fallback.instruction}`;
   first.instructions = fallback.instruction;
   return exam;
