@@ -780,11 +780,11 @@ export const DashMessageBubble: React.FC<DashMessageBubbleProps> = ({
     | { type: 'quiz'; content: string };
 
   const normalizeMathDelimiters = (raw: string): string => {
-    let normalized = String(raw || '');
-    normalized = normalized.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`);
-    normalized = normalized.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`);
-    normalized = normalized.replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
-    return normalized;
+    return String(raw || '')
+      .replace(/\\\\(\[|\]|\(|\)|\$)/g, '\\$1')
+      .replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`)
+      .replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`)
+      .replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
   };
 
   const parseRichSegments = (content: string): RichSegment[] => {

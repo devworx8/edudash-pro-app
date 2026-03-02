@@ -34,14 +34,22 @@ export const DashUsageBanner: React.FC<DashUsageBannerProps> = ({
   theme,
 }) => {
   if (!tierStatus) return null;
+  const safeLimit = Number.isFinite(tierStatus.quotaLimit) ? Math.max(0, tierStatus.quotaLimit) : 0;
+  const safeUsed = Number.isFinite(tierStatus.quotaUsed) ? Math.max(0, tierStatus.quotaUsed) : 0;
+  const safePercentUsed = safeLimit > 0
+    ? Math.min(100, Math.max(0, (safeUsed / safeLimit) * 100))
+    : 0;
+  const resolvedUsageLabel = safeLimit > 0
+    ? `${safeUsed}/${safeLimit} used this month`
+    : usageLabel;
 
   return (
     <View style={[styles.usageBanner, { borderColor: theme.border, backgroundColor: theme.surface }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-        {tierStatus.quotaLimit > 0 ? (
+        {safeLimit > 0 ? (
           <CircularQuotaRing
-            used={tierStatus.quotaUsed}
-            limit={tierStatus.quotaLimit}
+            used={safeUsed}
+            limit={safeLimit}
             size={40}
             strokeWidth={4}
             showPercentage
@@ -79,12 +87,12 @@ export const DashUsageBanner: React.FC<DashUsageBannerProps> = ({
               </Text>
             </View>
           </View>
-          <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>{usageLabel}</Text>
+          <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>{resolvedUsageLabel}</Text>
         </View>
       </View>
-      {tierStatus.quotaLimit > 0 ? (
+      {safeLimit > 0 ? (
         <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary }}>
-          {Math.round(tierStatus.quotaPercentage)}% used this month
+          {Math.round(safePercentUsed)}% used this month
         </Text>
       ) : null}
     </View>

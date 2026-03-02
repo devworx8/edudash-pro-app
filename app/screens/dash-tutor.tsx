@@ -15,8 +15,8 @@
  */
 
 import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { View, Text, StyleSheet } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,7 +40,7 @@ const ZA_COSMIC = {
 } as const;
 
 export default function DashTutorScreen() {
-  const { theme: appTheme, isDark } = useTheme();
+  const { isDark } = useTheme();
   const { profile, user } = useAuth();
   const params = useLocalSearchParams<{
     mode?: string;
@@ -120,31 +120,6 @@ export default function DashTutorScreen() {
     }
   }, [profile]);
 
-  // Compute header title based on mode
-  const headerTitle = useMemo(() => {
-    const mode = params?.mode as TutorMode | undefined;
-    switch (mode) {
-      case 'play': return 'Play & Learn';
-      case 'practice': return 'Practice';
-      case 'quiz': return 'Quiz Time';
-      case 'diagnostic': return 'Level Check';
-      case 'explain': return 'Learn';
-      default: return isPreschool ? 'Play & Learn' : 'Dash Tutor';
-    }
-  }, [params?.mode, isPreschool]);
-
-  // Age-band badge
-  const ageBadge = useMemo(() => {
-    switch (ageBand) {
-      case '3-5': return '👶 Ages 3-5';
-      case '6-8': return '🧒 Grade R-3';
-      case '9-12': return '📚 Grade 4-6';
-      case '13-15': return '📖 Grade 7-9';
-      case '16-18': return '🎓 Grade 10-12';
-      default: return '';
-    }
-  }, [ageBand]);
-
   // Cosmic background gradients
   const bgBase: [string, string, string] = isDark
     ? ['#0B1020', '#0F172A', '#131B2E']
@@ -155,12 +130,6 @@ export default function DashTutorScreen() {
   const glowB: [string, string, string] = isDark
     ? ['rgba(0,200,83,0.15)', 'rgba(0,188,212,0.04)', 'transparent']
     : ['rgba(0,200,83,0.10)', 'rgba(0,188,212,0.03)', 'transparent'];
-  
-  // Header gradient
-  const headerGradient: [string, string] = isDark
-    ? ['#0B1020', tutorTheme.colors.surface + 'CC']
-    : [tutorTheme.colors.surface, tutorTheme.colors.surface + 'E0'];
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Cosmic background layer */}
@@ -179,44 +148,6 @@ export default function DashTutorScreen() {
           end={{ x: 0, y: 1 }}
         />
       </View>
-
-      <Stack.Screen
-        options={{
-          title: headerTitle,
-          headerShown: true,
-          headerStyle: {
-            backgroundColor: 'transparent',
-          },
-          headerBackground: () => (
-            <LinearGradient
-              colors={headerGradient}
-              style={StyleSheet.absoluteFill}
-            />
-          ),
-          headerTitleStyle: {
-            color: isDark ? '#E2E8F0' : '#1E293B',
-            fontSize: tutorTheme.typography.headingSize - 4,
-            fontWeight: '700',
-          },
-          headerTintColor: tutorTheme.colors.primary,
-          headerRight: () => (
-            <View style={styles.headerRight}>
-              {ageBadge ? (
-                <LinearGradient
-                  colors={isDark
-                    ? [tutorTheme.colors.primary + '25', tutorTheme.colors.primary + '10']
-                    : [tutorTheme.colors.primary + '18', tutorTheme.colors.primary + '08']}
-                  style={styles.ageBadge}
-                >
-                  <Text style={[styles.ageBadgeText, { color: tutorTheme.colors.primary }]}>
-                    {ageBadge}
-                  </Text>
-                </LinearGradient>
-              ) : null}
-            </View>
-          ),
-        }}
-      />
 
       {/* Mascot greeting for preschool */}
       {tutorTheme.layout.showMascot && !conversationId && (
@@ -286,22 +217,6 @@ const styles = StyleSheet.create({
     width: '60%',
     height: '40%',
     borderTopLeftRadius: 300,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginRight: 8,
-  },
-  ageBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 14,
-  },
-  ageBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
   },
   mascotBanner: {
     flexDirection: 'row',

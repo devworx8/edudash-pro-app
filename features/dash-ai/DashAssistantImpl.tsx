@@ -335,9 +335,6 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
   const displaySpeechIndex = Math.max(0, Math.min(chunkIndex, Math.max(0, chunkCount - 1)));
   const canSeekBack = displaySpeechIndex > 0 && speechSegments.length > 0;
   const canSeekForward = displaySpeechIndex < speechSegments.length - 1;
-  const speechProgress = chunkCount > 0
-    ? Math.min(1, Math.max(0, (displaySpeechIndex + 1) / chunkCount))
-    : 0;
   const speechControlsLayout = resolveSpeechControlsLayoutState({
     isSpeaking,
     hasSpeechMessage: Boolean(activeSpeechMessage),
@@ -869,22 +866,6 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
                         </TouchableOpacity>
                       )}
                     </View>
-                  </View>
-                  <View
-                    style={{
-                      height: 5,
-                      borderRadius: 999,
-                      overflow: 'hidden',
-                      backgroundColor: theme.surface,
-                    }}
-                  >
-                    <View
-                      style={{
-                        height: '100%',
-                        width: `${Math.round(speechProgress * 100)}%`,
-                        backgroundColor: theme.primary,
-                      }}
-                    />
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity
