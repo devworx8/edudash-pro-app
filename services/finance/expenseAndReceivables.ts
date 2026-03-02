@@ -5,6 +5,7 @@
 
 import { assertSupabase } from '@/lib/supabase';
 import { withPettyCashTenant } from '@/lib/utils/pettyCashTenant';
+import { isPettyCashResetEntry } from '@/lib/utils/pettyCashReset';
 
 import type {
   FinanceMonthExpenseBreakdown,
@@ -65,6 +66,10 @@ export async function getMonthExpenseBreakdown(
   const entries: FinanceMonthExpenseBreakdown['entries'] = [];
 
   for (const tx of ((pettyCashResult.data || []) as Array<any>)) {
+    if (isPettyCashResetEntry(tx)) {
+      continue;
+    }
+
     const amount = Math.abs(Number(tx?.amount || 0));
     if (!Number.isFinite(amount) || amount <= 0) continue;
 

@@ -7,6 +7,8 @@ interface MathRendererProps {
   displayMode?: boolean;
 }
 
+const MAX_INLINE_RENDER_WIDTH = 320;
+
 function buildMathHtml(expression: string, displayMode: boolean): string {
   const escapedExpression = JSON.stringify(expression || '');
   const escapedDisplayMode = displayMode ? 'true' : 'false';
@@ -22,11 +24,11 @@ function buildMathHtml(expression: string, displayMode: boolean): string {
         padding: 0;
         background: transparent;
         color: #e2e8f0;
-        overflow: hidden;
+        overflow: visible;
       }
       #math-root {
         box-sizing: border-box;
-        padding: ${displayMode ? 8 : 2}px ${displayMode ? 8 : 3}px;
+        padding: ${displayMode ? 8 : 5}px ${displayMode ? 8 : 4}px;
         font-size: 17px;
         line-height: 1.45;
         display: ${displayMode ? 'block' : 'inline-block'};
@@ -52,13 +54,13 @@ function buildMathHtml(expression: string, displayMode: boolean): string {
       function postSize() {
         if (!window.ReactNativeWebView || !window.ReactNativeWebView.postMessage || !root) return;
         const rect = root.getBoundingClientRect();
-        const payload = {
-          type: 'size',
-          width: Math.max(24, Math.ceil(rect.width)),
-          height: Math.max(displayMode ? 64 : 30, Math.ceil(rect.height)),
-        };
-        window.ReactNativeWebView.postMessage(JSON.stringify(payload));
-      }
+          const payload = {
+            type: 'size',
+            width: Math.max(24, Math.ceil(rect.width)),
+            height: Math.max(displayMode ? 64 : 38, Math.ceil(rect.height)),
+          };
+          window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+        }
 
       try {
         katex.render(expression, root, { throwOnError: false, displayMode });
@@ -83,7 +85,7 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ expression, displayM
   const initialSize = useMemo(
     () => ({
       width: displayMode ? 0 : 96,
-      height: displayMode ? 78 : 34,
+      height: displayMode ? 78 : 42,
     }),
     [displayMode],
   );
@@ -103,11 +105,12 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ expression, displayM
       if (payload.type !== 'size') return;
 
       const width = Math.max(24, Math.round(Number(payload.width || 0)));
-      const height = Math.max(displayMode ? 64 : 30, Math.round(Number(payload.height || 0)));
+      const height = Math.max(displayMode ? 64 : 40, Math.round(Number(payload.height || 0)));
       setNativeSize((prev) => {
         if (!displayMode) {
-          if (width !== prev.width || height !== prev.height) {
-            return { width, height };
+          const safeWidth = Math.min(width, MAX_INLINE_RENDER_WIDTH);
+          if (safeWidth !== prev.width || height !== prev.height) {
+            return { width: safeWidth, height };
           }
           return prev;
         }
@@ -150,8 +153,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ expression, displayM
         borderWidth: displayMode ? 1 : 0,
         borderColor: 'rgba(148,163,184,0.28)',
         borderRadius: displayMode ? 12 : 0,
-        overflow: 'hidden',
-        minHeight: displayMode ? nativeSize.height : nativeSize.height,
+        overflow: displayMode ? 'hidden' : 'visible',
+        minHeight: displayMode ? Math.max(nativeSize.height, 64) : Math.max(nativeSize.height, 40),
         width: displayMode ? '100%' : nativeSize.width,
         alignSelf: displayMode ? 'stretch' : 'flex-start',
       }}

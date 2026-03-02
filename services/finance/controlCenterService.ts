@@ -384,10 +384,26 @@ export async function getFinanceControlCenterBundle(
   if (queueRes.error) errors.queue = queueRes.error;
   if (payrollRes.error) errors.payroll = payrollRes.error;
   const payrollValue: any = payrollRes.value;
+  const normalizedSnapshot = snapshotRes.value
+    ? {
+        ...snapshotRes.value,
+        expenses_this_month: Number(
+          expensesRes.value?.total_expenses ?? snapshotRes.value.expenses_this_month,
+        ),
+        petty_cash_expenses_this_month: Number(
+          expensesRes.value?.petty_cash_expenses ??
+            snapshotRes.value.petty_cash_expenses_this_month,
+        ),
+        financial_expenses_this_month: Number(
+          expensesRes.value?.financial_expenses ??
+            snapshotRes.value.financial_expenses_this_month,
+        ),
+      }
+    : null;
 
   return {
     month,
-    snapshot: snapshotRes.value,
+    snapshot: normalizedSnapshot,
     receivables: receivablesRes.value,
     expenses: expensesRes.value,
     payment_breakdown: breakdownRes.value,

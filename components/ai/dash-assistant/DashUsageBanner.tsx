@@ -25,7 +25,6 @@ interface DashUsageBannerProps {
   usageLabel: string;
   styles: any;
   theme: Theme;
-  isGenerating?: boolean;
 }
 
 export const DashUsageBanner: React.FC<DashUsageBannerProps> = ({
@@ -33,15 +32,8 @@ export const DashUsageBanner: React.FC<DashUsageBannerProps> = ({
   usageLabel,
   styles,
   theme,
-  isGenerating = false,
 }) => {
   if (!tierStatus) return null;
-  const quotaRatio = tierStatus.quotaLimit > 0 ? tierStatus.quotaUsed / tierStatus.quotaLimit : 0;
-  const progressColor = quotaRatio >= 0.9
-    ? theme.error
-    : quotaRatio >= 0.75
-      ? (theme.warning || theme.primary)
-      : theme.primary;
 
   return (
     <View style={[styles.usageBanner, { borderColor: theme.border, backgroundColor: theme.surface }]}>
@@ -53,6 +45,7 @@ export const DashUsageBanner: React.FC<DashUsageBannerProps> = ({
             size={40}
             strokeWidth={4}
             showPercentage
+            percentageMode="used"
           />
         ) : (
           <View
@@ -89,22 +82,11 @@ export const DashUsageBanner: React.FC<DashUsageBannerProps> = ({
           <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>{usageLabel}</Text>
         </View>
       </View>
-
-      {tierStatus.quotaLimit > 0 && (
-        <>
-          <View style={[styles.usageProgress, { marginTop: 2, backgroundColor: theme.border }]}>
-            <View
-              style={[
-                styles.usageProgressFill,
-                { backgroundColor: progressColor, width: `${Math.min(tierStatus.quotaPercentage, 100)}%` },
-              ]}
-            />
-          </View>
-          <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary, alignSelf: 'flex-end' }}>
-            {Math.round(tierStatus.quotaPercentage)}% used
-          </Text>
-        </>
-      )}
+      {tierStatus.quotaLimit > 0 ? (
+        <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary }}>
+          {Math.round(tierStatus.quotaPercentage)}% used this month
+        </Text>
+      ) : null}
     </View>
   );
 };

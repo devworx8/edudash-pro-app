@@ -1232,7 +1232,26 @@ const LOCALE_TO_LANGUAGE_NAME: Record<string, string> = {
 
 const LANGUAGE_MARKERS: Record<string, string[]> = {
   'en-ZA': ['the', 'and', 'with', 'they', 'read', 'answer', 'questions', 'story'],
-  'af-ZA': ['die', 'en', 'met', 'hulle', 'lees', 'beantwoord', 'vrae', 'storie'],
+  'af-ZA': [
+    'die',
+    'en',
+    'met',
+    'hulle',
+    'lees',
+    'beantwoord',
+    'vrae',
+    'storie',
+    'afrikaans',
+    'asseblief',
+    'goeie',
+    'juffrou',
+    'klas',
+    'baie',
+    'dankie',
+    'sorgvuldig',
+    'antwoord',
+    'sin',
+  ],
   'zu-ZA': ['funda', 'umbhalo', 'indaba', 'imibuzo', 'kanye', 'bona', 'ngoba', 'kule'],
   'xh-ZA': ['funda', 'ibali', 'imibuzo', 'kwaye', 'bona', 'kuba', 'kule', 'ngoko'],
   'nso-ZA': ['bala', 'kanegelo', 'dipotso', 'gomme', 'bona', 'ka', 'go', 'le'],
@@ -1272,6 +1291,68 @@ export function stripMetaPromptQuestions(exam: any): any {
       : section.questions || [];
     return { ...section, questions };
   });
+  return { ...exam, sections };
+}
+
+function cleanLearnerFacingLine(line: string): string {
+  return stripInlineTeacherTranslations(
+    stripOrdinalPrefix(String(line || '').replace(/^source:\s*/i, '').trim()),
+  )
+    .replace(/\b(?:en|af|zu|xh|nso|tn|st|nr|ss|ve|ts)-za\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanLearnerFacingBlock(value: unknown): string {
+  const lines = String(value || '')
+    .split(/\r?\n/)
+    .map((line) => cleanLearnerFacingLine(line))
+    .filter(Boolean)
+    .filter((line) => !isLikelySourceMetaLine(line));
+
+  if (lines.length === 0) return '';
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * Remove OCR/meta noise from learner-facing exam fields before integrity validation.
+ * This reduces false language mismatches caused by helper labels and source markers.
+ */
+export function sanitizeLearnerFacingExamContent(exam: any): any {
+  if (!exam || !Array.isArray(exam.sections)) return exam;
+
+  const sections = exam.sections.map((section: any) => {
+    const cleanedInstructions = cleanLearnerFacingBlock(section?.instructions);
+    const cleanedPassage = cleanLearnerFacingBlock(section?.readingPassage || section?.reading_passage);
+    const questions = Array.isArray(section?.questions)
+      ? section.questions.map((question: any) => {
+          const cleanedQuestion = cleanLearnerFacingBlock(question?.question || question?.text);
+          const cleanedOptions = Array.isArray(question?.options)
+            ? question.options
+                .map((option: unknown) => cleanLearnerFacingLine(String(option || '')))
+                .filter(Boolean)
+            : question?.options;
+          return {
+            ...question,
+            question: cleanedQuestion || String(question?.question || question?.text || '').trim(),
+            options: cleanedOptions,
+            correctAnswer: cleanLearnerFacingBlock(question?.correctAnswer || question?.correct_answer || question?.answer)
+              || question?.correctAnswer
+              || question?.correct_answer
+              || question?.answer,
+            explanation: cleanLearnerFacingBlock(question?.explanation) || question?.explanation,
+          };
+        })
+      : section?.questions;
+
+    return {
+      ...section,
+      instructions: cleanedInstructions || section?.instructions,
+      readingPassage: cleanedPassage || section?.readingPassage || section?.reading_passage,
+      questions,
+    };
+  });
+
   return { ...exam, sections };
 }
 
@@ -1448,6 +1529,12 @@ export function detectLikelyLocale(text: string): string | null {
   return bestScore >= 2 ? bestLocale : null;
 }
 
+function hasEnoughLanguageSignal(text: string): boolean {
+  const tokens = tokenizeLanguageText(text);
+  const alphaTokens = tokens.filter((token) => /[a-z]{3,}/i.test(token));
+  return alphaTokens.length >= 5;
+}
+
 export function getPassageKeywords(passage: string): Set<string> {
   return new Set(
     tokenizeLanguageText(passage).filter((token) => token.length >= 4 && !COMMON_STOP_WORDS.has(token)),
@@ -1522,6 +1609,7 @@ export function validateComprehensionIntegrity(exam: any, subject: string, langu
     }
 
     const passageKeywords = getPassageKeywords(passage);
+    const supportsGroundingCheck = passageKeywords.size >= 12;
     const questions = Array.isArray(first?.questions) ? first.questions.slice(0, 6) : [];
     const factualOptionGroundingMisses: number[] = [];
     let factualOptionQuestionCount = 0;
@@ -1543,6 +1631,10 @@ export function validateComprehensionIntegrity(exam: any, subject: string, langu
           return;
         }
 
+        if (!supportsGroundingCheck) {
+          return;
+        }
+
         factualOptionQuestionCount += 1;
         const combined = `${qText} ${options.map((option: unknown) => String(option || '')).join(' ')}`;
         if (!hasKeywordOverlap(combined, passageKeywords)) {
@@ -1552,13 +1644,91 @@ export function validateComprehensionIntegrity(exam: any, subject: string, langu
     });
 
     // Only fail grounding when it's systematic across multiple factual option questions.
-    if (factualOptionQuestionCount >= 3 && factualOptionGroundingMisses.length >= 3) {
+    const groundingMissRatio =
+      factualOptionQuestionCount > 0 ? factualOptionGroundingMisses.length / factualOptionQuestionCount : 0;
+    if (
+      factualOptionQuestionCount >= 4 &&
+      factualOptionGroundingMisses.length >= 4 &&
+      groundingMissRatio >= 0.85
+    ) {
       const labels = factualOptionGroundingMisses.slice(0, 4).map((q) => `Q${q}`).join(', ');
       issues.push(`Comprehension options are weakly grounded in passage context (${labels}).`);
     }
   }
 
   return issues;
+}
+
+/**
+ * If MCQ options in comprehension are weakly grounded, convert those items into
+ * short-answer prompts anchored to passage evidence instead of hard failing.
+ */
+export function softenWeakGroundingComprehensionOptions(exam: any, language: string): any {
+  if (!exam || !Array.isArray(exam.sections) || exam.sections.length === 0) return exam;
+
+  const locale = normalizeLanguageLocale(language);
+  const sectionIndex = exam.sections.findIndex((section: any) => {
+    const sectionTitle = normalizeText(section?.title || section?.name || '');
+    return (
+      sectionTitle.includes('comprehension') ||
+      sectionTitle.includes('lees') ||
+      sectionTitle.includes('read') ||
+      sectionTitle.includes('begrip') ||
+      sectionTitle.includes('funda') ||
+      sectionTitle.includes('bala')
+    );
+  });
+  if (sectionIndex < 0) return exam;
+
+  const target = exam.sections[sectionIndex];
+  const passage = String(target?.readingPassage || target?.reading_passage || '').trim();
+  const passageKeywords = getPassageKeywords(passage);
+  if (passageKeywords.size < 12) return exam;
+
+  let changed = 0;
+  const questions = Array.isArray(target?.questions) ? target.questions : [];
+  const repairedQuestions = questions.map((question: any) => {
+    const qText = String(question?.question || question?.text || '').trim();
+    const options = Array.isArray(question?.options) ? question.options : [];
+    if (!qText || options.length === 0 || isInferentialComprehensionQuestion(qText)) {
+      return question;
+    }
+
+    const combined = `${qText} ${options.map((option: unknown) => String(option || '')).join(' ')}`;
+    if (hasKeywordOverlap(combined, passageKeywords)) {
+      return question;
+    }
+
+    changed += 1;
+    const updated = { ...question } as Record<string, unknown>;
+    delete updated.options;
+    delete updated.optionObjects;
+    delete updated.correctOptionId;
+    delete updated.correct_option_id;
+
+    const promptPrefix = locale === 'af-ZA'
+      ? 'Gebruik inligting uit die leesstuk om te antwoord:'
+      : 'Use evidence from the passage to answer:';
+
+    updated.type = 'short_answer';
+    updated.question = `${promptPrefix} ${qText}`.replace(/\s+/g, ' ').trim();
+    updated.correctAnswer = locale === 'af-ZA'
+      ? 'Enige antwoord wat korrekte teksbewyse uit die leesstuk gebruik.'
+      : 'Any answer that uses accurate text evidence from the passage.';
+    updated.explanation = locale === 'af-ZA'
+      ? 'Krediet word gegee vir relevante bewyse uit die leesstuk en logiese verduideliking.'
+      : 'Award credit for relevant passage evidence and a logical explanation.';
+    return updated;
+  });
+
+  if (changed === 0) return exam;
+
+  const sections = [...exam.sections];
+  sections[sectionIndex] = {
+    ...target,
+    questions: repairedQuestions,
+  };
+  return { ...exam, sections };
 }
 
 export function validateLearnerLanguageConsistency(
@@ -1611,6 +1781,7 @@ export function validateLearnerLanguageConsistency(
   for (const sample of samples) {
     const text = String(sample.text || '').trim();
     if (text.length < 24) continue;
+    if (!hasEnoughLanguageSignal(text)) continue;
 
     const detectedLocale = detectLikelyLocale(text);
     if (detectedLocale && detectedLocale !== expectedLocale) {

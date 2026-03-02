@@ -20,6 +20,7 @@ interface CircularQuotaRingProps {
   strokeWidth?: number;
   label?: string;
   showPercentage?: boolean;
+  percentageMode?: 'remaining' | 'used';
   colorFull?: string;
   colorEmpty?: string;
   colorWarning?: string;
@@ -33,6 +34,7 @@ export function CircularQuotaRing({
   strokeWidth = 7,
   label,
   showPercentage = false,
+  percentageMode = 'remaining',
   colorFull = '#10B981',
   colorEmpty = 'rgba(255,255,255,0.08)',
   colorWarning = '#F59E0B',
@@ -42,21 +44,25 @@ export function CircularQuotaRing({
   const remaining = Math.max(0, limit - used);
   const percentUsed = limit > 0 ? Math.min(1, used / limit) : 0;
   const percentRemaining = 1 - percentUsed;
+  const progressRatio = percentageMode === 'used' ? percentUsed : percentRemaining;
 
   const ringColor = useMemo(() => {
+    if (percentageMode === 'used') {
+      if (percentUsed >= 0.9) return colorCritical;
+      if (percentUsed >= 0.75) return colorWarning;
+      return colorFull;
+    }
     if (percentRemaining <= 0.1) return colorCritical;
     if (percentRemaining <= 0.3) return colorWarning;
     return colorFull;
-  }, [percentRemaining, colorFull, colorWarning, colorCritical]);
+  }, [percentageMode, percentUsed, percentRemaining, colorFull, colorWarning, colorCritical]);
 
   const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const filledLength = circumference * percentRemaining;
   const center = size / 2;
 
   const segments = useMemo(() => {
     const totalSegments = 36;
-    const filledSegments = Math.round(totalSegments * percentRemaining);
+    const filledSegments = Math.round(totalSegments * progressRatio);
     const segmentAngle = 360 / totalSegments;
     const gapAngle = 2;
     const arcAngle = segmentAngle - gapAngle;
@@ -73,10 +79,10 @@ export function CircularQuotaRing({
 
       return { x1, y1, x2, y2, isFilled };
     });
-  }, [center, radius, percentRemaining]);
+  }, [center, radius, progressRatio]);
 
   const displayValue = showPercentage
-    ? `${Math.round(percentRemaining * 100)}%`
+    ? `${Math.round(progressRatio * 100)}%`
     : `${remaining}`;
 
   return (

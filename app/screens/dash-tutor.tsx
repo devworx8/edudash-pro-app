@@ -162,7 +162,7 @@ export default function DashTutorScreen() {
     : [tutorTheme.colors.surface, tutorTheme.colors.surface + 'E0'];
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Cosmic background layer */}
       <View pointerEvents="none" style={StyleSheet.absoluteFill}>
         <LinearGradient colors={bgBase} style={StyleSheet.absoluteFill} />

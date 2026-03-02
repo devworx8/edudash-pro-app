@@ -4,6 +4,7 @@
 
 import { assertSupabase } from '@/lib/supabase';
 import { withPettyCashTenant } from '@/lib/utils/pettyCashTenant';
+import { isPettyCashResetEntry } from '@/lib/utils/pettyCashReset';
 import { logger } from '@/lib/logger';
 
 import type { PettyCashTransaction, PettyCashSummary } from './types';
@@ -87,10 +88,17 @@ export async function fetchPettyCashData(userId: string): Promise<FetchPettyCash
 
   const monthly = transactions.filter((tx) => new Date(tx.created_at) >= currentMonthStart);
   const expenses = monthly
-    .filter((tx) => tx.type === 'expense' && tx.status === 'approved')
+    .filter(
+      (tx) => tx.type === 'expense' && tx.status === 'approved' && !isPettyCashResetEntry(tx),
+    )
     .reduce((s, tx) => s + tx.amount, 0);
   const replenishments = monthly
-    .filter((tx) => tx.type === 'replenishment' && tx.status === 'approved')
+    .filter(
+      (tx) =>
+        tx.type === 'replenishment' &&
+        tx.status === 'approved' &&
+        !isPettyCashResetEntry(tx),
+    )
     .reduce((s, tx) => s + tx.amount, 0);
   const pending = monthly.filter((tx) => tx.status === 'pending').reduce((s, tx) => s + tx.amount, 0);
 

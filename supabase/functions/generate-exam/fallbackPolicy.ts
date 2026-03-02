@@ -21,7 +21,7 @@ export function normalizeFallbackPolicy(value: unknown): FallbackPolicy {
 }
 
 export function normalizeQualityMode(value: unknown): QualityMode {
-  return String(value || '').trim().toLowerCase() === 'standard' ? 'standard' : 'strict';
+  return String(value || '').trim().toLowerCase() === 'strict' ? 'strict' : 'standard';
 }
 
 export function canFallbackForReason(policy: FallbackPolicy, reason: FallbackReason): boolean {

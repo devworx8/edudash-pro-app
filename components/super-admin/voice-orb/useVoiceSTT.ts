@@ -60,9 +60,6 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
     language: TranscribeLanguage = 'auto',
     options?: { includeAudioBase64?: boolean }
   ): Promise<STTResult | null> => {
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'useVoiceSTT.ts:transcribe',message:'STT transcribe called',data:{audioUri:audioUri?.slice(0,80)||'none',language,includeAudioBase64:!!options?.includeAudioBase64},timestamp:Date.now(),hypothesisId:'C',runId:'run1'})}).catch(()=>{});
-// #endregion
     setIsTranscribing(true);
     setError(null);
     

@@ -489,7 +489,7 @@ export function BottomTabBar() {
   if (!user || !profile) {
     return null;
   }
-  
+
   // Hide bottom nav on full-screen / immersive experiences (e.g. Dash AI assistant)
   if (
     typeof pathname === 'string' &&
@@ -652,6 +652,8 @@ export function BottomTabBar() {
     pathname.includes('/invite/') ||
     // Hide on any message thread view (parent/teacher/principal variants)
     pathname.includes('message-thread') ||
+    // Hide during full-screen tutor mode
+    pathname.includes('/screens/dash-tutor') ||
     // Hide during exam mode for a focused, full-screen experience
     pathname.includes('exam-generation');
 
@@ -690,7 +692,7 @@ export function BottomTabBar() {
   const navBackgroundColor = isNextGenNav ? 'rgba(15,18,30,0.88)' : theme.surface;
   const navBorderColor = isNextGenNav ? 'rgba(255,255,255,0.08)' : theme.border;
   const navInactiveColor = isNextGenNav ? 'rgba(234,240,255,0.72)' : theme.textSecondary;
-  const navBottomPadding = Math.max(insets.bottom, uiTokens.spacing.xs);
+  const navBottomPadding = Platform.OS === 'web' ? 0 : Math.max(insets.bottom, uiTokens.spacing.xs);
   const containerPaddingTop = isK12ParentNextGenNav
     ? (isCompact ? 0 : 1)
     : (isCompact ? uiTokens.spacing.xs : 6);
@@ -810,7 +812,19 @@ export function BottomTabBar() {
   })();
 
   return (
-    <View style={[styles.container, visibleTabs.some(t => t.isCenterTab) && { overflow: 'visible' as const }]}>
+    <View
+      style={[
+        styles.container,
+        visibleTabs.some(t => t.isCenterTab) && { overflow: 'visible' as const },
+        Platform.OS === 'web' && {
+          position: 'fixed' as any,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 1200,
+        },
+      ]}
+    >
       {sortedTabs.map((tab) => {
         const active = isActive(tab.route, tab.id);
 

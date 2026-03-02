@@ -156,7 +156,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
   const { tierStatus } = useRealtimeTier();
   const usageLabel = tierStatus
     ? tierStatus.quotaLimit > 0
-      ? `${tierStatus.quotaUsed}/${tierStatus.quotaLimit} used today`
+      ? `${tierStatus.quotaUsed}/${tierStatus.quotaLimit} used this month`
       : 'Unlimited usage'
     : '';
 
@@ -252,9 +252,6 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
 
   useEffect(() => {
     tierRef.current = tier;
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'DashAssistantImpl.tsx:tier',message:'DashAssistant tier resolved',data:{tier,role:normalizedRole,voiceEnabled,disableTts},timestamp:Date.now(),hypothesisId:'A',runId:'run1'})}).catch(()=>{});
-// #endregion
   }, [tier]);
 
   useEffect(() => {
@@ -937,7 +934,6 @@ fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{metho
               usageLabel={usageLabel}
               styles={styles}
               theme={theme}
-              isGenerating={isTypingActive}
             />
           )}
 

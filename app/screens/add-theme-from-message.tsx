@@ -45,8 +45,12 @@ function fridayOfWeek(monday: string): string {
 export default function AddThemeFromMessageScreen() {
   const params = useLocalSearchParams<{
     message?: string;
+    content?: string;
+    text?: string;
     title?: string;
     objectives?: string;
+    objectivesText?: string;
+    learningObjectives?: string;
   }>();
   const { theme } = useTheme();
   const { profile, user } = useAuth();
@@ -55,9 +59,9 @@ export default function AddThemeFromMessageScreen() {
   const createdBy = (profile as { id?: string })?.id || user?.id;
 
   const parsed = useMemo(() => {
-    const msg = params.message ?? '';
+    const msg = params.message ?? params.content ?? params.text ?? '';
     const title = params.title ?? '';
-    const objectivesStr = params.objectives ?? '';
+    const objectivesStr = params.objectives ?? params.objectivesText ?? params.learningObjectives ?? '';
     const parsedFromMessage = msg ? parseThemeFromMessage(msg) : { title: null, objectives: [] as string[] };
     const fallbackObjectives = objectivesStr
       ? (() => {
@@ -74,7 +78,7 @@ export default function AddThemeFromMessageScreen() {
       title: parsedFromMessage.title || title || null,
       objectives: parsedFromMessage.objectives.length > 0 ? parsedFromMessage.objectives : fallbackObjectives,
     };
-  }, [params.message, params.title, params.objectives]);
+  }, [params.message, params.content, params.text, params.title, params.objectives, params.objectivesText, params.learningObjectives]);
 
   const [title, setTitle] = useState(parsed.title ?? '');
   const [objectivesText, setObjectivesText] = useState(
@@ -203,7 +207,7 @@ export default function AddThemeFromMessageScreen() {
           headerBackTitle: 'Back',
         }}
       />
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={styles.scrollContent}

@@ -39,6 +39,8 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
   const isWeb = Platform.OS === 'web';
+  const closeGuardEnabledRef = React.useRef(false);
+  const closeGuardTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get color based on type
   const getColor = () => {
@@ -57,7 +59,16 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
   const iconColor = getColor();
 
   React.useEffect(() => {
+    if (closeGuardTimerRef.current) {
+      clearTimeout(closeGuardTimerRef.current);
+      closeGuardTimerRef.current = null;
+    }
+
     if (visible) {
+      closeGuardEnabledRef.current = false;
+      closeGuardTimerRef.current = setTimeout(() => {
+        closeGuardEnabledRef.current = true;
+      }, 260);
       if (isWeb) {
         // RN Web can keep modal scale at 0 with native-driver animations.
         scaleAnim.setValue(1);
@@ -90,8 +101,20 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
     } else {
       scaleAnim.setValue(0);
       pulseAnim.setValue(1);
+      closeGuardEnabledRef.current = false;
     }
+    return () => {
+      if (closeGuardTimerRef.current) {
+        clearTimeout(closeGuardTimerRef.current);
+        closeGuardTimerRef.current = null;
+      }
+    };
   }, [visible, isWeb, scaleAnim, pulseAnim]);
+
+  const handleBackdropPress = React.useCallback(() => {
+    if (isWeb && !closeGuardEnabledRef.current) return;
+    onClose();
+  }, [isWeb, onClose]);
 
   return (
     <ModalLayer
@@ -104,7 +127,7 @@ export const SuccessModal: React.FC<SuccessModalProps> = ({
         <TouchableOpacity 
           style={StyleSheet.absoluteFill} 
           activeOpacity={1} 
-          onPress={onClose}
+          onPress={handleBackdropPress}
         />
         
         <Animated.View

@@ -1389,8 +1389,21 @@ class DashPDFGeneratorImpl {
     try {
       onProgress?.('render', 75, 'Creating PDF...');
 
-      // Generate PDF using expo-print
-      const { uri } = await Print.printToFileAsync({ html });
+      // Generate PDF using expo-print.
+      // On web, `printToFileAsync` can return only base64 (or undefined in some runtimes),
+      // so avoid destructuring directly and build a safe URI fallback.
+      const printResult = await Print.printToFileAsync({
+        html,
+        base64: Platform.OS === 'web',
+      });
+      const uri =
+        printResult?.uri ||
+        (Platform.OS === 'web' && printResult?.base64
+          ? `data:application/pdf;base64,${printResult.base64}`
+          : undefined);
+      if (!uri) {
+        throw new Error('PDF renderer did not return a document URI');
+      }
       
       onProgress?.('render', 85, 'Finalizing...');
 

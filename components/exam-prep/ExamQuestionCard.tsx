@@ -104,8 +104,25 @@ function resolveChoiceLetter(value: string | undefined, options: string[] | unde
   return index >= 0 ? String.fromCharCode(97 + index) : null;
 }
 
+function normalizeMathDelimiters(raw: string): string {
+  let normalized = String(raw || '');
+  normalized = normalized.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_m, expr: string) => `$$${expr}$$`);
+  normalized = normalized.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_m, expr: string) => `$${expr}$`);
+  normalized = normalized.replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_m, expr: string) => `$${expr}$`);
+  return normalized;
+}
+
+function isComplexInlineMath(expression: string): boolean {
+  const normalized = String(expression || '');
+  if (!normalized) return false;
+  if (normalized.length >= 26) return true;
+  if (/\\frac|\\sqrt|\\sum|\\int|\\left|\\right|\\times|\\div/i.test(normalized)) return true;
+  if ((normalized.match(/[=+\-*/]/g) || []).length >= 2) return true;
+  return false;
+}
+
 function parseStandaloneMath(value: string): { expression: string; displayMode: boolean } | null {
-  const trimmed = String(value || '').trim();
+  const trimmed = normalizeMathDelimiters(value).trim();
   if (!trimmed) return null;
 
   const blockMatch = trimmed.match(/^\$\$([\s\S]+)\$\$$/);
@@ -347,7 +364,10 @@ export function ExamQuestionCard({
           }
           return (
             <View key={`segment-${index}`} style={styles.mathInlineItem}>
-              <MathRenderer expression={segment.value} displayMode={false} />
+              <MathRenderer
+                expression={segment.value}
+                displayMode={segment.type === 'block' || isComplexInlineMath(segment.value)}
+              />
             </View>
           );
         })}
@@ -917,6 +937,8 @@ const styles = StyleSheet.create({
   },
   mathInlineItem: {
     minWidth: 32,
+    maxWidth: '100%',
+    flexShrink: 1,
   },
   readingPassageCard: {
     borderRadius: 12,
@@ -1153,9 +1175,9 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   correctAnswerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
@@ -1167,6 +1189,6 @@ const styles = StyleSheet.create({
   },
   correctAnswerValue: {
     fontSize: 13,
-    flex: 1,
+    width: '100%',
   },
 });

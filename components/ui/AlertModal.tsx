@@ -126,9 +126,20 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   const { theme } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const isWeb = Platform.OS === 'web';
+  const closeGuardEnabledRef = React.useRef(false);
+  const closeGuardTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   React.useEffect(() => {
+    if (closeGuardTimerRef.current) {
+      clearTimeout(closeGuardTimerRef.current);
+      closeGuardTimerRef.current = null;
+    }
+
     if (visible) {
+      closeGuardEnabledRef.current = false;
+      closeGuardTimerRef.current = setTimeout(() => {
+        closeGuardEnabledRef.current = true;
+      }, 260);
       if (isWeb) {
         // RN Web + native-driver springs can leave scale at 0, causing a blank overlay.
         scaleAnim.setValue(1);
@@ -142,8 +153,20 @@ export const AlertModal: React.FC<AlertModalProps> = ({
       }).start();
     } else {
       scaleAnim.setValue(0);
+      closeGuardEnabledRef.current = false;
     }
+    return () => {
+      if (closeGuardTimerRef.current) {
+        clearTimeout(closeGuardTimerRef.current);
+        closeGuardTimerRef.current = null;
+      }
+    };
   }, [visible, scaleAnim, isWeb]);
+
+  const handleBackdropPress = React.useCallback(() => {
+    if (isWeb && !closeGuardEnabledRef.current) return;
+    onClose();
+  }, [isWeb, onClose]);
 
   const getTypeColor = useCallback(() => {
     switch (type) {
@@ -234,7 +257,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
         <TouchableOpacity 
           style={StyleSheet.absoluteFill} 
           activeOpacity={1} 
-          onPress={onClose}
+          onPress={handleBackdropPress}
         />
         
         <Animated.View

@@ -9,6 +9,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ExamQuestion } from '@/lib/examParser';
+import { MathRenderer } from '@/components/ai/dash-assistant/MathRenderer';
+import { containsMathDelimiters, parseMathSegments } from '@/components/exam-prep/mathSegments';
 
 interface ExamFooterProps {
   currentIndex: number;
@@ -32,6 +34,15 @@ const TEXT_QUESTION_TYPES: ExamQuestion['type'][] = [
   'fill_in_blank',
 ];
 
+function isComplexInlineMath(expression: string): boolean {
+  const normalized = String(expression || '');
+  if (!normalized) return false;
+  if (normalized.length >= 26) return true;
+  if (/\\frac|\\sqrt|\\sum|\\int|\\left|\\right|\\times|\\div/i.test(normalized)) return true;
+  if ((normalized.match(/[=+\-*/]/g) || []).length >= 2) return true;
+  return false;
+}
+
 export function ExamFooter({
   currentIndex,
   totalQuestions,
@@ -50,6 +61,35 @@ export function ExamFooter({
   const isFirstQuestion = currentIndex === 0;
   const isTextType = TEXT_QUESTION_TYPES.includes(questionType);
   const showSubmit = isTextType && currentAnswer.trim().length > 0;
+  const renderNoticeText = (value: string) => {
+    if (!containsMathDelimiters(value)) {
+      return <Text style={[styles.noticeText, { color: theme.text }]}>{value}</Text>;
+    }
+
+    const segments = parseMathSegments(value);
+    return (
+      <View style={styles.noticeMathWrap}>
+        {segments.map((segment, index) => {
+          if (segment.type === 'text') {
+            return (
+              <Text key={`notice-segment-${index}`} style={[styles.noticeText, { color: theme.text }]}>
+                {segment.value}
+              </Text>
+            );
+          }
+
+          return (
+            <View key={`notice-segment-${index}`} style={styles.noticeMathInline}>
+              <MathRenderer
+                expression={segment.value}
+                displayMode={segment.type === 'block' || isComplexInlineMath(segment.value)}
+              />
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.footer, { backgroundColor: theme.surface }]}>
@@ -77,7 +117,7 @@ export function ExamFooter({
             },
           ]}
         >
-          <Text style={[styles.noticeText, { color: theme.text }]}>{uiNotice.text}</Text>
+          {renderNoticeText(uiNotice.text)}
         </View>
       ) : null}
 
@@ -168,6 +208,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
+  },
+  noticeMathWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: 4,
+    rowGap: 4,
+  },
+  noticeMathInline: {
+    alignSelf: 'center',
+    maxWidth: '100%',
+    flexShrink: 1,
   },
   footerNavRow: {
     flexDirection: 'row',

@@ -125,6 +125,9 @@ const normalizePOPStatus = (status: unknown): POPStatus => {
 const includesCaseInsensitive = (value: unknown, search: string): boolean =>
   String(value ?? '').toLowerCase().includes(search);
 
+const hasValidListId = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
 export default function POPReviewScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
@@ -1249,6 +1252,14 @@ export default function POPReviewScreen() {
   };
 
   const styles = createStyles(theme, insets);
+  const safeFilteredUploads = React.useMemo(
+    () => filteredUploads.filter((upload): upload is POPUpload => Boolean(upload) && hasValidListId(upload.id)),
+    [filteredUploads],
+  );
+  const safeFilteredPettyCashRequests = React.useMemo(
+    () => filteredPettyCashRequests.filter((request) => Boolean(request) && hasValidListId((request as any)?.id)),
+    [filteredPettyCashRequests],
+  );
   const popSummary = {
     pending: uploads.filter((upload) => upload.status === 'pending').length,
     approved: uploads.filter((upload) => upload.status === 'approved').length,
@@ -1261,8 +1272,8 @@ export default function POPReviewScreen() {
   };
   const activeSummary = activeQueue === 'payment_proofs' ? popSummary : pettyCashSummary;
   const hasNoResults = activeQueue === 'payment_proofs'
-    ? filteredUploads.length === 0
-    : filteredPettyCashRequests.length === 0;
+    ? safeFilteredUploads.length === 0
+    : safeFilteredPettyCashRequests.length === 0;
   const emptyIcon = activeQueue === 'payment_proofs' ? 'receipt-outline' : 'wallet-outline';
   const emptyPendingText = activeQueue === 'payment_proofs'
     ? 'No pending payments to review'
@@ -1417,20 +1428,26 @@ export default function POPReviewScreen() {
           </View>
         ) : activeQueue === 'payment_proofs' ? (
           <FlatList
-            data={filteredUploads}
+            key={`queue-${activeQueue}`}
+            data={safeFilteredUploads}
             renderItem={renderUploadItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) => (hasValidListId(item?.id) ? item.id : `pop-${index}`)}
             contentContainerStyle={styles.listContent}
+            removeClippedSubviews={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
             }
           />
         ) : (
           <FlatList
-            data={filteredPettyCashRequests}
+            key={`queue-${activeQueue}`}
+            data={safeFilteredPettyCashRequests}
             renderItem={renderPettyCashItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) =>
+              hasValidListId((item as any)?.id) ? String((item as any).id) : `petty-cash-${index}`
+            }
             contentContainerStyle={styles.listContent}
+            removeClippedSubviews={false}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
             }

@@ -228,9 +228,6 @@ export default function DashVoiceScreen() {
       ).toLowerCase(),
     [profile]
   );
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'dash-voice.tsx:activeTier',message:'dash-voice tier resolved',data:{activeTier:(profile as any)?.subscription_tier||(profile as any)?.tier||(profile as any)?.current_tier||'free',role,orgType,userId:user?.id||null},timestamp:Date.now(),hypothesisId:'D',runId:'run1'})}).catch(()=>{});
-// #endregion
   const normalizedToolTier = useMemo(
     () => getCapabilityTier(normalizeTierName(activeTier || 'free')),
     [activeTier]
@@ -283,9 +280,6 @@ fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{metho
   }, [orgType, preferredLanguage, profile?.first_name, profile?.full_name, role, user?.id]);
 
   const quickActions = useMemo(() => dashPolicy.quickActions, [dashPolicy.quickActions]);
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'dash-voice.tsx:quickActions',message:'quickActions resolved',data:{count:dashPolicy.quickActions.length,mode:dashPolicy.defaultMode,role:dashPolicy.role,orgType:dashPolicy.orgType,labels:dashPolicy.quickActions.map((a:any)=>a.label)},timestamp:Date.now(),hypothesisId:'chips',runId:'run1'})}).catch(()=>{});
-// #endregion
   const rawDisplayed = streamingText || lastResponse;
   const displayedText = rawDisplayed && /^\s*data:\s*(\[DONE\])?\s*$/i.test(rawDisplayed)
     ? '' : rawDisplayed;
@@ -294,9 +288,6 @@ fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{metho
   // ── TTS Queue ─────────────────────────────────────────────────────
   const speakResponse = useCallback(async (text: string) => {
     if (!voiceOrbRef.current) return;
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'dash-voice.tsx:speakResponse',message:'speakResponse called',data:{textLen:text?.length||0,textPreview:(text||'').slice(0,80),hasVoiceOrb:!!voiceOrbRef.current,isSpeaking,isListening},timestamp:Date.now(),hypothesisId:'C',runId:'run1'})}).catch(()=>{});
-// #endregion
     // Detect phonics BEFORE cleaning so slash markers are preserved.
     const phonicsMode = shouldUsePhonicsMode(text, { organizationType: orgType });
     const clean = cleanForTTS(text, { phonicsMode });
@@ -575,9 +566,6 @@ fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{metho
   ) => {
     const trimmed = text.trim();
     if (!trimmed || isProcessing) return;
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'dash-voice.tsx:sendMessage',message:'sendMessage called',data:{inputChars:trimmed.length,inputPreview:trimmed.slice(0,80),isProcessing,activeTier,hasImage:!!attachedImage?.base64},timestamp:Date.now(),hypothesisId:'C',runId:'run1'})}).catch(()=>{});
-// #endregion
     const shouldAutoExportPdf = wantsPdfArtifact(trimmed);
 
     const flags = getFeatureFlagsSync();
@@ -827,9 +815,6 @@ fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{metho
         setLastResponse(resolvedDisplayText);
         setStreamingText('');
         setIsProcessing(false);
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'dash-voice.tsx:ocrComplete',message:'OCR/non-stream response complete',data:{responseLen:(resolvedDisplayText||'').length,responsePreview:(resolvedDisplayText||'').slice(0,80),willSpeak:!!(resolvedDisplayText)},timestamp:Date.now(),hypothesisId:'C',runId:'run1'})}).catch(()=>{});
-// #endregion
         if (resolvedDisplayText) {
           const withResponse = [...updatedHistory, { role: 'assistant' as const, content: resolvedDisplayText }];
           conversationHistoryRef.current = withResponse;
@@ -1046,9 +1031,6 @@ fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{metho
 
   // ── Handlers ──────────────────────────────────────────────────────
   const handleVoiceInput = useCallback((transcript: string, language?: SupportedLanguage) => {
-// #region agent log
-fetch('http://127.0.0.1:7783/ingest/d5d94b4c-0783-4dbc-b028-804fb46fa360',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'e44ee0'},body:JSON.stringify({sessionId:'e44ee0',location:'dash-voice.tsx:handleVoiceInput',message:'STT transcript received',data:{transcriptLen:(transcript||'').length,transcriptPreview:(transcript||'').slice(0,80),language:language||'none',isSpeaking,isProcessing,isSpeakingRef:isSpeakingRef.current},timestamp:Date.now(),hypothesisId:'C',runId:'run1'})}).catch(()=>{});
-// #endregion
     // Guard against ORB hearing its own TTS output during brief state races.
     if (isSpeakingRef.current || isSpeaking || isProcessing) {
       logDashTrace('voice_input_ignored', {

@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { assertSupabase } from '@/lib/supabase';
 import { track } from '@/lib/analytics';
 import { withPettyCashTenant } from '@/lib/utils/pettyCashTenant';
+import { isPettyCashResetEntry } from '@/lib/utils/pettyCashReset';
 
 // ============================================================================
 // ZOD SCHEMAS FOR VALIDATION
@@ -388,7 +389,7 @@ export async function getSummary(
         const { data: txns, error: txErr } = await withPettyCashTenant((column, client) => {
           let txQuery = client
             .from('petty_cash_transactions')
-            .select('amount, type, status, created_at')
+            .select('amount, type, status, created_at, category, description, reference_number')
             .eq(column, schoolId);
 
           if (validatedOptions.from) {
@@ -421,16 +422,19 @@ export async function getSummary(
 
         const list = txns || [];
         const approved = list.filter(t => t.status === 'approved');
+        const approvedOperational = approved.filter((t) => !isPettyCashResetEntry(t));
         const total_expenses = approved
-          .filter(t => t.type === 'expense')
+          .filter((t) => t.type === 'expense')
+          .filter((t) => !isPettyCashResetEntry(t))
           .reduce((s, t) => s + Number(t.amount || 0), 0);
         const total_replenishments = approved
-          .filter(t => t.type === 'replenishment')
+          .filter((t) => t.type === 'replenishment')
+          .filter((t) => !isPettyCashResetEntry(t))
           .reduce((s, t) => s + Number(t.amount || 0), 0);
-        const total_adjustments = approved
-          .filter(t => t.type === 'adjustment')
+        const total_adjustments = approvedOperational
+          .filter((t) => t.type === 'adjustment')
           .reduce((s, t) => s + Number(t.amount || 0), 0);
-        const transaction_count = approved.length;
+        const transaction_count = approvedOperational.length;
         const pending_count = list.filter(t => t.status === 'pending').length;
 
         // Compute overall signed total for balance across ALL time
@@ -490,6 +494,38 @@ export async function getSummary(
       pending_count: 0,
     };
 
+    // Normalize reset adjustments out of operational spend/income totals.
+    let resetExpenseTotal = 0;
+    let resetReplenishmentTotal = 0;
+    try {
+      const { data: resetRows } = await withPettyCashTenant((column, client) => {
+        let resetQuery = client
+          .from('petty_cash_transactions')
+          .select('amount, type, category, description, reference_number')
+          .eq(column, schoolId)
+          .eq('status', 'approved');
+
+        if (validatedOptions.from) {
+          resetQuery = resetQuery.gte('created_at', validatedOptions.from.toISOString());
+        }
+        if (validatedOptions.to) {
+          resetQuery = resetQuery.lt('created_at', validatedOptions.to.toISOString());
+        }
+
+        return resetQuery.limit(1000);
+      });
+
+      for (const row of resetRows || []) {
+        if (!isPettyCashResetEntry(row)) continue;
+        const amount = Number(row?.amount || 0);
+        if (!Number.isFinite(amount) || amount <= 0) continue;
+        if (row?.type === 'expense') resetExpenseTotal += amount;
+        if (row?.type === 'replenishment') resetReplenishmentTotal += amount;
+      }
+    } catch {
+      // Intentional: non-fatal normalization.
+    }
+
     // Compute overall signed total for balance across ALL time
     const { data: allApproved } = await withPettyCashTenant((column, client) =>
       client
@@ -510,6 +546,11 @@ export async function getSummary(
 
     return {
       ...summary,
+      total_expenses: Math.max(0, Number(summary.total_expenses || 0) - resetExpenseTotal),
+      total_replenishments: Math.max(
+        0,
+        Number(summary.total_replenishments || 0) - resetReplenishmentTotal,
+      ),
       current_balance,
       is_low_balance: current_balance < lowThreshold,
       low_balance_threshold: lowThreshold,

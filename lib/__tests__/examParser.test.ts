@@ -78,4 +78,49 @@ describe('examParser gradeAnswer', () => {
     expect(result.isCorrect).toBe(true);
     expect(result.marks).toBe(1);
   });
+
+  it('accepts numerically true verification equations for short answers', () => {
+    const question: ExamQuestion = {
+      id: 'q_math_verify',
+      type: 'short_answer',
+      question: 'Check if 91 ÷ 7 = 13 is correct by writing the multiplication sentence.',
+      marks: 4,
+      correctAnswer: '7 × 13 = 91, so the division is correct.',
+    };
+
+    const result = gradeAnswer(question, '13 x 7 = 91');
+
+    expect(result.isCorrect).toBe(true);
+    expect(result.marks).toBe(4);
+  });
+
+  it('does not mark false verification equations as correct', () => {
+    const question: ExamQuestion = {
+      id: 'q_math_verify_incorrect',
+      type: 'short_answer',
+      question: 'Check if 91 ÷ 7 = 13 is correct by writing the multiplication sentence.',
+      marks: 4,
+      correctAnswer: '7 × 13 = 91, so the division is correct.',
+    };
+
+    const result = gradeAnswer(question, '13 x 7 = 92');
+
+    expect(result.isCorrect).toBe(false);
+    expect(result.marks).toBeLessThan(4);
+  });
+
+  it('accepts equivalent equation form even when order is reversed', () => {
+    const question: ExamQuestion = {
+      id: 'q_math_equation_equivalent',
+      type: 'short_answer',
+      question: 'Write the multiplication sentence.',
+      marks: 3,
+      correctAnswer: '7 x 13 = 91',
+    };
+
+    const result = gradeAnswer(question, '13 × 7 = 91');
+
+    expect(result.isCorrect).toBe(true);
+    expect(result.marks).toBe(3);
+  });
 });

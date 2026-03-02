@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet, Platform, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, ScrollView, useWindowDimensions } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -174,6 +174,17 @@ export function DesktopLayout({
       backgroundColor: theme.surface,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
+      ...(Platform.OS === 'web'
+        ? {
+            position: 'sticky' as any,
+            top: 0,
+            zIndex: 40,
+          }
+        : {
+            position: 'relative' as const,
+            zIndex: 30,
+            ...(Platform.OS === 'android' ? { elevation: 6 } : null),
+          }),
     },
     headerLeft: {
       flexDirection: 'row' as const,
@@ -205,7 +216,14 @@ export function DesktopLayout({
   // This ensures Chrome DevTools mobile view shows mobile layout
   if (Platform.OS !== 'web' || isMobileWidth) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.background, position: 'relative' as any }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: theme.background,
+          position: 'relative' as any,
+          ...(Platform.OS === 'web' ? { height: '100vh' as any, overflow: 'hidden' as any } : null),
+        }}
+      >
         {/* Mobile Header with Hamburger or Back Button */}
         <View style={mobileStyles.mobileHeader}>
           <View style={mobileStyles.headerLeft}>
@@ -213,32 +231,27 @@ export function DesktopLayout({
               <TouchableOpacity
                 style={mobileStyles.hamburgerButton}
                 onPress={() => {
-                  console.log('[DesktopLayout] Back button pressed');
                   router.back();
                 }}
               >
                 <Ionicons name="arrow-back" size={24} color={theme.text} />
               </TouchableOpacity>
             ) : (
-              <Pressable
-                style={({ pressed }) => [
+              <TouchableOpacity
+                style={[
                   mobileStyles.hamburgerButton,
                   Platform.OS === 'web' && { cursor: 'pointer' },
-                  pressed && { opacity: 0.7 },
                 ]}
-                onPress={(event) => {
-                  if (Platform.OS === 'web') {
-                    event?.stopPropagation?.();
-                    event?.preventDefault?.();
-                  }
+                onPress={() => {
                   setMobileDrawerOpen(true);
                 }}
                 accessibilityLabel="Open menu"
                 accessibilityRole="button"
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.7}
               >
                 <Ionicons name="menu" size={24} color={theme.text} />
-              </Pressable>
+              </TouchableOpacity>
             )}
             <Text style={mobileStyles.headerTitle}>{title || tenantSlug}</Text>
           </View>
@@ -285,7 +298,7 @@ export function DesktopLayout({
         </View>
 
         {/* Main Content */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minHeight: 0, ...(Platform.OS === 'web' ? { overflow: 'hidden' as any } : null) }}>
           {children}
         </View>
 
@@ -293,7 +306,6 @@ export function DesktopLayout({
         <MobileNavDrawer
           isOpen={mobileDrawerOpen}
           onClose={() => {
-            console.log('[DesktopLayout] Closing drawer');
             setMobileDrawerOpen(false);
           }}
         />
@@ -407,23 +419,21 @@ export function DesktopLayout({
 
       {/* Main Content Area */}
       <View style={styles.mainContent}>
-        {userRole === 'parent' && (
-          <View style={styles.desktopHeader}>
-            <Text style={styles.desktopHeaderTitle} numberOfLines={1}>
-              {title || tenantSlug}
-            </Text>
-            <TouchableOpacity
-              style={styles.desktopHeaderAccountButton}
-              onPress={() => router.push('/screens/account' as any)}
-            >
-              <Avatar
-                name={`${user?.user_metadata?.first_name || ''} ${user?.user_metadata?.last_name || ''}`.trim() || user?.email || 'User'}
-                imageUri={(profile as any)?.avatar_url || null}
-                size={34}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.desktopHeader}>
+          <Text style={styles.desktopHeaderTitle} numberOfLines={1}>
+            {title || tenantSlug}
+          </Text>
+          <TouchableOpacity
+            style={styles.desktopHeaderAccountButton}
+            onPress={() => router.push('/screens/account' as any)}
+          >
+            <Avatar
+              name={`${user?.user_metadata?.first_name || ''} ${user?.user_metadata?.last_name || ''}`.trim() || user?.email || 'User'}
+              imageUri={(profile as any)?.avatar_url || null}
+              size={34}
+            />
+          </TouchableOpacity>
+        </View>
         {children}
       </View>
     </View>
@@ -588,6 +598,13 @@ const createStyles = (theme: any, collapsed: boolean, insets: any) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      ...(Platform.OS === 'web'
+        ? {
+            position: 'sticky' as any,
+            top: 0,
+            zIndex: 20,
+          }
+        : null),
     },
     desktopHeaderTitle: {
       flex: 1,

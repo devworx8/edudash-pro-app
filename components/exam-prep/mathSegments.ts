@@ -3,8 +3,19 @@ export type MathSegment = {
   value: string;
 };
 
+function normalizeMathDelimiters(raw: string): string {
+  let normalized = String(raw || '');
+  // Convert \[ ... \] to $$ ... $$ (display math)
+  normalized = normalized.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`);
+  // Convert \( ... \) to $ ... $ (inline math)
+  normalized = normalized.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`);
+  // Convert escaped dollar wrappers (\$ ... \$) to standard inline math
+  normalized = normalized.replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
+  return normalized;
+}
+
 export function parseMathSegments(value: string): MathSegment[] {
-  const source = String(value || '');
+  const source = normalizeMathDelimiters(value);
   if (!source.trim()) return [];
 
   const segments: MathSegment[] = [];
@@ -40,6 +51,5 @@ export function parseMathSegments(value: string): MathSegment[] {
 }
 
 export function containsMathDelimiters(value: string): boolean {
-  return /\$\$[\s\S]+?\$\$|\$[^$\n]+?\$/.test(String(value || ''));
+  return /\$\$[\s\S]+?\$\$|\$[^$\n]+?\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\\\$[^$\n]+?\\\$/.test(String(value || ''));
 }
-

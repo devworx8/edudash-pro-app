@@ -94,7 +94,39 @@ const STACK_SCREEN_OPTIONS = {
   animationTypeForReplace: 'push' as const,
   contentStyle: { backgroundColor: 'transparent' },
 };
-const CONTENT_CONTAINER_STYLE = { paddingBottom: 0 };
+const WEB_BOTTOM_NAV_SCROLL_CLEARANCE = 64;
+
+const shouldHideBottomNavForPath = (pathname?: string | null): boolean => {
+  if (!pathname) return true;
+
+  return (
+    pathname === '/' ||
+    pathname.includes('/(auth)') ||
+    pathname.includes('/sign-in') ||
+    pathname.includes('/register') ||
+    pathname.includes('/landing') ||
+    pathname.includes('/onboarding') ||
+    pathname.includes('org-onboarding') ||
+    pathname.includes('principal-onboarding') ||
+    pathname.includes('school-registration') ||
+    pathname.includes('parent-child-registration') ||
+    pathname.includes('learner-registration') ||
+    pathname.includes('parent-registration') ||
+    pathname.includes('teacher-registration') ||
+    pathname.includes('teacher-approval-pending') ||
+    pathname.includes('/auth-callback') ||
+    pathname.includes('/invite/') ||
+    pathname.includes('message-thread') ||
+    pathname.includes('/screens/dash-assistant') ||
+    pathname.includes('/screens/dash-voice') ||
+    pathname.includes('/screens/dash-orb') ||
+    pathname.includes('/screens/dash-tutor') ||
+    pathname.startsWith('/screens/ai-') ||
+    pathname.includes('/screens/worksheet-viewer') ||
+    pathname.includes('/screens/lesson-viewer') ||
+    pathname.includes('exam-generation')
+  );
+};
 
 /** Bridge that reads user role from AuthContext and passes to SpotlightTourProvider */
 function SpotlightTourBridge({ children }: { children: React.ReactNode }) {
@@ -195,6 +227,11 @@ function LayoutContent() {
   const shouldShowFAB = isReadyForFAB && !shouldHideFAB && powerUserModeEnabled && showDashFAB && !!user;
   const hasCenterDashTab = roleHasCenterDashTab(normalizedRole) || hasAdminCenterDashTab;
   const shouldRenderFAB = shouldShowFAB && (!hasCenterDashTab || isPrincipalRole);
+  const shouldReserveBottomNavSpace =
+    Platform.OS === 'web' &&
+    Boolean(user) &&
+    Boolean(profile) &&
+    !shouldHideBottomNavForPath(pathname);
   
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -214,7 +251,14 @@ function LayoutContent() {
       {Platform.OS !== 'web' && <DashWakeWordListener />}
       
       {/* Main content area - leave space for bottom nav */}
-      <View style={[styles.contentContainer, CONTENT_CONTAINER_STYLE]}>
+      <View
+        style={[
+          styles.contentContainer,
+          Platform.OS === 'web' && shouldReserveBottomNavSpace
+            ? { paddingBottom: WEB_BOTTOM_NAV_SCROLL_CLEARANCE }
+            : null,
+        ]}
+      >
         <Stack screenOptions={STACK_SCREEN_OPTIONS}>
           {/* Let Expo Router auto-discover screens */}
         </Stack>
@@ -517,8 +561,15 @@ function RootLayoutContent() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    ...(Platform.OS === 'web'
+      ? {
+          height: '100vh' as any,
+          overflow: 'hidden' as any,
+        }
+      : null),
   },
   contentContainer: {
     flex: 1,
+    minHeight: 0,
   },
 });

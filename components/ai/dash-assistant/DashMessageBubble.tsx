@@ -779,6 +779,14 @@ export const DashMessageBubble: React.FC<DashMessageBubbleProps> = ({
     | { type: 'spelling'; content: string }
     | { type: 'quiz'; content: string };
 
+  const normalizeMathDelimiters = (raw: string): string => {
+    let normalized = String(raw || '');
+    normalized = normalized.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`);
+    normalized = normalized.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`);
+    normalized = normalized.replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
+    return normalized;
+  };
+
   const parseRichSegments = (content: string): RichSegment[] => {
     const splitByPattern = (
       input: RichSegment[],
@@ -812,7 +820,7 @@ export const DashMessageBubble: React.FC<DashMessageBubbleProps> = ({
       return next;
     };
 
-    const base: RichSegment[] = [{ type: 'markdown', content }];
+    const base: RichSegment[] = [{ type: 'markdown', content: normalizeMathDelimiters(content) }];
     // Quiz blocks: ```quiz ... ```
     const withQuiz = splitByPattern(base, /```quiz\s*([\s\S]*?)```/gi, (value) => ({
       type: 'quiz' as const,

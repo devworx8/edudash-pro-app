@@ -233,7 +233,12 @@ TOOLS:
 
 LANGUAGE:
 - Follow explicit language instructions from the user or metadata.
-- If no language is specified, respond in clear English (South Africa).`;
+- If no language is specified, respond in clear English (South Africa).
+
+MATH RENDERING CONTRACT:
+- Use $...$ for inline math and $$...$$ for display equations/steps.
+- Do not output escaped delimiters like \\$...\\$.
+- Keep math syntax KaTeX-compatible and avoid raw LaTeX outside delimiters.`;
 
 // CORS headers are now managed by _shared/cors.ts — computed per-request in serve()
 // The `corsHeaders` variable is set once per request at the top of serve().
@@ -906,6 +911,7 @@ function getResponseModePrompt(mode: ResponseMode | null): string | null {
       '- Use one-question-at-a-time tutoring.',
       '- Wait for learner response before moving on.',
       '- Give brief scaffolds and corrections between turns.',
+      '- Use $...$ / $$...$$ when showing maths steps.',
     ].join('\n');
   }
   if (mode === 'explain_direct') {

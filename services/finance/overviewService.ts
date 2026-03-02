@@ -7,6 +7,7 @@
 
 import { assertSupabase } from '@/lib/supabase';
 import { withPettyCashTenant } from '@/lib/utils/pettyCashTenant';
+import { isPettyCashResetEntry } from '@/lib/utils/pettyCashReset';
 
 import type { FinanceOverviewData } from '../financial/types';
 import { withFinanceTenant } from './tenantUtils';
@@ -74,7 +75,7 @@ export async function getOverview(preschoolId?: string): Promise<FinanceOverview
     const pettyCashResult = await withPettyCashTenant((column, client) => {
       let query = client
         .from('petty_cash_transactions')
-        .select('amount, created_at, category')
+        .select('amount, created_at, category, description, reference_number')
         .eq('type', 'expense')
         .in('status', expenseStatuses as unknown as string[])
         .gte('created_at', rangeStartIso)
@@ -203,6 +204,8 @@ export async function getOverview(preschoolId?: string): Promise<FinanceOverview
     }
 
     pettyCashData.forEach((expense) => {
+      if (isPettyCashResetEntry(expense)) return;
+
       const monthIndex = toMonthIndex(expense.created_at);
       if (monthIndex === null) return;
       const amount = Math.abs(Number(expense.amount) || 0);

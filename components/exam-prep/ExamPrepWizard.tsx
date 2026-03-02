@@ -345,7 +345,10 @@ export function ExamPrepWizard(): React.ReactElement {
         examType: selectedExamType,
         language: selectedLanguage,
         fallbackPolicy: 'provider_outage_only',
-        qualityMode: getSubjectCategory(selectedSubject) === 'languages' ? 'strict' : 'standard',
+        qualityMode:
+          getSubjectCategory(selectedSubject) === 'languages' && readyMaterialSummaries.length === 0
+            ? 'strict'
+            : 'standard',
         useTeacherContext: withTeacherContext,
         draftId,
         contextIds: {
@@ -364,6 +367,7 @@ export function ExamPrepWizard(): React.ReactElement {
       selectedExamType,
       selectedLanguage,
       isMaterialPipelineBusy,
+      readyMaterialSummaries.length,
       examQuotaLimit,
       examQuotaRemaining,
       buildCustomPrompt,
@@ -383,7 +387,7 @@ export function ExamPrepWizard(): React.ReactElement {
       examType: 'practice_test',
       language: selectedLanguage || 'af-ZA',
       fallbackPolicy: 'provider_outage_only',
-      qualityMode: 'strict',
+      qualityMode: 'standard',
       useTeacherContext: true,
       contextIds: {
         childName,

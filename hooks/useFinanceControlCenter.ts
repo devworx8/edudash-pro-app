@@ -242,9 +242,14 @@ export function useFinanceControlCenter() {
     const breakdownPettyCashExpenses = Number(expenses?.petty_cash_expenses || 0);
     const snapshotFinancialExpenses = Number(snapshot?.financial_expenses_this_month || 0);
     const breakdownFinancialExpenses = Number(expenses?.financial_expenses || 0);
-    const totalExpenses = snapshotExpensesTotal > 0 ? snapshotExpensesTotal : breakdownExpensesTotal;
-    const pettyCashExpenses = snapshotPettyCashExpenses > 0 ? snapshotPettyCashExpenses : breakdownPettyCashExpenses;
-    const financialExpenses = snapshotFinancialExpenses > 0 ? snapshotFinancialExpenses : breakdownFinancialExpenses;
+    const hasBreakdown = Number.isFinite(breakdownExpensesTotal);
+    const totalExpenses = hasBreakdown ? breakdownExpensesTotal : snapshotExpensesTotal;
+    const pettyCashExpenses = hasBreakdown
+      ? breakdownPettyCashExpenses
+      : snapshotPettyCashExpenses;
+    const financialExpenses = hasBreakdown
+      ? breakdownFinancialExpenses
+      : snapshotFinancialExpenses;
     const pendingAmount = Number(snapshot?.pending_amount || 0);
     const overdueAmount = Number(snapshot?.overdue_amount || 0);
     const equationDelta = Math.abs((due - collected) - outstanding);

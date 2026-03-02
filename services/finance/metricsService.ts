@@ -7,6 +7,7 @@
 
 import { assertSupabase } from '@/lib/supabase';
 import { withPettyCashTenant } from '@/lib/utils/pettyCashTenant';
+import { isPettyCashResetEntry } from '@/lib/utils/pettyCashReset';
 
 import type { FinancialMetrics, MonthlyTrendData } from '../financial/types';
 import { withFinanceTenant, isMissingFinanceTenantColumn } from './tenantUtils';
@@ -103,7 +104,7 @@ export async function getFinancialMetrics(preschoolId: string): Promise<Financia
       (column, client) =>
         client
           .from('petty_cash_transactions')
-          .select('amount')
+          .select('amount, category, description, reference_number')
           .eq(column, preschoolId)
           .eq('type', 'expense')
           .in('status', ['approved', 'pending'])
@@ -116,7 +117,10 @@ export async function getFinancialMetrics(preschoolId: string): Promise<Financia
     }
 
     let monthlyExpenses =
-      expenseTransactions?.reduce((sum, t) => sum + Math.abs(t.amount), 0) || 0;
+      expenseTransactions?.reduce((sum, t) => {
+        if (isPettyCashResetEntry(t)) return sum;
+        return sum + Math.abs(t.amount);
+      }, 0) || 0;
 
     try {
       const { data: otherExpTx } = await withFinanceTenant<
@@ -245,7 +249,7 @@ export async function getMonthlyTrendData(preschoolId: string): Promise<MonthlyT
       const { data: monthlyExpenses } = await withPettyCashTenant((column, client) =>
         client
           .from('petty_cash_transactions')
-          .select('amount')
+          .select('amount, category, description, reference_number')
           .eq(column, preschoolId)
           .eq('type', 'expense')
           .eq('status', 'approved')
@@ -253,7 +257,11 @@ export async function getMonthlyTrendData(preschoolId: string): Promise<MonthlyT
           .lt('created_at', nextMonthStart),
       );
 
-      const petty = monthlyExpenses?.reduce((sum, t) => sum + Math.abs(t.amount), 0) || 0;
+      const petty =
+        monthlyExpenses?.reduce((sum, t) => {
+          if (isPettyCashResetEntry(t)) return sum;
+          return sum + Math.abs(t.amount);
+        }, 0) || 0;
       let otherExp = 0;
       try {
         const { data: monthOther } = await withFinanceTenant<

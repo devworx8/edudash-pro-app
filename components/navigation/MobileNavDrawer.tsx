@@ -3,7 +3,7 @@
  * Shows navigation items when hamburger menu is pressed on mobile web
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -303,7 +303,9 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
   
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const openedAtRef = useRef(0);
+  const closeGuardEnabledRef = useRef(false);
+  const closeGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [overlayInteractive, setOverlayInteractive] = useState(false);
   
   const userRole = (profile?.role as string) || 'parent';
   // Get member_type from organization_membership for CEO detection
@@ -338,34 +340,53 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
   const avatarUrl = profile?.avatar_url;
 
   useEffect(() => {
+    if (closeGuardTimerRef.current) {
+      clearTimeout(closeGuardTimerRef.current);
+      closeGuardTimerRef.current = null;
+    }
+
     if (isOpen) {
-      openedAtRef.current = Date.now();
+      closeGuardEnabledRef.current = false;
+      setOverlayInteractive(false);
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: 0,
           duration: 250,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
+      closeGuardTimerRef.current = setTimeout(() => {
+        closeGuardEnabledRef.current = true;
+        setOverlayInteractive(true);
+      }, 300);
     } else {
+      closeGuardEnabledRef.current = false;
+      setOverlayInteractive(false);
       Animated.parallel([
         Animated.timing(slideAnim, {
           toValue: -DRAWER_WIDTH,
           duration: 200,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(fadeAnim, {
           toValue: 0,
           duration: 150,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
     }
+
+    return () => {
+      if (closeGuardTimerRef.current) {
+        clearTimeout(closeGuardTimerRef.current);
+        closeGuardTimerRef.current = null;
+      }
+    };
   }, [isOpen, slideAnim, fadeAnim]);
 
   const handleNavPress = (route: string) => {
@@ -399,9 +420,9 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
       <Animated.View style={[styles.overlay, { opacity: fadeAnim }]}>
         <Pressable
           style={styles.overlayPressable}
+          pointerEvents={overlayInteractive ? 'auto' : 'none'}
           onPress={() => {
-            // Prevent the same tap that opened the drawer from closing it immediately on web.
-            if (Date.now() - openedAtRef.current < 220) return;
+            if (!closeGuardEnabledRef.current || !overlayInteractive) return;
             onClose();
           }}
         />

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Platform, View, Text, StyleSheet, ViewStyle } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { FlashList } from '@shopify/flash-list';
 import TutorHome from './TutorHome';
 import { ParentDashHome, type ParentChild } from './ParentDashHome';
@@ -109,10 +108,6 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
 
   const phaseOrder = ['Diagnose', 'Teach', 'Practice'];
   const phaseIndex = currentPhase ? phaseOrder.indexOf(currentPhase) : -1;
-  const hasTutorHeader = Boolean(tutorMode || currentPhase);
-  const tutorModeLabel = tutorMode
-    ? `${String(tutorMode).charAt(0).toUpperCase()}${String(tutorMode).slice(1)}`
-    : 'Diagnose → Teach → Practice';
   
   // Only show phase indicator for student/learner roles in tutoring context
   // Parents and staff don't need clinical Diagnose→Teach→Practice labels
@@ -216,32 +211,6 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
       ListHeaderComponent={
         messages.length > 0 ? (
           <View style={{ gap: 8 }}>
-            {hasTutorHeader && (
-              <View
-                style={{
-                  borderRadius: 14,
-                  borderWidth: 1,
-                  borderColor: theme.primary + '44',
-                  backgroundColor: theme.primary + '14',
-                  paddingHorizontal: 12,
-                  paddingVertical: 10,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 8,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                  <Ionicons name="school-outline" size={14} color={theme.primary} />
-                  <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '700' }}>
-                    Tutor Session Active
-                  </Text>
-                </View>
-                <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600' }}>
-                  Mode: {tutorModeLabel}
-                </Text>
-              </View>
-            )}
             {showPhaseIndicator && (
               <View style={[styles.phaseRailContainer, { backgroundColor: theme.surface, borderColor: theme.border }]}>
                 <View style={[styles.phaseRailTrack, { backgroundColor: theme.border }]} />

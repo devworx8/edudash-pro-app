@@ -20,6 +20,17 @@ import {
 } from '@/hooks/student-management';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 
+const toNonEmptyText = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+};
+
 export default function StudentManagementScreen() {
   const { theme } = useTheme();
   const { t } = useTranslation();
@@ -266,6 +277,9 @@ export default function StudentManagementScreen() {
           <View style={styles.studentsGrid}>
             {filteredStudents.map((student) => {
               const statusKey = String(student.status || 'active').toLowerCase();
+              const ageGroupName = toNonEmptyText(student.age_group_name);
+              const className = toNonEmptyText(student.class_name);
+              const parentName = toNonEmptyText(student.parent_name);
               const statusTone =
                 statusKey === 'inactive'
                   ? { bg: '#DC262622', border: '#DC262655', text: '#B91C1C' }
@@ -288,7 +302,7 @@ export default function StudentManagementScreen() {
                       ) : (
                         <View style={[
                           styles.studentAvatar,
-                          { backgroundColor: getAgeGroupColor(student.age_group_name, schoolInfo?.school_type || 'preschool') },
+                          { backgroundColor: getAgeGroupColor(ageGroupName || '', schoolInfo?.school_type || 'preschool') },
                         ]}>
                           <Text style={styles.studentInitials}>{getStudentInitials(student)}</Text>
                         </View>
@@ -310,21 +324,21 @@ export default function StudentManagementScreen() {
                   </View>
 
                   <View style={styles.studentDetails}>
-                    {student.age_group_name && (
+                    {ageGroupName ? (
                       <View style={[
                         styles.ageGroupBadge,
-                        { backgroundColor: getAgeGroupColor(student.age_group_name, schoolInfo?.school_type || 'preschool') + '20' },
+                        { backgroundColor: getAgeGroupColor(ageGroupName, schoolInfo?.school_type || 'preschool') + '20' },
                       ]}>
                         <Text style={[
                           styles.ageGroupBadgeText,
-                          { color: getAgeGroupColor(student.age_group_name, schoolInfo?.school_type || 'preschool') },
+                          { color: getAgeGroupColor(ageGroupName, schoolInfo?.school_type || 'preschool') },
                         ]}>
-                          {student.age_group_name}
+                          {ageGroupName}
                         </Text>
                       </View>
-                    )}
-                    {student.class_name && <Text style={styles.classInfo}>📚 {student.class_name}</Text>}
-                    {student.parent_name && <Text style={styles.parentInfo}>👨‍👩‍👧‍👦 {student.parent_name}</Text>}
+                    ) : null}
+                    {className ? <Text style={styles.classInfo}>📚 {className}</Text> : null}
+                    {parentName ? <Text style={styles.parentInfo}>👨‍👩‍👧‍👦 {parentName}</Text> : null}
                   </View>
 
                   <View style={styles.studentCardFooter}>

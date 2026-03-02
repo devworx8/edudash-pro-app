@@ -461,11 +461,107 @@ function normalizeMathExpression(value: string): string {
     .toLowerCase();
 }
 
+function normalizeMathSymbols(value: string): string {
+  return String(value || '')
+    .replace(/\$\$/g, '')
+    .replace(/\$/g, '')
+    .replace(/\\left|\\right/gi, '')
+    .replace(/\\times/gi, '*')
+    .replace(/\\cdot/gi, '*')
+    .replace(/[×xX]/g, '*')
+    .replace(/\\div/gi, '/')
+    .replace(/[÷]/g, '/')
+    .replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/gi, '($1)/($2)')
+    .replace(/\\sqrt\s*\{([^{}]+)\}/gi, 'sqrt($1)')
+    .replace(/[{}]/g, '')
+    .replace(/[−–—]/g, '-')
+    .replace(/,/g, '.')
+    .trim();
+}
+
 function areMathEquivalent(a: string, b: string): boolean {
   const normalizedA = normalizeMathExpression(a);
   const normalizedB = normalizeMathExpression(b);
   if (!normalizedA || !normalizedB) return false;
   return normalizedA === normalizedB;
+}
+
+function extractEquationExpressions(value: string): Array<{ left: string; right: string }> {
+  const source = normalizeMathSymbols(value);
+  const matches = source.match(/([^=,\n]{1,80})=([^=,\n]{1,80})/g) || [];
+  return matches
+    .map((entry) => {
+      const [left, right] = entry.split('=');
+      return {
+        left: String(left || '').trim(),
+        right: String(right || '').trim(),
+      };
+    })
+    .filter((item) => item.left.length > 0 && item.right.length > 0);
+}
+
+function safeEvalMathExpression(value: string): number | null {
+  const normalized = normalizeMathSymbols(value)
+    .replace(/sqrt\(([^()]+)\)/gi, 'Math.sqrt($1)')
+    .replace(/\s+/g, '');
+  if (!normalized) return null;
+  if (!/^[0-9+\-*/().Mathsqrt]+$/i.test(normalized)) return null;
+
+  try {
+    // Expression is pre-validated to numeric/math-safe characters only.
+    const result = Function(`"use strict"; return (${normalized});`)();
+    if (typeof result !== 'number' || !Number.isFinite(result)) return null;
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function isEquationNumericallyTrue(value: string): boolean {
+  const equations = extractEquationExpressions(value);
+  if (equations.length === 0) return false;
+
+  return equations.some((equation) => {
+    const left = safeEvalMathExpression(equation.left);
+    const right = safeEvalMathExpression(equation.right);
+    if (left === null || right === null) return false;
+    return Math.abs(left - right) < 1e-6;
+  });
+}
+
+function extractNumericTokens(value: string): Set<string> {
+  return new Set((String(value || '').match(/-?\d+(?:\.\d+)?/g) || []).map((token) => token.trim()));
+}
+
+function hasEquivalentMathSentence(student: string, expected: string): boolean {
+  const studentEquations = extractEquationExpressions(student);
+  if (studentEquations.length === 0) return false;
+  if (!isEquationNumericallyTrue(student)) return false;
+
+  const expectedNumbers = extractNumericTokens(expected);
+  if (expectedNumbers.size === 0) return false;
+
+  const studentNumbers = extractNumericTokens(student);
+  const overlap = [...expectedNumbers].filter((token) => studentNumbers.has(token)).length;
+  const overlapRatio = overlap / expectedNumbers.size;
+  return overlapRatio >= 0.6;
+}
+
+function computeNumericOverlapRatio(student: string, expected: string): number {
+  const expectedNumbers = extractNumericTokens(expected);
+  if (expectedNumbers.size === 0) return 0;
+  const studentNumbers = extractNumericTokens(student);
+  const overlap = [...expectedNumbers].filter((token) => studentNumbers.has(token)).length;
+  return overlap / expectedNumbers.size;
+}
+
+function isLikelyMathVerificationPrompt(questionText: string, expected: string): boolean {
+  const raw = `${questionText} ${expected}`.toLowerCase();
+  if (/[0-9].*[=+\-*/×÷]/.test(raw)) return true;
+  return (
+    /\b(check|verify|confirm|prove|calculate|solve|equation|sentence|multiplication|division|quotient|remainder)\b/.test(raw) ||
+    /\b(hoekom|hoe|bereken|kontroleer|bevestig|vergelyking|maal|deel)\b/.test(raw)
+  );
 }
 
 /**
@@ -603,6 +699,38 @@ export function gradeAnswer(
   if ((question.type === 'short_answer' || question.type === 'essay') && question.correctAnswer) {
     const normalizedExpected = normalize(question.correctAnswer);
     const normalizedStudent = normalize(answer);
+    const mathExpectationSource = [question.correctAnswer || '', question.question || ''].join(' ').trim();
+    const isMathVerificationPrompt = isLikelyMathVerificationPrompt(question.question || '', mathExpectationSource);
+    const mathSentenceMatched = hasEquivalentMathSentence(
+      answer,
+      mathExpectationSource,
+    );
+    const equationIsTrue = isEquationNumericallyTrue(answer);
+    const numericOverlap = computeNumericOverlapRatio(answer, mathExpectationSource);
+    if (isMathVerificationPrompt && equationIsTrue && numericOverlap >= 0.45) {
+      return {
+        isCorrect: true,
+        feedback: question.explanation || 'Correct. Your multiplication/division check is valid.',
+        marks: question.marks,
+      };
+    }
+    if (isMathVerificationPrompt && equationIsTrue && numericOverlap >= 0.3) {
+      return {
+        isCorrect: false,
+        feedback:
+          question.explanation ||
+          `Partially correct (${Math.round(numericOverlap * 100)}% numeric match). Add the final conclusion sentence.`,
+        marks: Math.max(1, Math.round(question.marks * 0.75)),
+      };
+    }
+    if (mathSentenceMatched) {
+      return {
+        isCorrect: true,
+        feedback: question.explanation || 'Correct mathematical sentence.',
+        marks: question.marks,
+      };
+    }
+
     const expectedTokens = normalizedExpected.split(' ').filter((token) => token.length >= 2);
     const studentTokens = normalizedStudent.split(' ');
 

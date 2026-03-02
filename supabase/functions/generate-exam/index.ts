@@ -21,12 +21,15 @@ import {
   ensureMinimumQuestionCoverage,
   extractJsonBlock,
   getQuestionCountPolicy,
+  isLanguageSubject,
   normalizeExamShape,
   normalizeLanguageLocale,
   normalizeText,
   parseExamJson,
   recalculateExamMarks,
   resolveArtifactType,
+  sanitizeLearnerFacingExamContent,
+  softenWeakGroundingComprehensionOptions,
   toUserFacingGenerationWarning,
   stripMetaPromptQuestions,
   validateComprehensionIntegrity,
@@ -117,6 +120,11 @@ type ScopeDiagnostics = {
   effectiveSchoolId: string | null;
   useTeacherContext: boolean;
 };
+
+function isWeakComprehensionGroundingIssue(issue: string): boolean {
+  const normalized = String(issue || '').toLowerCase();
+  return normalized.includes('weakly grounded in passage context');
+}
 
 type UploadedStudyMaterial = {
   sourceName: string;
@@ -913,6 +921,10 @@ serve(async (req: Request) => {
       .filter((value) => value.length > 0)
       .join('\n\n') || undefined;
     const hasStudyMaterialContext = uploadedStudyMaterials.length > 0 || storedStudyMaterials.length > 0;
+    const effectiveQualityMode =
+      qualityMode === 'strict' && isLanguageSubject(subject) && hasStudyMaterialContext
+        ? 'standard'
+        : qualityMode;
 
     const { data: tierData } = await supabase.rpc('get_user_subscription_tier', {
       user_id: scope.profile.id,
@@ -1022,6 +1034,7 @@ serve(async (req: Request) => {
       requestedAllowFallback,
       fallbackPolicy,
       qualityMode,
+      effectiveQualityMode,
       assignmentCount: contextSummary.assignmentCount,
       lessonCount: contextSummary.lessonCount,
     });
@@ -1189,6 +1202,7 @@ serve(async (req: Request) => {
       minQuestionCount: fullPaperMode ? countPolicy.min : Math.min(countPolicy.min, 16),
     });
     normalizedExam = enforceQuestionUpperBound(normalizedExam, countPolicy.max);
+    normalizedExam = sanitizeLearnerFacingExamContent(normalizedExam);
     normalizedExam = ensureLanguageReadingPassage(normalizedExam, subject, grade, language);
     normalizedExam = augmentQuestionVisuals(normalizedExam, visualMode);
     normalizedExam = recalculateExamMarks(normalizedExam);
@@ -1196,7 +1210,7 @@ serve(async (req: Request) => {
       normalizedExam,
       subject,
       language,
-      qualityMode,
+      effectiveQualityMode,
     );
     let integrityIssues = [
       ...validateComprehensionIntegrity(normalizedExam, subject, language),
@@ -1211,7 +1225,7 @@ serve(async (req: Request) => {
         repairedExam,
         subject,
         language,
-        qualityMode,
+        effectiveQualityMode,
       );
       const repairedIssues = [...repairedComprehensionIssues, ...repairedLanguageIssues];
       const hasEnoughQuestions =
@@ -1250,13 +1264,14 @@ serve(async (req: Request) => {
             minQuestionCount: fullPaperMode ? countPolicy.min : Math.min(countPolicy.min, 16),
           });
           aiRepairedExam = enforceQuestionUpperBound(aiRepairedExam, countPolicy.max);
+          aiRepairedExam = sanitizeLearnerFacingExamContent(aiRepairedExam);
           aiRepairedExam = ensureLanguageReadingPassage(aiRepairedExam, subject, grade, language);
           aiRepairedExam = augmentQuestionVisuals(aiRepairedExam, visualMode);
           aiRepairedExam = recalculateExamMarks(aiRepairedExam);
 
           const postRepairIssues = [
             ...validateComprehensionIntegrity(aiRepairedExam, subject, language),
-            ...validateLearnerLanguageConsistency(aiRepairedExam, subject, language, qualityMode),
+            ...validateLearnerLanguageConsistency(aiRepairedExam, subject, language, effectiveQualityMode),
           ];
           if (postRepairIssues.length === 0) {
             normalizedExam = aiRepairedExam;
@@ -1270,6 +1285,24 @@ serve(async (req: Request) => {
           '[generate-exam] quality repair pass failed',
           repairError instanceof Error ? repairError.message : String(repairError),
         );
+      }
+    }
+    if (integrityIssues.length > 0 && hasStudyMaterialContext && isLanguageSubject(subject)) {
+      const softenedExam = softenWeakGroundingComprehensionOptions(normalizedExam, language);
+      if (softenedExam !== normalizedExam) {
+        const postSoftenIssues = [
+          ...validateComprehensionIntegrity(softenedExam, subject, language),
+          ...validateLearnerLanguageConsistency(softenedExam, subject, language, effectiveQualityMode),
+        ];
+        const blockingIssues = postSoftenIssues.filter((issue) => !isWeakComprehensionGroundingIssue(issue));
+        if (blockingIssues.length === 0) {
+          normalizedExam = recalculateExamMarks(softenedExam);
+          integrityIssues = [];
+          qualityRepaired = true;
+          localFallbackReason =
+            localFallbackReason ||
+            'Dash softened some comprehension items to keep answers strictly grounded in uploaded study material.';
+        }
       }
     }
     if (integrityIssues.length > 0) {

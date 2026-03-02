@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 /**
  * Main layout styles for PrincipalDashboardV2 (header, scroll, section blocks).
@@ -20,6 +20,7 @@ export const createStyles = (theme: any, insetTop: number, insetBottom: number) 
   const glassSurface = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.72)';
   const glassSurfaceStrong = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.82)';
   const glassBorder = isDark ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.88)';
+  const bottomNavClearance = Platform.OS === 'web' ? 88 : 76;
 
   return StyleSheet.create({
     container: {
@@ -50,7 +51,8 @@ export const createStyles = (theme: any, insetTop: number, insetBottom: number) 
     },
     scrollContent: {
       paddingTop: insetTop + 12,
-      paddingBottom: Math.max(insetBottom, 8),
+      // Keep enough trailing space so the last section can scroll above the fixed bottom nav.
+      paddingBottom: Math.max(insetBottom + bottomNavClearance, bottomNavClearance),
     },
     header: {
       flexDirection: 'row',
