@@ -682,6 +682,17 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
               : announcement.content
             : 'A new announcement from your school.';
 
+          const canScheduleLocalBanner =
+            Platform.OS !== 'web' &&
+            typeof (Notifications as any)?.scheduleNotificationAsync === 'function';
+          if (!canScheduleLocalBanner) {
+            logger.debug(
+              'NotificationContext',
+              'Skipping local announcement banner: scheduleNotificationAsync unavailable on this platform'
+            );
+            return;
+          }
+
           try {
             await Notifications.scheduleNotificationAsync({
               identifier: `announcement-${announcement?.id ?? Date.now()}`,
