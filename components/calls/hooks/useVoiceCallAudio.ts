@@ -7,8 +7,8 @@
  * - Audio cleanup
  * 
  * CRITICAL: Uses expo-audio for ringback instead of InCallManager.startRingback()
- * because InCallManager.startRingback() ignores earpiece setting on Android
- * and always plays through speaker. expo-audio respects the audio mode settings.
+ * because some Android devices ignore earpiece routing for system ringback and
+ * can jump to speaker after a few rings. expo-audio respects our route settings.
  * 
  * ROBUSTNESS: Includes retry logic for ringback playback and proper cleanup
  */
@@ -91,14 +91,8 @@ export function useVoiceCallAudio({
 
   /**
    * Play ringback tone for the caller while waiting for callee to answer.
-   * 
-   * PRIORITY ORDER — uses device default first for familiar "krring-krring":
-   * 1. InCallManager.startRingback('_DEFAULT_') — system/carrier ringback tone
-   * 2. expo-audio with bundled ringback.mp3 — fallback if InCallManager unavailable
-   * 
-   * Previous implementation used expo-audio exclusively for earpiece routing,
-   * but the user expectation is the standard phone ring sound. InCallManager
-   * handles routing correctly when setForceSpeakerphoneOn(false) is called first.
+   * We intentionally use expo-audio (not system ringback) so Android keeps
+   * routing stable on earpiece during ringing.
    */
   const playCustomRingback = useCallback(async (retryAttempt = 0) => {
     if (ringbackStartedRef.current && ringbackPlayerRef.current?.playing) {
@@ -108,7 +102,6 @@ export function useVoiceCallAudio({
     
     console.log('[VoiceCallAudio] 🔊 playCustomRingback called', {
       attempt: retryAttempt + 1,
-      hasInCallManager: !!InCallManager,
       hasAsset: !!RINGBACK_SOUND,
       isSpeakerEnabled,
     });
@@ -123,20 +116,7 @@ export function useVoiceCallAudio({
       }
     }
     
-    // STRATEGY 1: Use InCallManager system ringback (device default "krring-krring")
-    if (InCallManager) {
-      try {
-        InCallManager.startRingback('_DEFAULT_');
-        ringbackStartedRef.current = true;
-        console.log('[VoiceCallAudio] ✅ Device default ringback started via InCallManager');
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-        return;
-      } catch (e) {
-        console.warn('[VoiceCallAudio] InCallManager ringback failed, falling back to expo-audio:', e);
-      }
-    }
-    
-    // STRATEGY 2: Fallback to expo-audio with bundled sound
+    // Use expo-audio with bundled sound for stable earpiece routing.
     if (!RINGBACK_SOUND) {
       console.error('[VoiceCallAudio] ❌ No ringback sound available');
       return;
@@ -230,15 +210,6 @@ export function useVoiceCallAudio({
         ringbackPlayerRef.current = null;
       }
       
-      // Also stop InCallManager ringback in case it was started elsewhere
-      if (InCallManager) {
-        try {
-          InCallManager.stopRingback();
-        } catch (e) {
-          // Ignore - may not have been started
-        }
-      }
-      
       ringbackStartedRef.current = false;
       ringbackRetryCountRef.current = 0;
       console.log('[VoiceCallAudio] ✅ Stopped ringback');
@@ -249,9 +220,8 @@ export function useVoiceCallAudio({
     }
   }, []);
 
-  // Earpiece enforcement during ringing/connecting states ONLY
-  // Single enforcement on state transition — no interval loop, which disrupts
-  // the expo-audio ringback pipeline. WebRTC manages routing when connected.
+  // Earpiece enforcement during ringing/connecting states ONLY.
+  // Re-assert route periodically to counter Android auto-route drift while ringing.
   useEffect(() => {
     if (!InCallManager) return;
     
@@ -267,6 +237,16 @@ export function useVoiceCallAudio({
       } catch (e) {
         console.warn('[VoiceCallAudio] Earpiece enforcement failed:', e);
       }
+
+      earpieceEnforcerRef.current = setInterval(() => {
+        if (!isSpeakerEnabledRef.current && (callState === 'connecting' || callState === 'ringing')) {
+          try {
+            InCallManager.setForceSpeakerphoneOn(false);
+          } catch {
+            // no-op: route retries are best-effort
+          }
+        }
+      }, 1200);
     }
     
     return () => {
@@ -355,12 +335,6 @@ export function useVoiceCallAudio({
       try {
         // Stop custom ringback (if playing)
         stopCustomRingback();
-        
-        // Stop InCallManager ringback (if any)
-        if (InCallManager && isOwner) {
-          InCallManager.stopRingback();
-          console.log('[VoiceCallAudio] Stopped ringback - call connected');
-        }
         
         // CRITICAL: Only apply audio setup ONCE on initial connect
         if (!speakerAppliedOnConnectRef.current) {

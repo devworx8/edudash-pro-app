@@ -85,6 +85,26 @@ const isNetworkError = (error: any) => {
   return message.includes('network request failed') || message.includes('failed to fetch');
 };
 
+const isWebRuntime = (): boolean =>
+  Platform.OS === 'web' ||
+  (typeof window !== 'undefined' && typeof document !== 'undefined');
+
+const isNotificationUnavailableOnWeb = (error: unknown): boolean => {
+  const msg = String((error as any)?.message || error || '').toLowerCase();
+  return (
+    (error as any)?.name === 'UnavailabilityError' ||
+    msg.includes('not available on web') ||
+    msg.includes('unavailabilityerror') ||
+    msg.includes('schedulenotificationasync is not available') ||
+    msg.includes('method or property notifications.schedulenotificationasync')
+  );
+};
+
+const canScheduleLocalNotification = (): boolean => {
+  if (isWebRuntime()) return false;
+  return typeof (Notifications as any)?.scheduleNotificationAsync === 'function';
+};
+
 // ============================================================================
 // Context
 // ============================================================================
@@ -578,6 +598,15 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
           }
 
           // ── 3. Show in-app notification banner (WhatsApp-style) ──
+          const canScheduleLocalBanner = canScheduleLocalNotification();
+          if (!canScheduleLocalBanner) {
+            logger.debug(
+              'NotificationContext',
+              'Skipping local message banner: scheduleNotificationAsync unavailable on this platform'
+            );
+            return;
+          }
+
           try {
             const { data: senderProfile } = await client
               .from('profiles')
@@ -616,6 +645,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
             logger.debug('NotificationContext', `Showed notification for message from ${senderName}`);
           } catch (notifError) {
+            if (isNotificationUnavailableOnWeb(notifError)) {
+              logger.debug(
+                'NotificationContext',
+                'Skipping local message banner: expo-notifications local scheduling unavailable on web'
+              );
+              return;
+            }
             logger.warn('NotificationContext', 'Failed to show message notification:', notifError);
           }
         }
@@ -682,9 +718,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
               : announcement.content
             : 'A new announcement from your school.';
 
-          const canScheduleLocalBanner =
-            Platform.OS !== 'web' &&
-            typeof (Notifications as any)?.scheduleNotificationAsync === 'function';
+          const canScheduleLocalBanner = canScheduleLocalNotification();
           if (!canScheduleLocalBanner) {
             logger.debug(
               'NotificationContext',
@@ -715,6 +749,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
             logger.debug('NotificationContext', 'Showed in-app banner for announcement:', title);
           } catch (notifError) {
+            if (isNotificationUnavailableOnWeb(notifError)) {
+              logger.debug(
+                'NotificationContext',
+                'Skipping local announcement banner: expo-notifications local scheduling unavailable on web'
+              );
+              return;
+            }
             logger.warn('NotificationContext', 'Failed to show announcement notification:', notifError);
           }
         }

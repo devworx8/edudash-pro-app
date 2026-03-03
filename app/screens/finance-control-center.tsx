@@ -10,6 +10,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -26,6 +27,12 @@ import { TAB_ITEMS } from '@/lib/screen-data/finance-control-center.types';
 import { FinanceOverviewTab } from '@/components/finance/FinanceOverviewTab';
 import { FinanceReceivablesTab } from '@/components/finance/FinanceReceivablesTab';
 import { FinanceCollectionsTab } from '@/components/finance/FinanceCollectionsTab';
+import { assertSupabase } from '@/lib/supabase';
+import {
+  FinanceDocumentService,
+  type FinanceDocumentType,
+} from '@/lib/services/finance/FinanceDocumentService';
+import type { FinancePendingPOPRow, PayrollRosterItem } from '@/types/finance';
 import {
   useFinanceControlCenter,
   formatCurrency,
@@ -33,16 +40,38 @@ import {
   pickSectionError,
   CATEGORY_LABELS,
   CATEGORY_COLORS,
-  CATEGORY_OPTIONS,
-  QUEUE_STAGE_ORDER,
   QUEUE_STAGE_LABELS,
   FINANCE_QUEUE_FUNNEL_V1,
 } from '@/hooks/useFinanceControlCenter';
 
+type IssueDocumentSource = 'custom' | 'queue' | 'payroll';
+
+interface FinanceDocumentDraft {
+  source: IssueDocumentSource;
+  documentType: FinanceDocumentType;
+  title: string;
+  description: string;
+  amount: string;
+  paidDate: string;
+  dueDate: string;
+  paymentMethod: string;
+  paymentReference: string;
+  categoryLabel: string;
+  recipientName: string;
+  sourceTag: string;
+  studentId?: string | null;
+  studentName?: string;
+  parentId?: string | null;
+  parentName?: string | null;
+  parentEmail?: string | null;
+}
+
+const todayIso = () => new Date().toISOString().split('T')[0];
+
 export default function FinanceControlCenterScreen() {
   const ctrl = useFinanceControlCenter();
   const {
-    theme, router, alertProps, financeAccess, activeTab, setTab,
+    theme, profile, orgId, router, alertProps, showAlert, financeAccess, activeTab, setTab,
     loading, refreshing, onRefresh, showMonthPicker, setShowMonthPicker,
     monthCursor, setMonthCursor, monthIso, monthLabel, bundle,
     snapshot, receivables, expenses, paymentBreakdown, payrollItems,
@@ -66,6 +95,243 @@ export default function FinanceControlCenterScreen() {
 
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
+  const [showIssueDocumentModal, setShowIssueDocumentModal] = React.useState(false);
+  const [issueDocumentDraft, setIssueDocumentDraft] = React.useState<FinanceDocumentDraft | null>(null);
+  const [issuingDocument, setIssuingDocument] = React.useState(false);
+  const [issueDocumentResult, setIssueDocumentResult] = React.useState<{
+    documentUrl?: string | null;
+    notificationError?: string | null;
+  } | null>(null);
+
+  const openIssueDocumentModal = React.useCallback((draft: FinanceDocumentDraft) => {
+    setIssueDocumentDraft(draft);
+    setIssueDocumentResult(null);
+    setShowIssueDocumentModal(true);
+  }, []);
+
+  const openCustomIssueDocumentModal = React.useCallback(() => {
+    const paidDate = todayIso();
+    openIssueDocumentModal({
+      source: 'custom',
+      documentType: 'invoice',
+      title: `${monthLabel} Finance Document`,
+      description: 'General finance charge',
+      amount: '',
+      paidDate,
+      dueDate: paidDate,
+      paymentMethod: 'bank_transfer',
+      paymentReference: '',
+      categoryLabel: 'General',
+      recipientName: '',
+      sourceTag: 'finance_control_center_manual',
+    });
+  }, [monthLabel, openIssueDocumentModal]);
+
+  const openIssueDocumentForQueue = React.useCallback((item: FinancePendingPOPRow) => {
+    const paidDate = (item.payment_date || item.created_at || new Date().toISOString()).toString().split('T')[0];
+    const dueDate = resolveQueueDisplayMonth(item).split('T')[0];
+    const studentName = `${item.student?.first_name || ''} ${item.student?.last_name || ''}`.trim() || 'Student';
+    const categoryCode = resolveQueueCategory(item);
+
+    openIssueDocumentModal({
+      source: 'queue',
+      documentType: 'receipt',
+      title: `Payment ${item.payment_reference || item.id.slice(0, 8)}`,
+      description: item.description || item.title || 'School fee payment',
+      amount: String(item.payment_amount || ''),
+      paidDate,
+      dueDate,
+      paymentMethod: 'bank_transfer',
+      paymentReference: item.payment_reference || `POP-${item.id.slice(0, 8).toUpperCase()}`,
+      categoryLabel: CATEGORY_LABELS[categoryCode] || 'School Fees',
+      recipientName: studentName,
+      sourceTag: 'finance_control_center_queue',
+      studentId: item.student_id,
+      studentName,
+    });
+  }, [openIssueDocumentModal, resolveQueueCategory, resolveQueueDisplayMonth]);
+
+  const openIssueDocumentForPayroll = React.useCallback((recipient: PayrollRosterItem) => {
+    const paidDate = todayIso();
+    const amount = deriveNetSalary(recipient);
+    const roleLabel = recipient.role_type === 'principal' ? 'Principal' : 'Teacher';
+
+    openIssueDocumentModal({
+      source: 'payroll',
+      documentType: 'receipt',
+      title: `${monthLabel} Payroll ${roleLabel}`,
+      description: `${monthLabel} payroll payout`,
+      amount: amount > 0 ? String(amount) : '',
+      paidDate,
+      dueDate: paidDate,
+      paymentMethod: 'bank_transfer',
+      paymentReference: `${roleLabel.toUpperCase()}-${monthIso.slice(0, 7)}-${recipient.payroll_recipient_id.slice(0, 6).toUpperCase()}`,
+      categoryLabel: 'Payroll',
+      recipientName: recipient.display_name,
+      sourceTag: 'finance_control_center_payroll',
+    });
+  }, [monthIso, monthLabel, openIssueDocumentModal]);
+
+  const resolveParentContext = React.useCallback(async (draft: FinanceDocumentDraft) => {
+    if (draft.parentId || draft.parentEmail) {
+      return {
+        id: draft.parentId || null,
+        name: draft.parentName || null,
+        email: draft.parentEmail || null,
+      };
+    }
+    if (!draft.studentId) return null;
+
+    const supabase = assertSupabase();
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select('parent_id')
+      .eq('id', draft.studentId)
+      .maybeSingle();
+    if (studentError) throw studentError;
+    const parentId = (student as any)?.parent_id;
+    if (!parentId) return null;
+
+    const { data: parent, error: parentError } = await supabase
+      .from('profiles')
+      .select('id, first_name, last_name, email')
+      .eq('id', parentId)
+      .maybeSingle();
+    if (parentError) throw parentError;
+
+    const name = `${(parent as any)?.first_name || ''} ${(parent as any)?.last_name || ''}`.trim();
+    return {
+      id: (parent as any)?.id || parentId,
+      name: name || null,
+      email: (parent as any)?.email || null,
+    };
+  }, []);
+
+  const handleOpenGeneratedDocument = React.useCallback(async () => {
+    if (!issueDocumentResult?.documentUrl) {
+      showAlert({
+        title: 'Document Missing',
+        message: 'The document link is unavailable.',
+        type: 'warning',
+      });
+      return;
+    }
+    try {
+      await Linking.openURL(issueDocumentResult.documentUrl);
+    } catch (error: any) {
+      showAlert({
+        title: 'Open Failed',
+        message: error?.message || 'Could not open document.',
+        type: 'error',
+      });
+    }
+  }, [issueDocumentResult?.documentUrl, showAlert]);
+
+  const handleGenerateIssueDocument = React.useCallback(async (sendToParent: boolean) => {
+    if (!issueDocumentDraft || !profile?.id || !orgId) return;
+    const amount = Number(issueDocumentDraft.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showAlert({
+        title: 'Invalid Amount',
+        message: 'Enter a valid amount greater than zero.',
+        type: 'warning',
+      });
+      return;
+    }
+
+    setIssuingDocument(true);
+    try {
+      const resolvedParent = await resolveParentContext(issueDocumentDraft);
+      const parentReachable = Boolean(resolvedParent?.id || resolvedParent?.email);
+      const issuerName =
+        (profile as any)?.full_name ||
+        `${(profile as any)?.first_name || ''} ${(profile as any)?.last_name || ''}`.trim() ||
+        'School Administrator';
+
+      const result = await FinanceDocumentService.generateAndOptionallySend({
+        organizationId: orgId,
+        documentType: issueDocumentDraft.documentType,
+        title: issueDocumentDraft.title || 'Finance Document',
+        description: issueDocumentDraft.description || 'Payment',
+        amount,
+        paidDate: issueDocumentDraft.paidDate || todayIso(),
+        dueDate: issueDocumentDraft.documentType === 'invoice' ? issueDocumentDraft.dueDate || issueDocumentDraft.paidDate : null,
+        paymentMethod: issueDocumentDraft.paymentMethod || 'manual',
+        paymentReference: issueDocumentDraft.paymentReference || null,
+        categoryLabel: issueDocumentDraft.categoryLabel || 'General',
+        recipientName: issueDocumentDraft.recipientName || issueDocumentDraft.studentName || resolvedParent?.name || 'Recipient',
+        sourceTag: issueDocumentDraft.sourceTag,
+        student: issueDocumentDraft.studentId
+          ? {
+              id: issueDocumentDraft.studentId,
+              firstName: issueDocumentDraft.studentName?.split(' ')[0] || null,
+              lastName: issueDocumentDraft.studentName?.split(' ').slice(1).join(' ') || null,
+            }
+          : null,
+        parent: resolvedParent,
+        issuer: {
+          id: profile.id,
+          name: issuerName,
+        },
+        sendToParent: sendToParent && parentReachable,
+      });
+
+      if (resolvedParent?.id || resolvedParent?.email) {
+        setIssueDocumentDraft((prev) =>
+          prev
+            ? {
+                ...prev,
+                parentId: resolvedParent.id,
+                parentName: resolvedParent.name,
+                parentEmail: resolvedParent.email,
+              }
+            : prev,
+        );
+      }
+      setIssueDocumentResult({
+        documentUrl: result.documentUrl || null,
+        notificationError: result.notificationError || null,
+      });
+
+      if (sendToParent) {
+        if (!parentReachable) {
+          showAlert({
+            title: 'Document Ready',
+            message: 'Generated document, but no linked parent contact was found to send it.',
+            type: 'warning',
+          });
+          return;
+        }
+        showAlert({
+          title: result.notificationError ? 'Document Generated' : 'Document Sent',
+          message: result.notificationError
+            ? result.notificationError
+            : 'Document generated and sent to parent.',
+          type: result.notificationError ? 'warning' : 'success',
+        });
+      } else {
+        showAlert({
+          title: 'Document Ready',
+          message: 'Document generated successfully.',
+          type: 'success',
+        });
+      }
+    } catch (error: any) {
+      showAlert({
+        title: 'Document Error',
+        message: error?.message || 'Failed to generate document.',
+        type: 'error',
+      });
+    } finally {
+      setIssuingDocument(false);
+    }
+  }, [issueDocumentDraft, orgId, profile, resolveParentContext, showAlert]);
+
+  const canSendIssueDocumentToParent = React.useMemo(() => {
+    if (!issueDocumentDraft) return false;
+    if (issueDocumentDraft.source === 'payroll') return false;
+    return Boolean(issueDocumentDraft.parentId || issueDocumentDraft.parentEmail || issueDocumentDraft.studentId);
+  }, [issueDocumentDraft]);
 
   const renderSectionError = (message: string | null) => {
     if (!message) return null;
@@ -276,6 +542,16 @@ export default function FinanceControlCenterScreen() {
                   </Text>
                 </View>
               )}
+              <View style={[styles.queueActions, { marginTop: 4 }]}>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, processing && { opacity: 0.6 }]}
+                  onPress={() => openIssueDocumentForQueue(item)}
+                  disabled={processing}
+                >
+                  <Ionicons name="document-text-outline" size={14} color={theme.text} />
+                  <Text style={styles.secondaryButtonText}> Document</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           );
         })
@@ -346,6 +622,15 @@ export default function FinanceControlCenterScreen() {
                   <Text style={styles.secondaryButtonText}> Advances</Text>
                 </TouchableOpacity>
               </View>
+              <View style={[styles.queueActions, { marginTop: 4 }]}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => openIssueDocumentForPayroll(item)}
+                >
+                  <Ionicons name="document-text-outline" size={14} color={theme.text} />
+                  <Text style={styles.secondaryButtonText}> Document</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           );
         })
@@ -397,6 +682,12 @@ export default function FinanceControlCenterScreen() {
         ) : (
           <Ionicons name="download-outline" size={14} color={theme.primary} />
         )}
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.headerActionBtn, { borderColor: theme.border }]}
+        onPress={openCustomIssueDocumentModal}
+      >
+        <Ionicons name="document-text-outline" size={14} color={theme.primary} />
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.headerActionBtn, { borderColor: theme.border }, snapshot?.month_locked && { opacity: 0.6 }]}
@@ -665,6 +956,211 @@ export default function FinanceControlCenterScreen() {
                 <TouchableOpacity style={styles.primaryButton} onPress={submitSalaryUpdate} disabled={savingSalary}>
                   {savingSalary ? <EduDashSpinner size="small" color="#fff" /> : <Text style={styles.primaryButtonText}>Save Salary</Text>}
                 </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      <Modal
+        visible={showIssueDocumentModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowIssueDocumentModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalKeyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+              <ScrollView
+                style={styles.modalFormScroll}
+                contentContainerStyle={styles.modalFormContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.modalTitle}>Issue Finance Document</Text>
+                <Text style={styles.queueSubtext}>
+                  Source: {issueDocumentDraft?.source || 'custom'}
+                </Text>
+
+                <Text style={styles.inputLabel}>Document Type</Text>
+                <View style={styles.methodChipRow}>
+                  {(['invoice', 'receipt'] as const).map((docType) => {
+                    const selected = issueDocumentDraft?.documentType === docType;
+                    return (
+                      <TouchableOpacity
+                        key={docType}
+                        style={[styles.methodChip, selected && styles.methodChipActive]}
+                        onPress={() =>
+                          setIssueDocumentDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  documentType: docType,
+                                }
+                              : prev,
+                          )
+                        }
+                      >
+                        <Text style={[styles.methodChipText, selected && styles.methodChipTextActive]}>
+                          {docType === 'invoice' ? 'Invoice' : 'Receipt'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.inputLabel}>Title</Text>
+                <TextInput
+                  style={styles.input}
+                  value={issueDocumentDraft?.title || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, title: value } : prev))
+                  }
+                  placeholder="Document title"
+                  placeholderTextColor={theme.textSecondary}
+                />
+
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput
+                  style={[styles.input, { minHeight: 64 }]}
+                  value={issueDocumentDraft?.description || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, description: value } : prev))
+                  }
+                  placeholder="What is this payment for?"
+                  placeholderTextColor={theme.textSecondary}
+                  multiline
+                />
+
+                <Text style={styles.inputLabel}>Recipient Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={issueDocumentDraft?.recipientName || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, recipientName: value } : prev))
+                  }
+                  placeholder="Learner / staff / parent name"
+                  placeholderTextColor={theme.textSecondary}
+                />
+
+                <Text style={styles.inputLabel}>Category Label</Text>
+                <TextInput
+                  style={styles.input}
+                  value={issueDocumentDraft?.categoryLabel || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, categoryLabel: value } : prev))
+                  }
+                  placeholder="Tuition / Payroll / Uniform / Other"
+                  placeholderTextColor={theme.textSecondary}
+                />
+
+                <Text style={styles.inputLabel}>Amount (R)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={issueDocumentDraft?.amount || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, amount: value } : prev))
+                  }
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor={theme.textSecondary}
+                />
+
+                <Text style={styles.inputLabel}>Paid Date (YYYY-MM-DD)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={issueDocumentDraft?.paidDate || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, paidDate: value } : prev))
+                  }
+                  placeholder={todayIso()}
+                  placeholderTextColor={theme.textSecondary}
+                />
+
+                {issueDocumentDraft?.documentType === 'invoice' && (
+                  <>
+                    <Text style={styles.inputLabel}>Due Date (YYYY-MM-DD)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={issueDocumentDraft?.dueDate || ''}
+                      onChangeText={(value) =>
+                        setIssueDocumentDraft((prev) => (prev ? { ...prev, dueDate: value } : prev))
+                      }
+                      placeholder={todayIso()}
+                      placeholderTextColor={theme.textSecondary}
+                    />
+                  </>
+                )}
+
+                <Text style={styles.inputLabel}>Payment Method</Text>
+                <TextInput
+                  style={styles.input}
+                  value={issueDocumentDraft?.paymentMethod || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, paymentMethod: value } : prev))
+                  }
+                  placeholder="bank_transfer"
+                  placeholderTextColor={theme.textSecondary}
+                />
+
+                <Text style={styles.inputLabel}>Reference</Text>
+                <TextInput
+                  style={styles.input}
+                  value={issueDocumentDraft?.paymentReference || ''}
+                  onChangeText={(value) =>
+                    setIssueDocumentDraft((prev) => (prev ? { ...prev, paymentReference: value } : prev))
+                  }
+                  placeholder="Reference code"
+                  placeholderTextColor={theme.textSecondary}
+                />
+
+                {issueDocumentResult?.documentUrl ? (
+                  <TouchableOpacity
+                    style={styles.documentLinkButton}
+                    onPress={handleOpenGeneratedDocument}
+                    disabled={issuingDocument}
+                  >
+                    <Ionicons name="open-outline" size={14} color={theme.primary} />
+                    <Text style={styles.documentLinkText}>View Generated Document</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </ScrollView>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => setShowIssueDocumentModal(false)}
+                  disabled={issuingDocument}
+                >
+                  <Text style={styles.secondaryButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.primaryButton}
+                  onPress={() => handleGenerateIssueDocument(false)}
+                  disabled={issuingDocument}
+                >
+                  {issuingDocument ? (
+                    <EduDashSpinner size="small" color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryButtonText}>Generate</Text>
+                  )}
+                </TouchableOpacity>
+                {canSendIssueDocumentToParent ? (
+                  <TouchableOpacity
+                    style={styles.successButton}
+                    onPress={() => handleGenerateIssueDocument(true)}
+                    disabled={issuingDocument}
+                  >
+                    {issuingDocument ? (
+                      <EduDashSpinner size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.primaryButtonText}>Generate & Send</Text>
+                    )}
+                  </TouchableOpacity>
+                ) : null}
               </View>
             </View>
           </View>
@@ -1073,6 +1569,15 @@ const createStyles = (theme: any) =>
       fontSize: 13,
       fontWeight: '700',
     },
+    successButton: {
+      backgroundColor: theme.success || '#22C55E',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minWidth: 130,
+    },
     secondaryButton: {
       backgroundColor: theme.surface,
       borderRadius: 10,
@@ -1182,6 +1687,24 @@ const createStyles = (theme: any) =>
     },
     methodChipTextActive: {
       color: '#fff',
+    },
+    documentLinkButton: {
+      marginTop: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 6,
+      borderWidth: 1,
+      borderColor: theme.primary + '55',
+      borderRadius: 999,
+      backgroundColor: theme.primary + '14',
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+    },
+    documentLinkText: {
+      color: theme.primary,
+      fontSize: 12,
+      fontWeight: '700',
     },
     modalActions: {
       flexDirection: 'row',

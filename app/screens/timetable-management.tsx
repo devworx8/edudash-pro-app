@@ -16,6 +16,8 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,6 +69,28 @@ function getActivityColor(activityType: string) {
   return ACTIVITY_TYPE_COLORS[activityType] || ACTIVITY_TYPE_COLORS.other;
 }
 
+interface NewSlotForm {
+  subject: string;
+  activityType: string;
+  startTime: string;
+  endTime: string;
+  room: string;
+  notes: string;
+  periodNumber: string;
+  isBreak: boolean;
+}
+
+const DEFAULT_NEW_SLOT_FORM: NewSlotForm = {
+  subject: '',
+  activityType: 'lesson',
+  startTime: '08:00',
+  endTime: '08:30',
+  room: '',
+  notes: '',
+  periodNumber: '',
+  isBreak: false,
+};
+
 export default function TimetableManagementScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
@@ -78,6 +102,9 @@ export default function TimetableManagementScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedDay, setSelectedDay] = useState(new Date().getDay() || 1);
   const [exporting, setExporting] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creatingSlot, setCreatingSlot] = useState(false);
+  const [newSlotForm, setNewSlotForm] = useState<NewSlotForm>(DEFAULT_NEW_SLOT_FORM);
 
   const fetchSlots = useCallback(async () => {
     if (!organizationId) return;
@@ -156,6 +183,77 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
       setExporting(false);
     }
   }, [buildTimetableHTML]);
+
+  const openCreateModal = useCallback(() => {
+    setNewSlotForm(DEFAULT_NEW_SLOT_FORM);
+    setShowCreateModal(true);
+  }, []);
+
+  const closeCreateModal = useCallback(() => {
+    if (creatingSlot) return;
+    setShowCreateModal(false);
+  }, [creatingSlot]);
+
+  const upsertForm = useCallback((patch: Partial<NewSlotForm>) => {
+    setNewSlotForm((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const handleCreateSlot = useCallback(async () => {
+    if (!organizationId) {
+      Alert.alert('Missing school', 'Could not determine your school. Please sign in again.');
+      return;
+    }
+
+    const trimmedSubject = newSlotForm.subject.trim();
+    const trimmedRoom = newSlotForm.room.trim();
+    const trimmedNotes = newSlotForm.notes.trim();
+    const activityType = newSlotForm.activityType.trim() || 'lesson';
+    const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
+    if (!timePattern.test(newSlotForm.startTime) || !timePattern.test(newSlotForm.endTime)) {
+      Alert.alert('Invalid time', 'Use 24-hour format HH:MM (for example 08:30).');
+      return;
+    }
+    if (newSlotForm.endTime <= newSlotForm.startTime) {
+      Alert.alert('Invalid range', 'End time must be after start time.');
+      return;
+    }
+
+    const parsedPeriod = newSlotForm.periodNumber.trim()
+      ? Number.parseInt(newSlotForm.periodNumber.trim(), 10)
+      : null;
+    if (newSlotForm.periodNumber.trim() && (!Number.isFinite(parsedPeriod) || parsedPeriod <= 0)) {
+      Alert.alert('Invalid period', 'Period number must be a positive number.');
+      return;
+    }
+
+    setCreatingSlot(true);
+    try {
+      const supabase = assertSupabase();
+      const { error } = await supabase.from('timetable_slots').insert({
+        school_id: organizationId,
+        day_of_week: selectedDay,
+        start_time: newSlotForm.startTime,
+        end_time: newSlotForm.endTime,
+        subject: trimmedSubject || null,
+        activity_type: activityType,
+        room: trimmedRoom || null,
+        notes: trimmedNotes || null,
+        period_number: parsedPeriod,
+        is_break: newSlotForm.isBreak,
+      });
+
+      if (error) throw error;
+
+      setShowCreateModal(false);
+      await fetchSlots();
+      Alert.alert('Added', `Timetable slot created for ${DAYS[selectedDay]}.`);
+    } catch (err) {
+      logger.error('[Timetable]', 'Failed to create slot', err);
+      Alert.alert('Create failed', 'Could not create the timetable slot. Please try again.');
+    } finally {
+      setCreatingSlot(false);
+    }
+  }, [fetchSlots, newSlotForm, organizationId, selectedDay]);
 
   if (loading) {
     return (
@@ -260,9 +358,133 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
       </ScrollView>
 
       {/* FAB */}
-      <TouchableOpacity style={[styles.fab, { backgroundColor: theme.primary }]} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={[styles.fab, { backgroundColor: theme.primary }]}
+        activeOpacity={0.8}
+        onPress={openCreateModal}
+      >
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
+
+      <Modal
+        visible={showCreateModal}
+        transparent
+        animationType="fade"
+        onRequestClose={closeCreateModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Timetable Slot</Text>
+              <TouchableOpacity onPress={closeCreateModal} disabled={creatingSlot}>
+                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>Day: {DAYS[selectedDay]}</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Subject (optional)"
+              placeholderTextColor={theme.textSecondary}
+              value={newSlotForm.subject}
+              onChangeText={(text) => upsertForm({ subject: text })}
+            />
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
+              {Object.keys(ACTIVITY_TYPE_COLORS).map((type) => {
+                const selected = newSlotForm.activityType === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.typeChip, selected && styles.typeChipActive]}
+                    onPress={() => upsertForm({ activityType: type })}
+                  >
+                    <Text style={[styles.typeChipText, selected && styles.typeChipTextActive]}>
+                      {ACTIVITY_TYPE_COLORS[type]?.label || type}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.rowInputs}>
+              <TextInput
+                style={[styles.input, styles.rowInput]}
+                placeholder="Start (HH:MM)"
+                placeholderTextColor={theme.textSecondary}
+                value={newSlotForm.startTime}
+                onChangeText={(text) => upsertForm({ startTime: text })}
+                autoCapitalize="none"
+              />
+              <TextInput
+                style={[styles.input, styles.rowInput]}
+                placeholder="End (HH:MM)"
+                placeholderTextColor={theme.textSecondary}
+                value={newSlotForm.endTime}
+                onChangeText={(text) => upsertForm({ endTime: text })}
+                autoCapitalize="none"
+              />
+            </View>
+
+            <View style={styles.rowInputs}>
+              <TextInput
+                style={[styles.input, styles.rowInput]}
+                placeholder="Room (optional)"
+                placeholderTextColor={theme.textSecondary}
+                value={newSlotForm.room}
+                onChangeText={(text) => upsertForm({ room: text })}
+              />
+              <TextInput
+                style={[styles.input, styles.rowInput]}
+                placeholder="Period # (optional)"
+                placeholderTextColor={theme.textSecondary}
+                value={newSlotForm.periodNumber}
+                onChangeText={(text) => upsertForm({ periodNumber: text })}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <TextInput
+              style={[styles.input, styles.inputMultiline]}
+              placeholder="Notes (optional)"
+              placeholderTextColor={theme.textSecondary}
+              value={newSlotForm.notes}
+              onChangeText={(text) => upsertForm({ notes: text })}
+              multiline
+              numberOfLines={3}
+            />
+
+            <TouchableOpacity
+              style={[styles.toggleRow, newSlotForm.isBreak && styles.toggleRowActive]}
+              onPress={() => upsertForm({ isBreak: !newSlotForm.isBreak })}
+            >
+              <Ionicons
+                name={newSlotForm.isBreak ? 'checkbox' : 'square-outline'}
+                size={18}
+                color={newSlotForm.isBreak ? theme.primary : theme.textSecondary}
+              />
+              <Text style={styles.toggleRowText}>Mark as break period</Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={closeCreateModal}
+                disabled={creatingSlot}
+              >
+                <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary, creatingSlot && styles.actionBtnDisabled]}
+                onPress={handleCreateSlot}
+                disabled={creatingSlot}
+              >
+                <Text style={styles.modalButtonPrimaryText}>{creatingSlot ? 'Saving...' : 'Save Slot'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </DesktopLayout>
   );
 }
@@ -337,4 +559,105 @@ const createStyles = (theme: any) =>
       elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 },
       shadowOpacity: 0.2, shadowRadius: 5,
     },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(10, 16, 30, 0.7)',
+      justifyContent: 'center',
+      padding: 16,
+    },
+    modalCard: {
+      backgroundColor: theme.cardBackground || theme.surface,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.border,
+      padding: 14,
+      maxHeight: '90%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+    },
+    modalTitle: { fontSize: 18, fontWeight: '700', color: theme.text },
+    modalSubtitle: { fontSize: 13, color: theme.textSecondary, marginBottom: 12 },
+    input: {
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: theme.text,
+      marginBottom: 10,
+      fontSize: 14,
+    },
+    inputMultiline: {
+      minHeight: 78,
+      textAlignVertical: 'top',
+    },
+    rowInputs: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    rowInput: {
+      flex: 1,
+    },
+    chipsRow: {
+      marginBottom: 10,
+    },
+    typeChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.border,
+      marginRight: 6,
+      backgroundColor: theme.background,
+    },
+    typeChipActive: {
+      borderColor: theme.primary,
+      backgroundColor: `${theme.primary}20`,
+    },
+    typeChipText: { fontSize: 12, color: theme.textSecondary, fontWeight: '600' },
+    typeChipTextActive: { color: theme.primary },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      borderWidth: 1,
+      borderColor: theme.border,
+      borderRadius: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 10,
+      marginBottom: 10,
+      backgroundColor: theme.background,
+    },
+    toggleRowActive: {
+      borderColor: theme.primary,
+      backgroundColor: `${theme.primary}15`,
+    },
+    toggleRowText: { fontSize: 13, color: theme.text },
+    modalActions: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 4,
+    },
+    modalButton: {
+      flex: 1,
+      borderRadius: 10,
+      paddingVertical: 11,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    modalButtonPrimary: {
+      backgroundColor: theme.primary,
+    },
+    modalButtonSecondary: {
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: theme.border,
+    },
+    modalButtonPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    modalButtonSecondaryText: { color: theme.text, fontWeight: '700', fontSize: 14 },
   });

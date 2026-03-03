@@ -32,9 +32,11 @@ export const CALL_NOTIFICATION_EVENTS = {
   SPEAKER: 'call:notification:speaker',
 } as const;
 
-// Feature flag to disable foreground service while debugging crash
-// Set to false to completely skip foreground service (for debugging)
-const ENABLE_FOREGROUND_SERVICE = true; // Re-enabled after fixing icon issue
+// Foreground service can be unstable on some Android device/ROM combinations.
+// Keep it opt-in via env flag while preserving call stability.
+// Set EXPO_PUBLIC_CALL_FOREGROUND_SERVICE_ENABLED=true to enable.
+const ENABLE_FOREGROUND_SERVICE =
+  String(process.env.EXPO_PUBLIC_CALL_FOREGROUND_SERVICE_ENABLED || '').toLowerCase() === 'true';
 
 // Conditionally import InCallManager
 let InCallManager: any = null;

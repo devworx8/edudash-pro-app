@@ -7,6 +7,35 @@ import { inferFeeCategoryCode } from '@/lib/utils/feeUtils';
 import { getDateOnlyISO, getMonthEndISO, getMonthStartISO, parseDateValue } from '@/lib/utils/dateUtils';
 import { POP_QUERY_KEYS } from './queryKeys';
 import type { POPUpload, CreatePOPUploadData } from './types';
+
+const mapPopUploadInsertError = (error: unknown): string => {
+  const message = String((error as any)?.message || '');
+  const details = String((error as any)?.details || '');
+  const hint = String((error as any)?.hint || '');
+  const combined = `${message} ${details} ${hint}`.toLowerCase();
+
+  if (combined.includes('valid_amount') || combined.includes('payment_amount')) {
+    return 'Amount paid is required and must be greater than R0.00.';
+  }
+
+  if (combined.includes('valid_payment_fields') || combined.includes('payment_date')) {
+    return 'Payment date is required for proof of payment uploads.';
+  }
+
+  if (
+    combined.includes('already exists for this month') ||
+    combined.includes('duplicate') ||
+    combined.includes('idx_pop_uploads_unique_month')
+  ) {
+    return 'A proof of payment for this learner, month, and category is already pending or approved.';
+  }
+
+  if (combined.includes('row-level security') || combined.includes('policy')) {
+    return 'You can only upload POP for your linked learner at this school.';
+  }
+
+  return message || 'Failed to save upload.';
+};
 export const useCreatePOPUpload = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -62,7 +91,7 @@ export const useCreatePOPUpload = () => {
         
       if (dbError) {
         logger.error('Database insert failed:', dbError);
-        throw new Error(`Failed to save upload: ${dbError.message}`);
+        throw new Error(mapPopUploadInsertError(dbError));
       }
       
       if (newUpload?.upload_type === 'proof_of_payment') {
@@ -105,6 +134,10 @@ export const useCreatePOPUpload = () => {
 };
 // Validate payment-specific rules
 async function validatePaymentUpload(data: CreatePOPUploadData): Promise<void> {
+  if (!Number.isFinite(Number(data.payment_amount)) || Number(data.payment_amount) <= 0) {
+    throw new Error('Amount paid is required and must be greater than R0.00.');
+  }
+
   if (!data.payment_for_month && !data.payment_date) {
     throw new Error('Please select the billing month for this payment.');
   }
@@ -178,6 +211,11 @@ function buildDatabaseRecord(
   userId: string,
   preschoolId: string
 ) {
+  const resolvedPaymentDate = getDateOnlyISO(data.payment_date || data.payment_for_month || new Date().toISOString());
+  const resolvedPaymentForMonth = getMonthStartISO(data.payment_for_month || data.payment_date || new Date().toISOString(), {
+    recoverUtcMonthBoundary: Boolean(data.payment_for_month),
+  });
+
   return {
     student_id: data.student_id,
     uploaded_by: userId,
@@ -191,12 +229,10 @@ function buildDatabaseRecord(
     file_type: uploadResult.fileType || 'unknown',
     
     ...(data.upload_type === 'proof_of_payment' && {
-      payment_amount: data.payment_amount ?? 0,
+      payment_amount: Number(data.payment_amount),
       payment_method: data.payment_method,
-      payment_date: getDateOnlyISO(data.payment_date),
-      payment_for_month: getMonthStartISO(data.payment_for_month || data.payment_date, {
-        recoverUtcMonthBoundary: Boolean(data.payment_for_month),
-      }),
+      payment_date: resolvedPaymentDate,
+      payment_for_month: resolvedPaymentForMonth,
       category_code: data.category_code || inferFeeCategoryCode(data.description || data.title || 'tuition'),
       payment_reference: data.payment_reference,
       ...(data.advance_months && data.advance_months > 0 && {

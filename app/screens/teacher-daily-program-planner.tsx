@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,51 @@ import { useTeacherDashboard } from '@/hooks/useDashboardData';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { buildReminderEventsFromBlocks, useNextActivityReminder } from '@/hooks/useNextActivityReminder';
 import { resolveSchoolTypeFromProfile } from '@/lib/schoolTypeResolver';
+import { assertSupabase } from '@/lib/supabase';
+import { toast } from '@/components/ui/ToastProvider';
+import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
+import { invokeAIGatewayWithRetry, formatAIGatewayErrorMessage } from '@/lib/ai-gateway/invokeWithRetry';
+import { LessonGeneratorService } from '@/lib/ai/lessonGenerator';
+import { incrementUsage, logUsageEvent } from '@/lib/ai/usage';
+
+const WEEKDAYS_MONDAY_TO_FRIDAY = [1, 2, 3, 4, 5] as const;
+
+const WEEKDAY_LABELS: Record<number, string> = {
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+  7: 'Sunday',
+};
+
+const LESSON_OUTPUT_CONTRACT = [
+  'Return ONLY valid JSON. Do not return markdown, prose, or code fences.',
+  'Schema:',
+  '{',
+  '  "lessonPlan": {',
+  '    "title": "string",',
+  '    "summary": "string",',
+  '    "objectives": ["string"],',
+  '    "materials": ["string"],',
+  '    "steps": [',
+  '      {',
+  '        "title": "string",',
+  '        "minutes": 10,',
+  '        "objective": "string",',
+  '        "instructions": ["string"],',
+  '        "teacherPrompt": "string",',
+  '        "example": "string"',
+  '      }',
+  '    ],',
+  '    "assessment": ["string"],',
+  '    "differentiation": { "support": "string", "extension": "string" },',
+  '    "closure": "string",',
+  '    "durationMinutes": 45',
+  '  }',
+  '}',
+].join('\n');
 
 function toWeekdayMondayFirst(value: Date): number {
   return value.getDay() === 0 ? 7 : value.getDay();
@@ -48,6 +93,34 @@ const buildRoutineContext = (routine: {
   ].join('\n');
 };
 
+type WeekBlockRow = {
+  title: string | null;
+  block_type: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  day_of_week: number | null;
+};
+
+function inferSubjectFromContext(value: string): string {
+  const source = value.toLowerCase();
+  if (/(afrikaans|afrikaans huistaal|eerste addisionele taal)/.test(source)) return 'Afrikaans';
+  if (/(english|language arts|grammar|reading|writing|comprehension)/.test(source)) return 'English';
+  if (/(math|mathematics|numeracy|algebra|fractions|geometry|division|multiplication)/.test(source)) return 'Mathematics';
+  if (/(science|natural science|life science|physics|chemistry)/.test(source)) return 'Natural Sciences';
+  if (/(social science|history|geography|ems|economics)/.test(source)) return 'Social Sciences';
+  if (/(technology|robotics|coding|computer|ict|digital)/.test(source)) return 'Technology';
+  if (/(life orientation|wellness|health|sport)/.test(source)) return 'Life Orientation';
+  return 'General Studies';
+}
+
+function normalizeGradeLevelNumber(rawValue: string): number {
+  const match = String(rawValue || '').match(/(\d{1,2})/);
+  if (!match) return 3;
+  const parsed = Number(match[1]);
+  if (!Number.isFinite(parsed)) return 3;
+  return Math.max(1, Math.min(parsed, 12));
+}
+
 export default function TeacherDailyProgramPlannerScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
@@ -57,6 +130,7 @@ export default function TeacherDailyProgramPlannerScreen() {
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const isCompact = width < 760;
   const [reminderSoundEnabled, setReminderSoundEnabled] = useState(true);
+  const [weeklyGenerationPending, setWeeklyGenerationPending] = useState(false);
   const resolvedSchoolType = useMemo(() => resolveSchoolTypeFromProfile(profile), [profile]);
   const alignedLessonRoute = resolvedSchoolType === 'k12_school'
     ? '/screens/ai-lesson-generator'
@@ -103,6 +177,259 @@ export default function TeacherDailyProgramPlannerScreen() {
     soundEnabled: reminderSoundEnabled,
     enabled: !!routine && reminderEvents.length > 0,
   });
+
+  const handleGenerateWeekLessons = useCallback(async () => {
+    if (!routine?.weeklyProgramId) {
+      toast.warn('No published weekly program found for this routine.');
+      return;
+    }
+
+    if (weeklyGenerationPending) return;
+
+    setWeeklyGenerationPending(true);
+    const supabase = assertSupabase();
+
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const authUserId = String(authData?.user?.id || '');
+      if (!authUserId) {
+        toast.error('You are not signed in. Please sign in and try again.');
+        return;
+      }
+
+      const { data: teacherProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id,preschool_id,organization_id')
+        .or(`auth_user_id.eq.${authUserId},id.eq.${authUserId}`)
+        .maybeSingle();
+
+      if (profileError) {
+        throw new Error(`Profile lookup failed: ${profileError.message}`);
+      }
+      if (!teacherProfile) {
+        toast.error('Could not find your teacher profile.');
+        return;
+      }
+
+      const schoolId = teacherProfile.preschool_id || teacherProfile.organization_id;
+      if (!schoolId) {
+        toast.error('Missing school context. Please contact support.');
+        return;
+      }
+
+      const { data: weekBlocks, error: weekBlocksError } = await supabase
+        .from('daily_program_blocks')
+        .select('title,block_type,start_time,end_time,day_of_week,block_order')
+        .eq('weekly_program_id', routine.weeklyProgramId)
+        .in('day_of_week', [...WEEKDAYS_MONDAY_TO_FRIDAY])
+        .order('day_of_week', { ascending: true })
+        .order('block_order', { ascending: true });
+
+      if (weekBlocksError) {
+        throw new Error(`Weekly block fetch failed: ${weekBlocksError.message}`);
+      }
+
+      const normalizedBlocks = (weekBlocks || []) as WeekBlockRow[];
+      const activeWeekdays = WEEKDAYS_MONDAY_TO_FRIDAY.filter((day) =>
+        normalizedBlocks.some((block) => Number(block.day_of_week || 0) === day),
+      );
+
+      if (activeWeekdays.length === 0) {
+        toast.warn('No Monday-Friday blocks found in this weekly program.');
+        return;
+      }
+
+      const gate = await canUseFeature('lesson_generation', activeWeekdays.length);
+      if (!gate.allowed) {
+        const status = gate.status || await getQuotaStatus('lesson_generation');
+        Alert.alert(
+          'Monthly limit reached',
+          `You need ${activeWeekdays.length} generations, but only ${status.remaining} are available.`,
+          [{ text: 'OK', style: 'default' }],
+        );
+        return;
+      }
+
+      let categoryId: string | null = null;
+      const { data: categoryRows } = await supabase
+        .from('lesson_categories')
+        .select('id')
+        .limit(1);
+      if (categoryRows?.[0]?.id) {
+        categoryId = categoryRows[0].id;
+      } else {
+        const { data: createdCategory, error: categoryError } = await supabase
+          .from('lesson_categories')
+          .insert({
+            name: 'General',
+            description: 'Auto-generated from weekly routine',
+          })
+          .select('id')
+          .single();
+        if (categoryError) {
+          throw new Error(`Category setup failed: ${categoryError.message}`);
+        }
+        categoryId = createdCategory?.id || null;
+      }
+
+      if (!categoryId) {
+        throw new Error('No lesson category available for saving lessons.');
+      }
+
+      let classDescriptor = 'Current class';
+      let gradeLevel = 3;
+      if (routine.classId) {
+        const { data: classRow } = await supabase
+          .from('classes')
+          .select('name,grade,grade_level')
+          .eq('id', routine.classId)
+          .maybeSingle();
+        if (classRow?.name) classDescriptor = classRow.name;
+        const gradeHint = String(classRow?.grade || classRow?.grade_level || '');
+        if (gradeHint) gradeLevel = normalizeGradeLevelNumber(gradeHint);
+      }
+
+      let created = 0;
+      let failed = 0;
+      let skipped = 0;
+      const warnings: string[] = [];
+
+      for (const dayOfWeek of WEEKDAYS_MONDAY_TO_FRIDAY) {
+        const dayBlocks = normalizedBlocks.filter((block) => Number(block.day_of_week || 0) === dayOfWeek);
+        if (dayBlocks.length === 0) {
+          skipped += 1;
+          continue;
+        }
+
+        const weekdayLabel = WEEKDAY_LABELS[dayOfWeek] || `Day ${dayOfWeek}`;
+        const objectiveList = dayBlocks
+          .map((block) => String(block.title || '').trim())
+          .filter(Boolean)
+          .slice(0, 5);
+        const objectiveSeed = objectiveList.join('; ');
+        const firstBlockTitle = objectiveList[0] || `${routine.title || 'Weekly routine'} focus`;
+        const subjectContextSource = [
+          routine.title || '',
+          routine.summary || '',
+          ...objectiveList,
+        ].join(' ');
+        const subject = inferSubjectFromContext(subjectContextSource);
+        const routineContext = dayBlocks
+          .map((block) => {
+            const start = String(block.start_time || '').trim();
+            const end = String(block.end_time || '').trim();
+            const timeLabel = start && end ? `${start}-${end}` : start || 'TBD';
+            return `${timeLabel} [${String(block.block_type || 'learning')}] ${String(block.title || 'Routine block')}`;
+          })
+          .join('\n');
+
+        const prompt = [
+          `Generate a CAPS-aligned lesson plan for ${weekdayLabel}.`,
+          `Class: ${classDescriptor}.`,
+          `Grade: ${gradeLevel}.`,
+          `Subject: ${subject}.`,
+          `Topic: ${firstBlockTitle}.`,
+          `Learning objectives: ${objectiveSeed || 'Use the routine blocks to derive objectives.'}.`,
+          'Include warm-up, guided activity, independent work, assessment, differentiation, and closure.',
+          `Routine context for ${weekdayLabel}:\n${routineContext}`,
+          LESSON_OUTPUT_CONTRACT,
+        ].join('\n');
+
+        const payload = {
+          action: 'lesson_generation',
+          prompt,
+          topic: `${firstBlockTitle} (${weekdayLabel})`,
+          subject,
+          gradeLevel,
+          duration: 45,
+          objectives: objectiveList,
+          language: 'en',
+          model: process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
+          context: `Weekly program ${routine.weeklyProgramId} • ${weekdayLabel}\n${routineContext}`,
+        };
+
+        const { data, error } = await invokeAIGatewayWithRetry(payload, {
+          retries: 1,
+          retryDelayMs: 1200,
+        });
+
+        if (error) {
+          failed += 1;
+          warnings.push(`${weekdayLabel}: ${formatAIGatewayErrorMessage(error, 'Generation failed')}`);
+          continue;
+        }
+
+        const lessonContent = String(data?.content || '').trim();
+        if (!lessonContent) {
+          failed += 1;
+          warnings.push(`${weekdayLabel}: AI returned empty lesson content.`);
+          continue;
+        }
+
+        const saved = await LessonGeneratorService.saveGeneratedLesson({
+          lesson: {
+            title: `${weekdayLabel}: ${firstBlockTitle}`,
+            description: `Auto-generated from weekly routine (${weekdayLabel}).`,
+            content: lessonContent,
+          },
+          teacherId: teacherProfile.id,
+          preschoolId: String(schoolId),
+          ageGroupId: resolvedSchoolType === 'k12_school' ? 'n/a' : 'preschool',
+          categoryId,
+          template: { duration: 45, complexity: 'moderate' },
+          isPublished: true,
+          subject,
+        });
+
+        if (!saved.success) {
+          failed += 1;
+          warnings.push(`${weekdayLabel}: ${saved.error || 'Could not save generated lesson.'}`);
+          continue;
+        }
+
+        created += 1;
+        try {
+          await incrementUsage('lesson_generation', 1);
+          await logUsageEvent({
+            feature: 'lesson_generation',
+            model: String(payload.model),
+            tokensIn: Number(data?.usage?.input_tokens || 0),
+            tokensOut: Number(data?.usage?.output_tokens || 0),
+            estCostCents: Number(data?.cost || 0),
+            timestamp: new Date().toISOString(),
+          });
+        } catch {
+          // Usage logging failures are non-fatal for batch lesson generation.
+        }
+      }
+
+      const summary = `Created ${created} lesson(s), skipped ${skipped}, failed ${failed}.`;
+      if (created > 0) {
+        toast.success(`Weekly generation complete. ${summary}`);
+        Alert.alert('Week lessons generated', summary, [
+          { text: 'Stay here', style: 'cancel' },
+          { text: 'Open lesson plans', onPress: () => router.push('/screens/teacher-lessons') },
+        ]);
+      } else {
+        toast.error(`No lessons were created. ${summary}`);
+      }
+
+      if (warnings.length > 0) {
+        const firstWarning = warnings[0];
+        const remaining = warnings.length - 1;
+        toast.warn(
+          remaining > 0
+            ? `${firstWarning} (+${remaining} more warning${remaining > 1 ? 's' : ''})`
+            : firstWarning,
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to generate week lessons';
+      toast.error(message);
+    } finally {
+      setWeeklyGenerationPending(false);
+    }
+  }, [routine, weeklyGenerationPending, resolvedSchoolType]);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -222,6 +549,20 @@ export default function TeacherDailyProgramPlannerScreen() {
             >
               <Ionicons name="sparkles-outline" size={18} color="#fff" />
               <Text style={styles.actionText}>Generate lesson from routine</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, weeklyGenerationPending && styles.actionButtonDisabled]}
+              onPress={handleGenerateWeekLessons}
+              disabled={weeklyGenerationPending || !routine}
+            >
+              {weeklyGenerationPending ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Ionicons name="calendar-outline" size={18} color="#fff" />
+              )}
+              <Text style={styles.actionText}>
+                {weeklyGenerationPending ? 'Generating Mon-Fri lessons...' : 'Generate week lessons (Mon-Fri)'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/screens/teacher-lessons')}>
               <Ionicons name="book-outline" size={18} color="#fff" />
@@ -523,6 +864,9 @@ const createStyles = (theme: any) =>
       color: '#fff',
       fontSize: 14,
       fontWeight: '700',
+    },
+    actionButtonDisabled: {
+      opacity: 0.8,
     },
     secondaryButton: {
       minHeight: 46,

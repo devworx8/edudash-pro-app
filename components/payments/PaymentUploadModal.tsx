@@ -49,6 +49,57 @@ const CATEGORY_OPTIONS: Array<{ code: FeeCategoryCode; label: string }> = [
   { code: 'ad_hoc', label: 'Other' },
 ];
 
+const parsePaymentAmountInput = (value: string): number => {
+  const raw = String(value || '').replace(/[Rr]/g, '').replace(/\s/g, '');
+  if (!raw) return Number.NaN;
+
+  const lastComma = raw.lastIndexOf(',');
+  const lastDot = raw.lastIndexOf('.');
+
+  let normalized = raw;
+  if (lastComma !== -1 && lastDot !== -1) {
+    // If both separators exist, treat the last separator as decimal and strip the other.
+    normalized =
+      lastComma > lastDot
+        ? raw.replace(/\./g, '').replace(',', '.')
+        : raw.replace(/,/g, '');
+  } else if (lastComma !== -1) {
+    normalized = raw.replace(',', '.');
+  }
+
+  const amount = Number.parseFloat(normalized);
+  return Number.isFinite(amount) ? amount : Number.NaN;
+};
+
+const mapPopUploadInsertError = (error: unknown): string => {
+  const message = String((error as any)?.message || '');
+  const details = String((error as any)?.details || '');
+  const hint = String((error as any)?.hint || '');
+  const combined = `${message} ${details} ${hint}`.toLowerCase();
+
+  if (combined.includes('valid_amount') || combined.includes('payment_amount')) {
+    return 'Amount paid is required and must be greater than R0.00.';
+  }
+
+  if (combined.includes('valid_payment_fields') || combined.includes('payment_date')) {
+    return 'Payment date and month are required for POP uploads.';
+  }
+
+  if (
+    combined.includes('already exists for this month') ||
+    combined.includes('duplicate') ||
+    combined.includes('idx_pop_uploads_unique_month')
+  ) {
+    return 'A proof of payment for this learner, month, and category is already pending or approved.';
+  }
+
+  if (combined.includes('row-level security') || combined.includes('policy')) {
+    return 'You can only upload POP for your linked learner at this school.';
+  }
+
+  return message || 'Failed to save proof of payment';
+};
+
 export function PaymentUploadModal({
   visible,
   onClose,
@@ -102,9 +153,16 @@ export function PaymentUploadModal({
   const paymentForLabel = paymentForMonth
     ? paymentForMonth.toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
     : null;
+  const paymentAmountValue = parsePaymentAmountInput(paymentAmount);
+  const hasValidAmount = Number.isFinite(paymentAmountValue) && paymentAmountValue > 0;
   const hasSuggestedPaymentForMonth = Boolean(paymentForDate);
   const showPaymentForField = !isUniformPayment;
-  const canSubmit = Boolean(selectedFile) && !uploading && (paymentForMonth || isUniformPayment) && Boolean(categoryCode);
+  const canSubmit =
+    Boolean(selectedFile) &&
+    !uploading &&
+    (paymentForMonth || isUniformPayment) &&
+    Boolean(categoryCode) &&
+    hasValidAmount;
 
   // Track previous visible state to only reset fields on open transition (false → true),
   // not on every re-render while modal is open (which caused infinite setState loops).
@@ -223,6 +281,10 @@ export function PaymentUploadModal({
       alert.showWarning('Select Month', 'Please choose the month you are paying for.');
       return;
     }
+    if (!hasValidAmount) {
+      alert.showWarning('Amount Required', 'Enter an amount greater than R0.00 before uploading.');
+      return;
+    }
 
     setUploading(true);
     try {
@@ -325,7 +387,7 @@ export function PaymentUploadModal({
         : 'A parent';
 
       const finalPreschoolId = selectedChild?.preschool_id || preschoolId;
-      const paymentAmountNum = paymentAmount ? parseFloat(paymentAmount) : 0;
+      const paymentAmountNum = paymentAmountValue;
       const paymentForMonthValue = effectivePaymentForMonth
         ? new Date(effectivePaymentForMonth.getFullYear(), effectivePaymentForMonth.getMonth(), 1)
             .toISOString()
@@ -363,7 +425,7 @@ export function PaymentUploadModal({
         .select()
         .single();
 
-      if (dbError) throw dbError;
+      if (dbError) throw new Error(mapPopUploadInsertError(dbError));
 
       // Notify principal of new POP submission
       if (finalPreschoolId && insertedPOP) {
@@ -565,7 +627,7 @@ export function PaymentUploadModal({
             />
           </View>
 
-          <Text style={styles.modalLabel}>Amount Paid (Optional)</Text>
+          <Text style={styles.modalLabel}>Amount Paid *</Text>
           <View style={styles.inputContainer}>
             <Text style={styles.currencyPrefix}>R</Text>
             <TextInput
