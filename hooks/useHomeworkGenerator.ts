@@ -14,6 +14,7 @@ import { incrementUsage, logUsageEvent } from '@/lib/ai/usage';
 import { ParentToolRegistry } from '@/services/dash-ai/ParentToolRegistry';
 import { logger } from '@/lib/logger';
 import { buildSystemPrompt, parseHomeworkResponse } from './utils/homeworkHelpers';
+import type { HomeworkPipelineMode } from '@/lib/homework/pipelineResolver';
 
 export type HomeworkGenOptions = {
   question: string;
@@ -23,6 +24,7 @@ export type HomeworkGenOptions = {
   context?: string;
   model?: string;
   studentId?: string;  // NEW: for context retrieval and tool usage
+  pipelineMode?: HomeworkPipelineMode;
 };
 
 export interface HomeworkResult {
@@ -116,6 +118,7 @@ export function useHomeworkGenerator() {
                 subject: opts.subject,
                 grade_level: opts.gradeLevel,
                 student_id: opts.studentId || null,
+                pipeline_mode: opts.pipelineMode || 'k12_exam_prep',
               },
             }
           });

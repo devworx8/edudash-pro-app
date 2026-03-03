@@ -19,9 +19,12 @@ import { toast } from '@/components/ui/ToastProvider'
 import { useHomeworkHelperModels } from '@/hooks/useAIModelSelection'
 import { useTheme } from '@/contexts/ThemeContext'
 import { FeatureQuotaBar } from '@/components/ai/FeatureQuotaBar'
+import { useAuth } from '@/contexts/AuthContext'
+import { resolveHomeworkPipelineFromProfile } from '@/lib/homework/pipelineResolver'
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function AIHomeworkHelperScreen() {
+  const { profile } = useAuth()
   const { theme } = useTheme()
   const [question, setQuestion] = useState('Explain how to solve long division: 156 ÷ 12 step by step for a Grade 4 learner.')
   const [subject, setSubject] = useState('Mathematics')
@@ -38,6 +41,12 @@ export default function AIHomeworkHelperScreen() {
 
   const flags = getFeatureFlagsSync()
   const { availableModels, selectedModel, setSelectedModel, quotas } = useHomeworkHelperModels()
+  const pipelineConfig = resolveHomeworkPipelineFromProfile(profile)
+  const isPreschoolPipeline = pipelineConfig.mode === 'preschool_activity_pack'
+  const screenTitle = isPreschoolPipeline ? 'AI Activity Helper' : 'AI Homework Helper'
+  const screenSubtitle = isPreschoolPipeline
+    ? 'Preschool home activity packs from worksheets and notes'
+    : 'Child-safe, step-by-step guidance'
   const AI_ENABLED = (process.env.EXPO_PUBLIC_AI_ENABLED === 'true') || (process.env.EXPO_PUBLIC_ENABLE_AI_FEATURES === 'true')
   const aiHelperEnabled = AI_ENABLED && flags.ai_homework_help !== false
 
@@ -107,10 +116,11 @@ export default function AIHomeworkHelperScreen() {
       track('edudash.ai.helper.started', { subject })
       const response = await generate({
         question: question,
-        subject,
-        gradeLevel: 4,
-        difficulty: 'medium',
+        subject: subject.trim() || (isPreschoolPipeline ? 'Early Learning' : 'Mathematics'),
+        gradeLevel: pipelineConfig.defaultGradeLevel,
+        difficulty: pipelineConfig.defaultDifficulty,
         model: selectedModel,
+        pipelineMode: pipelineConfig.mode,
       })
       // Extract text from HomeworkResult object
       const responseText = response?.text || (typeof response === 'string' ? response : String(response || ''))
@@ -136,8 +146,8 @@ export default function AIHomeworkHelperScreen() {
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: theme.background }]}>
       <ScreenHeader 
-        title="AI Homework Helper" 
-        subtitle="Child-safe, step-by-step guidance" 
+        title={screenTitle}
+        subtitle={screenSubtitle}
       />
       <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
         <ModelInUseIndicator modelId={selectedModel} label="Using" showCostDots compact />
@@ -159,6 +169,13 @@ export default function AIHomeworkHelperScreen() {
         )}
 
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+          <View style={[styles.pipelineChip, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+            <Ionicons name={isPreschoolPipeline ? 'flower-outline' : 'school-outline'} size={14} color={theme.textSecondary} />
+            <Text style={[styles.pipelineChipText, { color: theme.textSecondary }]}>
+              {isPreschoolPipeline ? 'Preschool pipeline active' : 'K-12 pipeline active'}
+            </Text>
+          </View>
+
           {/* Model selector */}
           <ModelSelectorChips
             availableModels={availableModels}
@@ -174,7 +191,7 @@ export default function AIHomeworkHelperScreen() {
             style={[styles.input, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]}
             value={subject}
             onChangeText={setSubject}
-            placeholder="e.g., Mathematics"
+            placeholder={pipelineConfig.subjectPlaceholder}
             placeholderTextColor={theme.textSecondary}
           />
 
@@ -183,7 +200,7 @@ export default function AIHomeworkHelperScreen() {
             style={[styles.input, styles.textArea, { borderColor: theme.border, backgroundColor: theme.surface, color: theme.text }]}
             value={question}
             onChangeText={setQuestion}
-            placeholder="Paste or type the question here"
+            placeholder={pipelineConfig.questionPlaceholder}
             placeholderTextColor={theme.textSecondary}
             multiline
           />
@@ -229,6 +246,18 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 13, marginBottom: 12 },
   disabledBanner: { padding: 8, borderRadius: 8, marginBottom: 12, borderWidth: StyleSheet.hairlineWidth },
   card: { borderRadius: 12, padding: 12, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12 },
+  pipelineChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 10,
+  },
+  pipelineChipText: { fontSize: 12, fontWeight: '600' },
   label: { fontSize: 12, marginBottom: 6 },
   input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
   textArea: { minHeight: 120 },

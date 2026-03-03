@@ -47,7 +47,7 @@ function getSchoolTypeDescription(schoolType: string): string {
 }
 
 export default function SubscriptionSetupScreen() {
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { refresh: refreshSubscription } = useSubscription();
   const params = useLocalSearchParams() as Partial<RouteParams>;
   const [plans, setPlans] = useState<NormalizedPlan[]>([]);
@@ -413,7 +413,7 @@ export default function SubscriptionSetupScreen() {
       const checkoutInput = {
         scope: scope,
         schoolId: scope === 'school' && schoolId ? schoolId : undefined,
-        userId: scope === 'user' ? profile?.id : undefined,
+        userId: scope === 'user' ? (user?.id || profile?.id) : undefined,
         planTier: plan.tier,
         billing: (annual ? 'annual' : 'monthly') as 'annual' | 'monthly',
         seats: plan.max_teachers || 1,

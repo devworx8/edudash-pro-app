@@ -140,11 +140,12 @@ export default function PaymentReturnScreen() {
     if (paymentStatus === 'success') {
       // Navigate to appropriate screen based on user role and subscription scope
       const isParent = profile?.role === 'parent';
+      const scope = String(params.scope || '').toLowerCase();
       
       if (isParent) {
         // Parent subscription - always go to parent dashboard
         router.push('/dashboard/parent' as any);
-      } else if (profile?.organization_id && subscription) {
+      } else if (scope === 'school' || !!subscription) {
         // School subscription - go to seat management
         router.push('/screens/principal-seat-management');
       } else {

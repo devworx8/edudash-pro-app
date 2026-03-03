@@ -137,6 +137,7 @@ export default function PrincipalRoutineRequestsScreen() {
         requestId: request.id,
         requestType: request.request_type,
         weekStartDate: request.week_start_date,
+        classId: request.class_id || '',
         ageGroup: request.age_group || '',
         themeTitle: request.theme_title || '',
         objectives: objectivesParam,

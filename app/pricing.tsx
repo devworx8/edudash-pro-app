@@ -44,6 +44,25 @@ export default function PricingScreen() {
   /**
    * Handle direct subscription checkout - goes straight to PayFast
    */
+  const resolveSchoolIdForCheckout = async (): Promise<string | null> => {
+    const profileSchoolId = (profile as any)?.organization_id || (profile as any)?.preschool_id;
+    if (profileSchoolId) return String(profileSchoolId);
+
+    if (!user?.id) return null;
+
+    try {
+      const { data } = await assertSupabase()
+        .from('profiles')
+        .select('organization_id, preschool_id')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      return String((data as any)?.organization_id || (data as any)?.preschool_id || '') || null;
+    } catch {
+      return null;
+    }
+  };
+
   const handleSubscribe = async (planKey: string, billing: 'monthly' | 'annual') => {
     if (!isLoggedIn || !user?.id) {
       Alert.alert('Sign In Required', 'Please sign in to subscribe to a plan.', [
@@ -63,8 +82,20 @@ export default function PricingScreen() {
       // school_starter, school_premium, school_pro, school_enterprise
       // are already canonical — no mapping needed
 
+      const scope: 'user' | 'school' = userType === 'parents' ? 'user' : 'school';
+      const schoolId = scope === 'school' ? await resolveSchoolIdForCheckout() : null;
+
+      if (scope === 'school' && !schoolId) {
+        showSupportAlert(
+          'School setup required',
+          'We could not find your school profile to attach this upgrade. Please sign out and sign in again, then retry.'
+        );
+        return;
+      }
+
       const result = await createCheckout({
-        scope: userType === 'parents' ? 'user' : 'school',
+        scope,
+        schoolId: scope === 'school' ? schoolId ?? undefined : undefined,
         userId: user.id,
         planTier,
         billing,

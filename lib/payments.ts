@@ -63,6 +63,13 @@ function extractCheckoutErrorMessage(err: unknown): string {
 
 function toFriendlyCheckoutError(rawMessage: string): string {
   const msg = rawMessage || ''
+  if (/school_id_required/i.test(msg)) {
+    return 'We could not identify your school account. Please sign in again and retry.'
+  }
+  if (/user_id_required/i.test(msg)) return 'Please sign in again and retry your payment.'
+  if (/plan_tier_required|invalid_scope|invalid_billing/i.test(msg)) {
+    return 'Invalid checkout request. Please refresh and try again.'
+  }
   if (/contact_sales_required/i.test(msg)) return 'This plan requires a sales contact. Please reach out to sales to continue.'
   if (/plan not found/i.test(msg)) return 'That plan isn’t available right now. Please refresh and try again.'
   if (/payfast.*not configured|passphrase required/i.test(msg)) {

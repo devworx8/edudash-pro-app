@@ -6,10 +6,11 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { FlatList, Linking, Modal, RefreshControl, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Linking, Modal, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
@@ -1252,6 +1253,7 @@ export default function POPReviewScreen() {
   };
 
   const styles = createStyles(theme, insets);
+  const isWeb = Platform.OS === 'web';
   const safeFilteredUploads = React.useMemo(
     () => filteredUploads.filter((upload): upload is POPUpload => Boolean(upload) && hasValidListId(upload.id)),
     [filteredUploads],
@@ -1290,18 +1292,30 @@ export default function POPReviewScreen() {
       <Stack.Screen
         options={{
           title: 'Finance Approvals',
-          headerShown: true,
-          headerStyle: { backgroundColor: theme.background },
-          headerTintColor: theme.text,
-          headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8 }}>
-              <Ionicons name="arrow-back" size={24} color={theme.text} />
-            </TouchableOpacity>
-          ),
+          headerShown: false,
         }}
       />
       
       <View style={[styles.container, { backgroundColor: theme.background }]}>
+        <View
+          style={[
+            styles.screenHeader,
+            {
+              backgroundColor: theme.cardBackground,
+              borderBottomColor: theme.border,
+              paddingTop: Math.max(insets.top, 12),
+            },
+          ]}
+        >
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={20} color={theme.text} />
+          </TouchableOpacity>
+          <Text style={[styles.screenHeaderTitle, { color: theme.text }]}>Finance Approvals</Text>
+          <TouchableOpacity style={styles.headerIconButton} onPress={handleRefresh}>
+            <Ionicons name="refresh" size={18} color={theme.textSecondary} />
+          </TouchableOpacity>
+        </View>
+
         {/* Queue Switch */}
         <View style={styles.queueTabs}>
           {([
@@ -1427,31 +1441,63 @@ export default function POPReviewScreen() {
             </Text>
           </View>
         ) : activeQueue === 'payment_proofs' ? (
-          <FlatList
-            key={`queue-${activeQueue}`}
-            data={safeFilteredUploads}
-            renderItem={renderUploadItem}
-            keyExtractor={(item, index) => (hasValidListId(item?.id) ? item.id : `pop-${index}`)}
-            contentContainerStyle={styles.listContent}
-            removeClippedSubviews={false}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
-            }
-          />
+          isWeb ? (
+            <ScrollView
+              key={`queue-${activeQueue}-web`}
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
+              }
+            >
+              {safeFilteredUploads.map((item) => (
+                <View key={item.id}>
+                  {renderUploadItem({ item })}
+                </View>
+              ))}
+            </ScrollView>
+          ) : (
+            <FlashList
+              key={`queue-${activeQueue}`}
+              data={safeFilteredUploads}
+              renderItem={renderUploadItem}
+              keyExtractor={(item, index) => (hasValidListId(item?.id) ? item.id : `pop-${index}`)}
+              contentContainerStyle={styles.listContent}
+              estimatedItemSize={220}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
+              }
+            />
+          )
         ) : (
-          <FlatList
-            key={`queue-${activeQueue}`}
-            data={safeFilteredPettyCashRequests}
-            renderItem={renderPettyCashItem}
-            keyExtractor={(item, index) =>
-              hasValidListId((item as any)?.id) ? String((item as any).id) : `petty-cash-${index}`
-            }
-            contentContainerStyle={styles.listContent}
-            removeClippedSubviews={false}
-            refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
-            }
-          />
+          isWeb ? (
+            <ScrollView
+              key={`queue-${activeQueue}-web`}
+              contentContainerStyle={styles.listContent}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
+              }
+            >
+              {safeFilteredPettyCashRequests.map((item) => (
+                <View key={item.id}>
+                  {renderPettyCashItem({ item })}
+                </View>
+              ))}
+            </ScrollView>
+          ) : (
+            <FlashList
+              key={`queue-${activeQueue}`}
+              data={safeFilteredPettyCashRequests}
+              renderItem={renderPettyCashItem}
+              keyExtractor={(item, index) =>
+                hasValidListId((item as any)?.id) ? String((item as any).id) : `petty-cash-${index}`
+              }
+              contentContainerStyle={styles.listContent}
+              estimatedItemSize={220}
+              refreshControl={
+                <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />
+              }
+            />
+          )
         )}
       </View>
 
@@ -1712,6 +1758,25 @@ const createStyles = (theme: any, insets: { top: number; bottom: number }) =>
   StyleSheet.create({
     container: {
       flex: 1,
+    },
+    screenHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingBottom: 12,
+      paddingHorizontal: 16,
+      borderBottomWidth: 1,
+    },
+    headerIconButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    screenHeaderTitle: {
+      fontSize: 18,
+      fontWeight: '800',
     },
     statsBar: {
       flexDirection: 'row',

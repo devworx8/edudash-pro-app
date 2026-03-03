@@ -1,6 +1,18 @@
 import { assertSupabase } from '@/lib/supabase';
 import { logError } from '@/lib/debug';
-import type { TeacherDashboardData } from '@/types/dashboard';
+import type { TeacherDashboardData, TeacherRoutineSnapshot } from '@/types/dashboard';
+
+type TeacherRoutineBundle = {
+  todayRoutine: TeacherDashboardData['todayRoutine'];
+  schoolWideRoutine: TeacherDashboardData['schoolWideRoutine'];
+  classRoutines: NonNullable<TeacherDashboardData['classRoutines']>;
+};
+
+const EMPTY_ROUTINE_BUNDLE: TeacherRoutineBundle = {
+  todayRoutine: null,
+  schoolWideRoutine: null,
+  classRoutines: [],
+};
 
 function toDateOnlyUTC(value: Date): string {
   return value.toISOString().split('T')[0];
@@ -39,10 +51,60 @@ function getProgramStatusScore(value: unknown): number {
   return 10;
 }
 
+function routinePriorityScore(row: Record<string, unknown>): number {
+  return getProgramStatusScore(row.status) + (row.class_id ? 5 : 0);
+}
+
+function compareRoutineRows(a: Record<string, unknown>, b: Record<string, unknown>): number {
+  const aScore = routinePriorityScore(a);
+  const bScore = routinePriorityScore(b);
+  if (aScore !== bScore) return bScore - aScore;
+  const aUpdated = new Date(String(a.updated_at || a.created_at || 0)).getTime();
+  const bUpdated = new Date(String(b.updated_at || b.created_at || 0)).getTime();
+  return bUpdated - aUpdated;
+}
+
+function mapRoutineRowToSnapshot(
+  row: Record<string, unknown>,
+  dayOfWeek: number,
+  dayBlocks: Array<Record<string, unknown>>,
+): TeacherRoutineSnapshot {
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const blocks = dayBlocks.map((block) => ({
+    id: String(block.id || ''),
+    title: String(block.title || 'Routine block'),
+    blockType: String(block.block_type || 'learning'),
+    startTime: normalizeTimeValue(block.start_time),
+    endTime: normalizeTimeValue(block.end_time),
+  }));
+
+  const nextBlock = blocks.find((block) => {
+    const startMinutes = parseTimeToMinutes(block.startTime);
+    return startMinutes !== null && startMinutes >= nowMinutes;
+  }) || null;
+
+  return {
+    weeklyProgramId: String(row.id || ''),
+    classId: row.class_id ? String(row.class_id) : null,
+    termId: row.term_id ? String(row.term_id) : null,
+    themeId: row.theme_id ? String(row.theme_id) : null,
+    title: row.title ? String(row.title) : null,
+    summary: row.summary ? String(row.summary) : null,
+    weekStartDate: String(row.week_start_date || ''),
+    weekEndDate: String(row.week_end_date || ''),
+    dayOfWeek,
+    blockCount: blocks.length,
+    nextBlockTitle: nextBlock?.title || null,
+    nextBlockStart: nextBlock?.startTime || null,
+    blocks,
+  };
+}
+
 export async function fetchTodayRoutine(
   schoolId: string,
   classIds: string[]
-): Promise<TeacherDashboardData['todayRoutine']> {
+): Promise<TeacherRoutineBundle> {
   const supabase = assertSupabase();
   const now = new Date();
   const today = toDateOnlyUTC(now);
@@ -69,7 +131,7 @@ export async function fetchTodayRoutine(
 
   if (programsError) {
     logError('Today routine programs fetch error:', programsError);
-    return null;
+    return EMPTY_ROUTINE_BUNDLE;
   }
 
   const candidates = (programRows || []).filter((row: Record<string, unknown>) => {
@@ -79,58 +141,69 @@ export async function fetchTodayRoutine(
     const inCurrentWeek = !!weekStart && !!weekEnd && weekStart <= today && weekEnd >= today;
     return inCurrentWeek && (!classId || classIds.includes(classId));
   });
-  if (candidates.length === 0) return null;
 
-  candidates.sort((a: Record<string, unknown>, b: Record<string, unknown>) => {
-    const aScore = getProgramStatusScore(a.status) + (a.class_id ? 5 : 0);
-    const bScore = getProgramStatusScore(b.status) + (b.class_id ? 5 : 0);
-    if (aScore !== bScore) return bScore - aScore;
-    const aUpdated = new Date(String(a.updated_at || a.created_at || 0)).getTime();
-    const bUpdated = new Date(String(b.updated_at || b.created_at || 0)).getTime();
-    return bUpdated - aUpdated;
-  });
+  if (candidates.length === 0) {
+    return EMPTY_ROUTINE_BUNDLE;
+  }
 
-  const selected = candidates[0] as Record<string, unknown>;
+  candidates.sort(compareRoutineRows);
+  const candidateIds = candidates.map((row: Record<string, unknown>) => String(row.id || '')).filter(Boolean);
 
   const { data: blockRows, error: blocksError } = await supabase
     .from('daily_program_blocks')
-    .select('id, title, block_type, start_time, end_time, day_of_week, block_order')
-    .eq('weekly_program_id', String(selected.id))
+    .select('id, weekly_program_id, title, block_type, start_time, end_time, day_of_week, block_order')
+    .in('weekly_program_id', candidateIds)
     .eq('day_of_week', dayOfWeek)
     .order('block_order', { ascending: true });
 
   if (blocksError) {
     logError('Today routine blocks fetch error:', blocksError);
-    return null;
+    return EMPTY_ROUTINE_BUNDLE;
   }
 
-  const blocks = (blockRows || []).map((row: Record<string, unknown>) => ({
-    id: String(row.id || ''),
-    title: String(row.title || 'Routine block'),
-    blockType: String(row.block_type || 'learning'),
-    startTime: normalizeTimeValue(row.start_time),
-    endTime: normalizeTimeValue(row.end_time),
-  }));
+  const blocksByProgramId = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of (blockRows || []) as Array<Record<string, unknown>>) {
+    const programId = String(row.weekly_program_id || '');
+    if (!programId) continue;
+    const list = blocksByProgramId.get(programId) || [];
+    list.push(row);
+    blocksByProgramId.set(programId, list);
+  }
 
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  const nextBlock = blocks.find((block) => {
-    const startMinutes = parseTimeToMinutes(block.startTime);
-    return startMinutes !== null && startMinutes >= nowMinutes;
-  }) || null;
+  const routineByProgramId = new Map<string, TeacherRoutineSnapshot>();
+  for (const row of candidates) {
+    const programId = String(row.id || '');
+    if (!programId) continue;
+    const dayBlocks = (blocksByProgramId.get(programId) || [])
+      .slice()
+      .sort((a, b) => Number(a.block_order || 0) - Number(b.block_order || 0));
+    routineByProgramId.set(programId, mapRoutineRowToSnapshot(row, dayOfWeek, dayBlocks));
+  }
+
+  const classRoutineRows = candidates.filter((row: Record<string, unknown>) => {
+    const classId = row.class_id ? String(row.class_id) : null;
+    return !!classId && classIds.includes(classId);
+  });
+  const schoolWideRoutineRow =
+    candidates.find((row: Record<string, unknown>) => !row.class_id) || null;
+
+  const classRoutines = classRoutineRows
+    .map((row: Record<string, unknown>) => routineByProgramId.get(String(row.id || '')))
+    .filter(Boolean) as TeacherRoutineSnapshot[];
+
+  const schoolWideRoutine = schoolWideRoutineRow
+    ? routineByProgramId.get(String(schoolWideRoutineRow.id || '')) || null
+    : null;
+
+  const todayRoutine =
+    classRoutines[0] ||
+    schoolWideRoutine ||
+    routineByProgramId.get(String(candidates[0]?.id || '')) ||
+    null;
 
   return {
-    weeklyProgramId: String(selected.id),
-    classId: selected.class_id ? String(selected.class_id) : null,
-    termId: selected.term_id ? String(selected.term_id) : null,
-    themeId: selected.theme_id ? String(selected.theme_id) : null,
-    title: selected.title ? String(selected.title) : null,
-    summary: selected.summary ? String(selected.summary) : null,
-    weekStartDate: String(selected.week_start_date || today),
-    weekEndDate: String(selected.week_end_date || today),
-    dayOfWeek,
-    blockCount: blocks.length,
-    nextBlockTitle: nextBlock?.title || null,
-    nextBlockStart: nextBlock?.startTime || null,
-    blocks,
+    todayRoutine,
+    schoolWideRoutine,
+    classRoutines,
   };
 }

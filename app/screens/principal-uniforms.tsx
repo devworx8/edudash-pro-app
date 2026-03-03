@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl, Platform, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,25 @@ const isUniformAssignmentsTableMissing = (error: any): boolean => {
   const message = String(error?.message || '').toLowerCase();
   return code === '42P01'
     || (message.includes('uniform_number_assignments') && message.includes('does not exist'));
+};
+
+const isUniformDeletePolicyMissing = (error: any): boolean => {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42501' || message.includes('row-level security') || message.includes('permission denied');
+};
+
+const isUniqueConflictError = (error: any): boolean => {
+  const code = String(error?.code || '');
+  const status = String(error?.status || '');
+  const message = String(error?.message || '').toLowerCase();
+  const details = String(error?.details || '').toLowerCase();
+  return code === '23505'
+    || code === '409'
+    || status === '409'
+    || message.includes('duplicate key')
+    || message.includes('unique constraint')
+    || details.includes('already exists');
 };
 
 export default function PrincipalUniformsScreen() {
@@ -54,6 +73,10 @@ export default function PrincipalUniformsScreen() {
   );
   const [parentProfilesById, setParentProfilesById] = useState<Record<string, ParentProfile>>({});
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
+  const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const [editingNumberStudentId, setEditingNumberStudentId] = useState<string | null>(null);
+  const [manualNumberInput, setManualNumberInput] = useState('');
+  const [savingManualNumberStudentId, setSavingManualNumberStudentId] = useState<string | null>(null);
 
   const {
     bulkMessaging,
@@ -214,8 +237,17 @@ export default function PrincipalUniformsScreen() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return displayRows.filter((row) => {
-      const matchesSearch = !q || [row.childName, row.studentCode, row.parentName, row.parentEmail, row.parentPhone, row.className]
-        .some((field) => field.toLowerCase().includes(q));
+      const searchableFields = [
+        row.childName,
+        row.studentCode,
+        row.parentName,
+        row.parentEmail,
+        row.parentPhone,
+        row.className,
+        hasAssignedBackNumber(row.tshirtNumber) ? normalizeBackNumber(row.tshirtNumber) : '',
+        row.paymentStatus,
+      ].map((field) => String(field ?? '').toLowerCase());
+      const matchesSearch = !q || searchableFields.some((field) => field.includes(q));
       const matchesSize = sizeFilter === 'all' || row.tshirtSize === sizeFilter || row.status === 'missing';
       return matchesSearch && matchesSize;
     });
@@ -235,6 +267,27 @@ export default function PrincipalUniformsScreen() {
 
   const handleGenerateNumbers = useCallback(async () => {
     if (!schoolId) return;
+    const supabase = assertSupabase();
+    const { data: latestAssignments, error: latestAssignmentsError } = await supabase
+      .from('uniform_number_assignments')
+      .select('student_id, tshirt_number')
+      .eq('preschool_id', schoolId);
+    if (latestAssignmentsError) {
+      logger.warn('[Uniforms] Failed to load latest number assignments, using local state', {
+        error: latestAssignmentsError.message,
+      });
+    }
+    const latestAssignedByStudent = new Map<string, string>(
+      (latestAssignments || []).map((assignment: any) => [
+        assignment.student_id,
+        String(assignment.tshirt_number || ''),
+      ])
+    );
+    const getCurrentAssignedNumber = (studentId: string): string => (
+      latestAssignedByStudent.get(studentId)
+      || assignedBackNumberByStudent.get(studentId)
+      || ''
+    );
 
     const studentsSorted = [...students].sort((a, b) => {
       const aName = `${a?.first_name || ''} ${a?.last_name || ''}`.trim().toLowerCase();
@@ -243,14 +296,28 @@ export default function PrincipalUniformsScreen() {
     });
     const rowByStudentId = new Map(rows.map((row) => [row.student_id, row] as const));
 
-    const studentsWithoutAssignedNumber = studentsSorted.filter((student) => (
-      !hasAssignedBackNumber(assignedBackNumberByStudent.get(student.id))
+    const seenNumbers = new Map<number, string>();
+    const duplicateStudentIds = new Set<string>();
+    const stableAssignedByStudent = new Map<string, string>();
+    studentsSorted.forEach((student) => {
+      const parsed = parseBackNumber(getCurrentAssignedNumber(student.id));
+      if (parsed === null) return;
+      if (seenNumbers.has(parsed)) {
+        duplicateStudentIds.add(student.id);
+        return;
+      }
+      seenNumbers.set(parsed, student.id);
+      stableAssignedByStudent.set(student.id, String(parsed));
+    });
+
+    const studentsNeedingAssignment = studentsSorted.filter((student) => (
+      !hasAssignedBackNumber(getCurrentAssignedNumber(student.id)) || duplicateStudentIds.has(student.id)
     ));
 
-    if (studentsWithoutAssignedNumber.length === 0) {
+    if (studentsNeedingAssignment.length === 0) {
       showAlert({
         title: 'No Missing Numbers',
-        message: 'All active learners already have valid T-shirt numbers.',
+        message: 'All active learners already have valid unique T-shirt numbers.',
         type: 'info',
         buttons: [{ text: 'OK' }],
       });
@@ -258,7 +325,7 @@ export default function PrincipalUniformsScreen() {
     }
 
     const usedNumbers = new Set<number>();
-    assignedBackNumberByStudent.forEach((value) => {
+    stableAssignedByStudent.forEach((value) => {
       const parsed = parseBackNumber(value);
       if (parsed === null) return;
       usedNumbers.add(parsed);
@@ -280,12 +347,15 @@ export default function PrincipalUniformsScreen() {
     }
 
     const assignments: Array<{ studentId: string; parentId: string | null; number: string }> = [];
-    studentsWithoutAssignedNumber.forEach((student) => {
+    studentsNeedingAssignment.forEach((student) => {
       const row = rowByStudentId.get(student.id);
       const rowNumber = parseBackNumber(row?.tshirt_number);
+      const currentAssignedNumber = parseBackNumber(getCurrentAssignedNumber(student.id));
       let assignedNumber: number | null = null;
 
-      if (rowNumber !== null && !usedNumbers.has(rowNumber)) {
+      if (currentAssignedNumber !== null && !usedNumbers.has(currentAssignedNumber)) {
+        assignedNumber = currentAssignedNumber;
+      } else if (rowNumber !== null && !usedNumbers.has(rowNumber)) {
         assignedNumber = rowNumber;
       } else {
         assignedNumber = availableNumbers.shift() ?? null;
@@ -305,36 +375,73 @@ export default function PrincipalUniformsScreen() {
         number: String(assignedNumber),
       });
     });
-    const skippedCount = Math.max(studentsWithoutAssignedNumber.length - assignments.length, 0);
+    const skippedCount = Math.max(studentsNeedingAssignment.length - assignments.length, 0);
 
     setGeneratingNumbers(true);
     try {
-      const supabase = assertSupabase();
       const nowIso = new Date().toISOString();
-      const assignmentResults = await Promise.allSettled(
-        assignments.map(async (assignment) => {
+      const takenNumbers = new Set<number>();
+      stableAssignedByStudent.forEach((value) => {
+        const parsed = parseBackNumber(value);
+        if (parsed !== null) takenNumbers.add(parsed);
+      });
+      const getNextAvailableNumber = (): number | null => {
+        for (let i = 1; i <= 99; i += 1) {
+          if (!takenNumbers.has(i)) return i;
+        }
+        return null;
+      };
+
+      const successAssignments: Array<{ studentId: string; parentId: string | null; number: string }> = [];
+      let failedCount = 0;
+      let firstFailureMessage: string | null = null;
+
+      for (const assignment of assignments) {
+        let candidate = parseBackNumber(assignment.number);
+        let assigned = false;
+        let attempts = 0;
+        let lastError: any = null;
+
+        while (candidate !== null && attempts < 99) {
+          attempts += 1;
+          const payloadNumber = String(candidate);
           const { error } = await supabase
             .from('uniform_number_assignments')
             .upsert({
               student_id: assignment.studentId,
               parent_id: assignment.parentId,
               preschool_id: schoolId,
-              tshirt_number: assignment.number,
+              tshirt_number: payloadNumber,
               assigned_by: profile?.id || null,
             }, { onConflict: 'student_id' });
-          if (error) throw error;
-        })
-      );
 
-      const failedCount = assignmentResults.filter((result) => result.status === 'rejected').length;
-      const successAssignments = assignments.filter((_, index) => assignmentResults[index]?.status === 'fulfilled');
+          if (!error) {
+            takenNumbers.add(candidate);
+            successAssignments.push({ ...assignment, number: payloadNumber });
+            assigned = true;
+            break;
+          }
+
+          lastError = error;
+          if (isUniqueConflictError(error)) {
+            // Reserve conflicting number locally so we do not retry it again.
+            takenNumbers.add(candidate);
+            const replacement = getNextAvailableNumber();
+            candidate = replacement;
+            continue;
+          }
+          break;
+        }
+
+        if (!assigned) {
+          failedCount += 1;
+          if (!firstFailureMessage) {
+            firstFailureMessage = String(lastError?.message || 'Unknown assignment error.');
+          }
+        }
+      }
+
       const successCount = successAssignments.length;
-      const firstFailure = assignmentResults.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-      const firstFailureMessage = firstFailure?.reason instanceof Error
-        ? firstFailure.reason.message
-        : firstFailure?.reason
-          ? String(firstFailure.reason)
-          : null;
 
       if (successCount > 0) {
         const successAssignmentMap = new Map(
@@ -396,6 +503,9 @@ export default function PrincipalUniformsScreen() {
       }
 
       const notes: string[] = [`Assigned ${successCount} unique number(s).`];
+      if (duplicateStudentIds.size > 0) {
+        notes.push(`Resolved ${duplicateStudentIds.size} duplicate assignment(s).`);
+      }
       if (skippedCount > 0) {
         notes.push(`${skippedCount} learner(s) were skipped because only 99 unique 1–2 digit numbers are available.`);
       }
@@ -468,6 +578,371 @@ export default function PrincipalUniformsScreen() {
     }
   }, [autoAction, bulkMessageNoOrder, bulkMessageUnpaid, loading, missingRows, schoolId, submittedRows]);
 
+  const handleSaveManualNumber = useCallback(async (item: DisplayRow) => {
+    if (!schoolId) return;
+    const parsed = parseBackNumber(manualNumberInput);
+    if (parsed === null) {
+      showAlert({
+        title: 'Invalid Number',
+        message: 'Enter a unique 1–2 digit number between 1 and 99.',
+        type: 'warning',
+        buttons: [{ text: 'OK' }],
+      });
+      return;
+    }
+
+    const normalized = String(parsed);
+    const duplicateOwner = Array.from(assignedBackNumberByStudent.entries()).find(
+      ([studentId, value]) => studentId !== item.studentId && normalizeBackNumber(value) === normalized
+    );
+
+    try {
+      setSavingManualNumberStudentId(item.studentId);
+      const supabase = assertSupabase();
+      const { error: assignmentError } = await supabase
+        .from('uniform_number_assignments')
+        .upsert({
+          student_id: item.studentId,
+          parent_id: item.parentId || null,
+          preschool_id: schoolId,
+          tshirt_number: normalized,
+          assigned_by: profile?.id || null,
+        }, { onConflict: 'student_id' });
+      if (assignmentError) throw assignmentError;
+
+      if (item.status === 'submitted' && !String(item.id).startsWith('missing-')) {
+        const { error: requestError } = await supabase
+          .from('uniform_requests')
+          .update({
+            tshirt_number: normalized,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', item.id)
+          .eq('preschool_id', schoolId);
+        if (requestError) throw requestError;
+      }
+
+      setAssignedBackNumberByStudent((prev) => {
+        const next = new Map(prev);
+        next.set(item.studentId, normalized);
+        return next;
+      });
+      setRows((prev) => prev.map((row) => (
+        row.student_id === item.studentId
+          ? { ...row, tshirt_number: normalized, updated_at: new Date().toISOString() }
+          : row
+      )));
+      setEditingNumberStudentId(null);
+      setManualNumberInput('');
+      await load();
+
+      showAlert({
+        title: 'Number Saved',
+        message: duplicateOwner
+          ? 'Number saved. A duplicate now exists on another learner. Tap Generate Numbers to resolve duplicates automatically.'
+          : 'T-shirt number saved successfully.',
+        type: duplicateOwner ? 'warning' : 'success',
+        buttons: [{ text: 'OK' }],
+      });
+    } catch (e: any) {
+      showAlert({
+        title: 'Save Failed',
+        message: e?.message || 'Unable to save the number right now.',
+        type: 'error',
+        buttons: [{ text: 'OK' }],
+      });
+    } finally {
+      setSavingManualNumberStudentId(null);
+    }
+  }, [
+    schoolId,
+    manualNumberInput,
+    assignedBackNumberByStudent,
+    profile?.id,
+    load,
+    showAlert,
+  ]);
+
+  const renderDetail = useCallback((
+    label: string,
+    value: string | number | null | undefined,
+    tone: 'default' | 'muted' = 'default',
+  ) => (
+    <Text style={tone === 'muted' ? styles.detailMuted : styles.detailText}>
+      <Text style={styles.detailLabel}>{label}: </Text>
+      <Text style={styles.detailValue}>{value ?? '-'}</Text>
+    </Text>
+  ), [styles]);
+
+  const renderUniformCard = useCallback((item: DisplayRow) => (
+    <View style={[styles.card, item.status === 'missing' && styles.missingCard]}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.name}>{item.childName}</Text>
+        {item.status === 'submitted' && (
+          <View style={[styles.paymentChip, {
+            backgroundColor: paymentStatusMeta(item.paymentStatus).bg,
+            borderColor: paymentStatusMeta(item.paymentStatus).border,
+          }]}>
+            <Text style={[styles.paymentChipText, { color: paymentStatusMeta(item.paymentStatus).text }]}>
+              {paymentStatusMeta(item.paymentStatus).label}
+            </Text>
+          </View>
+        )}
+      </View>
+      {item.status === 'missing' ? (
+        <>
+          <Text style={styles.muted}>No size submitted yet.</Text>
+          {item.parentName || item.parentEmail || item.parentPhone ? (
+            <>
+              {item.parentName ? renderDetail('Parent', item.parentName) : null}
+              {item.parentEmail ? renderDetail('Email', item.parentEmail) : null}
+              {item.parentPhone ? renderDetail('Phone', item.parentPhone) : null}
+            </>
+          ) : (
+            <Text style={styles.muted}>Parent not linked.</Text>
+          )}
+          {item.parentId ? (
+            <TouchableOpacity
+              style={[styles.inlineActionButton, { borderColor: theme.primary + '66', backgroundColor: theme.primary + '18' }]}
+              onPress={() => messageSingleParent(item)}
+              disabled={bulkMessaging !== null || singleMessagingTargetId === item.id}
+            >
+              <Ionicons name="person-add-outline" size={14} color={theme.primary} />
+              <Text style={[styles.inlineActionButtonText, { color: theme.primary }]}>
+                {singleMessagingTargetId === item.id ? 'Assigning...' : 'Assign to Parent'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {renderDetail('Age', item.ageYears ?? '-')}
+          {renderDetail('Size', item.tshirtSize)}
+          {renderDetail('T-shirts', item.tshirtQuantity ?? '-')}
+          {renderDetail('Shorts', item.shortsQuantity ?? '-')}
+          {renderDetail('Returning', item.isReturning ? 'Yes' : 'No')}
+          {hasAssignedBackNumber(item.tshirtNumber)
+            ? renderDetail('T-shirt Number', String(item.tshirtNumber).trim())
+            : <Text style={styles.muted}>T-shirt Number: not assigned</Text>}
+          {renderDetail('Sample supplied', item.sampleSupplied ? 'Yes' : 'No')}
+          {item.studentCode ? renderDetail('Student Code', item.studentCode) : null}
+          {renderDetail('Submitted by', item.parentName || 'Parent')}
+          {item.parentEmail ? renderDetail('Email', item.parentEmail) : null}
+          {renderDetail(
+            'Last updated',
+            item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('en-ZA') : item.submittedAt ? new Date(item.submittedAt).toLocaleDateString('en-ZA') : '-',
+            'muted',
+          )}
+          {item.parentId ? (
+            <TouchableOpacity
+              style={[styles.inlineActionButton, { borderColor: theme.primary + '66', backgroundColor: theme.primary + '18' }]}
+              onPress={() => messageSingleParent(item)}
+              disabled={bulkMessaging !== null || singleMessagingTargetId === item.id}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={14} color={theme.primary} />
+              <Text style={[styles.inlineActionButtonText, { color: theme.primary }]}>
+                {singleMessagingTargetId === item.id ? 'Sending...' : 'Message Parent'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {item.paymentStatus !== 'paid' && schoolId && (
+            <TouchableOpacity
+              style={[
+                styles.inlineActionButton,
+                { borderColor: theme.success + '66', backgroundColor: theme.success + '18', marginTop: 8 },
+              ]}
+              onPress={() => {
+                if (markingPaidId) return;
+                showAlert({
+                  title: 'Mark Uniform Paid',
+                  message:
+                    `Mark ${item.childName}'s uniform as paid? This will add a uniform payment record and update dashboards.`,
+                  type: 'info',
+                  buttons: [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Mark Paid',
+                      onPress: async () => {
+                        try {
+                          setMarkingPaidId(item.id);
+                          const supabase = assertSupabase();
+                          const { error } = await supabase
+                            .from('payments')
+                            .insert({
+                              student_id: item.studentId,
+                              preschool_id: schoolId,
+                              amount: 0,
+                              amount_cents: 0,
+                              currency: 'ZAR',
+                              status: 'completed',
+                              description: `Uniform payment marked paid by school for ${item.childName}`,
+                              metadata: {
+                                payment_context: 'uniform',
+                                fee_type: 'uniform',
+                              },
+                            })
+                            .select('id')
+                            .single();
+                          if (error) {
+                            throw error;
+                          }
+                          await load();
+                        } catch (e: any) {
+                          showAlert({
+                            title: 'Payment Update Failed',
+                            message: e?.message || 'Unable to mark uniform as paid right now.',
+                            type: 'error',
+                            buttons: [{ text: 'OK' }],
+                          });
+                        } finally {
+                          setMarkingPaidId(null);
+                        }
+                      },
+                    },
+                  ],
+                });
+              }}
+              disabled={markingPaidId === item.id || bulkMessaging !== null}
+            >
+              <Ionicons name="checkmark-done-outline" size={14} color={theme.success} />
+              <Text style={[styles.inlineActionButtonText, { color: theme.success }]}>
+                {markingPaidId === item.id ? 'Marking Paid...' : 'Mark Paid'}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {item.status === 'submitted' && schoolId ? (
+            <TouchableOpacity
+              style={[
+                styles.deleteActionButton,
+                { borderColor: theme.error + '66', backgroundColor: theme.error + '18' },
+              ]}
+              onPress={() => {
+                if (deletingRecordId) return;
+                showAlert({
+                  title: 'Delete Uniform Submission',
+                  message: `Delete ${item.childName}'s uniform submission? This removes their submitted sizes from this list.`,
+                  type: 'warning',
+                  buttons: [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: async () => {
+                        try {
+                          setDeletingRecordId(item.id);
+                          const supabase = assertSupabase();
+                          const { error } = await supabase
+                            .from('uniform_requests')
+                            .delete()
+                            .eq('id', item.id)
+                            .eq('preschool_id', schoolId);
+                          if (error) {
+                            throw error;
+                          }
+                          await load();
+                        } catch (e: any) {
+                          const migrationHint = isUniformDeletePolicyMissing(e)
+                            ? ' Delete policy is missing. Run migration 20260324003000_uniform_requests_delete_policy.sql.'
+                            : '';
+                          showAlert({
+                            title: 'Delete Failed',
+                            message: (e?.message || 'Unable to delete this uniform submission right now.') + migrationHint,
+                            type: 'error',
+                            buttons: [{ text: 'OK' }],
+                          });
+                        } finally {
+                          setDeletingRecordId(null);
+                        }
+                      },
+                    },
+                  ],
+                });
+              }}
+              disabled={deletingRecordId === item.id || bulkMessaging !== null}
+            >
+              <Ionicons name="trash-outline" size={14} color={theme.error} />
+              <Text style={[styles.deleteActionText, { color: theme.error }]}>
+                {deletingRecordId === item.id ? 'Deleting...' : 'Delete Record'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </>
+      )}
+      {schoolId ? (
+        <View style={styles.manualNumberSection}>
+          <Text style={styles.manualNumberLabel}>Back Number</Text>
+          {editingNumberStudentId === item.studentId ? (
+            <View style={styles.manualNumberEditor}>
+              <TextInput
+                style={styles.manualNumberInput}
+                value={manualNumberInput}
+                onChangeText={(value) => setManualNumberInput(value.replace(/[^\d]/g, '').slice(0, 2))}
+                placeholder="1-99"
+                placeholderTextColor={theme.textSecondary}
+                keyboardType="number-pad"
+                maxLength={2}
+              />
+              <TouchableOpacity
+                style={[styles.manualNumberButton, { borderColor: theme.border, backgroundColor: theme.surface }]}
+                onPress={() => {
+                  setEditingNumberStudentId(null);
+                  setManualNumberInput('');
+                }}
+                disabled={savingManualNumberStudentId === item.studentId}
+              >
+                <Text style={[styles.manualNumberButtonText, { color: theme.textSecondary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.manualNumberButton, { borderColor: theme.primary, backgroundColor: theme.primary }]}
+                onPress={() => handleSaveManualNumber(item)}
+                disabled={savingManualNumberStudentId === item.studentId}
+              >
+                <Text style={[styles.manualNumberButtonText, { color: '#fff' }]}>
+                  {savingManualNumberStudentId === item.studentId ? 'Saving...' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.manualNumberCta, {
+                borderColor: (theme.info || '#60a5fa') + '66',
+                backgroundColor: (theme.info || '#60a5fa') + '18',
+              }]}
+              onPress={() => {
+                setEditingNumberStudentId(item.studentId);
+                setManualNumberInput(hasAssignedBackNumber(item.tshirtNumber) ? normalizeBackNumber(item.tshirtNumber) : '');
+              }}
+            >
+              <Ionicons name="create-outline" size={14} color={theme.info || '#60a5fa'} />
+              <Text style={[styles.manualNumberCtaText, { color: theme.info || '#60a5fa' }]}>
+                {hasAssignedBackNumber(item.tshirtNumber) ? 'Change Number' : 'Set Number'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      ) : null}
+    </View>
+  ), [
+    bulkMessaging,
+    editingNumberStudentId,
+    deletingRecordId,
+    handleSaveManualNumber,
+    load,
+    manualNumberInput,
+    markingPaidId,
+    messageSingleParent,
+    paymentStatusMeta,
+    savingManualNumberStudentId,
+    schoolId,
+    renderDetail,
+    showAlert,
+    singleMessagingTargetId,
+    theme.error,
+    theme.primary,
+    theme.success,
+    theme.warning,
+  ]);
+
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ title: 'Uniform Sizes', headerShown: false }} />
@@ -475,42 +950,52 @@ export default function PrincipalUniformsScreen() {
         <Text style={styles.muted}>No school found on your profile.</Text>
       ) : (
         <>
-          <View style={styles.headerRow}>
+          <View style={styles.headerBlock}>
             <View style={styles.headerText}>
-              <Text style={styles.title}>Uniform Sizes</Text>
+              <Text style={styles.title} numberOfLines={2}>Uniform Sizes</Text>
               <Text style={styles.subtitle}>T-shirt size will be used for shorts. Returning numbers included.</Text>
             </View>
-            <TouchableOpacity
-              style={[styles.exportButton, { backgroundColor: theme.info || '#0EA5E9' }]}
-              onPress={handleGenerateNumbersPress}
-              disabled={generatingNumbers}
-            >
-              <Ionicons name="keypad-outline" size={18} color="#fff" />
-              <Text style={styles.exportButtonText}>
-                {generatingNumbers
-                  ? 'Generating...'
-                  : learnersWithoutNumberCount > 0
-                    ? `Generate Numbers (${learnersWithoutNumberCount})`
-                    : 'Generate Numbers'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.exportButton, { backgroundColor: theme.primary }]}
-              onPress={handleExportPdf}
-              disabled={exporting || filtered.length === 0}
-            >
-              <Ionicons name="document-text-outline" size={18} color="#fff" />
-              <Text style={styles.exportButtonText}>{exporting ? 'Exporting...' : 'Export PDF'}</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActionsRow}>
+              <TouchableOpacity
+                style={[styles.exportButton, styles.headerActionButton, { backgroundColor: theme.info || '#0EA5E9' }]}
+                onPress={handleGenerateNumbersPress}
+                disabled={generatingNumbers}
+              >
+                <Ionicons name="keypad-outline" size={18} color="#fff" />
+                <Text style={styles.exportButtonText} numberOfLines={1} ellipsizeMode="tail">
+                  {generatingNumbers
+                    ? 'Generating...'
+                    : learnersWithoutNumberCount > 0
+                      ? `Generate Numbers (${learnersWithoutNumberCount})`
+                      : 'Generate Numbers'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.exportButton, styles.headerActionButton, { backgroundColor: theme.primary }]}
+                onPress={handleExportPdf}
+                disabled={exporting || filtered.length === 0}
+              >
+                <Ionicons name="document-text-outline" size={18} color="#fff" />
+                <Text style={styles.exportButtonText} numberOfLines={1} ellipsizeMode="tail">{exporting ? 'Exporting...' : 'Export PDF'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
-          <TextInput
-            style={styles.search}
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search child, parent, or code"
-            placeholderTextColor={theme.textSecondary}
-          />
+          <View style={styles.searchWrap}>
+            <Ionicons name="search-outline" size={18} color={theme.textSecondary} />
+            <TextInput
+              style={styles.searchInput}
+              value={search}
+              onChangeText={setSearch}
+              placeholder="Search child, parent, code, class, or back number"
+              placeholderTextColor={theme.textSecondary}
+            />
+            {search.trim().length > 0 ? (
+              <TouchableOpacity onPress={() => setSearch('')} style={styles.searchClearButton}>
+                <Ionicons name="close-circle" size={18} color={theme.textSecondary} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
 
           <View style={styles.controlsRow}>
             <View style={styles.countChip}>
@@ -545,7 +1030,6 @@ export default function PrincipalUniformsScreen() {
                 {bulkMessaging === 'unpaid' ? 'Sending...' : 'Message Unpaid (' + unpaidContactableCount + ')'}
               </Text>
             </TouchableOpacity>
-            <View style={styles.controlsSpacer} />
             <TouchableOpacity
               style={[styles.toggleButton, showInsights && styles.toggleButtonActive]}
               onPress={() => setShowInsights((prev) => !prev)}
@@ -569,6 +1053,12 @@ export default function PrincipalUniformsScreen() {
               </Text>
             </View>
           )}
+
+          <View style={styles.filterSummaryRow}>
+            <Text style={styles.filterSummaryText}>
+              Showing {safeFiltered.length} result{safeFiltered.length === 1 ? '' : 's'}
+            </Text>
+          </View>
 
           {showFilters && (
             <View style={styles.filtersCard}>
@@ -632,157 +1122,39 @@ export default function PrincipalUniformsScreen() {
             </View>
           )}
 
-          <FlatList
-            data={safeFiltered}
-            keyExtractor={(item, index) => item?.id || `uniform-row-${index}`}
-            style={styles.list}
-            contentContainerStyle={[styles.listContent, safeFiltered.length === 0 && styles.listContentEmpty]}
-            removeClippedSubviews={Platform.OS !== 'web'}
-            initialNumToRender={12}
-            windowSize={8}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
-            ListEmptyComponent={
-              loading ? <Text style={styles.muted}>Loading...</Text> : <Text style={styles.muted}>No uniform submissions found.</Text>
-            }
-            renderItem={({ item }) => (
-              <View style={[styles.card, item.status === 'missing' && styles.missingCard]}>
-                <View style={styles.cardHeader}>
-                  <Text style={styles.name}>{item.childName}</Text>
-                  {item.status === 'submitted' && (
-                    <View style={[styles.paymentChip, {
-                      backgroundColor: paymentStatusMeta(item.paymentStatus).bg,
-                      borderColor: paymentStatusMeta(item.paymentStatus).border,
-                    }]}>
-                      <Text style={[styles.paymentChipText, { color: paymentStatusMeta(item.paymentStatus).text }]}>
-                        {paymentStatusMeta(item.paymentStatus).label}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                {item.status === 'missing' ? (
-                  <>
-                    <Text style={styles.muted}>No size submitted yet.</Text>
-                    {item.parentName || item.parentEmail || item.parentPhone ? (
-                      <>
-                        {item.parentName ? <Text style={styles.text}>Parent: {item.parentName}</Text> : null}
-                        {item.parentEmail ? <Text style={styles.text}>Email: {item.parentEmail}</Text> : null}
-                        {item.parentPhone ? <Text style={styles.text}>Phone: {item.parentPhone}</Text> : null}
-                      </>
-                    ) : (
-                      <Text style={styles.muted}>Parent not linked.</Text>
-                    )}
-                    {item.parentId ? (
-                      <TouchableOpacity
-                        style={[styles.inlineActionButton, { borderColor: theme.primary + '66', backgroundColor: theme.primary + '18' }]}
-                        onPress={() => messageSingleParent(item)}
-                        disabled={bulkMessaging !== null || singleMessagingTargetId === item.id}
-                      >
-                        <Ionicons name="person-add-outline" size={14} color={theme.primary} />
-                        <Text style={[styles.inlineActionButtonText, { color: theme.primary }]}>
-                          {singleMessagingTargetId === item.id ? 'Assigning...' : 'Assign to Parent'}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.text}>Age: {item.ageYears ?? '-'}</Text>
-                    <Text style={styles.text}>Size: {item.tshirtSize}</Text>
-                    <Text style={styles.text}>T-shirts: {item.tshirtQuantity ?? '-'}</Text>
-                    <Text style={styles.text}>Shorts: {item.shortsQuantity ?? '-'}</Text>
-                    <Text style={styles.text}>Returning: {item.isReturning ? 'Yes' : 'No'}</Text>
-                    {hasAssignedBackNumber(item.tshirtNumber)
-                      ? <Text style={styles.text}>T-shirt Number: {String(item.tshirtNumber).trim()}</Text>
-                      : <Text style={styles.muted}>T-shirt Number: not assigned</Text>}
-                    <Text style={styles.text}>Sample supplied: {item.sampleSupplied ? 'Yes' : 'No'}</Text>
-                    {item.studentCode ? <Text style={styles.text}>Student Code: {item.studentCode}</Text> : null}
-                    <Text style={styles.text}>Submitted by: {item.parentName || 'Parent'}</Text>
-                    {item.parentEmail ? <Text style={styles.text}>Email: {item.parentEmail}</Text> : null}
-                    <Text style={styles.muted}>
-                      Last updated: {item.updatedAt ? new Date(item.updatedAt).toLocaleDateString('en-ZA') : item.submittedAt ? new Date(item.submittedAt).toLocaleDateString('en-ZA') : '-'}
-                    </Text>
-                    {item.parentId ? (
-                      <TouchableOpacity
-                        style={[styles.inlineActionButton, { borderColor: theme.primary + '66', backgroundColor: theme.primary + '18' }]}
-                        onPress={() => messageSingleParent(item)}
-                        disabled={bulkMessaging !== null || singleMessagingTargetId === item.id}
-                      >
-                        <Ionicons name="chatbubble-ellipses-outline" size={14} color={theme.primary} />
-                        <Text style={[styles.inlineActionButtonText, { color: theme.primary }]}>
-                          {singleMessagingTargetId === item.id ? 'Sending...' : 'Message Parent'}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
-                    {item.paymentStatus !== 'paid' && schoolId && (
-                      <TouchableOpacity
-                        style={[
-                          styles.inlineActionButton,
-                          { borderColor: theme.success + '66', backgroundColor: theme.success + '18', marginTop: 8 },
-                        ]}
-                        onPress={() => {
-                          if (markingPaidId) return;
-                          showAlert({
-                            title: 'Mark Uniform Paid',
-                            message:
-                              `Mark ${item.childName}'s uniform as paid? This will add a uniform payment record and update dashboards.`,
-                            type: 'info',
-                            buttons: [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Mark Paid',
-                                onPress: async () => {
-                                  try {
-                                    setMarkingPaidId(item.id);
-                                    const supabase = assertSupabase();
-                                    const { error } = await supabase
-                                      .from('payments')
-                                      .insert({
-                                        student_id: item.studentId,
-                                        preschool_id: schoolId,
-                                        amount: 0,
-                                        amount_cents: 0,
-                                        currency: 'ZAR',
-                                        status: 'completed',
-                                        description: `Uniform payment marked paid by school for ${item.childName}`,
-                                        metadata: {
-                                          payment_context: 'uniform',
-                                          fee_type: 'uniform',
-                                        },
-                                      })
-                                      .select('id')
-                                      .single();
-                                    if (error) {
-                                      throw error;
-                                    }
-                                    await load();
-                                  } catch (e: any) {
-                                    showAlert({
-                                      title: 'Payment Update Failed',
-                                      message: e?.message || 'Unable to mark uniform as paid right now.',
-                                      type: 'error',
-                                      buttons: [{ text: 'OK' }],
-                                    });
-                                  } finally {
-                                    setMarkingPaidId(null);
-                                  }
-                                },
-                              },
-                            ],
-                          });
-                        }}
-                        disabled={markingPaidId === item.id || bulkMessaging !== null}
-                      >
-                        <Ionicons name="checkmark-done-outline" size={14} color={theme.success} />
-                        <Text style={[styles.inlineActionButtonText, { color: theme.success }]}>
-                          {markingPaidId === item.id ? 'Marking Paid...' : 'Mark Paid'}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </>
-                )}
-              </View>
-            )}
-          />
+          {Platform.OS === 'web' ? (
+            <View style={styles.list}>
+              <ScrollView
+                style={styles.list}
+                contentContainerStyle={[styles.listContent, safeFiltered.length === 0 && styles.listContentEmpty]}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+              >
+                {loading ? <Text style={styles.muted}>Loading...</Text> : null}
+                {!loading && safeFiltered.length === 0 ? <Text style={styles.muted}>No uniform submissions found.</Text> : null}
+                {!loading ? safeFiltered.map((item, index) => (
+                  <View key={item?.id || `uniform-row-${index}`}>
+                    {renderUniformCard(item)}
+                  </View>
+                )) : null}
+              </ScrollView>
+            </View>
+          ) : (
+            <FlatList
+              data={safeFiltered}
+              keyExtractor={(item, index) => item?.id || `uniform-row-${index}`}
+              style={styles.list}
+              contentContainerStyle={[styles.listContent, safeFiltered.length === 0 && styles.listContentEmpty]}
+              removeClippedSubviews
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={8}
+              refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+              ListEmptyComponent={
+                loading ? <Text style={styles.muted}>Loading...</Text> : <Text style={styles.muted}>No uniform submissions found.</Text>
+              }
+              renderItem={({ item }) => renderUniformCard(item)}
+            />
+          )}
         </>
       )}
       <AlertModal {...alertProps} />
@@ -795,19 +1167,33 @@ const createStyles = (theme: any) => StyleSheet.create({
   list: { flex: 1, minHeight: 0 },
   listContent: { paddingBottom: 20 },
   listContentEmpty: { flexGrow: 1, justifyContent: 'center' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 10 },
-  headerText: { flex: 1 },
-  title: { color: theme?.text || '#fff', fontSize: 20, fontWeight: '800' },
-  subtitle: { color: theme?.textSecondary || '#9CA3AF', fontSize: 12, marginTop: 4 },
-  exportButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  exportButtonText: { color: '#fff', fontWeight: '700' },
-  search: { backgroundColor: theme?.surface || '#111827', color: theme?.text || '#fff', borderRadius: 10, padding: 10, borderColor: theme?.border || '#1f2937', borderWidth: 1, marginBottom: 6 },
+  headerBlock: { marginBottom: 8, gap: 8 },
+  headerText: { width: '100%' },
+  title: { color: theme?.text || '#fff', fontSize: 30, lineHeight: 34, fontWeight: '800', flexShrink: 1, letterSpacing: -0.3 },
+  subtitle: { color: theme?.textSecondary || '#9CA3AF', fontSize: 13, marginTop: 4, lineHeight: 18, fontWeight: '500' },
+  headerActionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  headerActionButton: { flexGrow: 1, flexBasis: 164, maxWidth: '100%' },
+  exportButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, minHeight: 44, flexShrink: 1 },
+  exportButtonText: { color: '#fff', fontWeight: '700', flexShrink: 1, fontSize: 14, letterSpacing: 0.1 },
+  searchWrap: {
+    backgroundColor: theme?.surface || '#111827',
+    borderRadius: 10,
+    borderColor: theme?.border || '#1f2937',
+    borderWidth: 1,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchInput: { flex: 1, color: theme?.text || '#fff', fontSize: 14, paddingVertical: 8, lineHeight: 20 },
+  searchClearButton: { padding: 2 },
   controlsRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 6 },
   countChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: theme?.surface || '#111827', borderWidth: 1, borderColor: theme?.border || '#1f2937' },
-  countChipText: { color: theme?.text || '#fff', fontSize: 12, fontWeight: '600' },
+  countChipText: { color: theme?.text || '#fff', fontSize: 13, fontWeight: '700' },
   bulkButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  bulkButtonText: { color: '#fff', fontSize: 12, fontWeight: '800' },
-  controlsSpacer: { flexGrow: 1 },
+  bulkButtonText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   toggleButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, borderWidth: 1, borderColor: theme?.border || '#1f2937', backgroundColor: theme?.surface || '#111827' },
   toggleButtonActive: { backgroundColor: theme?.primary || '#3b82f6', borderColor: theme?.primary || '#3b82f6' },
   toggleButtonText: { color: theme?.textSecondary || '#9CA3AF', fontSize: 12, fontWeight: '700' },
@@ -818,7 +1204,7 @@ const createStyles = (theme: any) => StyleSheet.create({
   insightsCard: { backgroundColor: theme?.cardBackground || '#111827', borderRadius: 12, padding: 10, borderColor: theme?.border || '#1f2937', borderWidth: 1, marginBottom: 8 },
   insightBlock: { marginBottom: 10 },
   insightDivider: { height: 1, backgroundColor: theme?.border || '#1f2937', marginVertical: 6 },
-  summaryTitle: { color: theme?.text || '#fff', fontWeight: '700', marginBottom: 8 },
+  summaryTitle: { color: theme?.text || '#fff', fontWeight: '700', marginBottom: 8, fontSize: 12 },
   summaryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   summaryChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999, backgroundColor: theme?.surface || '#111827', borderWidth: 1, borderColor: theme?.border || '#1f2937' },
   summaryChipText: { color: theme?.text || '#fff', fontWeight: '600', fontSize: 12 },
@@ -830,9 +1216,9 @@ const createStyles = (theme: any) => StyleSheet.create({
   card: { backgroundColor: theme?.cardBackground || '#111827', borderRadius: 12, padding: 12, borderColor: theme?.border || '#1f2937', borderWidth: 1, marginBottom: 10 },
   missingCard: { borderStyle: 'dashed', borderColor: theme?.warning || '#f59e0b' },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  name: { color: theme?.text || '#fff', fontWeight: '800', fontSize: 16, marginBottom: 4 },
+  name: { color: theme?.text || '#fff', fontWeight: '800', fontSize: 20, lineHeight: 26, marginBottom: 8, letterSpacing: -0.2 },
   paymentChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999, borderWidth: 1 },
-  paymentChipText: { fontSize: 11, fontWeight: '700' },
+  paymentChipText: { fontSize: 12, fontWeight: '700' },
   inlineActionButton: {
     marginTop: 10,
     alignSelf: 'flex-start',
@@ -848,6 +1234,79 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
+  deleteActionButton: {
+    marginTop: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+  },
+  deleteActionText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  manualNumberSection: {
+    marginTop: 10,
+    gap: 6,
+  },
+  manualNumberLabel: {
+    color: theme?.textSecondary || '#9CA3AF',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  manualNumberEditor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  manualNumberInput: {
+    minWidth: 70,
+    maxWidth: 90,
+    borderWidth: 1,
+    borderColor: theme?.border || '#1f2937',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    color: theme?.text || '#fff',
+    backgroundColor: theme?.surface || '#111827',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  manualNumberButton: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  manualNumberButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  manualNumberCta: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  manualNumberCtaText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  detailText: { color: theme?.text || '#fff', fontSize: 14, lineHeight: 21, marginBottom: 2 },
+  detailMuted: { color: theme?.textSecondary || '#9CA3AF', fontSize: 13, lineHeight: 19, marginBottom: 2 },
+  detailLabel: { color: theme?.textSecondary || '#9CA3AF', fontWeight: '700' },
+  detailValue: { color: theme?.text || '#fff', fontWeight: '600' },
   text: { color: theme?.text || '#fff', fontSize: 13 },
-  muted: { color: theme?.textSecondary || '#9CA3AF', paddingVertical: 8, fontSize: 12 },
+  muted: { color: theme?.textSecondary || '#9CA3AF', paddingVertical: 8, fontSize: 13, lineHeight: 18 },
 });

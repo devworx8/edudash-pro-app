@@ -91,6 +91,8 @@ export function createEmptyTeacherData(): TeacherDashboardData {
     recentAssignments: [],
     upcomingEvents: [],
     todayRoutine: null,
+    schoolWideRoutine: null,
+    classRoutines: [],
   };
 }
 
@@ -106,6 +108,28 @@ export function createEmptyParentData(): ParentDashboardData {
     upcomingEvents: [],
     unreadMessages: 0,
   };
+}
+
+export interface TeacherRoutineSnapshot {
+  weeklyProgramId: string;
+  classId?: string | null;
+  termId?: string | null;
+  themeId?: string | null;
+  title?: string | null;
+  summary?: string | null;
+  weekStartDate: string;
+  weekEndDate: string;
+  dayOfWeek: number;
+  blockCount: number;
+  nextBlockTitle?: string | null;
+  nextBlockStart?: string | null;
+  blocks: Array<{
+    id: string;
+    title: string;
+    blockType: string;
+    startTime?: string | null;
+    endTime?: string | null;
+  }>;
 }
 
 export interface TeacherDashboardData {
@@ -143,27 +167,9 @@ export interface TeacherDashboardData {
     reminderOffsetDays?: 7 | 3 | 1 | null;
     reminderLabel?: string | null;
   }>;
-  todayRoutine?: {
-    weeklyProgramId: string;
-    classId?: string | null;
-    termId?: string | null;
-    themeId?: string | null;
-    title?: string | null;
-    summary?: string | null;
-    weekStartDate: string;
-    weekEndDate: string;
-    dayOfWeek: number;
-    blockCount: number;
-    nextBlockTitle?: string | null;
-    nextBlockStart?: string | null;
-    blocks: Array<{
-      id: string;
-      title: string;
-      blockType: string;
-      startTime?: string | null;
-      endTime?: string | null;
-    }>;
-  } | null;
+  todayRoutine?: TeacherRoutineSnapshot | null;
+  schoolWideRoutine?: TeacherRoutineSnapshot | null;
+  classRoutines?: TeacherRoutineSnapshot[];
 }
 
 export interface ParentDashboardData {

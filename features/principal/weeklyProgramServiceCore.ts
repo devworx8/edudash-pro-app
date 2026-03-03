@@ -15,6 +15,7 @@ export interface ShareWeeklyProgramInput {
   preschoolId: string;
   sharedBy: string;
   rules: ProgramTimeRules;
+  teacherUserIds?: string[];
 }
 
 export type WeeklyProgramShareAudience = 'parents' | 'teachers';
@@ -1012,9 +1013,37 @@ export class WeeklyProgramService {
 
     const weekStartDate = String(programRow.week_start_date || '').slice(0, 10);
     const dateRange = formatDateRange(weekStartDate);
+    let classDisplayName: string | null = null;
+    let classTeacherId: string | null = null;
+    if (programRow.class_id) {
+      const { data: classRow } = await supabase
+        .from('classes')
+        .select('name, teacher_id')
+        .eq('id', String(programRow.class_id))
+        .maybeSingle();
+      classDisplayName = classRow?.name ? String(classRow.name) : null;
+      classTeacherId = classRow?.teacher_id ? String(classRow.teacher_id) : null;
+    }
+
+    const normalizedTeacherUserIds = Array.from(
+      new Set((input.teacherUserIds || []).map((id) => String(id || '').trim()).filter(Boolean)),
+    );
+    const teacherUserIds = audience === 'teachers'
+      ? (normalizedTeacherUserIds.length > 0
+        ? normalizedTeacherUserIds
+        : classTeacherId
+          ? [classTeacherId]
+          : [])
+      : [];
+
+    if (audience === 'teachers' && programRow.class_id && teacherUserIds.length === 0) {
+      throw new Error('This class has no assigned teacher yet. Assign a teacher to the class, then share again.');
+    }
+
+    const classTitleSuffix = classDisplayName ? ` • ${classDisplayName}` : '';
     const title = audience === 'teachers'
-      ? `Teacher Routine • ${dateRange}`
-      : `Daily Routine • ${dateRange}`;
+      ? `Teacher Routine${classTitleSuffix} • ${dateRange}`
+      : `Daily Routine${classTitleSuffix} • ${dateRange}`;
 
     const summary = (audience === 'teachers' ? renderStaffSummary : renderParentSummary)({
       program: programRow,
@@ -1088,7 +1117,11 @@ export class WeeklyProgramService {
             ? 'New teacher routine brief is now active for classroom execution.'
             : 'New daily routine program shared with strict arrival and pickup windows.',
           target_audience: [audience],
-          role_targets: [audience === 'teachers' ? 'teacher' : 'parent'],
+          user_ids: audience === 'teachers' && teacherUserIds.length > 0 ? teacherUserIds : undefined,
+          role_targets:
+            audience === 'teachers'
+              ? (programRow.class_id ? undefined : ['teacher'])
+              : ['parent'],
           priority: audience === 'teachers' ? 'high' : 'medium',
           send_immediately: true,
           context: {

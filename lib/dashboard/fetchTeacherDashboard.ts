@@ -369,12 +369,16 @@ export async function fetchTeacherDashboardData(
       schoolId ? fetchEvents(schoolId) : Promise.resolve([]),
     ]);
 
-  const todayRoutine = schoolId
+  const routineBundle = schoolId
     ? await fetchTodayRoutine(
         schoolId,
         myClasses.map((cls: any) => String(cls.id))
       )
-    : null;
+    : {
+        todayRoutine: null,
+        schoolWideRoutine: null,
+        classRoutines: [],
+      };
 
   const uniqueStudentIds = new Set<string>();
   myClasses.forEach((cls: any) => {
@@ -403,6 +407,8 @@ export async function fetchTeacherDashboardData(
     myClasses: normalizedClasses,
     recentAssignments,
     upcomingEvents,
-    todayRoutine,
+    todayRoutine: routineBundle.todayRoutine,
+    schoolWideRoutine: routineBundle.schoolWideRoutine,
+    classRoutines: routineBundle.classRoutines,
   };
 }

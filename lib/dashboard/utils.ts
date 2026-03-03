@@ -168,7 +168,10 @@ export const createEmptyTeacherData = (): TeacherDashboardData => ({
   pendingGrading: 0,
   myClasses: [],
   recentAssignments: [],
-  upcomingEvents: []
+  upcomingEvents: [],
+  todayRoutine: null,
+  schoolWideRoutine: null,
+  classRoutines: [],
 });
 
 export const createEmptyParentData = (): ParentDashboardData => ({

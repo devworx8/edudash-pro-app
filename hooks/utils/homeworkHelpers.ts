@@ -11,6 +11,8 @@ import { logger } from '@/lib/logger';
  * Build enhanced system prompt with child context
  */
 export function buildSystemPrompt(opts: HomeworkGenOptions, childContext: any): string {
+  const isPreschoolPipeline = opts.pipelineMode === 'preschool_activity_pack' || opts.gradeLevel <= 0;
+
   let prompt = `You are Dash, an AI learning assistant helping a parent support their child's education.
 
 CONTEXT:
@@ -31,6 +33,30 @@ CONTEXT:
       const rate = Math.round((childContext.attendance_summary.present_count / childContext.attendance_summary.total_days) * 100);
       prompt += `\n- Recent attendance: ${rate}% (last 30 days)`;
     }
+  }
+
+  if (isPreschoolPipeline) {
+    prompt += `
+
+PIPELINE MODE:
+- Preschool activity pack mode (ages 1-6)
+
+YOUR ROLE:
+1. Convert worksheet/homework content into short, practical home activities (5-15 minutes each)
+2. Use simple parent instructions and clear materials list
+3. Include safe movement, language, and early numeracy/literacy opportunities
+4. Provide gentle observation checkpoints (completed / needs support / not attempted)
+5. Keep tone warm, practical, and non-judgmental
+
+OUTPUT FORMAT:
+- Activity title
+- Goal
+- Materials
+- Step-by-step activity (numbered)
+- Parent talk prompts
+- Safety note
+- Quick teacher feedback checklist`;
+    return prompt;
   }
 
   prompt += `

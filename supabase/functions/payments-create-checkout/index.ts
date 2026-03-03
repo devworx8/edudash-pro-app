@@ -16,6 +16,11 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const jsonHeaders = {
+  ...corsHeaders,
+  'Content-Type': 'application/json',
+};
+
 interface CheckoutInput {
   scope: 'school' | 'user';
   schoolId?: string;
@@ -171,14 +176,52 @@ Deno.serve(async (req) => {
   try {
     // Parse request body
     const input: CheckoutInput = await req.json();
+    const scope = input.scope === 'school' || input.scope === 'user' ? input.scope : null;
+    const billing = input.billing === 'monthly' || input.billing === 'annual' ? input.billing : null;
+    const planTier = String(input.planTier || '').trim();
     
     console.log('[payments-create-checkout] Received input:', {
-      scope: input.scope,
-      planTier: input.planTier,
-      billing: input.billing,
+      scope,
+      planTier,
+      billing,
       hasSchoolId: !!input.schoolId,
       hasUserId: !!input.userId,
     });
+
+    if (!scope) {
+      return new Response(JSON.stringify({ error: 'invalid_scope' }), {
+        headers: jsonHeaders,
+        status: 400,
+      });
+    }
+
+    if (!billing) {
+      return new Response(JSON.stringify({ error: 'invalid_billing' }), {
+        headers: jsonHeaders,
+        status: 400,
+      });
+    }
+
+    if (!planTier) {
+      return new Response(JSON.stringify({ error: 'plan_tier_required' }), {
+        headers: jsonHeaders,
+        status: 400,
+      });
+    }
+
+    if (scope === 'school' && !String(input.schoolId || '').trim()) {
+      return new Response(JSON.stringify({ error: 'school_id_required' }), {
+        headers: jsonHeaders,
+        status: 400,
+      });
+    }
+
+    if (scope === 'user' && !String(input.userId || '').trim()) {
+      return new Response(JSON.stringify({ error: 'user_id_required' }), {
+        headers: jsonHeaders,
+        status: 400,
+      });
+    }
     
     // Get environment configuration
     const payfastMode = Deno.env.get('PAYFAST_MODE') || 'sandbox';
@@ -197,7 +240,7 @@ Deno.serve(async (req) => {
     
     // Recurring billing on PayFast commonly requires a passphrase in production.
     // Fail fast with a clear error instead of redirecting to a 400 on PayFast.
-    const requiresRecurring = input.billing !== 'annual';
+    const requiresRecurring = billing !== 'annual';
     if (isProduction && requiresRecurring && !passphrase) {
       throw new Error('PAYFAST_PASSPHRASE is required for recurring payments in production mode');
     }
@@ -205,7 +248,7 @@ Deno.serve(async (req) => {
     // Create Supabase client with service role
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     
-    const normalizedTier = String(input.planTier || '')
+    const normalizedTier = planTier
       .trim()
       .toLowerCase()
       .replace(/-/g, '_');
@@ -238,7 +281,7 @@ Deno.serve(async (req) => {
     
     if (planError || !plan) {
       console.error('[payments-create-checkout] Plan not found:', planError);
-      throw new Error(`Subscription plan not found: ${input.planTier}`);
+      throw new Error(`Subscription plan not found: ${planTier}`);
     }
     
     // Check for enterprise tier
@@ -250,7 +293,7 @@ Deno.serve(async (req) => {
     }
     
     // Calculate price (prices are stored in rands)
-    const isAnnual = input.billing === 'annual';
+    const isAnnual = billing === 'annual';
     let price = isAnnual ? plan.price_annual : plan.price_monthly;
     
     // Apply launch promo (50% off monthly parent tiers only until Mar 31, 2026)
@@ -287,8 +330,8 @@ Deno.serve(async (req) => {
       item_description: `${plan.name} subscription - ${input.seats || plan.max_teachers || 1} seats`,
       custom_str1: input.userId || '',
       custom_str2: plan.tier,
-      custom_str3: input.scope,
-      custom_str4: input.billing,
+      custom_str3: scope,
+      custom_str4: billing,
       custom_str5: input.schoolId || '',
       custom_int1: input.seats || plan.max_teachers || 1,
     };
@@ -343,7 +386,7 @@ Deno.serve(async (req) => {
         user_id: input.userId || null,
         school_id: input.schoolId || null,
         tier: plan.tier,
-        billing_cycle: input.billing,
+        billing_cycle: billing,
         subscription_plan_id: plan.id,
         metadata: {
           mode: payfastMode,
@@ -373,14 +416,14 @@ Deno.serve(async (req) => {
         payment_id: paymentId,
         mode: payfastMode,
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { headers: jsonHeaders }
     );
     
   } catch (error) {
     console.error('[payments-create-checkout] Error:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { headers: jsonHeaders, status: 500 }
     );
   }
 });

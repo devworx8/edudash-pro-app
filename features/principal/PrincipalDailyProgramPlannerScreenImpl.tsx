@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { assertSupabase } from '@/lib/supabase';
 import { extractOrganizationId } from '@/lib/tenant/compat';
 import type { DailyProgramBlock, WeeklyProgramDraft } from '@/types/ecd-planning';
 import { WeeklyProgramCopilotService } from '@/lib/services/weeklyProgramCopilotService';
@@ -144,6 +145,13 @@ type PlannerPreset = {
   budgetLevel: 'low' | 'medium' | 'high';
   includeAssessment: boolean;
   rules: ProgramTimeRules;
+};
+
+type SchoolClassOption = {
+  id: string;
+  name: string;
+  gradeLevel: string | null;
+  teacherId: string | null;
 };
 
 type RoutineOptionId =
@@ -545,6 +553,13 @@ function withSchoolNamedTitle(rawTitle: string | null | undefined, schoolName: s
   return `${cleanSchool}: ${raw}`;
 }
 
+function formatClassLabel(option: SchoolClassOption): string {
+  const grade = String(option.gradeLevel || '').trim();
+  const name = String(option.name || '').trim();
+  if (grade && name) return `${grade} · ${name}`;
+  return grade || name || 'Unnamed class';
+}
+
 export default function PrincipalDailyProgramPlannerScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
@@ -554,6 +569,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     requestId?: string;
     requestType?: string;
     weekStartDate?: string;
+    classId?: string;
     ageGroup?: string;
     themeTitle?: string;
     objectives?: string;
@@ -597,6 +613,9 @@ export default function PrincipalDailyProgramPlannerScreen() {
   const [selectedPresetId, setSelectedPresetId] = useState<PlannerPreset['id'] | null>(null);
 
   const [rules, setRules] = useState<ProgramTimeRules>(buildDefaultRules());
+  const [classOptions, setClassOptions] = useState<SchoolClassOption[]>([]);
+  const [loadingClasses, setLoadingClasses] = useState(false);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [timePickerField, setTimePickerField] = useState<'arrivalStart' | 'arrivalCutoff' | 'pickupStart' | 'pickupCutoff' | null>(null);
   const [plannerPreferencesReady, setPlannerPreferencesReady] = useState(false);
 
@@ -730,6 +749,54 @@ export default function PrincipalDailyProgramPlannerScreen() {
   }, [loadPrograms]);
 
   useEffect(() => {
+    let active = true;
+
+    if (!organizationId) {
+      setClassOptions([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    const loadClasses = async () => {
+      setLoadingClasses(true);
+      try {
+        const supabase = assertSupabase();
+        const { data, error } = await supabase
+          .from('classes')
+          .select('id, name, grade_level, teacher_id')
+          .or(`preschool_id.eq.${organizationId},organization_id.eq.${organizationId}`)
+          .order('grade_level', { ascending: true })
+          .order('name', { ascending: true });
+
+        if (error) {
+          throw error;
+        }
+
+        if (!active) return;
+        const normalized = (data || []).map((row: any) => ({
+          id: String(row.id || ''),
+          name: String(row.name || ''),
+          gradeLevel: row.grade_level ? String(row.grade_level) : null,
+          teacherId: row.teacher_id ? String(row.teacher_id) : null,
+        })).filter((row) => row.id);
+        setClassOptions(normalized);
+      } catch (error) {
+        console.warn('[PrincipalDailyProgramPlanner] Failed to load classes:', error);
+      } finally {
+        if (active) {
+          setLoadingClasses(false);
+        }
+      }
+    };
+
+    void loadClasses();
+    return () => {
+      active = false;
+    };
+  }, [organizationId]);
+
+  useEffect(() => {
     if (prefillAppliedRef.current) return;
     const hasPrefill =
       Boolean(params.requestId) ||
@@ -747,6 +814,9 @@ export default function PrincipalDailyProgramPlannerScreen() {
     }
     if (params.ageGroup) {
       setAgeGroup(String(params.ageGroup));
+    }
+    if (params.classId) {
+      setSelectedClassId(String(params.classId));
     }
 
     const objectives = parseObjectivesParam(params.objectives);
@@ -767,6 +837,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     }
   }, [
     params.ageGroup,
+    params.classId,
     params.fromRoutineRequest,
     params.objectives,
     params.requestId,
@@ -939,6 +1010,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
 
       setDraft({
         ...generated,
+        class_id: selectedClassId,
         title: withSchoolNamedTitle(generated.title, schoolName, themeTitle),
         blocks: generatedBlocks,
         generation_context: {
@@ -998,6 +1070,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     routineOptions.storyCircle,
     routineOptions.toiletRoutine,
     routineOptions.transitionCues,
+    selectedClassId,
     schoolName,
     themeTitle,
     userId,
@@ -1057,6 +1130,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
       const saved = await WeeklyProgramService.saveWeeklyProgram({
         weeklyProgram: {
           ...draft,
+          class_id: selectedClassId,
           preschool_id: organizationId,
           created_by: userId,
           week_start_date: startOfWeekMonday(draft.week_start_date || weekStartDate),
@@ -1100,7 +1174,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     } finally {
       setSaving(false);
     }
-  }, [ageGroup, dailyMinutes, draft, loadPrograms, organizationId, schoolName, themeTitle, userId, weekStartDate, preflight, confirmedAssumptions, rules, showAlert]);
+  }, [ageGroup, dailyMinutes, draft, loadPrograms, organizationId, schoolName, selectedClassId, themeTitle, userId, weekStartDate, preflight, confirmedAssumptions, rules, showAlert]);
 
   const shareWithParents = useCallback(async (programOverride?: WeeklyProgramDraft) => {
     const activeProgram = programOverride || draft;
@@ -1189,18 +1263,26 @@ export default function PrincipalDailyProgramPlannerScreen() {
         }
         programToShare = saved;
       }
+      const targetClassId = programToShare.class_id
+        ? String(programToShare.class_id)
+        : null;
+      const targetClassOption = classOptions.find((option) => option.id === targetClassId) || null;
 
       await WeeklyProgramService.shareWeeklyProgramWithTeachers({
         weeklyProgramId: programToShare.id,
         preschoolId: organizationId,
         sharedBy: userId,
         rules: normalized,
+        teacherUserIds: targetClassOption?.teacherId ? [targetClassOption.teacherId] : undefined,
       });
 
       await loadPrograms();
+      const classLabel = targetClassOption ? formatClassLabel(targetClassOption) : null;
       showAlert({
         title: 'Shared with Teachers',
-        message: 'Routine brief shared with all teachers. Dashboards and in-app notifications are now updated.',
+        message: classLabel
+          ? `Routine brief shared with ${classLabel}${targetClassOption?.teacherId ? ' teacher(s)' : ''}. Dashboards and in-app notifications are now updated.`
+          : 'Routine brief shared with all teachers. Dashboards and in-app notifications are now updated.',
         type: 'success',
       });
     } catch (error: unknown) {
@@ -1212,7 +1294,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     } finally {
       setSharingTeachers(false);
     }
-  }, [draft, loadPrograms, organizationId, rules, saveDraft, userId, showAlert]);
+  }, [classOptions, draft, loadPrograms, organizationId, rules, saveDraft, userId, showAlert]);
 
   const deleteSavedProgram = useCallback(
     (program: WeeklyProgramDraft) => {
@@ -1430,6 +1512,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
       })();
       setSelectedPresetId(null);
       setWeekStartDate(startOfWeekMonday(program.week_start_date));
+      setSelectedClassId(program.class_id ? String(program.class_id) : null);
       setThemeTitle(normalizedTheme || themeTitle);
       setAgeGroup(program.age_group || '3-6');
       setDailyMinutes('300');
@@ -1473,6 +1556,11 @@ export default function PrincipalDailyProgramPlannerScreen() {
     const withTimesCount = draftBlocks.filter((block) => !!block.start_time && !!block.end_time).length;
     return { totalBlocks, withTimesCount };
   }, [draft?.blocks]);
+
+  const selectedClassOption = useMemo(
+    () => classOptions.find((option) => option.id === selectedClassId) || null,
+    [classOptions, selectedClassId],
+  );
 
   const capsCoverage = useMemo(() => {
     const rawCoverage = (draft?.generation_context as any)?.capsCoverage;
@@ -1913,6 +2001,49 @@ export default function PrincipalDailyProgramPlannerScreen() {
               <Text style={styles.schoolNamePillText}>School: {schoolName}</Text>
             </View>
           )}
+          <Text style={styles.fieldLabel}>Routine Scope</Text>
+          <Text style={styles.fieldSubHint}>
+            Use School-wide for shared activities, or select a class group to generate and share a class-specific routine.
+          </Text>
+          <View style={styles.toggleRow}>
+            <TouchableOpacity
+              style={[styles.togglePill, !selectedClassId && styles.togglePillActive]}
+              onPress={() => setSelectedClassId(null)}
+            >
+              <Text style={[styles.toggleText, !selectedClassId && styles.toggleTextActive]}>School-wide</Text>
+            </TouchableOpacity>
+          </View>
+          {loadingClasses ? (
+            <Text style={styles.sectionHint}>Loading class groups...</Text>
+          ) : classOptions.length > 0 ? (
+            <View style={styles.chipRow}>
+              {classOptions.map((option) => {
+                const isActive = selectedClassId === option.id;
+                return (
+                  <TouchableOpacity
+                    key={option.id}
+                    style={[styles.quickChipGhost, isActive && styles.togglePillActive]}
+                    onPress={() => setSelectedClassId(option.id)}
+                  >
+                    <Text style={[styles.quickChipGhostText, isActive && styles.toggleTextActive]}>
+                      {formatClassLabel(option)}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={styles.sectionHint}>No class groups found yet. Create classes to use class-specific routines.</Text>
+          )}
+          {selectedClassOption ? (
+            <View style={styles.schoolNamePill}>
+              <Ionicons name="people-outline" size={14} color={theme.primary} />
+              <Text style={styles.schoolNamePillText}>
+                Selected Class: {formatClassLabel(selectedClassOption)}
+                {selectedClassOption.teacherId ? '' : ' (No teacher assigned yet)'}
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.fieldLabel}>Week Start (Monday)</Text>
           <TextInput
             style={styles.input}
@@ -2360,7 +2491,13 @@ export default function PrincipalDailyProgramPlannerScreen() {
               disabled={sharingTeachers || !draft}
             >
               {sharingTeachers ? <EduDashSpinner size="small" color="#fff" /> : <Ionicons name="people-outline" size={16} color="#fff" />}
-              <Text style={styles.successBtnText}>{sharingTeachers ? 'Sharing...' : 'Share with Teachers'}</Text>
+              <Text style={styles.successBtnText}>
+                {sharingTeachers
+                  ? 'Sharing...'
+                  : selectedClassOption
+                    ? 'Share with Class Teacher'
+                    : 'Share with Teachers'}
+              </Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity

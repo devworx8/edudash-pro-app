@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
@@ -126,7 +126,87 @@ export default function TeacherDailyProgramPlannerScreen() {
   const { profile } = useAuth();
   const { width } = useWindowDimensions();
   const { data, loading, refresh } = useTeacherDashboard();
-  const routine = data?.todayRoutine || null;
+  const classLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const cls of data?.myClasses || []) {
+      const classId = String(cls.id || '').trim();
+      if (!classId) continue;
+      const grade = String(cls.grade || '').trim();
+      const className = String(cls.name || '').trim();
+      const label = grade && className ? `${grade} · ${className}` : grade || className || 'Class';
+      map.set(classId, label);
+    }
+    return map;
+  }, [data?.myClasses]);
+  const routineOptions = useMemo(() => {
+    const options: Array<{
+      key: string;
+      label: string;
+      routine: NonNullable<typeof data>['todayRoutine'];
+    }> = [];
+    const seenKeys = new Set<string>();
+
+    for (const routine of data?.classRoutines || []) {
+      if (!routine?.weeklyProgramId) continue;
+      const classLabel = routine.classId
+        ? classLabelById.get(routine.classId) || 'Class routine'
+        : 'Class routine';
+      const key = `class:${routine.weeklyProgramId}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      options.push({
+        key,
+        label: classLabel,
+        routine,
+      });
+    }
+
+    if (data?.schoolWideRoutine?.weeklyProgramId) {
+      const key = `school:${data.schoolWideRoutine.weeklyProgramId}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        options.push({
+          key,
+          label: 'School-wide',
+          routine: data.schoolWideRoutine,
+        });
+      }
+    }
+
+    if (options.length === 0 && data?.todayRoutine?.weeklyProgramId) {
+      options.push({
+        key: `default:${data.todayRoutine.weeklyProgramId}`,
+        label: data.todayRoutine.classId
+          ? classLabelById.get(data.todayRoutine.classId) || 'Class routine'
+          : 'School-wide',
+        routine: data.todayRoutine,
+      });
+    }
+
+    return options;
+  }, [classLabelById, data?.classRoutines, data?.schoolWideRoutine, data?.todayRoutine]);
+  const [selectedRoutineKey, setSelectedRoutineKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (routineOptions.length === 0) {
+      setSelectedRoutineKey(null);
+      return;
+    }
+    setSelectedRoutineKey((prev) => {
+      if (prev && routineOptions.some((option) => option.key === prev)) {
+        return prev;
+      }
+      return routineOptions[0].key;
+    });
+  }, [routineOptions]);
+  const routine = useMemo(() => {
+    if (!selectedRoutineKey) return data?.todayRoutine || null;
+    return routineOptions.find((option) => option.key === selectedRoutineKey)?.routine || data?.todayRoutine || null;
+  }, [data?.todayRoutine, routineOptions, selectedRoutineKey]);
+  const routineScopeLabel = useMemo(() => {
+    if (!routine) return '';
+    if (!routine.classId) return 'School-wide routine';
+    return classLabelById.get(routine.classId) || 'Class routine';
+  }, [classLabelById, routine]);
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const isCompact = width < 760;
   const [reminderSoundEnabled, setReminderSoundEnabled] = useState(true);
@@ -145,6 +225,7 @@ export default function TeacherDailyProgramPlannerScreen() {
       .join('; ');
     return {
       mode: 'quick',
+      pipeline: resolvedSchoolType === 'k12_school' ? 'k12_exam_prep' : 'preschool_activity_pack',
       topic: routineTopic,
       objectives: objectiveSeed,
       weeklyProgramId: routine?.weeklyProgramId || '',
@@ -154,7 +235,7 @@ export default function TeacherDailyProgramPlannerScreen() {
       themeId: routine?.themeId || '',
       routineContext: routine ? buildRoutineContext(routine) : '',
     };
-  }, [routine]);
+  }, [resolvedSchoolType, routine]);
 
   const reminderBlocksByDay = useMemo(() => {
     if (!routine?.blocks?.length) return {};
@@ -479,8 +560,29 @@ export default function TeacherDailyProgramPlannerScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>{routine.title || 'Published school routine'}</Text>
                 <Text style={styles.cardMeta}>
-                  {formatDate(routine.weekStartDate)} - {formatDate(routine.weekEndDate)} • {routine.blockCount} blocks
+                  {formatDate(routine.weekStartDate)} - {formatDate(routine.weekEndDate)} • {routineScopeLabel} • {routine.blockCount} blocks
                 </Text>
+                {routineOptions.length > 1 ? (
+                  <View style={styles.routineSwitchRow}>
+                    {routineOptions.map((option) => {
+                      const isActive = option.key === selectedRoutineKey;
+                      return (
+                        <TouchableOpacity
+                          key={option.key}
+                          style={[
+                            styles.routineSwitchChip,
+                            { borderColor: isActive ? theme.primary : theme.border, backgroundColor: isActive ? `${theme.primary}1c` : theme.background },
+                          ]}
+                          onPress={() => setSelectedRoutineKey(option.key)}
+                        >
+                          <Text style={[styles.routineSwitchChipText, { color: isActive ? theme.primary : theme.textSecondary }]}>
+                            {option.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : null}
                 {routine.nextBlockTitle ? (
                   <>
                     <View style={styles.nextBlockRow}>
@@ -536,7 +638,7 @@ export default function TeacherDailyProgramPlannerScreen() {
             <View style={styles.card}>
               <Text style={styles.cardTitle}>No published routine yet</Text>
               <Text style={styles.cardMeta}>
-                Ask your principal/admin to publish the daily routine. It will appear here automatically.
+                Ask your principal/admin to publish a school-wide or class routine. It will appear here automatically.
               </Text>
             </View>
           )}
@@ -688,6 +790,22 @@ const createStyles = (theme: any) =>
       color: theme.textSecondary,
       fontSize: 13,
       lineHeight: 19,
+    },
+    routineSwitchRow: {
+      marginTop: 4,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    routineSwitchChip: {
+      borderWidth: 1,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    routineSwitchChipText: {
+      fontSize: 11,
+      fontWeight: '700',
     },
     nextBlockRow: {
       marginTop: 6,
