@@ -205,6 +205,15 @@ function computeNumericOverlapRatio(student: string, expected: string): number {
   return overlap / expectedNumbers.size;
 }
 
+function computeBestNumericOverlap(student: string, sources: string[]): number {
+  let best = 0;
+  for (const source of sources) {
+    const ratio = computeNumericOverlapRatio(student, source);
+    if (ratio > best) best = ratio;
+  }
+  return best;
+}
+
 function isLikelyMathVerificationPrompt(questionText: string, expected: string): boolean {
   const raw = `${questionText} ${expected}`.toLowerCase();
   if (/[0-9].*[=+\-*/×÷]/.test(raw)) return true;
@@ -476,14 +485,17 @@ function gradeOpenResponse(question: ExamQuestion, answerRaw: string): GradeFeed
   ]
     .join(' ')
     .trim();
+  const questionMathSource = String(question.question || question.text || '').trim();
+  const answerMathSource = String(question.correctAnswer || question.correct_answer || question.answer || '').trim();
+  const mathSources = [questionMathSource, answerMathSource, mathExpectationSource].filter((entry) => entry.length > 0);
   const mathVerificationPrompt = isLikelyMathVerificationPrompt(
     String(question.question || question.text || ''),
     mathExpectationSource,
   );
 
   const equationIsTrue = isEquationNumericallyTrue(answerRaw);
-  const numericOverlap = computeNumericOverlapRatio(answerRaw, mathExpectationSource);
-  if (mathVerificationPrompt && equationIsTrue && numericOverlap >= 0.45) {
+  const numericOverlap = computeBestNumericOverlap(answerRaw, mathSources);
+  if (mathVerificationPrompt && equationIsTrue && numericOverlap >= 0.34) {
     return {
       isCorrect: true,
       marksAwarded: maxMarks,
@@ -493,20 +505,19 @@ function gradeOpenResponse(question: ExamQuestion, answerRaw: string): GradeFeed
       gradingMode: 'deterministic',
     };
   }
-  if (mathVerificationPrompt && equationIsTrue && numericOverlap >= 0.3) {
+  if (mathVerificationPrompt && equationIsTrue && numericOverlap >= 0.2) {
+    const hint = explanation ? ` ${explanation}` : '';
     return {
       isCorrect: false,
       marksAwarded: Math.max(1, Math.round(maxMarks * 0.75)),
       maxMarks,
-      feedback:
-        explanation ||
-        `Partially correct (${Math.round(numericOverlap * 100)}% numeric match). Add the final conclusion sentence.`,
+      feedback: `Partially correct (${Math.round(numericOverlap * 100)}% numeric match). Add a clear conclusion sentence that states if the check is correct.${hint}`,
       explanation,
       gradingMode: 'deterministic',
     };
   }
 
-  if (hasEquivalentMathSentence(answerRaw, mathExpectationSource)) {
+  if (mathSources.some((source) => hasEquivalentMathSentence(answerRaw, source))) {
     return {
       isCorrect: true,
       marksAwarded: maxMarks,

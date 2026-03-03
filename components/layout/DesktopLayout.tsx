@@ -51,8 +51,12 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'teachers', label: 'Teachers', icon: 'school-outline', route: '/screens/teacher-management', roles: ['principal', 'principal_admin'] },
   { id: 'registrations', label: 'Registrations', icon: 'person-add-outline', route: '/screens/principal-registrations', roles: ['principal', 'principal_admin'] },
   { id: 'classes', label: 'Classes', icon: 'book-outline', route: '/screens/class-teacher-management', roles: ['principal', 'principal_admin', 'teacher'] },
+  { id: 'teacher-routine-requests', label: 'Routine Requests', icon: 'clipboard-outline', route: '/screens/teacher-routine-requests', roles: ['teacher'] },
   { id: 'attendance', label: 'Attendance', icon: 'checkmark-circle-outline', route: '/screens/attendance', roles: ['principal', 'principal_admin', 'teacher'] },
   { id: 'messages', label: 'Messages', icon: 'mail-outline', route: '/screens/teacher-message-list', roles: ['principal', 'principal_admin', 'teacher'] },
+  { id: 'principal-daily-planner', label: 'AI Daily Planner', icon: 'sparkles-outline', route: '/screens/principal-daily-program-planner', roles: ['principal', 'principal_admin'] },
+  { id: 'principal-ai-year-planner', label: 'AI Year Planner', icon: 'calendar-clear-outline', route: '/screens/principal-ai-year-planner', roles: ['principal', 'principal_admin'] },
+  { id: 'principal-routine-requests', label: 'Routine Requests', icon: 'clipboard-outline', route: '/screens/principal-routine-requests', roles: ['principal', 'principal_admin'] },
   { id: 'financials', label: 'Financials', icon: 'cash-outline', route: '/screens/finance-control-center?tab=overview', roles: ['principal', 'principal_admin'] },
   { id: 'campaigns', label: 'Campaigns', icon: 'megaphone-outline', route: '/screens/campaigns', roles: ['principal', 'principal_admin'] },
   { id: 'timetable', label: 'Timetable', icon: 'time-outline', route: '/screens/timetable-management', roles: ['principal', 'principal_admin'] },
@@ -189,6 +193,8 @@ export function DesktopLayout({
     headerLeft: {
       flexDirection: 'row' as const,
       alignItems: 'center' as const,
+      flex: 1,
+      minWidth: 0,
       gap: 12,
     },
     hamburgerButton: {
@@ -200,6 +206,7 @@ export function DesktopLayout({
       fontSize: 18,
       fontWeight: '700' as const,
       color: theme.text,
+      flexShrink: 1,
     },
     headerRight: {
       flexDirection: 'row' as const,
@@ -253,7 +260,7 @@ export function DesktopLayout({
                 <Ionicons name="menu" size={24} color={theme.text} />
               </TouchableOpacity>
             )}
-            <Text style={mobileStyles.headerTitle}>{title || tenantSlug}</Text>
+            <Text style={mobileStyles.headerTitle} numberOfLines={1}>{title || tenantSlug}</Text>
           </View>
           <View style={mobileStyles.headerRight}>
             <TouchableOpacity
@@ -446,7 +453,7 @@ const createStyles = (theme: any, collapsed: boolean, insets: any) =>
       flex: 1,
       flexDirection: 'row',
       backgroundColor: theme.background,
-      minHeight: '100vh' as any,
+      minHeight: '100dvh' as any,
     },
     sidebar: {
       width: collapsed ? 64 : 240,
@@ -583,6 +590,7 @@ const createStyles = (theme: any, collapsed: boolean, insets: any) =>
     },
     mainContent: {
       flex: 1,
+      minWidth: 0,
       overflow: 'hidden' as any,
       // Full width on mobile
       ['@media (max-width: 767px)' as any]: {

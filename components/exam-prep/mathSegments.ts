@@ -4,14 +4,15 @@ export type MathSegment = {
 };
 
 function normalizeMathDelimiters(raw: string): string {
-  let normalized = String(raw || '');
-  // Convert \[ ... \] to $$ ... $$ (display math)
-  normalized = normalized.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`);
-  // Convert \( ... \) to $ ... $ (inline math)
-  normalized = normalized.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`);
-  // Convert escaped dollar wrappers (\$ ... \$) to standard inline math
-  normalized = normalized.replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
-  return normalized;
+  return String(raw || '')
+    // Unwrap double-escaped delimiters emitted by JSON-serialized model output.
+    .replace(/\\\\(\[|\]|\(|\)|\$)/g, '\\$1')
+    // Convert \[ ... \] to $$ ... $$ (display math)
+    .replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`)
+    // Convert \( ... \) to $ ... $ (inline math)
+    .replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`)
+    // Convert escaped dollar wrappers (\$ ... \$) to standard inline math
+    .replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
 }
 
 export function parseMathSegments(value: string): MathSegment[] {

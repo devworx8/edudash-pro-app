@@ -19,6 +19,6 @@ describe('generate-exam fallback policy', () => {
   it('supports strict and standard quality modes', () => {
     expect(normalizeQualityMode('strict')).toBe('strict');
     expect(normalizeQualityMode('standard')).toBe('standard');
-    expect(normalizeQualityMode('unknown')).toBe('strict');
+    expect(normalizeQualityMode('unknown')).toBe('standard');
   });
 });

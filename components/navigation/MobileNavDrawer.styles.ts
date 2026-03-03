@@ -7,7 +7,7 @@ import { EdgeInsets } from 'react-native-safe-area-context';
 
 export const DRAWER_WIDTH = 280;
 
-export const getNavDrawerStyles = (theme: any, isDark: boolean, insets: EdgeInsets) =>
+export const getNavDrawerStyles = (theme: any, isDark: boolean, insets: EdgeInsets, drawerWidth: number = DRAWER_WIDTH) =>
   StyleSheet.create({
     container: {
       ...StyleSheet.absoluteFillObject,
@@ -30,7 +30,7 @@ export const getNavDrawerStyles = (theme: any, isDark: boolean, insets: EdgeInse
       top: 0,
       left: 0,
       bottom: 0,
-      width: DRAWER_WIDTH,
+      width: drawerWidth,
       backgroundColor: theme.surface,
       opacity: 1,
       paddingTop: insets.top,

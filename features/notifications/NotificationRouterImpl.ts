@@ -528,8 +528,26 @@ async function handleNotificationInteraction(data: NotificationPayload): Promise
       if (role === 'principal' || role === 'principal_admin') {
         router.push('/screens/principal-announcement' as any);
       } else if (role === 'teacher') {
-        // Teachers see announcements in their messages/communications list
-        router.push('/screens/teacher-message-list' as any);
+        const feature = getString((data as any)?.feature) || '';
+        const navigateTo = getString((data as any)?.navigate_to) || getString((data as any)?.route) || '';
+        const looksLikeDailyRoutineShare =
+          feature === 'daily_program_share_teachers' ||
+          navigateTo === '/screens/teacher-daily-program-planner';
+
+        if (looksLikeDailyRoutineShare) {
+          const weekStartDate = getString((data as any)?.week_start_date);
+          const classId = getString((data as any)?.class_id);
+          router.push({
+            pathname: '/screens/teacher-daily-program-planner',
+            params: {
+              ...(weekStartDate ? { weekStartDate } : {}),
+              ...(classId ? { classId } : {}),
+            },
+          } as any);
+        } else {
+          // Teachers see general announcements in their messages/communications list
+          router.push('/screens/teacher-message-list' as any);
+        }
       } else {
         router.push('/screens/parent-announcements' as any);
       }

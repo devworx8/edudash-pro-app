@@ -183,6 +183,9 @@ Rules:
 - Provide a valid correctAnswer and explanation for each question.
 - At least 2 sections and at least 20 questions for practice_test (do not go below 20).
 - Prefer concise, clean question text.
+- For language subjects with reading comprehension, every question and every option must be grounded in the provided passage.
+- Never use placeholder OCR/meta text as learner-facing content (no file names, no "source:", no translation labels).
+- For mathematics, keep learner-facing equations in plain symbols (× ÷ =), avoid escaped dollar wrappers (\\$...\\$).
 `;
 
 function jsonResponse(body: JsonRecord, status: number, corsHeaders: Record<string, string>) {
@@ -512,6 +515,7 @@ async function attemptExamQualityRepair(params: {
     `Learner language must be strictly ${params.language}.`,
     'If uploaded study material exists, keep questions strictly grounded in that material.',
     'Do not include OCR labels/file names/translation annotations in learner-facing content.',
+    'For mathematics explanations, use plain symbols (× ÷ =) and avoid escaped dollar delimiters.',
     'Keep CAPS alignment and preserve realistic mark distribution.',
     `Previous draft JSON:\n${JSON.stringify(params.normalizedExam)}`,
   ];
@@ -1287,7 +1291,7 @@ serve(async (req: Request) => {
         );
       }
     }
-    if (integrityIssues.length > 0 && hasStudyMaterialContext && isLanguageSubject(subject)) {
+    if (integrityIssues.length > 0 && isLanguageSubject(subject)) {
       const softenedExam = softenWeakGroundingComprehensionOptions(normalizedExam, language);
       if (softenedExam !== normalizedExam) {
         const postSoftenIssues = [
@@ -1301,7 +1305,7 @@ serve(async (req: Request) => {
           qualityRepaired = true;
           localFallbackReason =
             localFallbackReason ||
-            'Dash softened some comprehension items to keep answers strictly grounded in uploaded study material.';
+            'Dash softened some comprehension items to keep answers strictly grounded in the reading passage context.';
         }
       }
     }

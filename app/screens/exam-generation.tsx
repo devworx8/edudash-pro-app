@@ -15,6 +15,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { assertSupabase } from '@/lib/supabase';
 import { consumeExamGenerationDraft } from '@/lib/exam-prep/generationDraftStore';
 import { parseExamMarkdown, type ParsedExam } from '@/lib/examParser';
+import { exportExamToPdf } from '@/lib/exam-prep/exportExamPdf';
 import { ExamInteractiveView, type ExamResults } from '@/components/exam-prep/ExamInteractiveView';
 import { ExamFlashcardsView } from '@/components/exam-prep/ExamFlashcardsView';
 import { ExamRevisionNotesView } from '@/components/exam-prep/ExamRevisionNotesView';
@@ -160,6 +161,8 @@ export default function ExamGenerationScreen() {
   const [persistenceWarning, setPersistenceWarning] = useState<string | null>(null);
   const [showGenerationStatus, setShowGenerationStatus] = useState(false);
   const [completionSummary, setCompletionSummary] = useState<string | null>(null);
+  const [pdfExporting, setPdfExporting] = useState(false);
+  const [pdfExportNotice, setPdfExportNotice] = useState<string | null>(null);
   // Parents mainly care about the actual exam; keep the
   // audit + study coach collapsed by default on small screens.
   const [showAudit, setShowAudit] = useState(false);
@@ -379,6 +382,26 @@ export default function ExamGenerationScreen() {
     []
   );
 
+  const handleExportPdf = useCallback(async () => {
+    if (!exam || artifactType !== 'practice_test') return;
+    setPdfExporting(true);
+    setPdfExportNotice(null);
+    try {
+      const result = await exportExamToPdf({
+        exam,
+        childName,
+        generatedAt: new Date(),
+      });
+      if (!result.ok) {
+        setPdfExportNotice(result.message || 'Could not export exam PDF right now.');
+        return;
+      }
+      setPdfExportNotice('PDF ready. You can now review or share it.');
+    } finally {
+      setPdfExporting(false);
+    }
+  }, [artifactType, childName, exam]);
+
   const readyWithPayload =
     state === 'ready' &&
     ((isPracticeArtifact && !!exam) || (!isPracticeArtifact && !!artifact));
@@ -413,6 +436,34 @@ export default function ExamGenerationScreen() {
               <TouchableOpacity style={[styles.doneButton, { borderColor: theme.success }]} onPress={() => router.back()}>
                 <Text style={[styles.doneButtonText, { color: theme.success }]}>Done</Text>
               </TouchableOpacity>
+            </View>
+          ) : null}
+          {isPracticeArtifact && exam ? (
+            <View style={[styles.exportRow, { borderColor: theme.border, backgroundColor: theme.surface }]}>
+              <TouchableOpacity
+                style={[
+                  styles.exportButton,
+                  {
+                    borderColor: theme.primary,
+                    backgroundColor: `${theme.primary}18`,
+                    opacity: pdfExporting ? 0.7 : 1,
+                  },
+                ]}
+                onPress={handleExportPdf}
+                disabled={pdfExporting}
+              >
+                <Ionicons
+                  name={pdfExporting ? 'sync-outline' : 'download-outline'}
+                  size={16}
+                  color={theme.primary}
+                />
+                <Text style={[styles.exportButtonText, { color: theme.primary }]}>
+                  {pdfExporting ? 'Exporting PDF...' : 'Export Exam to PDF'}
+                </Text>
+              </TouchableOpacity>
+              {pdfExportNotice ? (
+                <Text style={[styles.exportNotice, { color: theme.muted }]}>{pdfExportNotice}</Text>
+              ) : null}
             </View>
           ) : null}
           {/* Compact toggle — only shown after exam is completed so it doesn't distract during the test */}
@@ -671,6 +722,34 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  exportRow: {
+    marginHorizontal: 14,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  exportButton: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  exportButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  exportNotice: {
+    fontSize: 11,
+    fontWeight: '500',
+    lineHeight: 16,
   },
   metaCard: {
     marginHorizontal: 14,

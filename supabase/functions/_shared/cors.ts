@@ -1,8 +1,8 @@
 /**
- * Shared CORS configuration for all Edge Functions
- * 
- * Restricts origins to known EduDash Pro domains in production.
- * Falls back to wildcard only in development.
+ * Shared CORS configuration for all Edge Functions.
+ *
+ * Supports environment-driven allowlists via `ALLOWED_WEB_ORIGINS`
+ * (comma-separated exact origins) while keeping safe defaults.
  */
 
 const ALLOWED_ORIGINS = [
@@ -26,28 +26,79 @@ const DEV_ORIGINS = [
   'http://127.0.0.1:19006',
 ];
 
+function parseOriginList(value?: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function isPrivateLanOrigin(origin: string): boolean {
+  if (!origin) return false;
+  try {
+    const parsed = new URL(origin);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+    const host = parsed.hostname;
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) return true;
+    const classB = host.match(/^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/);
+    if (classB) {
+      const secondOctet = Number(classB[1]);
+      return secondOctet >= 16 && secondOctet <= 31;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function getAllowedOrigins(): string[] {
+  const envOrigins = parseOriginList(Deno.env.get('ALLOWED_WEB_ORIGINS'));
+  return Array.from(new Set([...ALLOWED_ORIGINS, ...envOrigins]));
+}
+
 export function getCorsHeaders(req?: Request): Record<string, string> {
   const origin = req?.headers.get('Origin') || '';
   const requestedHeaders = req?.headers.get('Access-Control-Request-Headers');
   const environment = Deno.env.get('ENVIRONMENT') || 'production';
   const corsOverride = Deno.env.get('CORS_ALLOW_ORIGIN');
+  const allowedOrigins = getAllowedOrigins();
+  const defaultOrigin = allowedOrigins[0] || ALLOWED_ORIGINS[0];
 
   // If explicit override is set, use it
   if (corsOverride) {
-    return buildHeaders(corsOverride, requestedHeaders);
+    const overrides = parseOriginList(corsOverride);
+    const mergedOverrides = Array.from(new Set([...overrides, ...allowedOrigins]));
+    if (overrides.includes('*')) {
+      return buildHeaders('*', requestedHeaders);
+    }
+    if (!origin) {
+      return buildHeaders(mergedOverrides[0] || defaultOrigin, requestedHeaders);
+    }
+    if (mergedOverrides.includes(origin)) {
+      return buildHeaders(origin, requestedHeaders);
+    }
+    if (DEV_ORIGINS.includes(origin) || isPrivateLanOrigin(origin)) {
+      return buildHeaders(origin, requestedHeaders);
+    }
+    return buildHeaders(mergedOverrides[0] || defaultOrigin, requestedHeaders);
+  }
+
+  if (!origin) {
+    return buildHeaders(defaultOrigin, requestedHeaders);
   }
 
   // In development, allow dev origins
   if (environment === 'development' || environment === 'local') {
-    if (DEV_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes(origin)) {
+    if (DEV_ORIGINS.includes(origin) || isPrivateLanOrigin(origin) || allowedOrigins.includes(origin)) {
       return buildHeaders(origin, requestedHeaders);
     }
-    // Allow wildcard in dev as fallback
-    return buildHeaders('*', requestedHeaders);
+    return buildHeaders(defaultOrigin, requestedHeaders);
   }
 
   // In production, allow known origins
-  if (ALLOWED_ORIGINS.includes(origin)) {
+  if (allowedOrigins.includes(origin)) {
     return buildHeaders(origin, requestedHeaders);
   }
 
@@ -56,8 +107,11 @@ export function getCorsHeaders(req?: Request): Record<string, string> {
     return buildHeaders(origin, requestedHeaders);
   }
 
-  // Default: no origin header (blocks cross-origin requests)
-  return buildHeaders(ALLOWED_ORIGINS[0], requestedHeaders);
+  if (isPrivateLanOrigin(origin)) {
+    return buildHeaders(origin, requestedHeaders);
+  }
+
+  return buildHeaders(defaultOrigin, requestedHeaders);
 }
 
 function buildHeaders(origin: string, requestedHeaders?: string | null): Record<string, string> {

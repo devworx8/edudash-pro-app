@@ -16,6 +16,7 @@ import {
   TouchableWithoutFeedback,
   Platform,
   Vibration,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -59,6 +60,9 @@ interface MessageActionsMenuProps {
   /** When true, show "Add to weekly program" (principal adding teacher's theme to curriculum) */
   showAddToWeeklyProgram?: boolean;
   onAddToWeeklyProgram?: () => void;
+  /** When true, show "Convert to routine request" */
+  showConvertToRoutineRequest?: boolean;
+  onConvertToRoutineRequest?: () => void;
 }
 
 export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
@@ -77,13 +81,20 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
   isTranslating = false,
   showAddToWeeklyProgram = false,
   onAddToWeeklyProgram,
+  showConvertToRoutineRequest = false,
+  onConvertToRoutineRequest,
 }) => {
   const { theme } = useTheme();
+  const { width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
   const [showFullEmojiPicker, setShowFullEmojiPicker] = useState(false);
   const [showTranslateOptions, setShowTranslateOptions] = useState(false);
+  const actionButtonWidth =
+    viewportWidth < 420 ? '50%' :
+    viewportWidth < 680 ? '33.333%' :
+    '25%';
   
   // Safe message content with fallback to prevent crashes
   const safeMessageContent = messageContent || '';
@@ -159,6 +170,7 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
     { id: 'forward', label: 'Forward', icon: 'arrow-redo' },
     { id: 'copy', label: 'Copy', icon: 'copy-outline' },
     ...(showAddToWeeklyProgram && onAddToWeeklyProgram ? [{ id: 'add_to_weekly_program', label: 'Add to weekly program', icon: 'calendar-outline' as keyof typeof Ionicons.glyphMap, color: theme.primary }] : []),
+    ...(showConvertToRoutineRequest && onConvertToRoutineRequest ? [{ id: 'convert_to_routine_request', label: 'Convert to routine request', icon: 'clipboard-outline' as keyof typeof Ionicons.glyphMap, color: theme.primary }] : []),
     ...(isOwnMessage && onEdit ? [{ id: 'edit', label: 'Edit', icon: 'pencil-outline' as keyof typeof Ionicons.glyphMap }] : []),
     ...(onTranslate ? [{ id: 'translate', label: 'Translate', icon: 'language-outline' as keyof typeof Ionicons.glyphMap }] : []),
     { id: 'delete', label: 'Delete', icon: 'trash-outline', destructive: true, color: '#ef4444' },
@@ -179,6 +191,9 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
       borderTopRightRadius: 24,
       paddingBottom: insets.bottom + 16,
       maxHeight: SCREEN_HEIGHT * 0.6,
+      width: '100%',
+      alignSelf: 'center',
+      maxWidth: Platform.OS === 'web' ? Math.min(viewportWidth, 760) : undefined,
       ...Platform.select({
         ios: {
           shadowColor: '#000',
@@ -439,7 +454,7 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
               {actions.map((action) => (
                 <TouchableOpacity
                   key={action.id}
-                  style={styles.actionButton}
+                  style={[styles.actionButton, { width: actionButtonWidth }]}
                   onPress={() => {
                     switch (action.id) {
                       case 'reply':
@@ -459,6 +474,9 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
                         break;
                       case 'add_to_weekly_program':
                         if (onAddToWeeklyProgram) handleAction(onAddToWeeklyProgram);
+                        break;
+                      case 'convert_to_routine_request':
+                        if (onConvertToRoutineRequest) handleAction(onConvertToRoutineRequest);
                         break;
                       case 'delete':
                         handleAction(onDelete);

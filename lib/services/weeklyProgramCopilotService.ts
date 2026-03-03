@@ -1234,6 +1234,190 @@ const blockText = (block: DailyProgramBlock): string =>
 const hasKeyword = (source: string, keywords: string[]): boolean =>
   keywords.some((keyword) => source.includes(keyword));
 
+type ToiletRoutinePolicy = {
+  requiredPerDay: number;
+  beforeBreakfast: boolean;
+  beforeLunch: boolean;
+  beforeNap: boolean;
+};
+
+const TOILET_KEYWORDS = ['toilet', 'bathroom', 'washroom', 'restroom', 'potty'];
+const BREAKFAST_KEYWORDS = ['breakfast'];
+const LUNCH_KEYWORDS = ['lunch'];
+const NAP_KEYWORDS = ['nap', 'quiet time', 'rest time', 'rest block'];
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+};
+
+const parseToiletRoutinePolicy = (input: GenerateWeeklyProgramFromTermInput): ToiletRoutinePolicy => {
+  const preflightText = [
+    input.preflightAnswers?.nonNegotiableAnchors,
+    input.preflightAnswers?.fixedWeeklyEvents,
+    input.preflightAnswers?.afterLunchPattern,
+  ]
+    .map((value) => String(value || '').toLowerCase())
+    .join(' ');
+
+  const hasToiletLanguage = TOILET_KEYWORDS.some((keyword) => preflightText.includes(keyword));
+  let requiredPerDay = input.constraints?.includeToiletRoutine ? 1 : 0;
+
+  if (hasToiletLanguage) {
+    const numericSignals = [
+      ...Array.from(preflightText.matchAll(/(\d+)\s*(?:x|times?)\s*(?:a\s*day|daily|per\s*day)?\s*(?:toilet|bathroom|potty)?/g)),
+      ...Array.from(preflightText.matchAll(/(\d+)\s*(?:toilet|bathroom|potty)\s*routines?/g)),
+      ...Array.from(preflightText.matchAll(/(?:toilet|bathroom|potty)\s*routines?\s*(\d+)/g)),
+    ];
+    const wordSignals = Array.from(
+      preflightText.matchAll(
+        /\b(one|two|three|four|five|six)\b\s*(?:toilet|bathroom|potty)?\s*routines?\b/g,
+      ),
+    )
+      .map((match) => NUMBER_WORDS[match[1]] ?? 0)
+      .filter((value) => Number.isFinite(value) && value > 0);
+    const parsed = numericSignals
+      .map((match) => Number(match[1]))
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .concat(wordSignals)
+      .map((value) => Math.min(6, Math.max(1, Math.trunc(value))));
+    if (parsed.length > 0) {
+      requiredPerDay = Math.max(requiredPerDay, ...parsed);
+    }
+  }
+
+  const beforeBreakfast = hasToiletLanguage && /(?:before|pre-)\s*breakfast/.test(preflightText);
+  const beforeLunch = hasToiletLanguage && /(?:before|pre-)\s*lunch/.test(preflightText);
+  const beforeNap = hasToiletLanguage && /(?:before|pre-)\s*(?:nap|quiet\s*time|rest)/.test(preflightText);
+  const anchorCount =
+    Number(beforeBreakfast) + Number(beforeLunch) + Number(beforeNap);
+  if (hasToiletLanguage && anchorCount > 0) {
+    requiredPerDay = Math.max(requiredPerDay, anchorCount);
+  }
+
+  return {
+    requiredPerDay,
+    beforeBreakfast: beforeBreakfast || requiredPerDay >= 3,
+    beforeLunch: beforeLunch || requiredPerDay >= 3,
+    beforeNap: beforeNap || requiredPerDay >= 3,
+  };
+};
+
+const isToiletRoutineBlock = (block: DailyProgramBlock): boolean =>
+  hasKeyword(blockText(block), TOILET_KEYWORDS);
+
+const isAnchorBlock = (block: DailyProgramBlock, keywords: string[]): boolean =>
+  hasKeyword(blockText(block), keywords);
+
+const createToiletRoutineBlock = (
+  day: number,
+  order: number,
+  label?: string,
+): DailyProgramBlock => ({
+  day_of_week: clampDayOfWeek(day),
+  block_order: Math.max(1, order),
+  block_type: 'transition',
+  title: label ? `Toilet Routine (${label})` : 'Toilet Routine & Hygiene',
+  start_time: null,
+  end_time: null,
+  objectives: ['Toilet support and handwashing', 'Healthy hygiene habits'],
+  materials: ['Soap', 'Water', 'Towels'],
+  transition_cue: 'Move calmly to toilet routine, then transition back to class.',
+  notes: 'Auto-enforced from preflight non-negotiable routine constraints.',
+  parent_tip: null,
+});
+
+const normalizeDayOrdering = (day: number, blocks: DailyProgramBlock[]): DailyProgramBlock[] =>
+  blocks
+    .slice()
+    .sort((a, b) => (a.block_order === b.block_order ? String(a.title || '').localeCompare(String(b.title || '')) : a.block_order - b.block_order))
+    .map((block, index) => normalizeDayBlock(block, day, index + 1));
+
+const enforceToiletRoutinePolicy = (
+  blocks: DailyProgramBlock[],
+  input: GenerateWeeklyProgramFromTermInput,
+): {
+  blocks: DailyProgramBlock[];
+  policy: ToiletRoutinePolicy;
+  insertedCount: number;
+  adjustedDays: number[];
+} => {
+  const policy = parseToiletRoutinePolicy(input);
+  if (policy.requiredPerDay <= 0) {
+    return {
+      blocks,
+      policy,
+      insertedCount: 0,
+      adjustedDays: [],
+    };
+  }
+
+  const grouped = new Map<number, DailyProgramBlock[]>();
+  for (const day of WEEKDAY_SEQUENCE) grouped.set(day, []);
+  for (const block of blocks) {
+    const day = clampDayOfWeek(block.day_of_week);
+    if (day >= 1 && day <= 5) {
+      grouped.get(day)?.push(block);
+    }
+  }
+
+  let insertedCount = 0;
+  const adjustedDays: number[] = [];
+
+  for (const day of WEEKDAY_SEQUENCE) {
+    let dayBlocks = normalizeDayOrdering(day, grouped.get(day) || []);
+    const initialLength = dayBlocks.length;
+    const initialToiletCount = dayBlocks.filter(isToiletRoutineBlock).length;
+
+    const ensureAnchorBefore = (anchorKeywords: string[], label: string) => {
+      const anchorIndex = dayBlocks.findIndex((block) => isAnchorBlock(block, anchorKeywords));
+      if (anchorIndex < 0) return;
+      const hasToiletBefore = dayBlocks.slice(0, anchorIndex).some(isToiletRoutineBlock);
+      if (hasToiletBefore) return;
+      dayBlocks.splice(anchorIndex, 0, createToiletRoutineBlock(day, anchorIndex + 1, label));
+      insertedCount += 1;
+    };
+
+    if (policy.beforeBreakfast) ensureAnchorBefore(BREAKFAST_KEYWORDS, 'Before Breakfast');
+    if (policy.beforeLunch) ensureAnchorBefore(LUNCH_KEYWORDS, 'Before Lunch');
+    if (policy.beforeNap) ensureAnchorBefore(NAP_KEYWORDS, 'Before Nap');
+
+    let toiletCount = dayBlocks.filter(isToiletRoutineBlock).length;
+    while (toiletCount < policy.requiredPerDay) {
+      const lunchIndex = dayBlocks.findIndex((block) => isAnchorBlock(block, LUNCH_KEYWORDS));
+      const insertIndex = lunchIndex > 0 ? lunchIndex : dayBlocks.length;
+      dayBlocks.splice(insertIndex, 0, createToiletRoutineBlock(day, insertIndex + 1, 'Scheduled'));
+      insertedCount += 1;
+      toiletCount += 1;
+    }
+
+    dayBlocks = normalizeDayOrdering(day, dayBlocks);
+    grouped.set(day, dayBlocks);
+
+    const finalToiletCount = dayBlocks.filter(isToiletRoutineBlock).length;
+    if (dayBlocks.length !== initialLength || finalToiletCount !== initialToiletCount) {
+      adjustedDays.push(day);
+    }
+  }
+
+  const normalized: DailyProgramBlock[] = [];
+  for (const day of WEEKDAY_SEQUENCE) {
+    normalized.push(...(grouped.get(day) || []));
+  }
+
+  return {
+    blocks: normalized.sort((a, b) =>
+      a.day_of_week === b.day_of_week ? a.block_order - b.block_order : a.day_of_week - b.day_of_week,
+    ),
+    policy,
+    insertedCount,
+    adjustedDays: Array.from(new Set(adjustedDays)),
+  };
+};
+
 const computeCapsCoverage = (blocks: DailyProgramBlock[]): CapsCoverageSummary => {
   const grouped = new Map<number, DailyProgramBlock[]>();
   for (const day of WEEKDAY_SEQUENCE) grouped.set(day, []);
@@ -1478,7 +1662,8 @@ const normalizeAIResponse = (
     : WEEKDAY_SEQUENCE.flatMap((day) => createFallbackWeekdayBlocks(day));
 
   const weekdayCoveredBlocks = ensureWeekdayCoverage(safeBlocks);
-  const fullDayBlocks = ensureFullDayCoverage(weekdayCoveredBlocks);
+  const toiletPolicyOutcome = enforceToiletRoutinePolicy(weekdayCoveredBlocks, input);
+  const fullDayBlocks = ensureFullDayCoverage(toiletPolicyOutcome.blocks);
   const normalizedBlocks = ensureDailyWeatherRepetition(fullDayBlocks);
   const initialCoverage = computeCapsCoverage(normalizedBlocks);
   const correctedBlocks = applyCapsCoverageMetadata(normalizedBlocks, initialCoverage);
@@ -1501,6 +1686,21 @@ const normalizeAIResponse = (
       `Coverage gaps flagged for follow-up: ${finalCoverage.missingByDay
         .map((gap) => `Day ${gap.day} (${gap.missingStrands.join(', ')})`)
         .join('; ')}`,
+    );
+  }
+  if (toiletPolicyOutcome.policy.requiredPerDay > 0) {
+    const anchorHints = [
+      toiletPolicyOutcome.policy.beforeBreakfast ? 'before breakfast' : null,
+      toiletPolicyOutcome.policy.beforeLunch ? 'before lunch' : null,
+      toiletPolicyOutcome.policy.beforeNap ? 'before nap/quiet time' : null,
+    ].filter(Boolean);
+    assumptionSummary.push(
+      `Toilet routine requirement: at least ${toiletPolicyOutcome.policy.requiredPerDay} per weekday${anchorHints.length > 0 ? ` (${anchorHints.join(', ')})` : ''}.`,
+    );
+  }
+  if (toiletPolicyOutcome.insertedCount > 0) {
+    assumptionSummary.push(
+      `Auto-enforced toilet routines: inserted ${toiletPolicyOutcome.insertedCount} block(s) across day(s) ${toiletPolicyOutcome.adjustedDays.join(', ')} to satisfy preflight constraints.`,
     );
   }
 
@@ -1547,11 +1747,21 @@ const buildPrompt = (input: GenerateWeeklyProgramFromTermInput): string => {
   const objectivesText = (input.weeklyObjectives || []).join('; ') || 'Age-appropriate learning outcomes';
   const routineRequirements: string[] = [];
   const preflight = input.preflightAnswers;
+  const toiletPolicy = parseToiletRoutinePolicy(input);
   const weekStart = startOfWeekMonday(input.weekStartDate);
   const holidaysInWeek = getHolidaysInWeek(weekStart);
 
-  if (constraints.includeToiletRoutine) {
-    routineRequirements.push('Include a toilet or bathroom routine support moment each day.');
+  if (toiletPolicy.requiredPerDay > 0) {
+    routineRequirements.push(`Include at least ${toiletPolicy.requiredPerDay} toilet/bathroom routine blocks each weekday.`);
+    if (toiletPolicy.beforeBreakfast) {
+      routineRequirements.push('Place a toilet routine before breakfast each weekday.');
+    }
+    if (toiletPolicy.beforeLunch) {
+      routineRequirements.push('Place a toilet routine before lunch each weekday.');
+    }
+    if (toiletPolicy.beforeNap) {
+      routineRequirements.push('Place a toilet routine before nap/quiet-time each weekday.');
+    }
   }
   if (constraints.includeNapTime) {
     const ageGroup = String(input.ageGroup || '').trim();

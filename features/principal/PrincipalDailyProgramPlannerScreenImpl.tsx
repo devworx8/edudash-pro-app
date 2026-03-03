@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,
   RefreshControl,
@@ -7,10 +7,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Stack } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -74,6 +75,26 @@ function normalizeTime(value: string): string {
   if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return trimmed;
   if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return trimmed;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function parseObjectivesParam(value?: string | string[]): string[] {
+  if (!value) return [];
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => String(item).trim()).filter(Boolean);
+    }
+  } catch {
+    // Fall through to plain text parsing.
+  }
+
+  return String(raw)
+    .split(/[\n,;|]/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
 function timeToDate(hhmm: string): Date {
@@ -527,12 +548,25 @@ function withSchoolNamedTitle(rawTitle: string | null | undefined, schoolName: s
 export default function PrincipalDailyProgramPlannerScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
+  const { width } = useWindowDimensions();
   const { showAlert, AlertModalComponent } = useAlertModal();
+  const params = useLocalSearchParams<{
+    requestId?: string;
+    requestType?: string;
+    weekStartDate?: string;
+    ageGroup?: string;
+    themeTitle?: string;
+    objectives?: string;
+    fromRoutineRequest?: string;
+  }>();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const isCompactLayout = width < 920;
+  const isUltraCompact = width < 640;
 
   const organizationId = extractOrganizationId(profile);
   const userId = user?.id || profile?.id;
   const schoolName = useMemo(() => resolveSchoolName(profile), [profile]);
+  const prefillAppliedRef = useRef(false);
 
   const [weekStartDate, setWeekStartDate] = useState(() => startOfWeekMonday(new Date()));
   const [themeTitle, setThemeTitle] = useState('Healthy Habits');
@@ -694,6 +728,52 @@ export default function PrincipalDailyProgramPlannerScreen() {
   useEffect(() => {
     void loadPrograms();
   }, [loadPrograms]);
+
+  useEffect(() => {
+    if (prefillAppliedRef.current) return;
+    const hasPrefill =
+      Boolean(params.requestId) ||
+      Boolean(params.themeTitle) ||
+      Boolean(params.ageGroup) ||
+      Boolean(params.weekStartDate) ||
+      Boolean(params.objectives);
+    if (!hasPrefill) return;
+
+    if (params.weekStartDate) {
+      setWeekStartDate(startOfWeekMonday(params.weekStartDate));
+    }
+    if (params.themeTitle) {
+      setThemeTitle(String(params.themeTitle));
+    }
+    if (params.ageGroup) {
+      setAgeGroup(String(params.ageGroup));
+    }
+
+    const objectives = parseObjectivesParam(params.objectives);
+    if (objectives.length > 0) {
+      setWeeklyObjectives(objectives.join(', '));
+    }
+
+    prefillAppliedRef.current = true;
+
+    if (params.fromRoutineRequest === '1') {
+      showAlert({
+        title: 'Request prefilled',
+        message: params.requestId
+          ? `Routine request ${params.requestId} loaded into planner setup.`
+          : 'Routine request details loaded into planner setup.',
+        type: 'info',
+      });
+    }
+  }, [
+    params.ageGroup,
+    params.fromRoutineRequest,
+    params.objectives,
+    params.requestId,
+    params.themeTitle,
+    params.weekStartDate,
+    showAlert,
+  ]);
 
   const refreshLessonQuota = useCallback(async () => {
     try {
@@ -1445,8 +1525,140 @@ export default function PrincipalDailyProgramPlannerScreen() {
       });
 
     const missingEssentials: string[] = [];
-    if (routineOptions.toiletRoutine && !blockHasKeywords(['toilet', 'bathroom', 'potty', 'washroom'])) {
-      missingEssentials.push('Toilet Routine');
+    const preflightToiletText = [
+      preflight.nonNegotiableAnchors,
+      preflight.fixedWeeklyEvents,
+      preflight.afterLunchPattern,
+    ]
+      .map((value) => String(value || '').toLowerCase())
+      .join(' ');
+    const hasToiletLanguage = ['toilet', 'bathroom', 'potty', 'washroom'].some((keyword) =>
+      preflightToiletText.includes(keyword),
+    );
+    const wordCountMap: Record<string, number> = {
+      one: 1,
+      two: 2,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+    };
+    const numericToiletCounts = [
+      ...Array.from(preflightToiletText.matchAll(/(\d+)\s*(?:x|times?)\s*(?:a\s*day|daily|per\s*day)?\s*(?:toilet|bathroom|potty)?/g)).map(
+        (match) => Number(match[1]),
+      ),
+      ...Array.from(preflightToiletText.matchAll(/(\d+)\s*(?:toilet|bathroom|potty)\s*routines?/g)).map(
+        (match) => Number(match[1]),
+      ),
+      ...Array.from(preflightToiletText.matchAll(/(?:toilet|bathroom|potty)\s*routines?\s*(\d+)/g)).map(
+        (match) => Number(match[1]),
+      ),
+    ];
+    const wordToiletCounts = Array.from(
+      preflightToiletText.matchAll(/\b(one|two|three|four|five|six)\b\s*(?:toilet|bathroom|potty)?\s*routines?\b/g),
+    ).map((match) => wordCountMap[match[1]] || 0);
+    const parsedToiletCounts = [...numericToiletCounts, ...wordToiletCounts]
+      .filter((value) => Number.isFinite(value) && value > 0)
+      .map((value) => Math.min(6, Math.max(1, Math.trunc(value))));
+    const toiletAnchorBeforeBreakfast =
+      hasToiletLanguage && /(?:before|pre-)\s*breakfast/.test(preflightToiletText);
+    const toiletAnchorBeforeLunch =
+      hasToiletLanguage && /(?:before|pre-)\s*lunch/.test(preflightToiletText);
+    const toiletAnchorBeforeNap =
+      hasToiletLanguage && /(?:before|pre-)\s*(?:nap|quiet\s*time|rest)/.test(preflightToiletText);
+    const inferredAnchorCount =
+      Number(toiletAnchorBeforeBreakfast) + Number(toiletAnchorBeforeLunch) + Number(toiletAnchorBeforeNap);
+    const requiredToiletPerDay = routineOptions.toiletRoutine
+      ? Math.max(1, parsedToiletCounts.length > 0 ? Math.max(...parsedToiletCounts) : 1, inferredAnchorCount)
+      : 0;
+
+    const dayBlocksByDay = new Map<number, DailyProgramBlock[]>();
+    DAY_ORDER.forEach((day) => dayBlocksByDay.set(day, []));
+    blocks.forEach((block) => {
+      const day = Number(block.day_of_week);
+      if (!DAY_ORDER.includes(day as (typeof DAY_ORDER)[number])) return;
+      dayBlocksByDay.get(day)?.push(block);
+    });
+
+    if (requiredToiletPerDay > 0) {
+      const missingToiletDays = DAY_ORDER.filter((day) => {
+        const dayBlocks = dayBlocksByDay.get(day) || [];
+        const toiletCount = dayBlocks.filter((block) => {
+          const haystack = [
+            block.block_type,
+            block.title,
+            block.notes,
+            block.transition_cue,
+          ]
+            .map((value) => String(value || '').toLowerCase())
+            .join(' ');
+          return ['toilet', 'bathroom', 'potty', 'washroom'].some((keyword) => haystack.includes(keyword));
+        }).length;
+        return toiletCount < requiredToiletPerDay;
+      });
+      if (missingToiletDays.length > 0) {
+        missingEssentials.push(
+          `Toilet Routine (${requiredToiletPerDay}x daily missing: ${missingToiletDays
+            .map((day) => DAY_LABELS[day])
+            .join(', ')})`,
+        );
+      }
+
+      const dayHasToiletBeforeAnchor = (dayBlocks: DailyProgramBlock[], anchorKeywords: string[]) => {
+        const normalized = dayBlocks
+          .slice()
+          .sort((a, b) => Number(a.block_order || 0) - Number(b.block_order || 0));
+        const anchorIndex = normalized.findIndex((block) => {
+          const haystack = [
+            block.block_type,
+            block.title,
+            block.notes,
+            block.transition_cue,
+          ]
+            .map((value) => String(value || '').toLowerCase())
+            .join(' ');
+          return anchorKeywords.some((keyword) => haystack.includes(keyword));
+        });
+        if (anchorIndex < 0) return true;
+        return normalized.slice(0, anchorIndex).some((block) => {
+          const haystack = [
+            block.block_type,
+            block.title,
+            block.notes,
+            block.transition_cue,
+          ]
+            .map((value) => String(value || '').toLowerCase())
+            .join(' ');
+          return ['toilet', 'bathroom', 'potty', 'washroom'].some((keyword) => haystack.includes(keyword));
+        });
+      };
+
+      if (toiletAnchorBeforeBreakfast) {
+        const invalidDays = DAY_ORDER.filter((day) =>
+          !dayHasToiletBeforeAnchor(dayBlocksByDay.get(day) || [], ['breakfast']),
+        );
+        if (invalidDays.length > 0) {
+          missingEssentials.push(`Toilet before breakfast (${invalidDays.map((day) => DAY_LABELS[day]).join(', ')})`);
+        }
+      }
+
+      if (toiletAnchorBeforeLunch) {
+        const invalidDays = DAY_ORDER.filter((day) =>
+          !dayHasToiletBeforeAnchor(dayBlocksByDay.get(day) || [], ['lunch']),
+        );
+        if (invalidDays.length > 0) {
+          missingEssentials.push(`Toilet before lunch (${invalidDays.map((day) => DAY_LABELS[day]).join(', ')})`);
+        }
+      }
+
+      if (toiletAnchorBeforeNap) {
+        const invalidDays = DAY_ORDER.filter((day) =>
+          !dayHasToiletBeforeAnchor(dayBlocksByDay.get(day) || [], ['nap', 'quiet time', 'rest']),
+        );
+        if (invalidDays.length > 0) {
+          missingEssentials.push(`Toilet before nap (${invalidDays.map((day) => DAY_LABELS[day]).join(', ')})`);
+        }
+      }
     }
     if (routineOptions.napTime && !blockHasKeywords([' nap', 'quiet time', 'rest'])) {
       missingEssentials.push('Nap / Quiet Time');
@@ -1503,6 +1715,9 @@ export default function PrincipalDailyProgramPlannerScreen() {
     };
   }, [
     draft?.blocks,
+    preflight.afterLunchPattern,
+    preflight.fixedWeeklyEvents,
+    preflight.nonNegotiableAnchors,
     routineOptions.hygieneChecks,
     routineOptions.mealBreaks,
     routineOptions.napTime,
@@ -1576,12 +1791,12 @@ export default function PrincipalDailyProgramPlannerScreen() {
             Generate a robust CAPS-aligned school routine, lock strict arrival/pickup windows, and share it with parents in one publish flow.
           </Text>
 
-          <View style={styles.statsRow}>
-            <View style={styles.statPill}>
+          <View style={[styles.statsRow, isCompactLayout && styles.statsRowCompact]}>
+            <View style={[styles.statPill, isCompactLayout && styles.statPillCompact, isUltraCompact && styles.statPillFull]}>
               <Text style={styles.statLabel}>Blocks</Text>
               <Text style={styles.statValue}>{programStats.totalBlocks}</Text>
             </View>
-            <View style={styles.statPill}>
+            <View style={[styles.statPill, isCompactLayout && styles.statPillCompact, isUltraCompact && styles.statPillFull]}>
               <Text style={styles.statLabel}>AI Remaining</Text>
               <Text style={styles.statValue}>
                 {lessonQuota
@@ -1591,10 +1806,36 @@ export default function PrincipalDailyProgramPlannerScreen() {
                   : '--'}
               </Text>
             </View>
-            <View style={styles.statPill}>
+            <View style={[styles.statPill, isCompactLayout && styles.statPillCompact, isUltraCompact && styles.statPillFull]}>
               <Text style={styles.statLabel}>Saved Plans</Text>
               <Text style={styles.statValue}>{programs.length}</Text>
             </View>
+          </View>
+
+          {(lessonQuota?.source === 'fallback' || lessonQuota?.serverReachable === false) && (
+            <View style={styles.usageFallbackBanner}>
+              <Ionicons name="cloud-offline-outline" size={14} color="#f59e0b" />
+              <Text style={styles.usageFallbackText}>
+                Server usage unavailable. Showing local estimate until sync recovers.
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.heroLinkRow}>
+            <TouchableOpacity
+              style={styles.heroLinkChip}
+              onPress={() => router.push('/screens/principal-routine-requests')}
+            >
+              <Ionicons name="clipboard-outline" size={13} color={theme.primary} />
+              <Text style={styles.heroLinkText}>Requests Inbox</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.heroLinkChip}
+              onPress={() => router.push('/screens/principal-weekly-plans')}
+            >
+              <Ionicons name="albums-outline" size={13} color={theme.primary} />
+              <Text style={styles.heroLinkText}>Saved routines</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.readinessWrap}>
@@ -1637,7 +1878,12 @@ export default function PrincipalDailyProgramPlannerScreen() {
             {SMART_PRESETS.map((preset) => (
               <TouchableOpacity
                 key={preset.id}
-                style={[styles.presetCard, selectedPresetId === preset.id && styles.presetCardActive]}
+                style={[
+                  styles.presetCard,
+                  isCompactLayout && styles.presetCardCompact,
+                  isUltraCompact && styles.presetCardSingleColumn,
+                  selectedPresetId === preset.id && styles.presetCardActive,
+                ]}
                 onPress={() => applySmartPreset(preset)}
               >
                 <Text style={[styles.presetCardTitle, selectedPresetId === preset.id && styles.presetCardTitleActive]}>
@@ -1705,7 +1951,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
             <Text style={styles.inlineBtnText}>Load from Year Plan</Text>
           </TouchableOpacity>
 
-          <View style={styles.row}>
+          <View style={[styles.row, isCompactLayout && styles.rowStack]}>
             <View style={styles.halfInput}>
               <Text style={styles.fieldLabel}>Age Group</Text>
               <TextInput
@@ -1760,7 +2006,12 @@ export default function PrincipalDailyProgramPlannerScreen() {
               return (
                 <TouchableOpacity
                   key={option.id}
-                  style={[styles.essentialChip, active && styles.essentialChipActive]}
+                  style={[
+                    styles.essentialChip,
+                    isCompactLayout && styles.essentialChipCompact,
+                    isUltraCompact && styles.essentialChipSingleColumn,
+                    active && styles.essentialChipActive,
+                  ]}
                   onPress={() => toggleRoutineOption(option.id)}
                 >
                   <Text style={[styles.essentialLabel, active && styles.essentialLabelActive]}>{option.label}</Text>
@@ -1853,7 +2104,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
             These limits are enforced before parents can receive the routine. Program blocks outside this window are blocked from publishing.
           </Text>
 
-          <View style={styles.row}>
+          <View style={[styles.row, isCompactLayout && styles.rowStack]}>
             <View style={styles.halfInput}>
               <Text style={styles.fieldLabel}>Arrival Starts</Text>
               <View style={styles.timeInputRow}>
@@ -1896,7 +2147,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
             </View>
           </View>
 
-          <View style={styles.row}>
+          <View style={[styles.row, isCompactLayout && styles.rowStack]}>
             <View style={styles.halfInput}>
               <Text style={styles.fieldLabel}>Pickup Starts</Text>
               <View style={styles.timeInputRow}>
@@ -1968,13 +2219,13 @@ export default function PrincipalDailyProgramPlannerScreen() {
           )}
 
           <View style={styles.presetRow}>
-            <TouchableOpacity style={styles.presetBtn} onPress={() => applyPreset('half_day')}>
+            <TouchableOpacity style={[styles.presetBtn, isCompactLayout && styles.presetBtnCompact, isUltraCompact && styles.presetBtnSingleColumn]} onPress={() => applyPreset('half_day')}>
               <Text style={styles.presetBtnText}>Half-Day Preset</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.presetBtn} onPress={() => applyPreset('full_day')}>
+            <TouchableOpacity style={[styles.presetBtn, isCompactLayout && styles.presetBtnCompact, isUltraCompact && styles.presetBtnSingleColumn]} onPress={() => applyPreset('full_day')}>
               <Text style={styles.presetBtnText}>Full-Day Preset</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.presetBtn} onPress={() => applyPreset('aftercare')}>
+            <TouchableOpacity style={[styles.presetBtn, isCompactLayout && styles.presetBtnCompact, isUltraCompact && styles.presetBtnSingleColumn]} onPress={() => applyPreset('aftercare')}>
               <Text style={styles.presetBtnText}>Aftercare Preset</Text>
             </TouchableOpacity>
           </View>
@@ -2052,7 +2303,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
             </View>
           )}
 
-          <View style={styles.row}>
+          <View style={[styles.row, isCompactLayout && styles.rowStack]}>
             <TouchableOpacity
               style={[styles.primaryBtn, styles.halfButton, (generating || !canGenerate) && styles.buttonDisabled]}
               onPress={generateProgram}
@@ -2094,7 +2345,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
             </Text>
           )}
 
-          <View style={styles.row}>
+          <View style={[styles.row, isCompactLayout && styles.rowStack]}>
             <TouchableOpacity
               style={[styles.secondaryBtn, styles.halfButton, (saving || !draft) && styles.buttonDisabled]}
               onPress={() => void saveDraft()}
@@ -2153,7 +2404,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
               <Text style={styles.inlineBtnText}>{saving ? 'Saving...' : 'Save / Update Draft'}</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.previewModeRow}>
+          <View style={[styles.previewModeRow, isCompactLayout && styles.previewModeRowWrap]}>
               <TouchableOpacity
                 style={[styles.previewModePill, draftViewMode === 'cards' && styles.previewModePillActive]}
                 onPress={() => setDraftViewMode('cards')}
@@ -2172,23 +2423,23 @@ export default function PrincipalDailyProgramPlannerScreen() {
               </TouchableOpacity>
             </View>
             <View style={styles.draftInsightRow}>
-              <View style={styles.draftInsightPill}>
+              <View style={[styles.draftInsightPill, isUltraCompact && styles.draftInsightPillFull]}>
                 <Text style={styles.draftInsightLabel}>Missing Times</Text>
                 <Text style={styles.draftInsightValue}>{draftInsights.missingTimes}</Text>
               </View>
-              <View style={styles.draftInsightPill}>
+              <View style={[styles.draftInsightPill, isUltraCompact && styles.draftInsightPillFull]}>
                 <Text style={styles.draftInsightLabel}>Missing Titles</Text>
                 <Text style={styles.draftInsightValue}>{draftInsights.missingTitles}</Text>
               </View>
-              <View style={styles.draftInsightPill}>
+              <View style={[styles.draftInsightPill, isUltraCompact && styles.draftInsightPillFull]}>
                 <Text style={styles.draftInsightLabel}>Out of Window</Text>
                 <Text style={styles.draftInsightValue}>{draftInsights.outOfWindow}</Text>
               </View>
-              <View style={styles.draftInsightPill}>
+              <View style={[styles.draftInsightPill, isUltraCompact && styles.draftInsightPillFull]}>
                 <Text style={styles.draftInsightLabel}>Short Days (&lt;13:30)</Text>
                 <Text style={styles.draftInsightValue}>{draftInsights.shortDaysCount}</Text>
               </View>
-              <View style={styles.draftInsightPill}>
+              <View style={[styles.draftInsightPill, isUltraCompact && styles.draftInsightPillFull]}>
                 <Text style={styles.draftInsightLabel}>Missing Essentials</Text>
                 <Text style={styles.draftInsightValue}>{draftInsights.missingEssentialsCount}</Text>
               </View>
@@ -2339,7 +2590,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
                           />
 
                           {/* Times */}
-                          <View style={styles.row}>
+                          <View style={[styles.row, isCompactLayout && styles.rowStack]}>
                             <View style={styles.halfInput}>
                               <Text style={styles.fieldLabel}>Start</Text>
                               <TextInput
@@ -2481,6 +2732,9 @@ const createStyles = (theme: any) =>
       padding: 16,
       gap: 12,
       paddingBottom: 36,
+      width: '100%',
+      maxWidth: 1280,
+      alignSelf: 'center',
     },
     hero: {
       borderRadius: 18,
@@ -2533,6 +2787,50 @@ const createStyles = (theme: any) =>
       flexDirection: 'row',
       gap: 8,
     },
+    statsRowCompact: {
+      flexWrap: 'wrap',
+    },
+    usageFallbackBanner: {
+      marginTop: 10,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: '#f59e0b66',
+      backgroundColor: '#f59e0b1a',
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    usageFallbackText: {
+      flex: 1,
+      color: '#f59e0b',
+      fontSize: 11,
+      lineHeight: 15,
+      fontWeight: '700',
+    },
+    heroLinkRow: {
+      marginTop: 10,
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    heroLinkChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.primary + '66',
+      backgroundColor: theme.background + 'c9',
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+    heroLinkText: {
+      color: theme.primary,
+      fontSize: 11,
+      fontWeight: '700',
+    },
     statPill: {
       flex: 1,
       borderRadius: 999,
@@ -2541,6 +2839,13 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.background + 'b3',
       paddingVertical: 8,
       paddingHorizontal: 10,
+    },
+    statPillCompact: {
+      flexBasis: '48%',
+      minWidth: 160,
+    },
+    statPillFull: {
+      flexBasis: '100%',
     },
     statLabel: {
       color: theme.textSecondary,
@@ -2690,6 +2995,9 @@ const createStyles = (theme: any) =>
       flexDirection: 'row',
       gap: 8,
     },
+    rowStack: {
+      flexDirection: 'column',
+    },
     halfInput: {
       flex: 1,
     },
@@ -2743,6 +3051,12 @@ const createStyles = (theme: any) =>
       paddingHorizontal: 10,
       gap: 4,
     },
+    presetCardCompact: {
+      flexBasis: '48%',
+    },
+    presetCardSingleColumn: {
+      flexBasis: '100%',
+    },
     presetCardActive: {
       borderColor: theme.primary,
       backgroundColor: theme.primary + '16',
@@ -2777,6 +3091,12 @@ const createStyles = (theme: any) =>
       paddingHorizontal: 10,
       paddingVertical: 8,
       gap: 2,
+    },
+    essentialChipCompact: {
+      flexBasis: '48%',
+    },
+    essentialChipSingleColumn: {
+      flexBasis: '100%',
     },
     essentialChipActive: {
       borderColor: theme.primary,
@@ -2836,6 +3156,12 @@ const createStyles = (theme: any) =>
       paddingVertical: 10,
       alignItems: 'center',
       backgroundColor: theme.background + 'cc',
+    },
+    presetBtnCompact: {
+      flexBasis: '48%',
+    },
+    presetBtnSingleColumn: {
+      flexBasis: '100%',
     },
     presetBtnText: {
       color: theme.text,
@@ -3080,6 +3406,9 @@ const createStyles = (theme: any) =>
       paddingHorizontal: 9,
       alignItems: 'center',
     },
+    draftInsightPillFull: {
+      flexBasis: '100%',
+    },
     draftInsightLabel: {
       color: theme.textSecondary,
       fontSize: 10,
@@ -3124,6 +3453,9 @@ const createStyles = (theme: any) =>
       gap: 8,
       marginTop: 2,
       marginBottom: 2,
+    },
+    previewModeRowWrap: {
+      flexWrap: 'wrap',
     },
     previewModePill: {
       borderRadius: 999,

@@ -93,6 +93,7 @@ export default function AILessonGeneratorScreen() {
   const [resultViewMode, setResultViewMode] = useState<'cards' | 'raw'>('cards');
   const [quickLessonContext, setQuickLessonContext] = useState<QuickLessonThemeContext | null>(null);
   const [quickLessonContextLoading, setQuickLessonContextLoading] = useState(false);
+  const [explicitRoutineContext, setExplicitRoutineContext] = useState('');
   const [showFullscreenLesson, setShowFullscreenLesson] = useState(false);
   const quickDefaultsApplied = useRef(false);
   const flags = getFeatureFlagsSync();
@@ -100,7 +101,17 @@ export default function AILessonGeneratorScreen() {
   const lessonFullscreenEnabled = flags.lesson_fullscreen_v1 !== false;
 
   // Search params for prefill
-  const searchParams = useLocalSearchParams<{ topic?: string; subject?: string; gradeLevel?: string; duration?: string; objectives?: string; model?: string; language?: string; mode?: string }>();
+  const searchParams = useLocalSearchParams<{
+    topic?: string;
+    subject?: string;
+    gradeLevel?: string;
+    duration?: string;
+    objectives?: string;
+    model?: string;
+    language?: string;
+    mode?: string;
+    routineContext?: string;
+  }>();
   const modeParam = Array.isArray(searchParams?.mode) ? searchParams.mode[0] : searchParams?.mode;
   const isQuickMode = modeParam === 'quick';
   const schoolId = profile?.organization_id || profile?.preschool_id || null;
@@ -158,12 +169,14 @@ export default function AILessonGeneratorScreen() {
     const o = (searchParams?.objectives || '').trim();
     const m = (searchParams?.model || '').trim();
     const lang = (searchParams?.language || '').trim().toLowerCase();
+    const routineCtx = (searchParams?.routineContext || '').trim();
 
     if (t) setTopic(t);
     if (s) setSubject(s);
     if (g && /^\d+$/.test(g)) setGradeLevel(g);
     if (d && /^\d+$/.test(d)) setDuration(d);
     if (o) setObjectives(o);
+    if (routineCtx) setExplicitRoutineContext(routineCtx);
     if (lang && ['en', 'es', 'fr', 'pt', 'de', 'af', 'zu', 'st'].includes(lang)) setLanguage(lang as LanguageCode);
     if (m && [
       'claude-3-haiku-20240307',
@@ -217,8 +230,11 @@ export default function AILessonGeneratorScreen() {
       ? '\nThis is QUICK MODE: keep prep minimal, use common classroom materials, and deliver in compact timed steps.'
       : '';
     const planningHint = buildQuickLessonThemeHint(quickLessonContext);
-    return `Generate a ${Number(duration) || 45} minute lesson plan for Grade ${Number(gradeLevel) || 3} in ${subject} on "${topic}". Learning objectives: ${objs.join('; ') || 'derive objectives'}. Provide objectives, warm-up, activities, assessment, and closure.${quickHint}${planningHint ? `\nPlanning Alignment Context:\n${planningHint}` : ''}.${langSuffix}`;
-  }, [topic, subject, gradeLevel, duration, objectives, language, isQuickMode, quickLessonContext]);
+    const routineHint = explicitRoutineContext
+      ? `\nRoutine Execution Context (must align to timings/flow):\n${explicitRoutineContext}`
+      : '';
+    return `Generate a ${Number(duration) || 45} minute lesson plan for Grade ${Number(gradeLevel) || 3} in ${subject} on "${topic}". Learning objectives: ${objs.join('; ') || 'derive objectives'}. Provide objectives, warm-up, activities, assessment, and closure.${quickHint}${planningHint ? `\nPlanning Alignment Context:\n${planningHint}` : ''}${routineHint}.${langSuffix}`;
+  }, [topic, subject, gradeLevel, duration, objectives, language, isQuickMode, quickLessonContext, explicitRoutineContext]);
 
   const onOpenWithDash = useCallback(() => {
     const initialMessage = buildDashPrompt();
@@ -246,7 +262,12 @@ export default function AILessonGeneratorScreen() {
       objectives,
       language,
       selectedModel,
-      planningContext: buildQuickLessonThemeHint(quickLessonContext),
+      planningContext: [
+        buildQuickLessonThemeHint(quickLessonContext),
+        explicitRoutineContext ? `Routine execution context:\n${explicitRoutineContext}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
     });
   }, [
     isQuotaExhausted,
@@ -259,6 +280,7 @@ export default function AILessonGeneratorScreen() {
     language,
     selectedModel,
     quickLessonContext,
+    explicitRoutineContext,
     lessonFullscreenEnabled,
   ]);
 

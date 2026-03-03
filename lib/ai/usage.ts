@@ -130,6 +130,32 @@ export type AIUsageLogEvent = {
   timestamp: string // ISO string
 }
 
+export type UsageDataSource = 'server' | 'fallback'
+
+export type UsageSourceState = {
+  source: UsageDataSource
+  serverReachable: boolean
+  lastUpdated: string
+}
+
+let usageSourceState: UsageSourceState = {
+  source: 'server',
+  serverReachable: true,
+  lastUpdated: new Date().toISOString(),
+}
+
+function setUsageSourceState(source: UsageDataSource, serverReachable: boolean) {
+  usageSourceState = {
+    source,
+    serverReachable,
+    lastUpdated: new Date().toISOString(),
+  }
+}
+
+export function getUsageSourceState(): UsageSourceState {
+  return usageSourceState
+}
+
 export async function getUsage(): Promise<AIUsageRecord> {
   const uid = await getCurrentUserId()
   const key = `${STORAGE_PREFIX}_${uid}_${monthKey()}`
@@ -162,6 +188,7 @@ export async function incrementUsage(feature: AIUsageFeature, count = 1, model =
   try {
     // 1. Immediately try to sync to server (write-through)
     await logUsageEvent(event)
+    setUsageSourceState('server', true)
     console.log(`[Usage] Successfully synced ${feature} usage to server`)
     
     // 2. Clear any local cache since server is now authoritative
@@ -169,6 +196,7 @@ export async function incrementUsage(feature: AIUsageFeature, count = 1, model =
     await storage.removeItem(key)
     
   } catch (serverError) {
+    setUsageSourceState('fallback', false)
     console.warn(`[Usage] Server sync failed, using local cache:`, serverError)
     
     // 3. Fallback: update local storage for offline scenarios
@@ -293,7 +321,9 @@ export async function logUsageEvent(event: AIUsageLogEvent): Promise<void> {
     const payload = { action: 'log', event }
     const { error } = await assertSupabase().functions.invoke('ai-usage', { body: payload as any })
     if (error) throw error
+    setUsageSourceState('server', true)
   } catch {
+    setUsageSourceState('fallback', false)
     await enqueueUsageLog(event)
     // Only flush queue periodically to avoid performance issues
     // Flush every 10th failed event or after 5 minutes
@@ -331,6 +361,9 @@ export async function getServerUsage(): Promise<AIUsageRecord | null> {
   try {
     const { data, error } = await assertSupabase().functions.invoke('ai-usage', { body: {} as any })
     if (error) throw error
+    const source = data?.source === 'fallback' ? 'fallback' : 'server'
+    const serverReachable = data?.serverReachable !== false
+    setUsageSourceState(source, serverReachable)
     const src: any = (data && (data.monthly || data)) || {}
     const counts: AIUsageRecord = {
       lesson_generation: Number(src.lesson_generation ?? src.lesson ?? src.lessons ?? 0) || 0,
@@ -341,6 +374,7 @@ export async function getServerUsage(): Promise<AIUsageRecord | null> {
     }
     return counts
   } catch {
+    setUsageSourceState('fallback', false)
     return null
   }
 }
@@ -407,13 +441,14 @@ export async function getCombinedUsage(): Promise<AIUsageRecord> {
   // This fixes cross-device sync issues where local storage would reset quota
   const server = await getServerUsage()
   if (server) {
+    setUsageSourceState('server', true)
     return server
   }
   
   // Fallback to local only when server is completely unavailable
   // This handles offline scenarios but won't persist across devices
   const local = await getUsage()
+  setUsageSourceState('fallback', false)
   console.warn('Using local usage as fallback - server unavailable:', local)
   return local
 }
-

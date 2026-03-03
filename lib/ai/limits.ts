@@ -1,5 +1,5 @@
 import { assertSupabase } from '@/lib/supabase'
-import { getCombinedUsage, type AIUsageRecord } from '@/lib/ai/usage'
+import { getCombinedUsage, getUsageSourceState, type AIUsageRecord, type UsageDataSource } from '@/lib/ai/usage'
 import { getOrgType, canUseAllocation, type OrgType } from '@/lib/subscriptionRules'
 import { getDefaultModels } from '@/lib/ai/models'
 import {
@@ -245,6 +245,8 @@ export type QuotaStatus = {
   used: number
   limit: number
   remaining: number
+  source?: UsageDataSource
+  serverReachable?: boolean
 }
 
 export async function getQuotaStatus(feature: AIQuotaFeature): Promise<QuotaStatus> {
@@ -264,6 +266,7 @@ export async function getQuotaStatus(feature: AIQuotaFeature): Promise<QuotaStat
   // Fallback to general subscription limits
   const limits = await getEffectiveLimits()
   const usage: AIUsageRecord = await getCombinedUsage()
+  const usageSource = getUsageSourceState()
   const used = usage[feature] || 0
   const limit = Math.max(0, limits.quotas[feature] || 0)
   const remaining = Math.max(0, limit - used)
@@ -276,7 +279,13 @@ export async function getQuotaStatus(feature: AIQuotaFeature): Promise<QuotaStat
     tier: limits.tier
   });
   
-  return { used, limit, remaining }
+  return {
+    used,
+    limit,
+    remaining,
+    source: usageSource.source,
+    serverReachable: usageSource.serverReachable,
+  }
 }
 
 export type CanUseResult = {
@@ -418,10 +427,13 @@ export async function getTeacherSpecificQuota(feature: AIQuotaFeature): Promise<
       teacherName: allocation.teacher_name
     })
     
+    const usageSource = getUsageSourceState()
     return {
       used: effectiveUsed,
       limit: allocatedLimit,
-      remaining
+      remaining,
+      source: usageSource.source,
+      serverReachable: usageSource.serverReachable,
     }
     
   } catch (error) {

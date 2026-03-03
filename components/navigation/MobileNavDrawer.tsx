@@ -13,6 +13,7 @@ import {
   ScrollView,
   Pressable,
   Image,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
@@ -194,6 +195,7 @@ const getDefaultNavItems = (
         { id: 'home', label: 'Dashboard', icon: 'home', route: '/screens/teacher-dashboard' },
         { id: 'students', label: 'Students', icon: 'people', route: '/screens/student-management' },
         { id: 'classes', label: 'Classes', icon: 'school', route: '/screens/class-teacher-management' },
+        { id: 'routine-requests', label: 'Routine Requests', icon: 'clipboard', route: '/screens/teacher-routine-requests' },
         { id: 'lessons', label: 'Browse Lessons', icon: 'book', route: '/screens/teacher-lessons' },
         { id: 'assign', label: 'Assign Lessons', icon: 'paper-plane', route: '/screens/assign-lesson' },
         { id: 'activities', label: 'Activities', icon: 'game-controller', route: '/screens/aftercare-activities' },
@@ -224,6 +226,9 @@ const getDefaultNavItems = (
     case 'principal_admin':
       return [
         { id: 'home', label: 'Dashboard', icon: 'home', route: '/screens/principal-dashboard' },
+        { id: 'daily-planner', label: 'AI Daily Planner', icon: 'sparkles', route: '/screens/principal-daily-program-planner' },
+        { id: 'year-planner-ai', label: 'AI Year Planner', icon: 'calendar-clear', route: '/screens/principal-ai-year-planner' },
+        { id: 'routine-requests', label: 'Routine Requests', icon: 'clipboard', route: '/screens/principal-routine-requests' },
         { id: 'students', label: 'Students', icon: 'people', route: '/screens/student-management' },
         { id: 'teachers', label: 'Teachers', icon: 'briefcase', route: '/screens/teacher-management' },
         { id: 'teacher-approval', label: 'Approve Teachers', icon: 'checkmark-done', route: '/screens/teacher-approval' },
@@ -300,6 +305,8 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { width: viewportWidth } = useWindowDimensions();
+  const drawerWidth = Math.min(DRAWER_WIDTH, Math.max(240, viewportWidth - 24));
   
   const slideAnim = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -369,7 +376,7 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
       setOverlayInteractive(false);
       Animated.parallel([
         Animated.timing(slideAnim, {
-          toValue: -DRAWER_WIDTH,
+          toValue: -drawerWidth,
           duration: 200,
           useNativeDriver: Platform.OS !== 'web',
         }),
@@ -387,7 +394,13 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
         closeGuardTimerRef.current = null;
       }
     };
-  }, [isOpen, slideAnim, fadeAnim]);
+  }, [isOpen, slideAnim, fadeAnim, drawerWidth]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      slideAnim.setValue(-drawerWidth);
+    }
+  }, [drawerWidth, isOpen, slideAnim]);
 
   const handleNavPress = (route: string) => {
     onClose();
@@ -412,7 +425,7 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
     return null;
   }
 
-  const styles = getNavDrawerStyles(theme, isDark, insets);
+  const styles = getNavDrawerStyles(theme, isDark, insets, drawerWidth);
 
   return (
     <View style={styles.container} pointerEvents={isOpen ? 'auto' : 'none'}>

@@ -2,8 +2,8 @@
 // Principal Year Planner Screen - Refactored for WARP.md compliance (≤500 lines)
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
-import { Stack } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, useWindowDimensions } from 'react-native';
+import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -40,6 +40,7 @@ const MONTH_COLORS = [
 export default function PrincipalYearPlannerScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
+  const { width } = useWindowDimensions();
   const styles = createStyles(theme);
 
   const orgId = extractOrganizationId(profile);
@@ -82,6 +83,14 @@ export default function PrincipalYearPlannerScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingTerm, setEditingTerm] = useState<AcademicTerm | null>(null);
   const [formData, setFormData] = useState<TermFormData>(getDefaultTermFormData());
+  const isCompact = width < 860;
+  const isUltraCompact = width < 560;
+  const monthTileBasis = useMemo(() => {
+    if (width >= 1280) return '24%';
+    if (width >= 980) return '31%';
+    if (width >= 680) return '48%';
+    return '100%';
+  }, [width]);
 
   const {
     suggest: aiSuggest,
@@ -127,8 +136,10 @@ export default function PrincipalYearPlannerScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView
         style={styles.container}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
+        <View style={styles.pageShell}>
         <View style={styles.header}>
           <View style={styles.tabRow}>
             <TouchableOpacity
@@ -144,12 +155,25 @@ export default function PrincipalYearPlannerScreen() {
               <Text style={[styles.tabBtnText, viewTab === 'monthly' && styles.tabBtnTextActive]}>Monthly</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity style={styles.publishButton} onPress={() => handlePublishPlan()}>
-              <Ionicons name="megaphone-outline" size={20} color={theme.primary} />
-              <Text style={[styles.publishButtonText, { color: theme.primary }]}>Publish plan</Text>
+          <View style={[styles.headerActions, isCompact && styles.headerActionsCompact]}>
+            <TouchableOpacity
+              style={[styles.publishButton, isCompact && styles.headerActionBtnCompact, isUltraCompact && styles.headerActionBtnFull]}
+              onPress={() => router.push('/screens/principal-ai-year-planner')}
+            >
+              <Ionicons name="library-outline" size={20} color={theme.primary} />
+              <Text style={[styles.publishButtonText, { color: theme.primary }]} numberOfLines={1}>AI Planner Library</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.addButton} onPress={openCreateModal}>
+            <TouchableOpacity
+              style={[styles.publishButton, isCompact && styles.headerActionBtnCompact, isUltraCompact && styles.headerActionBtnFull]}
+              onPress={() => handlePublishPlan()}
+            >
+              <Ionicons name="megaphone-outline" size={20} color={theme.primary} />
+              <Text style={[styles.publishButtonText, { color: theme.primary }]} numberOfLines={1}>Publish plan</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.addButton, isCompact && styles.headerActionBtnCompact, isUltraCompact && styles.headerActionBtnFull]}
+              onPress={openCreateModal}
+            >
               <Ionicons name="add" size={24} color="#fff" />
               <Text style={styles.addButtonText}>New Term</Text>
             </TouchableOpacity>
@@ -191,7 +215,7 @@ export default function PrincipalYearPlannerScreen() {
                         const itemCount = BUCKET_ORDER.reduce((s, b) => s + (byBucket[b]?.length ?? 0), 0);
                         const isExpanded = expandedMonth?.year === year && expandedMonth?.month === month;
                         return (
-                          <View key={month} style={styles.monthTileWrapper}>
+                          <View key={month} style={[styles.monthTileWrapper, { flexBasis: monthTileBasis, maxWidth: monthTileBasis }]}>
                             <TouchableOpacity
                               style={[styles.monthTile, isExpanded && styles.monthTileExpanded]}
                               onPress={() =>
@@ -284,6 +308,7 @@ export default function PrincipalYearPlannerScreen() {
           aiError={aiError}
           aiTips={aiLastResult?.tips}
         />
+        </View>
       </ScrollView>
     </DesktopLayout>
   );
@@ -294,6 +319,15 @@ const createStyles = (theme: any) =>
     container: {
       flex: 1,
       backgroundColor: theme.background,
+    },
+    scrollContent: {
+      width: '100%',
+      paddingBottom: 24,
+    },
+    pageShell: {
+      width: '100%',
+      maxWidth: 1220,
+      alignSelf: 'center',
     },
     header: {
       flexDirection: 'row',
@@ -330,7 +364,18 @@ const createStyles = (theme: any) =>
     headerActions: {
       flexDirection: 'row',
       alignItems: 'center',
+      flexWrap: 'wrap',
       gap: 10,
+    },
+    headerActionsCompact: {
+      width: '100%',
+      justifyContent: 'flex-start',
+    },
+    headerActionBtnCompact: {
+      flexGrow: 1,
+    },
+    headerActionBtnFull: {
+      width: '100%',
     },
     publishButton: {
       flexDirection: 'row',
@@ -415,7 +460,7 @@ const createStyles = (theme: any) =>
       marginBottom: 16,
     },
     monthTileWrapper: {
-      width: '31%',
+      width: '100%',
       minWidth: 100,
     },
     monthTile: {

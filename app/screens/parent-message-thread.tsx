@@ -123,6 +123,7 @@ export default function ParentMessageThreadScreen() {
     isPrincipal &&
     !!h.selectedMessage &&
     h.selectedMessage.sender_id !== user?.id;
+  const showConvertToRoutineRequest = showAddToWeeklyProgram;
   const handleAddToWeeklyProgram = useCallback(() => {
     const content = h.selectedMessage?.content ?? '';
     const message = typeof content === 'string' ? content : '';
@@ -136,6 +137,23 @@ export default function ParentMessageThreadScreen() {
         message: safe,
         title: parsedTheme.title ?? '',
         objectives: parsedTheme.objectives.length ? JSON.stringify(parsedTheme.objectives) : '',
+      },
+    });
+  }, [h.selectedMessage, h.setShowMessageActions, h.setSelectedMessage]);
+  const handleConvertToRoutineRequest = useCallback(() => {
+    const content = h.selectedMessage?.content ?? '';
+    const message = typeof content === 'string' ? content : '';
+    const parsedTheme = parseThemeFromMessage(message);
+    const safe = message.slice(0, 4000);
+    h.setShowMessageActions(false);
+    h.setSelectedMessage(null);
+    router.push({
+      pathname: '/screens/principal-routine-requests',
+      params: {
+        message: safe,
+        title: parsedTheme.title ?? '',
+        objectives: parsedTheme.objectives.length ? JSON.stringify(parsedTheme.objectives) : '',
+        teacherId: h.selectedMessage?.sender_id || '',
       },
     });
   }, [h.selectedMessage, h.setShowMessageActions, h.setSelectedMessage]);
@@ -444,7 +462,9 @@ export default function ParentMessageThreadScreen() {
           onEdit={h.selectedMessage.sender_id === user?.id ? actions.handleEdit : undefined}
           onStar={actions.handleToggleStar}
           showAddToWeeklyProgram={showAddToWeeklyProgram}
-          onAddToWeeklyProgram={showAddToWeeklyProgram ? handleAddToWeeklyProgram : undefined} />
+          onAddToWeeklyProgram={showAddToWeeklyProgram ? handleAddToWeeklyProgram : undefined}
+          showConvertToRoutineRequest={showConvertToRoutineRequest}
+          onConvertToRoutineRequest={showConvertToRoutineRequest ? handleConvertToRoutineRequest : undefined} />
       )}
       <ForwardMessagePicker visible={actions.showForwardPicker} onSelect={actions.confirmForward} onCancel={actions.cancelForward} />
       <ChatSearchOverlay visible={opts.showSearchOverlay} query={opts.searchQuery} results={opts.searchResults as any[]}

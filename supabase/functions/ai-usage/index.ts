@@ -432,7 +432,11 @@ serve(async (req: Request) => {
           counts[key] = (counts[key] || 0) + 1;
         }
 
-        return respond({ monthly: counts });
+        return respond({
+          monthly: counts,
+          source: 'server',
+          serverReachable: true,
+        });
       }
 
       // Get server-defined limits for the user
@@ -445,6 +449,7 @@ serve(async (req: Request) => {
           overageRequiresPrepay: tier === 'free' || tier === 'trial',
           models: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'],
           source: 'server',
+          serverReachable: true,
           tier,
         });
       }
@@ -532,6 +537,8 @@ serve(async (req: Request) => {
           quotas,
           current_usage: currentUsage,
           period_start: monthStart,
+          source: 'server',
+          serverReachable: true,
         });
       }
 

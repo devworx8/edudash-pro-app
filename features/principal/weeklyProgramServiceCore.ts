@@ -1074,6 +1074,10 @@ export class WeeklyProgramService {
     }
 
     try {
+      const notificationFeature =
+        audience === 'teachers' ? 'daily_program_share_teachers' : 'daily_program_share';
+      const targetRoute =
+        audience === 'teachers' ? '/screens/teacher-daily-program-planner' : '/screens/parent-daily-program';
       await supabase.functions.invoke('notifications-dispatcher', {
         body: {
           event_type: 'new_announcement',
@@ -1084,10 +1088,27 @@ export class WeeklyProgramService {
             ? 'New teacher routine brief is now active for classroom execution.'
             : 'New daily routine program shared with strict arrival and pickup windows.',
           target_audience: audience,
-          priority: 'medium',
+          priority: audience === 'teachers' ? 'high' : 'medium',
           send_immediately: true,
+          context: {
+            feature: notificationFeature,
+            weekly_program_id: input.weeklyProgramId,
+            week_start_date: weekStartDate,
+            class_id: programRow.class_id || null,
+            navigate_to: targetRoute,
+          },
+          custom_payload: {
+            type: 'announcement',
+            feature: notificationFeature,
+            screen: 'daily_program',
+            navigate_to: targetRoute,
+            weekly_program_id: input.weeklyProgramId,
+            week_start_date: weekStartDate,
+            class_id: programRow.class_id || null,
+            announcement_id: announcementRow.id,
+          },
           metadata: {
-            feature: audience === 'teachers' ? 'daily_program_share_teachers' : 'daily_program_share',
+            feature: notificationFeature,
             weekly_program_id: input.weeklyProgramId,
             week_start_date: weekStartDate,
             platform: Platform.OS,

@@ -18,4 +18,13 @@ describe('ExamQuestionCard math segmentation', () => {
       { type: 'text', value: ' in this question.' },
     ]);
   });
+
+  it('normalizes double-escaped latex delimiters from JSON payloads', () => {
+    const segments = parseMathSegments(String.raw`Check this: \\$7 \\times 13 = 91\\$ before you submit.`);
+    expect(segments).toEqual([
+      { type: 'text', value: 'Check this: ' },
+      { type: 'inline', value: String.raw`7 \\times 13 = 91` },
+      { type: 'text', value: ' before you submit.' },
+    ]);
+  });
 });

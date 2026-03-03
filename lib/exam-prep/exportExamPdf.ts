@@ -37,16 +37,19 @@ function toExamPrintHtml(params: ExportExamPdfParams): string {
       const questions = Array.isArray(section?.questions) ? section.questions : [];
       const questionsHtml = questions
         .map((question, questionIndex) => {
-          const questionText = escapeHtml(String(question?.question || question?.text || ''));
+          const questionText = escapeHtml(String(question?.question || ''));
           const marks = Number.isFinite(Number(question?.marks)) ? Number(question?.marks) : 1;
-          const options = Array.isArray(question?.options)
-            ? question.options
-                .map((option, optionIndex) => {
-                  const letter = String.fromCharCode(65 + optionIndex);
-                  return `<li><span class="opt">${letter}.</span> ${escapeHtml(String(option || ''))}</li>`;
-                })
-                .join('')
-            : '';
+          const rawOptions = Array.isArray(question?.optionObjects)
+            ? question.optionObjects.map((option) => option?.text || '')
+            : Array.isArray(question?.options)
+              ? question.options
+              : [];
+          const options = rawOptions
+            .map((option, optionIndex) => {
+              const letter = String.fromCharCode(65 + optionIndex);
+              return `<li><span class="opt">${letter}.</span> ${escapeHtml(String(option || ''))}</li>`;
+            })
+            .join('');
 
           const answerSpace = question?.type === 'multiple_choice' || question?.type === 'true_false'
             ? ''
@@ -66,9 +69,9 @@ function toExamPrintHtml(params: ExportExamPdfParams): string {
         })
         .join('');
 
-      const sectionTitle = escapeHtml(String(section?.title || section?.name || `Section ${sectionIndex + 1}`));
+      const sectionTitle = escapeHtml(String(section?.title || `Section ${sectionIndex + 1}`));
       const sectionInstructions = escapeHtml(String(section?.instructions || ''));
-      const readingPassage = escapeHtml(String(section?.readingPassage || section?.reading_passage || ''));
+      const readingPassage = escapeHtml(String(section?.readingPassage || ''));
 
       return `
         <section class="section">

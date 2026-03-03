@@ -2959,16 +2959,18 @@ async function recordNotification(
   userIds: string[],
   template: NotificationTemplate,
   request: NotificationRequest,
-  expoResult?: ExpoResult
+  expoResult?: ExpoResult,
+  resolvedData?: Record<string, unknown>
 ): Promise<void> {
   try {
+    const dataPayload = resolvedData || template.data || {};
     for (const userId of userIds) {
       // 1. Record in push_notifications table (for tracking sent push notifications)
       await supabase.from('push_notifications').insert({
         recipient_user_id: userId,
         title: template.title,
         body: template.body,
-        data: template.data,
+        data: dataPayload,
         status: expoResult?.success === false ? 'failed' : 'sent',
         expo_receipt_id: expoResult?.data?.id,
         notification_type: request.event_type,
@@ -2987,10 +2989,10 @@ async function recordNotification(
         is_read: false,
         metadata: {
           event_type: request.event_type,
-          data: template.data,
+          data: dataPayload,
           category: getNotificationCategory(request.event_type),
         },
-        action_url: template.data?.url || null,
+        action_url: (dataPayload as Record<string, unknown>)?.url || null,
         created_at: new Date().toISOString(),
       }).then(({ error }) => {
         if (error) {
@@ -3488,7 +3490,10 @@ async function dispatchNotification(request: Request): Promise<Response> {
       template = { ...template, ...notificationRequest.template_override };
     }
 
-    const enhancedData = { ...template.data || {} };
+    const enhancedData = {
+      ...(template.data || {}),
+      ...(notificationRequest.custom_payload || {}),
+    };
 
     const expoNotifications: ExpoNotificationPayload[] = pushTokens.map((tokenInfo) => ({
       to: [tokenInfo.expo_push_token],
@@ -3541,7 +3546,7 @@ async function dispatchNotification(request: Request): Promise<Response> {
 
     const expoResult = expoResults.length > 0 ? expoResults[0] : undefined;
     if (filteredUserIds.length > 0) {
-      await recordNotification(filteredUserIds, template, notificationRequest, expoResult);
+      await recordNotification(filteredUserIds, template, notificationRequest, expoResult, enhancedData);
     }
 
     // Mark messages as delivered server-side when push is sent for message events.

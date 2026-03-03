@@ -105,11 +105,11 @@ function resolveChoiceLetter(value: string | undefined, options: string[] | unde
 }
 
 function normalizeMathDelimiters(raw: string): string {
-  let normalized = String(raw || '');
-  normalized = normalized.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_m, expr: string) => `$$${expr}$$`);
-  normalized = normalized.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_m, expr: string) => `$${expr}$`);
-  normalized = normalized.replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_m, expr: string) => `$${expr}$`);
-  return normalized;
+  return String(raw || '')
+    .replace(/\\\\(\[|\]|\(|\)|\$)/g, '\\$1')
+    .replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_m, expr: string) => `$$${expr}$$`)
+    .replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_m, expr: string) => `$${expr}$`)
+    .replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_m, expr: string) => `$${expr}$`);
 }
 
 function isComplexInlineMath(expression: string): boolean {
@@ -135,9 +135,11 @@ function parseStandaloneMath(value: string): { expression: string; displayMode: 
 
   const inlineMatch = trimmed.match(/^\$([^$\n]+)\$$/);
   if (inlineMatch?.[1]) {
+    const expression = inlineMatch[1].trim();
     return {
-      expression: inlineMatch[1].trim(),
-      displayMode: false,
+      expression,
+      // Render complex inline expressions as block math to avoid clipping on narrow cards.
+      displayMode: isComplexInlineMath(expression),
     };
   }
 
@@ -877,7 +879,10 @@ export function ExamQuestionCard({
               )}
             </View>
             {feedbackMath ? (
-              <MathRenderer expression={feedbackMath.expression} displayMode={feedbackMath.displayMode} />
+              <MathRenderer
+                expression={feedbackMath.expression}
+                displayMode={feedbackMath.displayMode || isComplexInlineMath(feedbackMath.expression)}
+              />
             ) : containsMathDelimiters(studentAnswer.feedback || '') ? (
               renderRichMathText(studentAnswer.feedback || '', styles.feedbackText, theme.text)
             ) : (
@@ -891,7 +896,10 @@ export function ExamQuestionCard({
                   Correct answer:
                 </Text>
                 {correctAnswerMath ? (
-                  <MathRenderer expression={correctAnswerMath.expression} displayMode={false} />
+                  <MathRenderer
+                    expression={correctAnswerMath.expression}
+                    displayMode={correctAnswerMath.displayMode || isComplexInlineMath(correctAnswerMath.expression)}
+                  />
                 ) : containsMathDelimiters(resolvedCorrectAnswerDisplay || question.correctAnswer || question.correctOptionId || '') ? (
                   renderRichMathText(
                     resolvedCorrectAnswerDisplay || question.correctAnswer || question.correctOptionId || '',

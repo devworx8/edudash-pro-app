@@ -1,12 +1,14 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTeacherDashboard } from '@/hooks/useDashboardData';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { buildReminderEventsFromBlocks, useNextActivityReminder } from '@/hooks/useNextActivityReminder';
+import { resolveSchoolTypeFromProfile } from '@/lib/schoolTypeResolver';
 
 function toWeekdayMondayFirst(value: Date): number {
   return value.getDay() === 0 ? 7 : value.getDay();
@@ -29,12 +31,56 @@ const formatDate = (value?: string | null) => {
   });
 };
 
+const buildRoutineContext = (routine: {
+  title?: string | null;
+  blocks: Array<{ title: string; blockType: string; startTime?: string | null; endTime?: string | null }>;
+}) => {
+  const topBlocks = (routine.blocks || []).slice(0, 8);
+  const lines = topBlocks.map((block) => {
+    const timeLabel = block.startTime && block.endTime
+      ? `${block.startTime}-${block.endTime}`
+      : block.startTime || 'TBD';
+    return `${timeLabel} [${block.blockType}] ${block.title}`;
+  });
+  return [
+    `Weekly routine context: ${String(routine.title || 'Published routine')}`,
+    ...lines,
+  ].join('\n');
+};
+
 export default function TeacherDailyProgramPlannerScreen() {
   const { theme } = useTheme();
+  const { profile } = useAuth();
+  const { width } = useWindowDimensions();
   const { data, loading, refresh } = useTeacherDashboard();
   const routine = data?.todayRoutine || null;
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const isCompact = width < 760;
   const [reminderSoundEnabled, setReminderSoundEnabled] = useState(true);
+  const resolvedSchoolType = useMemo(() => resolveSchoolTypeFromProfile(profile), [profile]);
+  const alignedLessonRoute = resolvedSchoolType === 'k12_school'
+    ? '/screens/ai-lesson-generator'
+    : '/screens/preschool-lesson-generator';
+
+  const alignedLessonParams = useMemo(() => {
+    const routineTopic = routine?.nextBlockTitle || routine?.title || 'Today routine focus';
+    const objectiveSeed = (routine?.blocks || [])
+      .slice(0, 4)
+      .map((block) => block.title)
+      .filter(Boolean)
+      .join('; ');
+    return {
+      mode: 'quick',
+      topic: routineTopic,
+      objectives: objectiveSeed,
+      weeklyProgramId: routine?.weeklyProgramId || '',
+      weekStartDate: routine?.weekStartDate || '',
+      classId: routine?.classId || '',
+      termId: routine?.termId || '',
+      themeId: routine?.themeId || '',
+      routineContext: routine ? buildRoutineContext(routine) : '',
+    };
+  }, [routine]);
 
   const reminderBlocksByDay = useMemo(() => {
     if (!routine?.blocks?.length) return {};
@@ -65,7 +111,7 @@ export default function TeacherDailyProgramPlannerScreen() {
       {overlay ? (
         <Modal visible={true} transparent animationType="fade" onRequestClose={dismissOverlay}>
           <TouchableOpacity style={styles.reminderOverlayBackdrop} activeOpacity={1} onPress={dismissOverlay}>
-            <View style={[styles.reminderOverlayContent, { backgroundColor: theme.surface, borderColor: theme.primary }]}>
+            <View style={[styles.reminderOverlayContent, isCompact && styles.reminderOverlayContentCompact, { backgroundColor: theme.surface, borderColor: theme.primary }]}>
               <Text style={[styles.reminderOverlayLabel, { color: theme.textSecondary }]}>Reminder</Text>
               <Text style={[styles.reminderOverlayMinutes, { color: theme.text }]}>{overlay.threshold} min</Text>
               <Text style={[styles.reminderOverlayTitle, { color: theme.text }]}>{overlay.title}</Text>
@@ -82,12 +128,14 @@ export default function TeacherDailyProgramPlannerScreen() {
       ) : null}
 
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={20} color={theme.text} />
-        </TouchableOpacity>
-        <View style={styles.headerTextWrap}>
-          <Text style={styles.headerTitle}>Daily Routine</Text>
-          <Text style={styles.headerSubtitle}>Teacher view only: routine is managed by principal/admin.</Text>
+        <View style={styles.headerShell}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={20} color={theme.text} />
+          </TouchableOpacity>
+          <View style={styles.headerTextWrap}>
+            <Text style={styles.headerTitle}>Daily Routine</Text>
+            <Text style={styles.headerSubtitle}>Teacher view only: routine is managed by principal/admin.</Text>
+          </View>
         </View>
       </View>
 
@@ -98,6 +146,7 @@ export default function TeacherDailyProgramPlannerScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.pageShell}>
           {routine ? (
             <>
               <View style={styles.card}>
@@ -167,6 +216,13 @@ export default function TeacherDailyProgramPlannerScreen() {
 
           <View style={styles.actionsCard}>
             <Text style={styles.sectionTitle}>Lesson tools</Text>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push({ pathname: alignedLessonRoute as any, params: alignedLessonParams } as any)}
+            >
+              <Ionicons name="sparkles-outline" size={18} color="#fff" />
+              <Text style={styles.actionText}>Generate lesson from routine</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/screens/teacher-lessons')}>
               <Ionicons name="book-outline" size={18} color="#fff" />
               <Text style={styles.actionText}>Open lesson plans</Text>
@@ -179,10 +235,28 @@ export default function TeacherDailyProgramPlannerScreen() {
               <Ionicons name="tv-outline" size={18} color={theme.text} />
               <Text style={styles.secondaryText}>Open Room Display link</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={() =>
+                router.push({
+                  pathname: '/screens/teacher-routine-requests',
+                  params: {
+                    requestType: 'daily_routine',
+                    weekStartDate: routine?.weekStartDate || '',
+                    classId: routine?.classId || '',
+                    themeTitle: routine?.title || '',
+                  },
+                })
+              }
+            >
+              <Ionicons name="clipboard-outline" size={18} color={theme.text} />
+              <Text style={styles.secondaryText}>Request new routine/program</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.refreshButton} onPress={refresh}>
               <Ionicons name="refresh-outline" size={16} color={theme.primary} />
               <Text style={styles.refreshText}>Refresh routine</Text>
             </TouchableOpacity>
+          </View>
           </View>
         </ScrollView>
       )}
@@ -197,14 +271,19 @@ const createStyles = (theme: any) =>
       backgroundColor: theme.background,
     },
     header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
       paddingHorizontal: 16,
       paddingTop: 8,
       paddingBottom: 14,
       borderBottomWidth: 1,
       borderBottomColor: theme.border,
+    },
+    headerShell: {
+      width: '100%',
+      maxWidth: 980,
+      alignSelf: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
     },
     backButton: {
       width: 40,
@@ -244,6 +323,12 @@ const createStyles = (theme: any) =>
       padding: 16,
       gap: 14,
       paddingBottom: 20,
+    },
+    pageShell: {
+      width: '100%',
+      maxWidth: 980,
+      alignSelf: 'center',
+      gap: 14,
     },
     card: {
       backgroundColor: theme.surface,
@@ -326,6 +411,13 @@ const createStyles = (theme: any) =>
       padding: 24,
       alignItems: 'center',
       minWidth: 260,
+      width: '100%',
+      maxWidth: 380,
+    },
+    reminderOverlayContentCompact: {
+      minWidth: 0,
+      paddingHorizontal: 18,
+      paddingVertical: 20,
     },
     reminderOverlayLabel: {
       fontSize: 11,

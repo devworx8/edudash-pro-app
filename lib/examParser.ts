@@ -555,6 +555,15 @@ function computeNumericOverlapRatio(student: string, expected: string): number {
   return overlap / expectedNumbers.size;
 }
 
+function computeBestNumericOverlap(student: string, sources: string[]): number {
+  let best = 0;
+  for (const source of sources) {
+    const ratio = computeNumericOverlapRatio(student, source);
+    if (ratio > best) best = ratio;
+  }
+  return best;
+}
+
 function isLikelyMathVerificationPrompt(questionText: string, expected: string): boolean {
   const raw = `${questionText} ${expected}`.toLowerCase();
   if (/[0-9].*[=+\-*/×÷]/.test(raw)) return true;
@@ -699,27 +708,26 @@ export function gradeAnswer(
   if ((question.type === 'short_answer' || question.type === 'essay') && question.correctAnswer) {
     const normalizedExpected = normalize(question.correctAnswer);
     const normalizedStudent = normalize(answer);
-    const mathExpectationSource = [question.correctAnswer || '', question.question || ''].join(' ').trim();
-    const isMathVerificationPrompt = isLikelyMathVerificationPrompt(question.question || '', mathExpectationSource);
-    const mathSentenceMatched = hasEquivalentMathSentence(
-      answer,
-      mathExpectationSource,
-    );
+    const questionMathSource = String(question.question || '').trim();
+    const answerMathSource = String(question.correctAnswer || '').trim();
+    const combinedMathSource = [answerMathSource, questionMathSource].join(' ').trim();
+    const mathSources = [questionMathSource, answerMathSource, combinedMathSource].filter((entry) => entry.length > 0);
+    const isMathVerificationPrompt = isLikelyMathVerificationPrompt(questionMathSource, combinedMathSource);
+    const mathSentenceMatched = mathSources.some((source) => hasEquivalentMathSentence(answer, source));
     const equationIsTrue = isEquationNumericallyTrue(answer);
-    const numericOverlap = computeNumericOverlapRatio(answer, mathExpectationSource);
-    if (isMathVerificationPrompt && equationIsTrue && numericOverlap >= 0.45) {
+    const numericOverlap = computeBestNumericOverlap(answer, mathSources);
+    if (isMathVerificationPrompt && equationIsTrue && numericOverlap >= 0.34) {
       return {
         isCorrect: true,
         feedback: question.explanation || 'Correct. Your multiplication/division check is valid.',
         marks: question.marks,
       };
     }
-    if (isMathVerificationPrompt && equationIsTrue && numericOverlap >= 0.3) {
+    if (isMathVerificationPrompt && equationIsTrue && numericOverlap >= 0.2) {
+      const hint = question.explanation ? ` ${question.explanation}` : '';
       return {
         isCorrect: false,
-        feedback:
-          question.explanation ||
-          `Partially correct (${Math.round(numericOverlap * 100)}% numeric match). Add the final conclusion sentence.`,
+        feedback: `Partially correct (${Math.round(numericOverlap * 100)}% numeric match). Add a clear conclusion sentence that states if the check is correct.${hint}`,
         marks: Math.max(1, Math.round(question.marks * 0.75)),
       };
     }

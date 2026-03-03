@@ -175,6 +175,18 @@ export default function NotificationsScreen() {
   const getString = (value: unknown): string | undefined =>
     typeof value === 'string' ? value : undefined;
 
+  const extractNotificationPayload = (data?: Record<string, unknown>): Record<string, unknown> => {
+    if (!data || typeof data !== 'object') return {};
+    const nested = (data as Record<string, unknown>).data;
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      return {
+        ...(data as Record<string, unknown>),
+        ...(nested as Record<string, unknown>),
+      };
+    }
+    return data as Record<string, unknown>;
+  };
+
   const extractReceiptUrl = (data?: Record<string, unknown>): string | null => {
     if (!data) return null;
     const candidates = [
@@ -237,7 +249,8 @@ export default function NotificationsScreen() {
       queryClient.invalidateQueries({ queryKey: ['notifications', user.id] });
     }
 
-    const receiptUrl = extractReceiptUrl(notification.data);
+    const payload = extractNotificationPayload(notification.data);
+    const receiptUrl = extractReceiptUrl(payload);
     if (receiptUrl) {
       const lowerUrl = receiptUrl.toLowerCase();
       if (lowerUrl.endsWith('.pdf')) {
@@ -253,10 +266,10 @@ export default function NotificationsScreen() {
     }
 
     const fallbackText = `${notification.title} ${notification.body}`.trim();
-    const dataType = getString(notification.data?.type)?.toLowerCase() || '';
-    const threadId = extractThreadId(notification.data as Record<string, unknown> | undefined);
-    const callId = extractCallId(notification.data as Record<string, unknown> | undefined);
-    const callType = extractCallType(notification.data as Record<string, unknown> | undefined);
+    const dataType = getString(payload?.type)?.toLowerCase() || '';
+    const threadId = extractThreadId(payload);
+    const callId = extractCallId(payload);
+    const callType = extractCallType(payload);
     const combinedText = `${notification.title} ${notification.body} ${dataType}`.toLowerCase();
     const isCallLike =
       notification.type === 'call' ||
@@ -295,8 +308,8 @@ export default function NotificationsScreen() {
       'receipt',
     ].includes(dataType);
 
-    if (isUniformNotification(notification.data, fallbackText)) {
-      const childId = resolveChildId(notification.data);
+    if (isUniformNotification(payload, fallbackText)) {
+      const childId = resolveChildId(payload);
       if (isParent && isPaymentLike) {
         if (childId) {
           navigateSafe('/screens/parent-uniform-payments', { childId });
@@ -310,8 +323,8 @@ export default function NotificationsScreen() {
     }
 
     if (isParent && isPaymentLike) {
-      const childId = resolveChildId(notification.data);
-      const tab = resolveBillingTab(notification.data, fallbackText);
+      const childId = resolveChildId(payload);
+      const tab = resolveBillingTab(payload, fallbackText);
       if (childId) {
         navigateSafe('/screens/parent-payments', { tab, childId });
       } else {
@@ -329,8 +342,8 @@ export default function NotificationsScreen() {
         navigateSafe('/screens/calls');
         break;
       case 'homework':
-        if (notification.data?.assignment_id) {
-          navigateSafe('/screens/homework-detail', { assignmentId: notification.data.assignment_id as string });
+        if (payload?.assignment_id) {
+          navigateSafe('/screens/homework-detail', { assignmentId: payload.assignment_id as string });
         } else {
           navigateSafe('/screens/homework');
         }
@@ -339,22 +352,40 @@ export default function NotificationsScreen() {
         navigateSafe('/screens/grades');
         break;
       case 'announcement':
-        navigateSafe('/screens/parent-announcements');
+        if (isTeacher) {
+          const feature = getString(payload?.feature) || '';
+          const navigateTo = getString(payload?.navigate_to) || getString(payload?.route) || '';
+          const looksLikeDailyRoutineShare =
+            feature === 'daily_program_share_teachers' ||
+            navigateTo === '/screens/teacher-daily-program-planner';
+          if (looksLikeDailyRoutineShare) {
+            const weekStartDate = getString(payload?.week_start_date);
+            const classId = getString(payload?.class_id);
+            navigateSafe('/screens/teacher-daily-program-planner', {
+              ...(weekStartDate ? { weekStartDate } : {}),
+              ...(classId ? { classId } : {}),
+            });
+          } else {
+            navigateSafe('/screens/teacher-message-list');
+          }
+        } else {
+          navigateSafe('/screens/parent-announcements');
+        }
         break;
       case 'attendance':
         navigateSafe('/screens/parent-progress');
         break;
       case 'registration':
-        if (notification.data?.registration_id) {
-          navigateSafe('/screens/registration-detail', { id: notification.data.registration_id as string });
+        if (payload?.registration_id) {
+          navigateSafe('/screens/registration-detail', { id: payload.registration_id as string });
         } else {
           navigateSafe('/screens/principal-registrations');
         }
         break;
       case 'billing':
         if (isParent) {
-          const childId = resolveChildId(notification.data);
-          const tab = resolveBillingTab(notification.data, `${notification.title} ${notification.body}`.trim());
+          const childId = resolveChildId(payload);
+          const tab = resolveBillingTab(payload, `${notification.title} ${notification.body}`.trim());
           if (childId) {
             navigateSafe('/screens/parent-payments', { tab, childId });
           } else {
