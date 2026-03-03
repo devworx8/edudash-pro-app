@@ -193,6 +193,7 @@ const getDefaultNavItems = (
     case 'teacher':
       return [
         { id: 'home', label: 'Dashboard', icon: 'home', route: '/screens/teacher-dashboard' },
+        { id: 'daily-routine', label: 'Daily Routine', icon: 'today', route: '/screens/teacher-daily-program-planner' },
         { id: 'students', label: 'Students', icon: 'people', route: '/screens/student-management' },
         { id: 'classes', label: 'Classes', icon: 'school', route: '/screens/class-teacher-management' },
         { id: 'routine-requests', label: 'Routine Requests', icon: 'clipboard', route: '/screens/teacher-routine-requests' },

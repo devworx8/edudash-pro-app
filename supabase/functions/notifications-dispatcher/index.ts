@@ -161,7 +161,7 @@ interface NotificationRequest {
   event_id?: string;
   meeting_id?: string;
   excursion_id?: string;
-  target_audience?: string[];
+  target_audience?: string[] | string;
   // Attendance
   attendance_date?: string;
   student_ids?: string[];
@@ -1520,14 +1520,31 @@ async function getUsersToNotify(request: NotificationRequest): Promise<string[]>
 
     case 'new_announcement':
       if (request.preschool_id) {
-        const { data: parents } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`preschool_id.eq.${request.preschool_id},organization_id.eq.${request.preschool_id}`)
-          .eq('role', 'parent')
-          .eq('is_active', true);
-        if (parents) {
-          userIds.push(...parents.map((p: { id: string }) => p.id));
+        const rawAudience = request.target_audience;
+        const targetAudience = Array.isArray(rawAudience)
+          ? rawAudience
+          : typeof rawAudience === 'string'
+            ? rawAudience.split(',').map((entry) => entry.trim()).filter(Boolean)
+            : [];
+        const normalizedAudience = new Set(
+          targetAudience.map((entry) => String(entry || '').toLowerCase()).filter(Boolean)
+        );
+        const includeAll = normalizedAudience.size === 0 || normalizedAudience.has('all');
+        const targetRoles: string[] = [];
+        if (includeAll || normalizedAudience.has('parents')) targetRoles.push('parent');
+        if (includeAll || normalizedAudience.has('teachers')) targetRoles.push('teacher');
+        if (includeAll || normalizedAudience.has('staff')) targetRoles.push('staff');
+
+        if (targetRoles.length > 0) {
+          const { data: recipients } = await supabase
+            .from('profiles')
+            .select('id')
+            .or(`preschool_id.eq.${request.preschool_id},organization_id.eq.${request.preschool_id}`)
+            .in('role', targetRoles)
+            .eq('is_active', true);
+          if (recipients) {
+            userIds.push(...recipients.map((p: { id: string }) => p.id));
+          }
         }
       }
       if (request.announcement_id) {

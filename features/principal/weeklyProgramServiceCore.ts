@@ -1087,7 +1087,8 @@ export class WeeklyProgramService {
           body: audience === 'teachers'
             ? 'New teacher routine brief is now active for classroom execution.'
             : 'New daily routine program shared with strict arrival and pickup windows.',
-          target_audience: audience,
+          target_audience: [audience],
+          role_targets: [audience === 'teachers' ? 'teacher' : 'parent'],
           priority: audience === 'teachers' ? 'high' : 'medium',
           send_immediately: true,
           context: {

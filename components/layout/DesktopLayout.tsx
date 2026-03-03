@@ -49,6 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   // Principal/Teacher items
   { id: 'students', label: 'Students', icon: 'people-outline', route: '/screens/student-management', roles: ['principal', 'principal_admin', 'teacher'] },
   { id: 'teachers', label: 'Teachers', icon: 'school-outline', route: '/screens/teacher-management', roles: ['principal', 'principal_admin'] },
+  { id: 'teacher-daily-routine', label: 'Daily Routine', icon: 'today-outline', route: '/screens/teacher-daily-program-planner', roles: ['teacher'] },
   { id: 'registrations', label: 'Registrations', icon: 'person-add-outline', route: '/screens/principal-registrations', roles: ['principal', 'principal_admin'] },
   { id: 'classes', label: 'Classes', icon: 'book-outline', route: '/screens/class-teacher-management', roles: ['principal', 'principal_admin', 'teacher'] },
   { id: 'teacher-routine-requests', label: 'Routine Requests', icon: 'clipboard-outline', route: '/screens/teacher-routine-requests', roles: ['teacher'] },
