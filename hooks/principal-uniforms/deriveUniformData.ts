@@ -1,5 +1,6 @@
 import type { DisplayRow, UniformRow, StudentRow } from './types';
 import { formatName, resolveParentProfile } from './types';
+import { hasAssignedBackNumber, normalizeBackNumber } from './numbering';
 
 export interface DerivedUniformData {
   submittedRows: DisplayRow[];
@@ -16,6 +17,7 @@ export function deriveUniformData(
   rows: UniformRow[],
   students: StudentRow[],
   paymentStatusByStudent: Map<string, 'paid' | 'pending' | 'unpaid'>,
+  assignedBackNumberByStudent: Map<string, string>,
   parentProfilesById: Record<string, { id?: string | null; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }> = {},
 ): DerivedUniformData {
   const studentLookup = new Map<string, StudentRow>();
@@ -42,6 +44,14 @@ export function deriveUniformData(
       || formatName(row.student?.first_name, row.student?.last_name)
       || formatName(student?.first_name, student?.last_name);
     const parentName = formatName(parentProfile?.first_name, parentProfile?.last_name) || parentProfile?.email || '';
+    const rowBackNumber = normalizeBackNumber(row.tshirt_number);
+    const assignedBackNumber = normalizeBackNumber(assignedBackNumberByStudent.get(row.student_id));
+    const resolvedBackNumber = hasAssignedBackNumber(rowBackNumber)
+      ? rowBackNumber
+      : hasAssignedBackNumber(assignedBackNumber)
+        ? assignedBackNumber
+        : '';
+
     return {
       id: row.id, studentId: row.student_id,
       childName: childName || 'Unnamed Child',
@@ -49,7 +59,7 @@ export function deriveUniformData(
       tshirtSize: row.tshirt_size,
       tshirtQuantity: row.tshirt_quantity ?? 0,
       shortsQuantity: row.shorts_quantity ?? 0,
-      tshirtNumber: row.tshirt_number || '',
+      tshirtNumber: resolvedBackNumber,
       isReturning: Boolean(row.is_returning),
       sampleSupplied: Boolean(row.sample_supplied),
       studentCode: row.student?.student_id || student?.student_id || '',
@@ -76,11 +86,12 @@ export function deriveUniformData(
     const fallbackParentProfile = fallbackParentId ? parentProfilesById[fallbackParentId] : null;
     const parentProfile = relationParentProfile || fallbackParentProfile || null;
     const parentName = formatName(parentProfile?.first_name, parentProfile?.last_name) || parentProfile?.email || '';
+    const assignedBackNumber = normalizeBackNumber(assignedBackNumberByStudent.get(student.id));
     return {
       id: student.id, studentId: student.id,
       childName: formatName(student.first_name, student.last_name) || 'Unnamed Child',
       ageYears: null, tshirtSize: '', tshirtQuantity: null, shortsQuantity: null,
-      tshirtNumber: '', isReturning: false, sampleSupplied: false,
+      tshirtNumber: hasAssignedBackNumber(assignedBackNumber) ? assignedBackNumber : '', isReturning: false, sampleSupplied: false,
       studentCode: student.student_id || '',
       parentId: (parentProfile?.id || fallbackParentId || ''),
       parentName, parentEmail: parentProfile?.email || '',

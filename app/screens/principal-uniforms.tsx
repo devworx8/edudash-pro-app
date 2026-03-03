@@ -12,9 +12,17 @@ import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { logger } from '@/lib/logger';
 import {
   SIZE_OPTIONS, isUniformPaymentRecord,
-  deriveUniformData, exportUniformPdf, useUniformMessaging, hasAssignedBackNumber, needsGeneratedBackNumber,
+  deriveUniformData, exportUniformPdf, useUniformMessaging,
+  hasAssignedBackNumber, needsGeneratedBackNumber, normalizeBackNumber, parseBackNumber,
 } from '@/hooks/principal-uniforms';
 import type { UniformRow, StudentRow, DisplayRow, ParentProfile } from '@/hooks/principal-uniforms';
+
+const isUniformAssignmentsTableMissing = (error: any): boolean => {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42P01'
+    || (message.includes('uniform_number_assignments') && message.includes('does not exist'));
+};
 
 export default function PrincipalUniformsScreen() {
   const { user, profile } = useAuth();
@@ -39,6 +47,9 @@ export default function PrincipalUniformsScreen() {
   const [showInsights, setShowInsights] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [paymentStatusByStudent, setPaymentStatusByStudent] = useState<Map<string, 'paid' | 'pending' | 'unpaid'>>(
+    () => new Map()
+  );
+  const [assignedBackNumberByStudent, setAssignedBackNumberByStudent] = useState<Map<string, string>>(
     () => new Map()
   );
   const [parentProfilesById, setParentProfilesById] = useState<Record<string, ParentProfile>>({});
@@ -104,6 +115,27 @@ export default function PrincipalUniformsScreen() {
         setParentProfilesById({});
       }
 
+      try {
+        const { data: assignmentRows, error: assignmentError } = await supabase
+          .from('uniform_number_assignments')
+          .select('student_id, tshirt_number')
+          .eq('preschool_id', schoolId);
+        if (assignmentError) throw assignmentError;
+        const nextAssignments = new Map<string, string>();
+        (assignmentRows || []).forEach((row: any) => {
+          if (!row?.student_id || !hasAssignedBackNumber(row?.tshirt_number)) return;
+          nextAssignments.set(row.student_id, String(row.tshirt_number).trim());
+        });
+        setAssignedBackNumberByStudent(nextAssignments);
+      } catch (assignmentError: any) {
+        if (isUniformAssignmentsTableMissing(assignmentError)) {
+          // Keep backward compatibility while migration is pending.
+          setAssignedBackNumberByStudent(new Map());
+        } else {
+          throw assignmentError;
+        }
+      }
+
       const studentIds = (studentRows as any[] | null)?.map((s: any) => s.id).filter(Boolean) || [];
       if (studentIds.length) {
         const [{ data: popData }, { data: paymentsData }] = await Promise.all([
@@ -157,8 +189,8 @@ export default function PrincipalUniformsScreen() {
   }, [load]);
 
   const derived = useMemo(
-    () => deriveUniformData(rows, students, paymentStatusByStudent, parentProfilesById),
-    [rows, students, paymentStatusByStudent, parentProfilesById]
+    () => deriveUniformData(rows, students, paymentStatusByStudent, assignedBackNumberByStudent, parentProfilesById),
+    [rows, students, paymentStatusByStudent, assignedBackNumberByStudent, parentProfilesById]
   );
 
   const { submittedRows, missingRows, submittedCount, missingCount,
@@ -167,7 +199,11 @@ export default function PrincipalUniformsScreen() {
     () => submittedRows.filter((row) => needsGeneratedBackNumber(row.tshirtNumber)).length,
     [submittedRows]
   );
-  const learnersWithoutNumberCount = submittedMissingNumberCount + missingCount;
+  const missingSubmissionWithoutNumberCount = useMemo(
+    () => missingRows.filter((row) => needsGeneratedBackNumber(row.tshirtNumber)).length,
+    [missingRows]
+  );
+  const learnersWithoutNumberCount = submittedMissingNumberCount + missingSubmissionWithoutNumberCount;
 
   const displayRows: DisplayRow[] = useMemo(() => (
     statusFilter === 'submitted' ? submittedRows
@@ -200,13 +236,21 @@ export default function PrincipalUniformsScreen() {
   const handleGenerateNumbers = useCallback(async () => {
     if (!schoolId) return;
 
-    const submittedWithoutNumber = rows.filter((row) => needsGeneratedBackNumber(row?.tshirt_number));
-    if (submittedWithoutNumber.length === 0) {
+    const studentsSorted = [...students].sort((a, b) => {
+      const aName = `${a?.first_name || ''} ${a?.last_name || ''}`.trim().toLowerCase();
+      const bName = `${b?.first_name || ''} ${b?.last_name || ''}`.trim().toLowerCase();
+      return aName.localeCompare(bName);
+    });
+    const rowByStudentId = new Map(rows.map((row) => [row.student_id, row] as const));
+
+    const studentsWithoutAssignedNumber = studentsSorted.filter((student) => (
+      !hasAssignedBackNumber(assignedBackNumberByStudent.get(student.id))
+    ));
+
+    if (studentsWithoutAssignedNumber.length === 0) {
       showAlert({
         title: 'No Missing Numbers',
-        message: missingCount > 0
-          ? `All submitted uniform orders already have valid numbers. ${missingCount} learner(s) still need to submit uniform orders before numbers can be generated.`
-          : 'All submitted uniform orders already have valid T-shirt numbers.',
+        message: 'All active learners already have valid T-shirt numbers.',
         type: 'info',
         buttons: [{ text: 'OK' }],
       });
@@ -214,9 +258,9 @@ export default function PrincipalUniformsScreen() {
     }
 
     const usedNumbers = new Set<number>();
-    rows.forEach((row) => {
-      const parsed = Number.parseInt(String(row?.tshirt_number || '').trim(), 10);
-      if (!hasAssignedBackNumber(row?.tshirt_number) || !Number.isFinite(parsed)) return;
+    assignedBackNumberByStudent.forEach((value) => {
+      const parsed = parseBackNumber(value);
+      if (parsed === null) return;
       usedNumbers.add(parsed);
     });
 
@@ -235,45 +279,57 @@ export default function PrincipalUniformsScreen() {
       return;
     }
 
-    const orderedMissing = [...submittedWithoutNumber].sort((a, b) => {
-      const aTs = new Date(a?.created_at || 0).getTime();
-      const bTs = new Date(b?.created_at || 0).getTime();
-      return aTs - bTs;
-    });
+    const assignments: Array<{ studentId: string; parentId: string | null; number: string }> = [];
+    studentsWithoutAssignedNumber.forEach((student) => {
+      const row = rowByStudentId.get(student.id);
+      const rowNumber = parseBackNumber(row?.tshirt_number);
+      let assignedNumber: number | null = null;
 
-    const assignments = orderedMissing.slice(0, availableNumbers.length).map((row, index) => ({
-      id: row.id,
-      number: String(availableNumbers[index]),
-    }));
-    const skippedCount = Math.max(orderedMissing.length - assignments.length, 0);
+      if (rowNumber !== null && !usedNumbers.has(rowNumber)) {
+        assignedNumber = rowNumber;
+      } else {
+        assignedNumber = availableNumbers.shift() ?? null;
+      }
+
+      if (assignedNumber === null) return;
+      usedNumbers.add(assignedNumber);
+
+      assignments.push({
+        studentId: student.id,
+        parentId: row?.parent_id
+          || student.parent?.id
+          || student.parent_id
+          || student.guardian?.id
+          || student.guardian_id
+          || null,
+        number: String(assignedNumber),
+      });
+    });
+    const skippedCount = Math.max(studentsWithoutAssignedNumber.length - assignments.length, 0);
 
     setGeneratingNumbers(true);
     try {
       const supabase = assertSupabase();
-      const assignmentMap = new Map(assignments.map((assignment) => [assignment.id, assignment.number]));
       const nowIso = new Date().toISOString();
-      const results = await Promise.allSettled(
+      const assignmentResults = await Promise.allSettled(
         assignments.map(async (assignment) => {
-          const { data, error } = await supabase
-            .from('uniform_requests')
-            .update({
+          const { error } = await supabase
+            .from('uniform_number_assignments')
+            .upsert({
+              student_id: assignment.studentId,
+              parent_id: assignment.parentId,
+              preschool_id: schoolId,
               tshirt_number: assignment.number,
-              updated_at: nowIso,
-            })
-            .eq('id', assignment.id)
-            .eq('preschool_id', schoolId)
-            .select('id')
-            .maybeSingle();
+              assigned_by: profile?.id || null,
+            }, { onConflict: 'student_id' });
           if (error) throw error;
-          if (!data?.id) {
-            throw new Error('Update was rejected by access policy or no matching order was found.');
-          }
         })
       );
 
-      const failedCount = results.filter((result) => result.status === 'rejected').length;
-      const successCount = assignments.length - failedCount;
-      const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+      const failedCount = assignmentResults.filter((result) => result.status === 'rejected').length;
+      const successAssignments = assignments.filter((_, index) => assignmentResults[index]?.status === 'fulfilled');
+      const successCount = successAssignments.length;
+      const firstFailure = assignmentResults.find((result): result is PromiseRejectedResult => result.status === 'rejected');
       const firstFailureMessage = firstFailure?.reason instanceof Error
         ? firstFailure.reason.message
         : firstFailure?.reason
@@ -281,24 +337,52 @@ export default function PrincipalUniformsScreen() {
           : null;
 
       if (successCount > 0) {
+        const successAssignmentMap = new Map(
+          successAssignments.map((assignment) => [assignment.studentId, assignment.number] as const)
+        );
+
+        const updatesForSubmittedRows = rows
+          .filter((row) => successAssignmentMap.has(row.student_id))
+          .filter((row) => normalizeBackNumber(row.tshirt_number) !== successAssignmentMap.get(row.student_id));
+
+        if (updatesForSubmittedRows.length > 0) {
+          await Promise.allSettled(
+            updatesForSubmittedRows.map(async (row) => {
+              const { error } = await supabase
+                .from('uniform_requests')
+                .update({
+                  tshirt_number: successAssignmentMap.get(row.student_id) || row.tshirt_number,
+                  updated_at: nowIso,
+                })
+                .eq('id', row.id)
+                .eq('preschool_id', schoolId);
+              if (error) throw error;
+            })
+          );
+        }
+
         // Keep UI/export in sync immediately, then rehydrate from DB.
+        setAssignedBackNumberByStudent((prev) => {
+          const next = new Map(prev);
+          successAssignments.forEach((assignment) => next.set(assignment.studentId, assignment.number));
+          return next;
+        });
         setRows((prev) => prev.map((row) => (
-          assignmentMap.has(row.id)
+          successAssignmentMap.has(row.student_id)
             ? {
               ...row,
-              tshirt_number: assignmentMap.get(row.id) || row.tshirt_number,
+              tshirt_number: successAssignmentMap.get(row.student_id) || row.tshirt_number,
               updated_at: nowIso,
             }
             : row
         )));
 
         // Notify parents to confirm newly assigned numbers
-        const assignedIds = new Set(assignments.map((a) => a.id));
         const confirmTargets = submittedRows
-          .filter((row) => assignedIds.has(row.id))
+          .filter((row) => successAssignmentMap.has(row.studentId))
           .map((row) => ({
             ...row,
-            tshirtNumber: assignmentMap.get(row.id) || row.tshirtNumber,
+            tshirtNumber: successAssignmentMap.get(row.studentId) || row.tshirtNumber,
           }));
         if (confirmTargets.length > 0) {
           await bulkMessageConfirmNumbers(confirmTargets);
@@ -313,13 +397,10 @@ export default function PrincipalUniformsScreen() {
 
       const notes: string[] = [`Assigned ${successCount} unique number(s).`];
       if (skippedCount > 0) {
-        notes.push(`${skippedCount} order(s) were skipped because only 99 unique 1–2 digit numbers are available.`);
+        notes.push(`${skippedCount} learner(s) were skipped because only 99 unique 1–2 digit numbers are available.`);
       }
       if (failedCount > 0) {
         notes.push(`${failedCount} update(s) failed. ${firstFailureMessage ? 'Example: ' + firstFailureMessage : 'Please retry.'}`);
-      }
-      if (missingCount > 0) {
-        notes.push(`${missingCount} learner(s) still need to submit uniform orders before numbers can be generated.`);
       }
 
       showAlert({
@@ -338,25 +419,35 @@ export default function PrincipalUniformsScreen() {
     } finally {
       setGeneratingNumbers(false);
     }
-  }, [schoolId, rows, load, missingCount, showAlert, submittedRows, bulkMessageConfirmNumbers]);
+  }, [
+    schoolId,
+    rows,
+    students,
+    assignedBackNumberByStudent,
+    load,
+    showAlert,
+    submittedRows,
+    bulkMessageConfirmNumbers,
+    profile?.id,
+  ]);
 
   const handleGenerateNumbersPress = useCallback(() => {
     if (!schoolId) return;
-    if (submittedMissingNumberCount === 0 || generatingNumbers) {
+    if (learnersWithoutNumberCount === 0 || generatingNumbers) {
       handleGenerateNumbers();
       return;
     }
 
     showAlert({
       title: 'Generate T-shirt Numbers',
-      message: `Assign unique 1–2 digit numbers (1-99) to ${submittedMissingNumberCount} submitted order(s) missing valid numbers?${missingCount > 0 ? ` ${missingCount} learner(s) still have no order submitted.` : ''}`,
+      message: `Assign unique 1–2 digit numbers (1-99) to ${learnersWithoutNumberCount} learner(s) missing valid numbers?`,
       type: 'info',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Generate', onPress: handleGenerateNumbers },
       ],
     });
-  }, [schoolId, submittedMissingNumberCount, generatingNumbers, handleGenerateNumbers, missingCount, showAlert]);
+  }, [schoolId, learnersWithoutNumberCount, generatingNumbers, handleGenerateNumbers, showAlert]);
 
   const paymentStatusMeta = useCallback((status: DisplayRow['paymentStatus']) => {
     if (status === 'paid') return { label: 'Paid', bg: theme.success + '22', border: theme.success + '55', text: theme.success };
@@ -398,10 +489,8 @@ export default function PrincipalUniformsScreen() {
               <Text style={styles.exportButtonText}>
                 {generatingNumbers
                   ? 'Generating...'
-                  : submittedMissingNumberCount > 0
-                    ? learnersWithoutNumberCount > submittedMissingNumberCount
-                      ? `Generate Numbers (${submittedMissingNumberCount}/${learnersWithoutNumberCount})`
-                      : `Generate Numbers (${submittedMissingNumberCount})`
+                  : learnersWithoutNumberCount > 0
+                    ? `Generate Numbers (${learnersWithoutNumberCount})`
                     : 'Generate Numbers'}
               </Text>
             </TouchableOpacity>

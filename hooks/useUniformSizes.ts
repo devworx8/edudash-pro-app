@@ -16,6 +16,21 @@ import {
   type UniformRequestRow, type SchoolUniformFeeRow, type UniformFeeRow,
   getAgeYears, getErrorMessage,
 } from '@/components/dashboard/parent/UniformSizesSection.styles';
+
+const normalizeBackNumber = (value: unknown): string => String(value ?? '').trim();
+const hasAssignedBackNumber = (value: unknown): boolean => {
+  const normalized = normalizeBackNumber(value);
+  if (!/^\d{1,2}$/.test(normalized)) return false;
+  const parsed = Number(normalized);
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 99;
+};
+const isUniformAssignmentsTableMissing = (error: any): boolean => {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+  return code === '42P01'
+    || (message.includes('uniform_number_assignments') && message.includes('does not exist'));
+};
+
 export function useUniformSizes(children: ChildRow[]) {
   const { profile } = useAuth();
   const { terminology } = useOrganizationTerminology();
@@ -59,28 +74,66 @@ export function useUniformSizes(children: ChildRow[]) {
           .select('student_id,child_name,age_years,tshirt_size,tshirt_quantity,shorts_quantity,is_returning,tshirt_number,sample_supplied,updated_at')
           .in('student_id', children.map((c) => c.id));
         if (error) throw error;
-        const rows: UniformRequestRow[] = Array.isArray(data) ? data : [];
-        if (rows.length) {
-          setEntries((prev) => {
-            const next = { ...prev };
-            rows.forEach((row) => {
-              const isRet = row.is_returning ?? next[row.student_id]?.isReturning ?? false;
-              next[row.student_id] = {
-                ...(next[row.student_id] || {}),
-                childName: row.child_name || next[row.student_id]?.childName || '',
-                ageYears: row.age_years ? String(row.age_years) : next[row.student_id]?.ageYears || '',
-                tshirtSize: row.tshirt_size || '', tshirtQuantity: row.tshirt_quantity ? String(row.tshirt_quantity) : '1',
-                shortsQuantity: row.shorts_quantity ? String(row.shorts_quantity) : '1',
-                pastNumberChoice: isRet ? 'yes' : 'no',
-                isReturning: isRet, tshirtNumber: isRet ? row.tshirt_number || '' : '',
-                sampleSupplied: row.sample_supplied ?? false, status: 'saved',
-                message: t('dashboard.parent.uniform.status.saved', { defaultValue: 'Saved' }),
-                updatedAt: row.updated_at || null, isEditing: false,
-              };
-            });
-            return next;
-          });
+        let assignedRows: Array<{ student_id: string; tshirt_number?: string | null }> = [];
+        const assignmentRes = await supabase
+          .from('uniform_number_assignments')
+          .select('student_id,tshirt_number')
+          .in('student_id', children.map((c) => c.id));
+        if (assignmentRes.error) {
+          if (!isUniformAssignmentsTableMissing(assignmentRes.error)) {
+            logger.warn('UniformSizes', 'Failed to load pre-assigned uniform numbers', assignmentRes.error);
+          }
+        } else {
+          assignedRows = assignmentRes.data || [];
         }
+        const assignedBackNumberByStudent = new Map<string, string>();
+        assignedRows.forEach((row) => {
+          if (!row?.student_id || !hasAssignedBackNumber(row.tshirt_number)) return;
+          assignedBackNumberByStudent.set(row.student_id, normalizeBackNumber(row.tshirt_number));
+        });
+        const rows: UniformRequestRow[] = Array.isArray(data) ? data : [];
+        setEntries((prev) => {
+          const next = { ...prev };
+          children.forEach((child) => {
+            const assignedBackNumber = assignedBackNumberByStudent.get(child.id);
+            if (!assignedBackNumber || !hasAssignedBackNumber(assignedBackNumber)) return;
+            const existing = next[child.id] || {} as UniformEntry;
+            if (existing.pastNumberChoice === 'yes' && hasAssignedBackNumber(existing.tshirtNumber)) return;
+            next[child.id] = {
+              ...existing,
+              pastNumberChoice: 'yes',
+              isReturning: true,
+              tshirtNumber: assignedBackNumber,
+            };
+          });
+          rows.forEach((row) => {
+            const assignedBackNumber = assignedBackNumberByStudent.get(row.student_id);
+            const rowBackNumber = normalizeBackNumber(row.tshirt_number);
+            const resolvedBackNumber = hasAssignedBackNumber(rowBackNumber)
+              ? rowBackNumber
+              : hasAssignedBackNumber(assignedBackNumber)
+                ? normalizeBackNumber(assignedBackNumber)
+                : '';
+            const isRet = Boolean(row.is_returning) || hasAssignedBackNumber(resolvedBackNumber);
+            next[row.student_id] = {
+              ...(next[row.student_id] || {}),
+              childName: row.child_name || next[row.student_id]?.childName || '',
+              ageYears: row.age_years ? String(row.age_years) : next[row.student_id]?.ageYears || '',
+              tshirtSize: row.tshirt_size || '',
+              tshirtQuantity: row.tshirt_quantity ? String(row.tshirt_quantity) : '1',
+              shortsQuantity: row.shorts_quantity ? String(row.shorts_quantity) : '1',
+              pastNumberChoice: isRet ? 'yes' : 'no',
+              isReturning: isRet,
+              tshirtNumber: isRet ? resolvedBackNumber : '',
+              sampleSupplied: row.sample_supplied ?? false,
+              status: 'saved',
+              message: t('dashboard.parent.uniform.status.saved', { defaultValue: 'Saved' }),
+              updatedAt: row.updated_at || null,
+              isEditing: false,
+            };
+          });
+          return next;
+        });
       } catch (e: unknown) {
         setLoadError(getErrorMessage(e, t('dashboard.parent.uniform.errors.load_existing', { defaultValue: 'Unable to load uniform sizes.' })));
       } finally { setLoading(false); }
@@ -148,7 +201,7 @@ export function useUniformSizes(children: ChildRow[]) {
     if (!Number.isFinite(age) || age < 1 || age > 18) return val(t('dashboard.parent.uniform.validation.age', { defaultValue: 'Enter a valid age (1-18).' }));
     if (!['yes', 'no'].includes(e.pastNumberChoice)) return val(t('dashboard.parent.uniform.validation.past_number_choice', { defaultValue: 'Select whether your child has a previous back number.' }));
     if (hasPastNumber && !num) return val(t('dashboard.parent.uniform.validation.tshirt_number', { defaultValue: 'Enter the returning T-shirt number.' }));
-    if (hasPastNumber && num && !/^\d{1,6}$/.test(num)) return val(t('dashboard.parent.uniform.validation.tshirt_number_format', { defaultValue: 'T-shirt number must be 1-6 digits.' }));
+    if (hasPastNumber && num && !/^\d{1,2}$/.test(num)) return val(t('dashboard.parent.uniform.validation.tshirt_number_format', { defaultValue: 'T-shirt number must be 1-2 digits.' }));
     if (!Number.isFinite(tq) || tq < 1 || tq > 20) return val(t('dashboard.parent.uniform.validation.tshirt_qty', { defaultValue: 'Enter a valid number of T-shirts (1-20).' }));
     if (!Number.isFinite(sq) || sq < 0 || sq > 20) return val(t('dashboard.parent.uniform.validation.shorts_qty', { defaultValue: 'Enter a valid number of shorts (0-20).' }));
     setEntries((p) => ({ ...p, [id]: { ...p[id], status: 'saving', message: null } }));
@@ -160,6 +213,17 @@ export function useUniformSizes(children: ChildRow[]) {
         tshirt_number: hasPastNumber ? num || null : null, sample_supplied: e.sampleSupplied,
       }, { onConflict: 'student_id' }).select('updated_at').single();
       if (error) throw error;
+      if (hasPastNumber && num) {
+        const { error: assignmentError } = await supabase
+          .from('uniform_number_assignments')
+          .upsert({
+            student_id: id,
+            tshirt_number: num,
+          }, { onConflict: 'student_id' });
+        if (assignmentError && !isUniformAssignmentsTableMissing(assignmentError)) {
+          logger.warn('UniformSizes', 'Unable to sync assigned uniform number', assignmentError);
+        }
+      }
       setEntries((p) => ({ ...p, [id]: { ...p[id], status: 'saved', message: t('dashboard.parent.uniform.status.saved', { defaultValue: 'Saved' }), updatedAt: data?.updated_at || new Date().toISOString(), isEditing: false } }));
     } catch (err: unknown) {
       setEntries((p) => ({ ...p, [id]: { ...p[id], status: 'error', message: getErrorMessage(err, t('dashboard.parent.uniform.errors.save_failed', { defaultValue: 'Save failed' })) } }));

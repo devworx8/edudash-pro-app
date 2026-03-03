@@ -142,7 +142,7 @@ export const UniformEditCard: React.FC<Props> = React.memo(({
       {entry.pastNumberChoice === 'yes' && (
         <>
           <Text style={styles.label}>{t('dashboard.parent.uniform.labels.tshirt_number', { defaultValue: 'T-shirt Number' })}</Text>
-          <TextInput style={styles.input} value={entry.tshirtNumber} onChangeText={(v) => onUpdate({ tshirtNumber: v })} placeholder="e.g. 08" placeholderTextColor={theme.textSecondary} keyboardType="number-pad" maxLength={6} />
+          <TextInput style={styles.input} value={entry.tshirtNumber} onChangeText={(v) => onUpdate({ tshirtNumber: v })} placeholder="e.g. 08" placeholderTextColor={theme.textSecondary} keyboardType="number-pad" maxLength={2} />
           <Text style={styles.helperText}>{t('dashboard.parent.uniform.helper.back_number', { defaultValue: 'Use the number that should appear on the back.' })}</Text>
         </>
       )}
