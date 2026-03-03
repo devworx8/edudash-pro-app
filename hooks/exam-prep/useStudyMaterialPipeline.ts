@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -145,8 +145,28 @@ export function useStudyMaterialPipeline(selectedLanguage: SouthAfricanLanguage)
   }, []);
 
   const processStudyMaterial = useCallback(async (file: StudyMaterialInputFile) => {
-    const info = await FileSystem.getInfoAsync(file.uri);
-    const sizeBytes = typeof file.size === 'number' && file.size > 0 ? file.size : info.exists && typeof info.size === 'number' ? info.size : 0;
+    let sizeBytes = typeof file.size === 'number' && file.size > 0 ? file.size : 0;
+    if (sizeBytes <= 0) {
+      if (Platform.OS === 'web') {
+        try {
+          const response = await fetch(file.uri);
+          if (response.ok) {
+            const blob = await response.blob();
+            sizeBytes = blob.size || 0;
+          }
+        } catch {
+          sizeBytes = 0;
+        }
+      } else {
+        try {
+          const info = await FileSystem.getInfoAsync(file.uri);
+          sizeBytes = info.exists && typeof info.size === 'number' ? info.size : 0;
+        } catch {
+          sizeBytes = 0;
+        }
+      }
+    }
+
     if (sizeBytes > MAX_MATERIAL_SIZE_BYTES && file.mimeType !== 'application/pdf') {
       Alert.alert('File too large', `This file is ${formatSizeMB(sizeBytes)}MB. Please use files up to ${MAX_MATERIAL_SIZE_MB}MB.`);
       return;
@@ -164,11 +184,50 @@ export function useStudyMaterialPipeline(selectedLanguage: SouthAfricanLanguage)
     if (isMaterialPipelineBusy) return;
     setMaterialSelectionBusy(true);
     try {
+      if (Platform.OS === 'web') {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ['image/*'],
+          copyToCacheDirectory: true,
+          multiple: true,
+        });
+        if (result.canceled || !result.assets?.length) return;
+        await Promise.all(
+          result.assets.map((asset, index) =>
+            processStudyMaterial({
+              uri: asset.uri,
+              name: asset.name || `image-${Date.now()}-${index + 1}.jpg`,
+              mimeType: asset.mimeType || 'image/jpeg',
+              size: asset.size,
+            }),
+          ),
+        );
+        return;
+      }
+
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (permission.status !== 'granted') { Alert.alert('Permission required', 'Please allow photo library access.'); return; }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, selectionLimit: 15, quality: 0.9, allowsEditing: false });
+      if (permission.status !== 'granted') {
+        Alert.alert('Permission required', 'Please allow photo library access.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        selectionLimit: 15,
+        quality: 0.9,
+        allowsEditing: false,
+      });
       if (result.canceled || !result.assets?.length) return;
-      await Promise.all(result.assets.map((asset, index) => processStudyMaterial({ uri: asset.uri, name: asset.fileName || `image-${Date.now()}-${index + 1}.jpg`, mimeType: asset.mimeType || 'image/jpeg', size: asset.fileSize })));
+      await Promise.all(
+        result.assets.map((asset, index) =>
+          processStudyMaterial({
+            uri: asset.uri,
+            name: asset.fileName || `image-${Date.now()}-${index + 1}.jpg`,
+            mimeType: asset.mimeType || 'image/jpeg',
+            size: asset.fileSize,
+          }),
+        ),
+      );
     } catch { Alert.alert('Upload failed', 'Could not add image study material.'); } finally { setMaterialSelectionBusy(false); }
   }, [isMaterialPipelineBusy, processStudyMaterial]);
 

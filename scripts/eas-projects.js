@@ -1,6 +1,12 @@
 // Centralized EAS project map shared by app.config.js and CLI helpers.
 // Keep this in sync with Expo accounts/projects.
 
+const KING_PROD_PROJECT_ID =
+  process.env.EAS_PROJECT_ID_KING_PROD ||
+  process.env.EAS_PROJECT_ID_KINGPROD ||
+  process.env.KING_PROD_EAS_PROJECT_ID ||
+  '';
+
 const EAS_PROJECTS = {
   // Default project - EduPro-Final (edudashproplay-store org) - CURRENT ACTIVE for Play Store
   // Mark_2 1.0.22(27) is published from this project
@@ -22,12 +28,29 @@ const EAS_PROJECTS = {
   // dash-v project (edudash-v account) - NEW
   'dash-v': { id: '4b4481c9-152c-4cb1-920a-feec24c063ad', owner: 'edudash-v', slug: 'dash-v' },
   'edudash-v': { id: '4b4481c9-152c-4cb1-920a-feec24c063ad', owner: 'edudash-v', slug: 'dash-v' },
+  // king-prod project (dynamic via env var)
+  'king-prod': {
+    id: KING_PROD_PROJECT_ID || '__MISSING_KING_PROD_PROJECT_ID__',
+    owner: 'king-prod',
+    slug: 'dash',
+  },
+  'king-prod-dash': {
+    id: KING_PROD_PROJECT_ID || '__MISSING_KING_PROD_PROJECT_ID__',
+    owner: 'king-prod',
+    slug: 'dash',
+  },
 };
 
 function resolveEasProjectConfig(envProjectId) {
   if (envProjectId) {
     if (EAS_PROJECTS[envProjectId]) {
-      return { ...EAS_PROJECTS[envProjectId], alias: envProjectId };
+      const resolved = { ...EAS_PROJECTS[envProjectId], alias: envProjectId };
+      if (!resolved.id || resolved.id.startsWith('__MISSING_')) {
+        throw new Error(
+          `EAS project alias '${envProjectId}' requires EAS_PROJECT_ID_KING_PROD (or EAS_PROJECT_ID_KINGPROD) to be set.`
+        );
+      }
+      return resolved;
     }
     return {
       id: envProjectId,

@@ -1,4 +1,5 @@
 import * as FileSystem from 'expo-file-system/legacy';
+import { Platform } from 'react-native';
 
 import { assertSupabase } from '@/lib/supabase';
 
@@ -199,6 +200,42 @@ export async function summarizeStudyMaterial(payload: {
 }
 
 export async function readFileAsBase64(uri: string): Promise<string> {
+  if (Platform.OS === 'web') {
+    if (uri.startsWith('data:')) {
+      const base64Marker = 'base64,';
+      const markerIndex = uri.indexOf(base64Marker);
+      if (markerIndex >= 0) return uri.slice(markerIndex + base64Marker.length);
+    }
+
+    const response = await fetch(uri);
+    if (!response.ok) {
+      throw new Error(`Could not read selected file (${response.status}).`);
+    }
+    const blob = await response.blob();
+
+    const readerCtor = (globalThis as any).FileReader;
+    if (!readerCtor) {
+      throw new Error('Web file reader is not available in this browser.');
+    }
+
+    const base64DataUrl: string = await new Promise((resolve, reject) => {
+      const reader = new readerCtor();
+      reader.onerror = () => reject(new Error('Failed to read selected file.'));
+      reader.onloadend = () => {
+        if (typeof reader.result !== 'string') {
+          reject(new Error('Invalid file data.'));
+          return;
+        }
+        resolve(reader.result);
+      };
+      reader.readAsDataURL(blob);
+    });
+
+    const marker = base64DataUrl.indexOf('base64,');
+    if (marker >= 0) return base64DataUrl.slice(marker + 7);
+    return base64DataUrl;
+  }
+
   return await FileSystem.readAsStringAsync(uri, {
     encoding: FileSystem.EncodingType.Base64,
   });

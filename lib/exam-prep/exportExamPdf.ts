@@ -14,6 +14,47 @@ type ExportExamPdfResult = {
   message?: string;
 };
 
+function toSafeFilename(value: string): string {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+  return normalized || `exam-${Date.now()}`;
+}
+
+function base64ToBlob(base64: string, mimeType: string): Blob {
+  const binary = atob(base64);
+  const chunkSize = 1024;
+  const chunks: Uint8Array[] = [];
+  for (let offset = 0; offset < binary.length; offset += chunkSize) {
+    const slice = binary.slice(offset, offset + chunkSize);
+    const bytes = new Uint8Array(slice.length);
+    for (let index = 0; index < slice.length; index += 1) {
+      bytes[index] = slice.charCodeAt(index);
+    }
+    chunks.push(bytes);
+  }
+  return new Blob(chunks, { type: mimeType });
+}
+
+function downloadPdfOnWeb(base64: string, filename: string): void {
+  if (typeof document === 'undefined' || typeof URL === 'undefined') {
+    throw new Error('Web document APIs are not available for PDF export.');
+  }
+
+  const blob = base64ToBlob(base64, 'application/pdf');
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = 'noopener noreferrer';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 function escapeHtml(value: string): string {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -131,25 +172,28 @@ function toExamPrintHtml(params: ExportExamPdfParams): string {
 export async function exportExamToPdf(params: ExportExamPdfParams): Promise<ExportExamPdfResult> {
   try {
     const html = toExamPrintHtml(params);
+    const safeFileName = `${toSafeFilename(params.exam?.title || 'generated-exam')}.pdf`;
     const printResult = await Print.printToFileAsync({
       html,
       base64: Platform.OS === 'web',
     });
 
-    const pdfUri = printResult?.uri
-      || (Platform.OS === 'web' && printResult?.base64
-        ? `data:application/pdf;base64,${printResult.base64}`
-        : '');
+    const pdfUri = printResult?.uri || '';
+
+    if (Platform.OS === 'web') {
+      if (printResult?.base64) {
+        downloadPdfOnWeb(printResult.base64, safeFileName);
+        return { ok: true };
+      }
+      if (pdfUri && typeof window !== 'undefined') {
+        window.open(pdfUri, '_blank', 'noopener,noreferrer');
+        return { ok: true };
+      }
+      return { ok: false, message: 'PDF export failed: browser data payload was empty.' };
+    }
 
     if (!pdfUri) {
       return { ok: false, message: 'PDF export failed: no document URI returned.' };
-    }
-
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined') {
-        window.open(pdfUri, '_blank');
-      }
-      return { ok: true };
     }
 
     const canShare = await Sharing.isAvailableAsync();

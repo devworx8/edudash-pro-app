@@ -55,7 +55,7 @@ export async function loadStudentsData(params: LoadStudentsParams): Promise<Load
       parent_id, guardian_id, class_id, is_active, preschool_id,
       avatar_url, created_at, status, grade_level, gender,
       medical_conditions, allergies, emergency_contact_name, emergency_contact_phone,
-      classes!students_class_id_fkey(name, teacher_id, teacher:profiles!classes_teacher_id_fkey(first_name, last_name)),
+      classes!students_class_id_fkey(name, teacher_id, teacher_name),
       parent:profiles!students_parent_id_fkey(first_name, last_name, email, phone),
       guardian:profiles!students_guardian_id_fkey(first_name, last_name, email, phone)
     `)
@@ -113,7 +113,6 @@ export async function loadStudentsData(params: LoadStudentsParams): Promise<Load
       : 'Not provided';
 
     const classRecord = getRecord(db.classes);
-    const teacherRecord = getRecord(classRecord?.teacher);
     const className = classRecord?.name || null;
     const gradeLevel = db.grade_level || className || 'Not Assigned';
 
@@ -138,9 +137,7 @@ export async function loadStudentsData(params: LoadStudentsParams): Promise<Load
         ? Math.round((attendanceMap[db.id].present / attendanceMap[db.id].total) * 100)
         : 0,
       lastAttendance: attendanceMap[db.id]?.lastDate || '',
-      assignedTeacher: teacherRecord
-        ? `${teacherRecord.first_name || ''} ${teacherRecord.last_name || ''}`.trim()
-        : 'Not Assigned',
+      assignedTeacher: classRecord?.teacher_name || 'Not Assigned',
       fees: { outstanding: 0, lastPayment: '', paymentStatus: 'current' as const },
       schoolId: preschoolId,
       classId: db.class_id,

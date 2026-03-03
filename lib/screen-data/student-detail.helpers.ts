@@ -33,6 +33,71 @@ interface FetchStudentResult {
   transactions: Transaction[];
 }
 
+export type StudentChangeRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface StudentChangeRequest {
+  id: string;
+  student_id: string;
+  school_id: string;
+  requested_by: string;
+  status: StudentChangeRequestStatus;
+  requested_changes: Record<string, string | null>;
+  request_note?: string | null;
+  review_note?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+const ALLOWED_STUDENT_CHANGE_FIELDS = [
+  'first_name',
+  'last_name',
+  'gender',
+  'date_of_birth',
+  'home_address',
+  'home_phone',
+  'medical_conditions',
+  'allergies',
+  'medication',
+  'emergency_contact_name',
+  'emergency_contact_phone',
+  'emergency_contact_relation',
+] as const;
+
+function sanitizeRequestedStudentChanges(
+  input: Record<string, unknown>,
+): Record<string, string | null> {
+  return ALLOWED_STUDENT_CHANGE_FIELDS.reduce<Record<string, string | null>>((acc, key) => {
+    if (!(key in input)) return acc;
+    const value = input[key];
+    if (value == null) {
+      acc[key] = null;
+      return acc;
+    }
+    const normalized = String(value).trim();
+    acc[key] = normalized.length > 0 ? normalized : null;
+    return acc;
+  }, {});
+}
+
+function toStudentChangeRequestRecord(row: any): StudentChangeRequest {
+  return {
+    id: String(row.id),
+    student_id: String(row.student_id),
+    school_id: String(row.school_id),
+    requested_by: String(row.requested_by),
+    status: (row.status || 'pending') as StudentChangeRequestStatus,
+    requested_changes: sanitizeRequestedStudentChanges((row.requested_changes || {}) as Record<string, unknown>),
+    request_note: row.request_note || null,
+    review_note: row.review_note || null,
+    reviewed_by: row.reviewed_by || null,
+    reviewed_at: row.reviewed_at || null,
+    created_at: String(row.created_at),
+    updated_at: String(row.updated_at),
+  };
+}
+
 /** Fetch all student data, class list, and transactions in one call. */
 export async function fetchStudentData(params: FetchStudentParams): Promise<FetchStudentResult> {
   const { studentId, userId, profileId, isParent, canAssignClass, canViewFinancial, profileRole } = params;
@@ -352,4 +417,123 @@ export async function markPaymentReceived(
     })
     .eq('student_id', studentId)
     .eq('status', 'pending');
+}
+
+export async function listStudentChangeRequests(params: {
+  studentId: string;
+  userId: string;
+  isPrincipal: boolean;
+}): Promise<StudentChangeRequest[]> {
+  const { studentId, userId, isPrincipal } = params;
+  const supabase = assertSupabase();
+
+  let query = supabase
+    .from('student_change_requests' as any)
+    .select('id, student_id, school_id, requested_by, status, requested_changes, request_note, review_note, reviewed_by, reviewed_at, created_at, updated_at')
+    .eq('student_id', studentId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  if (!isPrincipal) {
+    query = query.eq('requested_by', userId);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    logger.error(TAG, 'Error listing student change requests:', error);
+    throw new Error('Failed to load change requests');
+  }
+
+  return (data || []).map(toStudentChangeRequestRecord);
+}
+
+export async function submitStudentChangeRequest(params: {
+  studentId: string;
+  schoolId: string;
+  requestedBy: string;
+  requestedChanges: Record<string, unknown>;
+  requestNote?: string | null;
+}): Promise<void> {
+  const supabase = assertSupabase();
+  const payloadChanges = sanitizeRequestedStudentChanges(params.requestedChanges);
+
+  const hasRequestedFields = Object.keys(payloadChanges).length > 0;
+  const note = (params.requestNote || '').trim();
+  if (!hasRequestedFields && !note) {
+    throw new Error('Please add at least one field change or a note.');
+  }
+
+  const { error } = await supabase
+    .from('student_change_requests' as any)
+    .insert({
+      student_id: params.studentId,
+      school_id: params.schoolId,
+      requested_by: params.requestedBy,
+      status: 'pending',
+      requested_changes: payloadChanges,
+      request_note: note || null,
+    });
+
+  if (error) {
+    if (String(error.code) === '23505') {
+      throw new Error('You already have a pending change request for this student.');
+    }
+    logger.error(TAG, 'Error submitting student change request:', error);
+    throw new Error(error.message || 'Could not submit change request');
+  }
+}
+
+export async function reviewStudentChangeRequest(params: {
+  requestId: string;
+  reviewerId: string;
+  decision: 'approved' | 'rejected';
+  reviewNote?: string | null;
+}): Promise<void> {
+  const supabase = assertSupabase();
+
+  const { data: requestRow, error: requestError } = await supabase
+    .from('student_change_requests' as any)
+    .select('id, student_id, status, requested_changes')
+    .eq('id', params.requestId)
+    .single();
+
+  if (requestError || !requestRow) {
+    logger.error(TAG, 'Error loading student change request for review:', requestError);
+    throw new Error('Could not load the selected request');
+  }
+
+  if (requestRow.status !== 'pending') {
+    throw new Error('This request has already been reviewed.');
+  }
+
+  if (params.decision === 'approved') {
+    const updates = sanitizeRequestedStudentChanges((requestRow.requested_changes || {}) as Record<string, unknown>);
+    if (Object.keys(updates).length > 0) {
+      const { error: updateStudentError } = await supabase
+        .from('students')
+        .update(updates)
+        .eq('id', requestRow.student_id);
+
+      if (updateStudentError) {
+        logger.error(TAG, 'Error applying approved student changes:', updateStudentError);
+        throw new Error(updateStudentError.message || 'Failed to apply changes to student profile');
+      }
+    }
+  }
+
+  const reviewNote = (params.reviewNote || '').trim();
+  const { error: reviewError } = await supabase
+    .from('student_change_requests' as any)
+    .update({
+      status: params.decision,
+      review_note: reviewNote || null,
+      reviewed_by: params.reviewerId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq('id', params.requestId);
+
+  if (reviewError) {
+    logger.error(TAG, 'Error updating student change request review:', reviewError);
+    throw new Error(reviewError.message || 'Failed to update request status');
+  }
 }

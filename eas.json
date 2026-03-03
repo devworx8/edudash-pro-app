@@ -121,6 +121,7 @@
     },
     "playstore": {
       "extends": "production",
+      "credentialsSource": "remote",
       "android": {
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease"
@@ -129,8 +130,24 @@
         "EAS_PROJECT_ID": "playstore"
       }
     },
+    "playstore-shared-key": {
+      "extends": "production",
+      "credentialsSource": "local",
+      "android": {
+        "buildType": "app-bundle",
+        "gradleCommand": ":app:bundleRelease"
+      }
+    },
+    "playstore-shared-key-apk": {
+      "extends": "production",
+      "credentialsSource": "local",
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "playstore-dash-t": {
       "extends": "production",
+      "credentialsSource": "remote",
       "android": {
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease"
