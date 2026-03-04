@@ -465,7 +465,7 @@ export function VideoCallInterface({
             const { data: callerProfile } = await getSupabase()
               .from('profiles')
               .select('first_name, last_name')
-              .eq('auth_user_id', user.id)
+              .eq('id', user.id)
               .maybeSingle();
 
             const callerName = callerProfile
