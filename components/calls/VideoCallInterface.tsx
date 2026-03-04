@@ -673,7 +673,7 @@ export function VideoCallInterface({
         console.log('[VideoCall] Joining room:', roomUrl, 'with token:', !!meetingToken);
         await daily.join({
           url: roomUrl,
-          token: meetingToken, // Include token for private rooms
+          ...(meetingToken ? { token: meetingToken } : {}), // Only include token when valid string
           subscribeToTracksAutomatically: true,
           audioSource: true,
           videoSource: true,

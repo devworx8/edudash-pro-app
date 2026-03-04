@@ -86,14 +86,10 @@ Deno.serve(async (req: Request) => {
 
     const token = authHeader.replace('Bearer ', '');
 
-    // Create Supabase client with user token
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-      global: {
-        headers: { Authorization: authHeader },
-      },
-    });
+    // Service-role client for DB queries (bypasses RLS)
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Verify the user token
+    // Verify the user token using service-role client
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
@@ -106,11 +102,11 @@ Deno.serve(async (req: Request) => {
 
     console.log('[Daily Rooms] Authenticated user:', user.id, user.email);
 
-    // Get user profile
+    // Get user profile (profiles.id = auth.uid())
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role, preschool_id')
-      .eq('auth_user_id', user.id)
+      .eq('id', user.id)
       .maybeSingle();
 
     if (profileError) {

@@ -759,7 +759,7 @@ export function useVoiceCallDaily({
         console.log('[VoiceCallDaily] Joining room:', roomUrl, 'with token:', !!meetingToken);
         await daily.join({ 
           url: roomUrl,
-          token: meetingToken || undefined, // Include token for private rooms
+          ...(meetingToken ? { token: meetingToken } : {}), // Only include token when valid string
           audioSource: true,
           videoSource: false, // Explicitly false for voice-only calls
           // Ensure we receive all participant audio

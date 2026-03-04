@@ -1287,7 +1287,7 @@ export function WhatsAppStyleVideoCall({
 
         await daily.join({ 
           url: roomUrl,
-          token: meetingToken, // Include token for private rooms
+          ...(meetingToken ? { token: meetingToken } : {}), // Only include token when valid string
           subscribeToTracksAutomatically: true,
           audioSource: true,
           videoSource: true,

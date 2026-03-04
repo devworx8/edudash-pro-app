@@ -491,6 +491,12 @@ export function CallProvider({ children }: CallProviderProps) {
         hasOutgoingCall: !!outgoingCallRef.current,
       });
       
+      // CRITICAL: Ignore notifications for calls WE initiated (we are the caller)
+      if (data.caller_id && data.caller_id === currentUserIdRef.current) {
+        console.log('[CallProvider] Ignoring notification - we are the caller');
+        return;
+      }
+      
       // If we already have this call or are in a call, ignore (using refs)
       if (incomingCallRef.current?.call_id === data.call_id || answeringCallRef.current || outgoingCallRef.current) {
         console.log('[CallProvider] Ignoring notification - already handling call');
@@ -569,6 +575,12 @@ export function CallProvider({ children }: CallProviderProps) {
         async (payload: { new: ActiveCall }) => {
           console.log('[CallProvider] ✅ Incoming call INSERT detected:', payload.new);
           const call = payload.new;
+
+          // CRITICAL: Ignore our own outgoing calls (caller_id = us)
+          if (call.caller_id === currentUserId) {
+            console.log('[CallProvider] Ignoring own outgoing call INSERT:', call.call_id);
+            return;
+          }
 
           // Ignore calls that are already ended or have ended_at set
           if (call.status === 'ended' || call.ended_at) {
