@@ -9,6 +9,8 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Colors } from '@/constants/Colors';
 import { navigateBack } from '@/lib/navigation';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -52,11 +54,19 @@ export function ScreenHeader({
         styles.container,
         {
           paddingTop: insets.top,
-          backgroundColor: headerBgColor,
-          borderBottomColor: theme.border,
+          backgroundColor: Platform.OS === 'ios' ? 'transparent' : headerBgColor,
         },
       ]}
     >
+      {/* Glass blur backdrop on iOS */}
+      {Platform.OS === 'ios' && isDark && (
+        <BlurView
+          intensity={30}
+          tint="dark"
+          style={StyleSheet.absoluteFillObject}
+        />
+      )}
+
       <View style={styles.content}>
         {/* Left Section - Back Button */}
         <View style={styles.leftSection}>
@@ -69,7 +79,7 @@ export function ScreenHeader({
             >
               <Ionicons
                 name={Platform.OS === 'ios' ? 'chevron-back' : 'arrow-back'}
-                size={24}
+                size={22}
                 color={headerTextColor}
               />
             </TouchableOpacity>
@@ -94,35 +104,47 @@ export function ScreenHeader({
         {/* Right Section - Actions */}
         <View style={styles.rightSection}>{rightAction}</View>
       </View>
+
+      {/* Bottom gradient fade — soft transition instead of hard border */}
+      {isDark && (
+        <LinearGradient
+          colors={['rgba(255,255,255,0.06)', 'rgba(255,255,255,0)']}
+          style={styles.bottomFade}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+    overflow: 'hidden',
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 56,
     paddingHorizontal: 16,
+    zIndex: 2,
   },
   leftSection: {
     width: 44,
     alignItems: 'flex-start',
   },
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 22,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   titleSection: {
     flex: 1,
@@ -130,19 +152,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: -0.2,
   },
   subtitle: {
     fontSize: 12,
-    fontWeight: '400',
+    fontWeight: '500',
     textAlign: 'center',
     marginTop: 2,
+    opacity: 0.7,
   },
   rightSection: {
     width: 44,
     alignItems: 'flex-end',
+  },
+  bottomFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 1,
   },
 });
 

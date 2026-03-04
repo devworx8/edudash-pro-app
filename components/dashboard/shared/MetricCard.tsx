@@ -7,8 +7,9 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 
 const { width } = Dimensions.get('window');
@@ -209,8 +210,14 @@ export const MetricCard: React.FC<MetricCardProps> = ({
               </Text>
             </View>
           )}
-          <View style={styles.metricHeader}>
-            <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
+          <View style={[styles.metricHeader]}>
+            <View style={[styles.iconContainer]}>
+              <LinearGradient
+                colors={[color + '22', color + '08']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFillObject}
+              />
               <Ionicons 
                 name={icon as any} 
                 size={isSmallScreen ? (size === 'large' ? 24 : 20) : (size === 'large' ? 28 : 24)} 
@@ -250,7 +257,19 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   );
 };
 
+const isDarkHex = (hex: string): boolean => {
+  const match = String(hex || '').trim().match(/^#([0-9a-f]{6})$/i);
+  if (!match) return false;
+  const value = match[1];
+  const r = Number.parseInt(value.slice(0, 2), 16);
+  const g = Number.parseInt(value.slice(2, 4), 16);
+  const b = Number.parseInt(value.slice(4, 6), 16);
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance < 0.55;
+};
+
 const createStyles = (theme: any, customCardWidth?: number) => {
+  const isDark = isDarkHex(theme?.background);
   const cardPadding = isTablet ? 20 : isSmallScreen ? 10 : 14;
   const cardGap = isTablet ? 12 : isSmallScreen ? 6 : 8;
   const horizontalCardMargin = customCardWidth ? 0 : cardGap / 2;
@@ -267,18 +286,21 @@ const createStyles = (theme: any, customCardWidth?: number) => {
 
   return StyleSheet.create({
     metricCard: {
-      backgroundColor: theme.cardBackground,
-      borderRadius: isSmallScreen ? 12 : 16,
+      backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.cardBackground,
+      borderRadius: isSmallScreen ? 14 : 18,
       padding: isSmallScreen ? 14 : 18,
       width: customCardWidth ? '100%' : cardWidth,
       marginHorizontal: horizontalCardMargin,
       marginBottom: customCardWidth ? 0 : cardGap,
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.08,
-      shadowRadius: 8,
-      elevation: 3,
+      borderWidth: isDark ? 1 : 0,
+      borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'transparent',
+      shadowColor: isDark ? '#000' : theme.shadow,
+      shadowOffset: { width: 0, height: isDark ? 8 : 2 },
+      shadowOpacity: isDark ? 0.2 : 0.08,
+      shadowRadius: isDark ? 16 : 8,
+      elevation: isDark ? 8 : 3,
       minHeight: isSmallScreen ? 110 : 130,
+      overflow: 'hidden' as const,
     },
     metricCardLarge: {
       width: isTablet ? (width - 60) / 2 : width - (cardPadding * 2),
@@ -302,10 +324,11 @@ const createStyles = (theme: any, customCardWidth?: number) => {
     iconContainer: {
       width: isSmallScreen ? 44 : 52,
       height: isSmallScreen ? 44 : 52,
-      borderRadius: isSmallScreen ? 12 : 14,
+      borderRadius: isSmallScreen ? 13 : 16,
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
+      overflow: 'hidden' as const,
     },
     badge: {
       position: 'absolute',
@@ -354,6 +377,7 @@ const createStyles = (theme: any, customCardWidth?: number) => {
       color: theme.text,
       marginBottom: 6,
       lineHeight: isSmallScreen ? 28 : isTablet ? 40 : 36,
+      letterSpacing: -0.3,
     },
     metricTitle: {
       fontSize: isSmallScreen ? 13 : isTablet ? 16 : 15,

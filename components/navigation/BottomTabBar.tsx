@@ -7,6 +7,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
+import { BlurView } from 'expo-blur';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import {
   resolveExplicitSchoolTypeFromProfile,
   resolveOrganizationId,
@@ -21,6 +27,39 @@ import {
 } from '@/lib/navigation/navManifest';
 import { useFinancePrivacyMode } from '@/hooks/useFinancePrivacyMode';
 import { useNotifications } from '@/hooks/useNotifications';
+
+/** Animated tab icon with spring scale on press */
+function AnimatedTabIcon({
+  name,
+  size,
+  color,
+  active,
+}: {
+  name: string;
+  size: number;
+  color: string;
+  active: boolean;
+}) {
+  const scale = useSharedValue(1);
+
+  React.useEffect(() => {
+    if (active) {
+      scale.value = withSpring(1.15, { damping: 10, stiffness: 200 });
+    } else {
+      scale.value = withSpring(1, { damping: 14, stiffness: 120 });
+    }
+  }, [active, scale]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <Ionicons name={name as any} size={size} color={color} />
+    </Animated.View>
+  );
+}
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const isSmallScreen = SCREEN_WIDTH < 360;
@@ -707,16 +746,29 @@ export function BottomTabBar() {
   const styles = StyleSheet.create({
     container: {
       flexDirection: 'row',
-      backgroundColor: navBackgroundColor,
-      borderTopWidth: 1,
+      backgroundColor: Platform.OS === 'ios' ? 'transparent' : navBackgroundColor,
+      borderTopWidth: Platform.OS === 'ios' ? 0 : 1,
       borderTopColor: navBorderColor,
       paddingBottom: navBottomPadding,
       paddingTop: containerPaddingTop,
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: -1 },
-      shadowOpacity: isNextGenNav ? 0.18 : 0.08,
-      shadowRadius: isNextGenNav ? 12 : 4,
-      elevation: isNextGenNav ? 10 : 4,
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.22,
+      shadowRadius: 16,
+      elevation: 12,
+      overflow: 'hidden' as const,
+    },
+    blurBackground: {
+      ...StyleSheet.absoluteFillObject,
+    },
+    activeIndicator: {
+      position: 'absolute' as const,
+      top: 2,
+      width: 32,
+      height: 3,
+      borderRadius: 2,
+      backgroundColor: navActiveColor,
+      alignSelf: 'center' as const,
     },
     tab: {
       flex: 1,
@@ -825,6 +877,15 @@ export function BottomTabBar() {
         },
       ]}
     >
+      {/* Glass blur background (iOS) */}
+      {Platform.OS === 'ios' && (
+        <BlurView
+          intensity={40}
+          tint="dark"
+          style={styles.blurBackground}
+        />
+      )}
+
       {sortedTabs.map((tab) => {
         const active = isActive(tab.route, tab.id);
 
@@ -859,11 +920,14 @@ export function BottomTabBar() {
             onPress={() => router.push(tab.route as any)}
             activeOpacity={0.7}
           >
+            {/* Active tab pill indicator */}
+            {active && <View style={styles.activeIndicator} />}
             <View style={[styles.iconContainer, styles.badgeWrapper]}>
-              <Ionicons
-                name={(active ? tab.activeIcon : tab.icon) as any}
+              <AnimatedTabIcon
+                name={active ? tab.activeIcon : tab.icon}
                 size={isCompact ? 20 : 22}
                 color={active ? navActiveColor : navInactiveColor}
+                active={active}
               />
               {badgeCount > 0 && (
                 <View style={styles.badge}>
