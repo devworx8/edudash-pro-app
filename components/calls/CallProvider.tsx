@@ -920,7 +920,7 @@ export function CallProvider({ children }: CallProviderProps) {
 
     await getSupabase()
       .from('active_calls')
-      .update({ status: 'rejected' })
+      .update({ status: 'rejected', ended_at: new Date().toISOString() })
       .eq('call_id', incomingCall.call_id);
 
     setIncomingCall(null);
