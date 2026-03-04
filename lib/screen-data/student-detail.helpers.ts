@@ -50,6 +50,30 @@ export interface StudentChangeRequest {
   updated_at: string;
 }
 
+function isStudentChangeRequestsUnavailableError(error: any): boolean {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '').toLowerCase();
+  const details = String(error?.details || '').toLowerCase();
+  const hint = String(error?.hint || '').toLowerCase();
+  const combined = `${message} ${details} ${hint}`;
+
+  if (code === 'PGRST205' || code === 'PGRST204' || code === '42P01' || code === '42703') {
+    return true;
+  }
+
+  if (code === '42501' || code === 'PGRST301') {
+    return true;
+  }
+
+  return (
+    combined.includes('student_change_requests') &&
+    (combined.includes('schema cache') ||
+      combined.includes('does not exist') ||
+      combined.includes('not found') ||
+      combined.includes('permission denied'))
+  );
+}
+
 const ALLOWED_STUDENT_CHANGE_FIELDS = [
   'first_name',
   'last_name',
@@ -440,6 +464,13 @@ export async function listStudentChangeRequests(params: {
 
   const { data, error } = await query;
   if (error) {
+    if (isStudentChangeRequestsUnavailableError(error)) {
+      logger.warn(TAG, 'student_change_requests unavailable; returning empty list:', {
+        code: error.code,
+        message: error.message,
+      });
+      return [];
+    }
     logger.error(TAG, 'Error listing student change requests:', error);
     throw new Error('Failed to load change requests');
   }
@@ -475,6 +506,9 @@ export async function submitStudentChangeRequest(params: {
     });
 
   if (error) {
+    if (isStudentChangeRequestsUnavailableError(error)) {
+      throw new Error('Profile change requests are not available yet on this school setup.');
+    }
     if (String(error.code) === '23505') {
       throw new Error('You already have a pending change request for this student.');
     }
@@ -498,6 +532,9 @@ export async function reviewStudentChangeRequest(params: {
     .single();
 
   if (requestError || !requestRow) {
+    if (isStudentChangeRequestsUnavailableError(requestError)) {
+      throw new Error('Profile change requests are not available yet on this school setup.');
+    }
     logger.error(TAG, 'Error loading student change request for review:', requestError);
     throw new Error('Could not load the selected request');
   }
@@ -533,6 +570,9 @@ export async function reviewStudentChangeRequest(params: {
     .eq('id', params.requestId);
 
   if (reviewError) {
+    if (isStudentChangeRequestsUnavailableError(reviewError)) {
+      throw new Error('Profile change requests are not available yet on this school setup.');
+    }
     logger.error(TAG, 'Error updating student change request review:', reviewError);
     throw new Error(reviewError.message || 'Failed to update request status');
   }

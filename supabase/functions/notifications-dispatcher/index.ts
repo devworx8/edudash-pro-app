@@ -754,6 +754,23 @@ function getNotificationTemplate(eventType: string, context: NotificationContext
       priority: 'normal',
       channelId: 'general'
     },
+    birthday_reminder_5_days: {
+      title: '🎉 Birthday In 5 Days',
+      body: context.student_name
+        ? `${context.student_name}'s birthday is in 5 days (${context.birthday_date}). They'll be turning ${context.age}!`
+        : 'A birthday is coming up in 5 days!',
+      data: {
+        type: 'birthday_reminder',
+        screen: 'birthday-planner',
+        student_name: context.student_name,
+        days_until: 5,
+        age: context.age,
+      },
+      sound: 'default',
+      badge: 1,
+      priority: 'normal',
+      channelId: 'general'
+    },
     birthday_reminder_tomorrow: {
       title: '🎈 Birthday Tomorrow!',
       body: context.student_name 
@@ -2981,6 +2998,29 @@ async function recordNotification(
 ): Promise<void> {
   try {
     const dataPayload = resolvedData || template.data || {};
+    const customPayload =
+      request.custom_payload && typeof request.custom_payload === 'object'
+        ? request.custom_payload
+        : {};
+    const isSwipeAckBirthdayReminder =
+      request.event_type === 'birthday_reminder_week' ||
+      request.event_type === 'birthday_reminder_5_days';
+
+    const reminderOffset =
+      typeof (customPayload as Record<string, unknown>).reminder_offset_days === 'number'
+        ? ((customPayload as Record<string, unknown>).reminder_offset_days as number)
+        : typeof (dataPayload as Record<string, unknown>).days_until === 'number'
+          ? ((dataPayload as Record<string, unknown>).days_until as number)
+          : null;
+
+    const reminderKind = (customPayload as Record<string, unknown>).reminder_kind;
+    const requiresSwipeAck =
+      isSwipeAckBirthdayReminder ||
+      (customPayload as Record<string, unknown>).requires_swipe_ack === true;
+    const stickyPopup =
+      requiresSwipeAck ||
+      (customPayload as Record<string, unknown>).sticky_popup === true;
+
     for (const userId of userIds) {
       // 1. Record in push_notifications table (for tracking sent push notifications)
       await supabase.from('push_notifications').insert({
@@ -3008,6 +3048,10 @@ async function recordNotification(
           event_type: request.event_type,
           data: dataPayload,
           category: getNotificationCategory(request.event_type),
+          reminder_offset_days: reminderOffset,
+          reminder_kind: typeof reminderKind === 'string' ? reminderKind : null,
+          requires_swipe_ack: requiresSwipeAck,
+          sticky_popup: stickyPopup,
         },
         action_url: (dataPayload as Record<string, unknown>)?.url || null,
         created_at: new Date().toISOString(),

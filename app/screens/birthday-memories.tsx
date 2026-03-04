@@ -112,6 +112,7 @@ export default function BirthdayMemoriesScreen() {
           mediaType,
           fileUri: asset.uri,
           fileName: asset.fileName || undefined,
+          webFile: (asset as any).file,
         });
       }
       await loadMedia();

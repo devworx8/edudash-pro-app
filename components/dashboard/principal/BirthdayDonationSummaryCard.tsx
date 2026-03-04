@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { router } from 'expo-router';
 import { useTheme, type ThemeColors } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { BirthdayDonationsService } from '@/features/birthday-donations/services/BirthdayDonationsService';
@@ -139,9 +140,19 @@ export const BirthdayDonationSummaryCard: React.FC<BirthdayDonationSummaryCardPr
           <Text style={styles.muted}>
             {t('dashboard.birthday_donations.month_progress', { defaultValue: '{{percent}}% collected across {{days}} birthday days', percent: monthPercent, days: monthSummary.daysWithBirthdays })}
           </Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={loadSummary}>
-            <Text style={styles.refreshText}>{t('dashboard.birthday_donations.refresh', { defaultValue: 'Refresh' })}</Text>
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.refreshButton} onPress={loadSummary}>
+              <Text style={styles.refreshText}>{t('dashboard.birthday_donations.refresh', { defaultValue: 'Refresh' })}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.manageButton}
+              onPress={() => router.push('/screens/birthday-donation-reminders' as any)}
+            >
+              <Text style={styles.manageButtonText}>
+                {t('dashboard.birthday_donations.open_reminders', { defaultValue: 'Open reminders' })}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </>
       )}
     </View>
@@ -221,5 +232,26 @@ const createStyles = (theme: ThemeColors) => StyleSheet.create({
     fontSize: 12,
     color: theme.primary,
     fontWeight: '600',
+  },
+  actionRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  manageButton: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: theme.success + '18',
+    borderWidth: 1,
+    borderColor: theme.success + '42',
+  },
+  manageButtonText: {
+    fontSize: 12,
+    color: theme.success,
+    fontWeight: '700',
   },
 });

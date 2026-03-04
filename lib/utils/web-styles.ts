@@ -147,10 +147,21 @@ export const injectWebStyles = (): (() => void) => {
   `;
   document.head.appendChild(style);
 
-  // Global layout styles for full viewport height
+  // Global layout styles for full viewport height + hide scrollbars on web
   const globalStyle = document.createElement('style');
   globalStyle.setAttribute('data-edudash-web-layout', 'true');
   globalStyle.textContent = `
+    /* Hide all scrollbars on web (keep scrolling behavior) */
+    * {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+    *::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    
     /* Ensure all app containers have full viewport height on web */
     #root, .expo-root, .expo-app-container, [data-reactroot], body, html {
       min-height: 100vh !important;

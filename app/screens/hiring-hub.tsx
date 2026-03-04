@@ -28,6 +28,7 @@ import {
 } from '@/types/hiring';
 import { useAlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { BasicHiringProcedureChecklist } from '@/components/hiring/BasicHiringProcedureChecklist';
 
 type TabType = 'new' | 'under_review' | 'shortlisted' | 'interview' | 'offered';
 
@@ -145,6 +146,9 @@ export default function HiringHubScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {/* Basic Hiring Procedure Checklist */}
+            <BasicHiringProcedureChecklist theme={theme} defaultCollapsed={true} />
 
             {/* Job Postings Section */}
             <View style={styles.section}>

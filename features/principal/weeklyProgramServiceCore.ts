@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import { assertSupabase } from '@/lib/supabase';
 import type { DailyProgramBlock, WeeklyProgramDraft } from '@/types/ecd-planning';
 import { fetchThemeForWeek } from '@/lib/services/curriculumThemeService';
+import { stabilizeDailyRoutineBlocks } from '@/lib/routines/dailyRoutineNormalization';
 
 export interface ProgramTimeRules {
   arrivalStartTime: string;
@@ -22,6 +23,7 @@ export type WeeklyProgramShareAudience = 'parents' | 'teachers';
 
 export interface SaveWeeklyProgramInput {
   weeklyProgram: WeeklyProgramDraft;
+  rules?: ProgramTimeRules | null;
 }
 
 export interface DeleteWeeklyProgramInput {
@@ -289,10 +291,22 @@ function ensureMinimumWeekdayEndCoverage(blocks: DailyProgramBlock[]): {
   };
 }
 
-function normalizeBlocksWithCoverage(blocks: DailyProgramBlock[]): {
+function normalizeBlocksWithCoverage(
+  blocks: DailyProgramBlock[],
+  options?: {
+    ageGroup?: string | null;
+    rules?: ProgramTimeRules | null;
+  },
+): {
   blocks: DailyProgramBlock[];
   filledDays: number[];
   extendedDays: number[];
+  normalizationWarnings: string[];
+  normalizationMetrics: {
+    overlapsResolved: number;
+    dedupedBlocks: number;
+    anchorLocksApplied: number;
+  };
 } {
   const normalized = (blocks || [])
     .map((block, index) => {
@@ -317,10 +331,17 @@ function normalizeBlocksWithCoverage(blocks: DailyProgramBlock[]): {
 
   const withWeekdayCoverage = ensureWeekdayCoverage(normalized);
   const withMinimumEndCoverage = ensureMinimumWeekdayEndCoverage(withWeekdayCoverage.blocks);
+  const stabilization = stabilizeDailyRoutineBlocks(withMinimumEndCoverage.blocks, {
+    ageGroup: options?.ageGroup || null,
+    arrivalStartTime: options?.rules?.arrivalStartTime || null,
+    pickupCutoffTime: options?.rules?.pickupCutoffTime || null,
+  });
   return {
-    blocks: withMinimumEndCoverage.blocks,
+    blocks: stabilization.blocks,
     filledDays: withWeekdayCoverage.filledDays,
     extendedDays: withMinimumEndCoverage.extendedDays,
+    normalizationWarnings: stabilization.warnings,
+    normalizationMetrics: stabilization.metrics,
   };
 }
 
@@ -623,7 +644,9 @@ export class WeeklyProgramService {
 
     return programs.map((program) => {
       const rawProgramBlocks = groupedBlocks.get(program.id) || [];
-      const { blocks: coveredBlocks } = normalizeBlocksWithCoverage(rawProgramBlocks);
+      const { blocks: coveredBlocks } = normalizeBlocksWithCoverage(rawProgramBlocks, {
+        ageGroup: program.age_group || null,
+      });
 
       return {
         id: program.id,
@@ -654,7 +677,10 @@ export class WeeklyProgramService {
 
     const weekStartDate = startOfWeekMonday(weeklyProgram.week_start_date);
     const weekEndDate = addDays(weekStartDate, 4);
-    const normalizedCoverage = normalizeBlocksWithCoverage(Array.isArray(weeklyProgram.blocks) ? weeklyProgram.blocks : []);
+    const normalizedCoverage = normalizeBlocksWithCoverage(Array.isArray(weeklyProgram.blocks) ? weeklyProgram.blocks : [], {
+      ageGroup: weeklyProgram.age_group || null,
+      rules: input.rules || null,
+    });
     const blocks = normalizedCoverage.blocks;
     const autoFilledDays = normalizedCoverage.filledDays;
     const extendedDays = normalizedCoverage.extendedDays;
@@ -681,7 +707,11 @@ export class WeeklyProgramService {
       status: weeklyProgram.status || 'draft',
     };
 
-    const generationContextValue = weeklyProgram.generation_context || {};
+    const generationContextValue = {
+      ...(weeklyProgram.generation_context || {}),
+      normalizationWarnings: normalizedCoverage.normalizationWarnings,
+      normalizationMetrics: normalizedCoverage.normalizationMetrics,
+    };
     const withGenerationContext = {
       ...basePayload,
       generation_context: generationContextValue,
@@ -852,7 +882,10 @@ export class WeeklyProgramService {
       }
     }
 
-    const saveWarnings = [saveWarning, autoFillWarning, shortDayCoverageWarning].filter(Boolean) as string[];
+    const normalizationWarning = normalizedCoverage.normalizationWarnings.length > 0
+      ? `Normalization applied: ${normalizedCoverage.normalizationWarnings.join(' | ')}`
+      : null;
+    const saveWarnings = [saveWarning, autoFillWarning, shortDayCoverageWarning, normalizationWarning].filter(Boolean) as string[];
 
     return {
       id: savedProgram.id,
@@ -942,7 +975,10 @@ export class WeeklyProgramService {
       throw new Error(blockError.message || 'Failed to load program blocks');
     }
 
-    const normalizedCoverage = normalizeBlocksWithCoverage((blockRows || []) as DailyProgramBlock[]);
+    const normalizedCoverage = normalizeBlocksWithCoverage((blockRows || []) as DailyProgramBlock[], {
+      ageGroup: programRow.age_group || null,
+      rules: normalized,
+    });
     const blocks = normalizedCoverage.blocks;
     const autoFilledDays = normalizedCoverage.filledDays;
     const extendedDays = normalizedCoverage.extendedDays;

@@ -12,6 +12,7 @@ type Props = {
   usesUploadedMaterial: boolean;
   generationMode: 'ai' | 'outage_fallback';
   qualityRepaired: boolean;
+  compact?: boolean;
 };
 
 export function GenerationStatusChip({
@@ -23,12 +24,14 @@ export function GenerationStatusChip({
   usesUploadedMaterial,
   generationMode,
   qualityRepaired,
+  compact = false,
 }: Props): React.ReactElement {
   return (
     <View style={styles.wrap}>
       <TouchableOpacity
         style={[
           styles.header,
+          compact && styles.headerCompact,
           {
             borderColor: hasGenerationWarning ? `${theme.warning}55` : `${theme.primary}55`,
             backgroundColor: hasGenerationWarning ? `${theme.warning}16` : `${theme.primary}16`,
@@ -46,9 +49,10 @@ export function GenerationStatusChip({
           <Text
             style={[
               styles.headerText,
+              compact && styles.headerTextCompact,
               { color: hasGenerationWarning ? theme.warning : theme.primary },
             ]}
-            numberOfLines={1}
+            numberOfLines={compact ? 2 : 1}
           >
             {hasGenerationWarning ? 'Generation status requires review' : 'Uploaded material active'}
           </Text>
@@ -91,17 +95,21 @@ export function GenerationStatusChip({
 const styles = StyleSheet.create({
   wrap: {
     marginHorizontal: 14,
-    marginTop: 8,
+    marginTop: 6,
     marginBottom: 4,
   },
   header: {
     borderRadius: 12,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  headerCompact: {
+    alignItems: 'flex-start',
+    paddingVertical: 9,
   },
   headerLeft: {
     flexDirection: 'row',
@@ -111,9 +119,13 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: 11,
-    lineHeight: 14,
+    lineHeight: 15,
     fontWeight: '700',
     flexShrink: 1,
+  },
+  headerTextCompact: {
+    fontSize: 12,
+    lineHeight: 16,
   },
   body: {
     borderRadius: 12,

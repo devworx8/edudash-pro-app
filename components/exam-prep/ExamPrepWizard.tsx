@@ -6,68 +6,42 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-
-import { ExamPrepReviewStep } from '@/components/exam-prep/ExamPrepWizardReviewStep';
-import {
-  ExamPrepGradeStep,
-  ExamPrepSubjectStep,
-  ExamPrepTypeStep,
-} from '@/components/exam-prep/ExamPrepWizardSteps';
+import { Alert, ScrollView, Text, View } from 'react-native';
 import {
   GRADES,
-  LANGUAGE_OPTIONS,
   SUBJECTS_BY_PHASE,
   getPhaseFromGrade,
   type ExamContextSummary,
-  type ExamGenerationResponse,
   type SouthAfricanLanguage,
 } from '@/components/exam-prep/types';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { hasCapability, getRequiredTier, type Tier } from '@/lib/ai/capabilities';
 import { getCapabilityTier, normalizeTierName } from '@/lib/tiers';
-import { assertSupabase } from '@/lib/supabase';
 import { stashExamGenerationDraft } from '@/lib/exam-prep/generationDraftStore';
 import {
-  buildExamGenerationHref,
-  buildExamRouteParams,
   getSubjectCategory,
   toSafeParam,
   type SubjectCategory,
   type WizardStep,
 } from '@/components/exam-prep/examPrepWizard.helpers';
 import { examPrepWizardStyles as styles } from '@/components/exam-prep/examPrepWizard.styles';
-import { QuotaRingWithStatus } from '@/components/ui/CircularQuotaRing';
 import { useAIUserLimits } from '@/hooks/useAI';
 import { useStudyMaterialPipeline } from '@/hooks/exam-prep/useStudyMaterialPipeline';
-import { extractInvokeErrorDetails } from '@/components/exam-prep/generationErrorMapping';
-import { ExamPrepStudyMaterialCard } from '@/components/exam-prep/ExamPrepStudyMaterialCard';
-
-function toQuotaMap(input: unknown): Record<string, number> {
-  if (!input || typeof input !== 'object') return {};
-  const map: Record<string, number> = {};
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) continue;
-    map[key] = Math.max(0, numeric);
-  }
-  return map;
-}
-
-function getFirstQuotaValue(
-  map: Record<string, number>,
-  keys: string[],
-): number {
-  for (const key of keys) {
-    const value = map[key];
-    if (Number.isFinite(value)) return value;
-  }
-  return 0;
-}
+import { ExamPrepWizardHeader } from '@/components/exam-prep/ExamPrepWizardHeader';
+import { ExamPrepQuickLaunchCard } from '@/components/exam-prep/ExamPrepQuickLaunchCard';
+import { ExamPrepWizardStepContent } from '@/components/exam-prep/ExamPrepWizardStepContent';
+import { ExamPrepLockedView } from '@/components/exam-prep/ExamPrepLockedView';
+import {
+  buildCustomPrompt as buildCustomPromptBlock,
+  buildGenerationHref,
+  buildQuickLaunchHref,
+  fetchContextPreview as fetchContextPreviewFromApi,
+  getFirstQuotaValue,
+  toQuotaMap,
+} from '@/components/exam-prep/examPrepWizard.logic';
 
 export function ExamPrepWizard(): React.ReactElement {
   const { theme, isDark } = useTheme();
@@ -180,33 +154,7 @@ export function ExamPrepWizard(): React.ReactElement {
     });
   }, [subjects, subjectSearch, subjectCategory]);
 
-  const buildCustomPrompt = useCallback((): string | undefined => {
-    const blocks: string[] = [];
-    const trimmedPrompt = customPromptText.trim();
-    const selectedLanguageName = LANGUAGE_OPTIONS[selectedLanguage] || selectedLanguage;
-    if (trimmedPrompt) {
-      blocks.push(`Additional learner requirements:\n${trimmedPrompt}`);
-    }
-    if (readyMaterialSummaries.length > 0) {
-      blocks.push(
-        `Study material extracted from uploaded images/PDFs:\n${readyMaterialSummaries.join('\n\n---\n\n')}`
-      );
-      if (selectedLanguage === 'en-ZA') {
-        blocks.push(
-          'When generated content includes non-English terminology, include plain English support cues for the learner.',
-        );
-      } else {
-        blocks.push(
-          `Keep ALL learner-facing content strictly in ${selectedLanguageName}. Do not include English translations in question text, options, instructions, or memorandum content.`,
-        );
-      }
-    }
-
-    if (blocks.length === 0) return undefined;
-    return blocks.join('\n\n');
-  }, [customPromptText, readyMaterialSummaries, selectedLanguage]);
-
-  const fetchContextPreview = useCallback(async () => {
+  const loadContextPreview = useCallback(async () => {
     if (!selectedGrade || !selectedSubject || !selectedExamType || !useTeacherContext) {
       setContextPreview(null);
       setContextError(null);
@@ -218,52 +166,17 @@ export function ExamPrepWizard(): React.ReactElement {
     setContextError(null);
 
     try {
-      const supabase = assertSupabase();
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-
-      const invokeOptions: {
-        body: Record<string, unknown>;
-        headers?: Record<string, string>;
-      } = {
-        body: {
-          grade: selectedGrade,
-          subject: selectedSubject,
-          examType: selectedExamType,
-          language: selectedLanguage,
-          allowFallback: false,
-          studentId,
-          classId,
-          schoolId,
-          useTeacherContext: true,
-          previewContext: true,
-        },
-      };
-
-      if (token) {
-        invokeOptions.headers = { Authorization: `Bearer ${token}` };
-      }
-
-      const { data, error } = await supabase.functions.invoke('generate-exam', invokeOptions);
-      if (error) {
-        const info = await extractInvokeErrorDetails(error, data);
-        throw new Error(info.message || 'Could not load teacher context');
-      }
-
-      const response = data as ExamGenerationResponse;
-      if (!response?.success) {
-        throw new Error(response?.error || 'Could not load teacher context');
-      }
-
       if (requestSeq !== contextRequestSeqRef.current) return;
-      setContextPreview(
-        response.contextSummary || {
-          assignmentCount: 0,
-          lessonCount: 0,
-          focusTopics: [],
-          weakTopics: [],
-        }
-      );
+      const contextSummary = await fetchContextPreviewFromApi({
+        grade: selectedGrade,
+        subject: selectedSubject,
+        examType: selectedExamType,
+        language: selectedLanguage,
+        studentId,
+        classId,
+        schoolId,
+      });
+      setContextPreview(contextSummary);
     } catch (error) {
       if (requestSeq !== contextRequestSeqRef.current) return;
       const message = error instanceof Error ? error.message : 'Could not load teacher context';
@@ -294,8 +207,8 @@ export function ExamPrepWizard(): React.ReactElement {
       return;
     }
 
-    fetchContextPreview();
-  }, [step, useTeacherContext, fetchContextPreview]);
+    loadContextPreview();
+  }, [step, useTeacherContext, loadContextPreview]);
 
   const moveToStep = useCallback((nextStep: WizardStep) => {
     setStep(nextStep);
@@ -332,34 +245,32 @@ export function ExamPrepWizard(): React.ReactElement {
         );
       }
 
-      const customPrompt = buildCustomPrompt();
+      const customPrompt = buildCustomPromptBlock({
+        customPromptText,
+        readyMaterialSummaries,
+        selectedLanguage,
+      });
       const draftId = customPrompt
         ? stashExamGenerationDraft({
             customPrompt,
           })
         : undefined;
 
-      const generationParams = buildExamRouteParams({
+      const href = buildGenerationHref({
         grade: selectedGrade,
         subject: selectedSubject,
         examType: selectedExamType,
         language: selectedLanguage,
-        fallbackPolicy: 'provider_outage_only',
-        qualityMode:
-          getSubjectCategory(selectedSubject) === 'languages' && readyMaterialSummaries.length === 0
-            ? 'strict'
-            : 'standard',
         useTeacherContext: withTeacherContext,
         draftId,
-        contextIds: {
-          childName,
-          studentId,
-          classId,
-          schoolId,
-        },
+        childName,
+        studentId,
+        classId,
+        schoolId,
+        readyMaterialCount: readyMaterialSummaries.length,
       });
 
-      router.push(buildExamGenerationHref(generationParams));
+      router.push(href);
     },
     [
       selectedGrade,
@@ -368,9 +279,10 @@ export function ExamPrepWizard(): React.ReactElement {
       selectedLanguage,
       isMaterialPipelineBusy,
       readyMaterialSummaries.length,
+      readyMaterialSummaries,
+      customPromptText,
       examQuotaLimit,
       examQuotaRemaining,
-      buildCustomPrompt,
       childName,
       studentId,
       classId,
@@ -381,37 +293,24 @@ export function ExamPrepWizard(): React.ReactElement {
 
   const handleQuickStartAfrikaansLive = useCallback(() => {
     const quickGrade = selectedGrade || gradeParam || 'grade_6';
-    const quickParams = buildExamRouteParams({
+    const href = buildQuickLaunchHref({
       grade: quickGrade,
       subject: selectedSubject || 'Afrikaans First Additional Language',
-      examType: 'practice_test',
       language: selectedLanguage || 'af-ZA',
-      fallbackPolicy: 'provider_outage_only',
-      qualityMode: 'standard',
-      useTeacherContext: true,
-      contextIds: {
-        childName,
-        studentId,
-        classId,
-        schoolId,
-      },
+      childName,
+      studentId,
+      classId,
+      schoolId,
     });
 
-    router.push(buildExamGenerationHref(quickParams));
+    router.push(href);
   }, [selectedGrade, gradeParam, selectedSubject, selectedLanguage, childName, studentId, classId, schoolId]);
 
   if (!canUseExamPrep) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
         <Stack.Screen options={{ title: 'Exam Prep' }} />
-        <View style={styles.disabledContainer}>
-          <Ionicons name="lock-closed-outline" size={64} color={theme.muted} />
-          <Text style={[styles.disabledText, { color: theme.text }]}>Exam Prep is locked</Text>
-          <Text style={[styles.disabledSubtext, { color: theme.muted }]}>Upgrade to {requiredExamTier || 'Starter'} to unlock exam practice features.</Text>
-          <TouchableOpacity style={[styles.backButton, { backgroundColor: theme.primary }]} onPress={() => router.push('/screens/manage-subscription')}>
-            <Text style={styles.backButtonText}>Manage Plan</Text>
-          </TouchableOpacity>
-        </View>
+        <ExamPrepLockedView requiredExamTier={requiredExamTier} theme={theme} />
       </SafeAreaView>
     );
   }
@@ -431,159 +330,63 @@ export function ExamPrepWizard(): React.ReactElement {
         }}
       />
 
-      <LinearGradient colors={isDark ? ['#1e293b', '#0f172a'] : ['#f0f9ff', '#e0f2fe']} style={styles.header}>
-        <View style={styles.headerContent}>
-          <Ionicons name="school" size={32} color={theme.primary} />
-          <View style={styles.headerText}>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>AI-Powered Exam Prep</Text>
-            <Text style={[styles.headerSubtitle, { color: theme.muted }]}>Structured CAPS-aligned generation from real teacher artifacts.</Text>
-          </View>
-        </View>
-
-        <View style={styles.progressSteps}>
-          {['Grade', 'Subject', 'Type', 'Review'].map((label, index) => {
-            const stepNum = index + 1;
-            const isActive = stepNum <= currentStep;
-            return (
-              <View key={label} style={styles.progressStep}>
-                <View style={[styles.progressDot, { backgroundColor: isActive ? theme.primary : theme.border }]}>
-                  {stepNum < currentStep ? <Ionicons name="checkmark" size={12} color="#ffffff" /> : null}
-                </View>
-                <Text style={[styles.progressLabel, { color: isActive ? theme.primary : theme.muted }]}>{label}</Text>
-              </View>
-            );
-          })}
-        </View>
-      </LinearGradient>
+      <ExamPrepWizardHeader currentStep={currentStep} isDark={isDark} theme={theme} />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
-        <View style={[styles.quickLaunchCard, { backgroundColor: theme.surface, borderColor: theme.border }]}> 
-          <View style={styles.quickLaunchHeader}>
-            <Ionicons name="flash-outline" size={18} color={theme.primary} />
-            <Text style={[styles.quickLaunchTitle, { color: theme.text }]}>Quick Live Session</Text>
-          </View>
-          <Text style={[styles.quickLaunchSubtitle, { color: theme.muted }]}>Open interactive in-canvas practice for {quickLaunchLabel} with instant correct/incorrect markers and explanations.</Text>
-          <TouchableOpacity style={[styles.quickLaunchButton, { backgroundColor: theme.primary }]} onPress={handleQuickStartAfrikaansLive}>
-            <Ionicons name="play-circle" size={18} color="#ffffff" />
-            <Text style={styles.quickLaunchButtonText}>Start Live Practice: {quickLaunchLabel}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {step === 'grade' ? (
-          <ExamPrepGradeStep
-            theme={theme}
-            selectedGrade={selectedGrade}
-            onSelectGrade={handleSelectGrade}
-            onNext={() => moveToStep('subject')}
-          />
-        ) : null}
-
-        {step === 'subject' ? (
-          <ExamPrepSubjectStep
-            theme={theme}
-            gradeLabel={gradeInfo?.label || selectedGrade}
-            selectedSubject={selectedSubject}
-            filteredSubjects={filteredSubjects}
-            subjectSearch={subjectSearch}
-            subjectCategory={subjectCategory}
-            onSubjectSearchChange={setSubjectSearch}
-            onSubjectCategoryChange={setSubjectCategory}
-            onSelectSubject={setSelectedSubject}
-            onBack={() => moveToStep('grade')}
-            onNext={() => moveToStep('type')}
-          />
-        ) : null}
-
-        {step === 'type' ? (
-          <ExamPrepTypeStep
-            theme={theme}
-            gradeLabel={gradeInfo?.label || selectedGrade}
-            selectedSubject={selectedSubject}
-            selectedExamType={selectedExamType}
-            selectedLanguage={selectedLanguage}
-            onSelectExamType={setSelectedExamType}
-            onSelectLanguage={setSelectedLanguage}
-            onBack={() => moveToStep('subject')}
-            onNext={() => moveToStep('review')}
-          />
-        ) : null}
-
-        {step === 'review' ? (
-          <>
-            {examQuotaLimit > 0 ? (
-              <View style={[styles.usageCard, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <View style={styles.usageCardHeader}>
-                  <Ionicons name="sparkles-outline" size={16} color={theme.primary} />
-                  <Text style={[styles.usageCardTitle, { color: theme.text }]}>AI Usage This Month</Text>
-                </View>
-                <View style={styles.usageRingWrap}>
-                  <QuotaRingWithStatus
-                    featureName="Exam prep"
-                    used={examQuotaUsed}
-                    limit={examQuotaLimit}
-                    size={66}
-                  />
-                </View>
-                <Text style={[styles.usageCardHint, { color: theme.muted }]}>
-                  {examQuotaUsed}/{examQuotaLimit} exam-related AI actions used this month.
-                </Text>
-              </View>
-            ) : null}
-
-            {examQuotaWarning ? (
-              <View style={[styles.usageWarning, { borderColor: `${theme.warning}55`, backgroundColor: `${theme.warning}12` }]}>
-                <Ionicons name="warning-outline" size={15} color={theme.warning} />
-                <Text style={[styles.usageWarningText, { color: theme.warning }]}>
-                  {examQuotaWarning}
-                </Text>
-              </View>
-            ) : null}
-
-            <ExamPrepReviewStep
-              theme={theme}
-              childName={childName}
-              gradeLabel={gradeInfo?.label || selectedGrade}
-              selectedGrade={selectedGrade}
-              selectedSubject={selectedSubject}
-              selectedExamTypeLabel={selectedExamTypeLabel}
-              selectedExamType={selectedExamType}
-              selectedLanguage={selectedLanguage}
-              useTeacherContext={useTeacherContext}
-              contextPreview={contextPreview}
-              contextLoading={contextLoading}
-              contextError={contextError}
-              onBack={() => moveToStep('type')}
-              onSetUseTeacherContext={setUseTeacherContext}
-              hideGenerateButtons
-            />
-
-            <ExamPrepStudyMaterialCard
-              theme={theme}
-              isDark={isDark}
-              readyMaterialSummaries={readyMaterialSummaries}
-              pdfSplitProgress={pdfSplitProgress}
-              splitProgressPercent={splitProgressPercent}
-              studyMaterials={studyMaterials}
-              isMaterialPipelineBusy={isMaterialPipelineBusy}
-              hasBlockingMaterialErrors={hasBlockingMaterialErrors}
-              failedMaterialCount={failedMaterialCount}
-              pausedMaterialCount={pausedMaterialCount}
-              materialPipelineLabel={materialPipelineLabel}
-              customPromptText={customPromptText}
-              selectedExamTypeLabel={selectedExamTypeLabel}
-              onSetCustomPromptText={setCustomPromptText}
-              onPickImage={handlePickMaterialImage}
-              onPickPdf={handlePickMaterialPdf}
-              onRemoveMaterial={handleRemoveMaterial}
-              onRetryMaterial={handleRetryMaterial}
-              onRetryFailed={handleRetryFailedMaterials}
-              onResumeQueue={handleResumeQueue}
-              onCancelQueue={handleCancelQueue}
-              onGenerate={() => handleStartGeneration(useTeacherContext)}
-              onGenerateWithoutContext={() => handleStartGeneration(false)}
-            />
-          </>
-        ) : null}
+        <ExamPrepQuickLaunchCard
+          quickLaunchLabel={quickLaunchLabel}
+          theme={theme}
+          onPress={handleQuickStartAfrikaansLive}
+        />
+        <ExamPrepWizardStepContent
+          childName={childName}
+          contextError={contextError}
+          contextLoading={contextLoading}
+          contextPreview={contextPreview}
+          customPromptText={customPromptText}
+          examQuotaLimit={examQuotaLimit}
+          examQuotaUsed={examQuotaUsed}
+          examQuotaWarning={examQuotaWarning}
+          failedMaterialCount={failedMaterialCount}
+          filteredSubjects={filteredSubjects}
+          gradeLabel={gradeInfo?.label || selectedGrade}
+          handleSelectGrade={handleSelectGrade}
+          handleStartGeneration={handleStartGeneration}
+          hasBlockingMaterialErrors={hasBlockingMaterialErrors}
+          isDark={isDark}
+          isMaterialPipelineBusy={isMaterialPipelineBusy}
+          materialPipelineLabel={materialPipelineLabel}
+          pausedMaterialCount={pausedMaterialCount}
+          pdfSplitProgress={pdfSplitProgress}
+          readyMaterialSummaries={readyMaterialSummaries}
+          selectedExamType={selectedExamType}
+          selectedExamTypeLabel={selectedExamTypeLabel}
+          selectedGrade={selectedGrade}
+          selectedLanguage={selectedLanguage}
+          selectedSubject={selectedSubject}
+          splitProgressPercent={splitProgressPercent}
+          step={step}
+          studyMaterials={studyMaterials}
+          subjectCategory={subjectCategory}
+          subjectSearch={subjectSearch}
+          theme={theme}
+          useTeacherContext={useTeacherContext}
+          onMoveToStep={moveToStep}
+          onPickMaterialImage={handlePickMaterialImage}
+          onPickMaterialPdf={handlePickMaterialPdf}
+          onRemoveMaterial={handleRemoveMaterial}
+          onResumeQueue={handleResumeQueue}
+          onRetryFailedMaterials={handleRetryFailedMaterials}
+          onRetryMaterial={handleRetryMaterial}
+          onCancelQueue={handleCancelQueue}
+          onSetCustomPromptText={setCustomPromptText}
+          onSetSelectedExamType={setSelectedExamType}
+          onSetSelectedLanguage={setSelectedLanguage}
+          onSetSelectedSubject={setSelectedSubject}
+          onSetSubjectCategory={setSubjectCategory}
+          onSetSubjectSearch={setSubjectSearch}
+          onSetUseTeacherContext={setUseTeacherContext}
+        />
       </ScrollView>
     </SafeAreaView>
   );

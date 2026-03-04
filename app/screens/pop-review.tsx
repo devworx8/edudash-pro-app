@@ -1001,9 +1001,20 @@ export default function POPReviewScreen() {
               {formatDate(item.created_at)}
             </Text>
           </View>
-          <TouchableOpacity onPress={() => viewDocument(item)} style={styles.viewButton}>
-            <Ionicons name="document-text" size={20} color={theme.primary} />
-          </TouchableOpacity>
+          <View style={styles.cardHeaderActions}>
+            <TouchableOpacity onPress={() => viewDocument(item)} style={styles.viewButton}>
+              <Ionicons name="document-text" size={20} color={theme.primary} />
+            </TouchableOpacity>
+            {status === 'approved' ? (
+              <TouchableOpacity
+                onPress={() => openReceiptModal(item)}
+                style={styles.viewButton}
+                accessibilityLabel="Generate receipt"
+              >
+                <Ionicons name="receipt-outline" size={20} color={theme.success} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
 
         {/* Content */}
@@ -2051,7 +2062,7 @@ const createStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     modalContent: {
       width: '100%',
-      maxWidth: 400,
+      maxWidth: Platform.OS === 'web' ? 520 : 400,
       borderRadius: 16,
       padding: 20,
     },
@@ -2078,9 +2089,14 @@ const createStyles = (theme: any, insets: { top: number; bottom: number }) =>
       padding: 12,
       fontSize: 14,
       marginBottom: 12,
+      minWidth: 0,
+      width: '100%',
     },
     receiptInputSmall: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: Platform.OS === 'web' ? 180 : 0,
+      minWidth: 0,
       borderWidth: 1,
       borderRadius: 10,
       padding: 12,
@@ -2088,6 +2104,7 @@ const createStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     receiptRow: {
       flexDirection: 'row',
+      flexWrap: Platform.OS === 'web' ? 'wrap' : 'nowrap',
       gap: 12,
       marginBottom: 12,
     },
@@ -2108,14 +2125,23 @@ const createStyles = (theme: any, insets: { top: number; bottom: number }) =>
     },
     modalActions: {
       flexDirection: 'row',
+      flexWrap: Platform.OS === 'web' ? 'wrap' : 'nowrap',
       marginTop: 16,
       gap: 12,
     },
     modalButton: {
-      flex: 1,
+      flexGrow: 1,
+      flexShrink: 1,
+      flexBasis: Platform.OS === 'web' ? 120 : 0,
+      minWidth: Platform.OS === 'web' ? 110 : 0,
       paddingVertical: 12,
       borderRadius: 10,
       alignItems: 'center',
+    },
+    cardHeaderActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
     modalCancelButton: {
       borderWidth: 1,

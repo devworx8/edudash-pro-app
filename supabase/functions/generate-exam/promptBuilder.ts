@@ -205,6 +205,8 @@ export function buildUserPrompt(payload: {
     base.push(
       'For mathematical notation, wrap inline maths in $...$ and display maths in $$...$$.',
       'Use KaTeX-compatible LaTeX (e.g., \\frac{a}{b}, \\sqrt{x}, x^2, \\times, \\div).',
+      'Render fractions using \\frac{numerator}{denominator}; avoid malformed stacked text or plain slash fractions when mathematical fractions are intended.',
+      'Ensure each equation/expression is syntactically valid KaTeX and can render without parse errors.',
       'Do not place plain-language words inside math delimiters.',
     );
   }

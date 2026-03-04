@@ -180,6 +180,36 @@ export const createStyles = (theme: ThemeColors) =>
     listSection: {
       marginTop: 12,
     },
+    searchRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 10,
+    },
+    searchInput: {
+      flex: 1,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.background,
+      color: theme.text,
+      fontSize: 13,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+    },
+    searchClearButton: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.background,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    searchClearText: {
+      color: theme.textSecondary,
+      fontSize: 12,
+      fontWeight: '600',
+    },
     sectionHeaderRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -218,6 +248,12 @@ export const createStyles = (theme: ThemeColors) =>
     },
     reminderScopeSection: {
       marginBottom: 8,
+    },
+    studentListScroll: {
+      maxHeight: 360,
+    },
+    studentListContent: {
+      paddingBottom: 6,
     },
     studentRow: {
       flexDirection: 'row',

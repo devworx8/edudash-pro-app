@@ -1,5 +1,6 @@
 import { assertSupabase } from '@/lib/supabase';
 import { getSACalendarForYear } from '@/lib/data/saSchoolCalendar';
+import { stabilizeDailyRoutineBlocks } from '@/lib/routines/dailyRoutineNormalization';
 import type {
   DailyProgramBlock,
   DailyProgramBlockType,
@@ -1231,14 +1232,56 @@ const blockText = (block: DailyProgramBlock): string =>
     .map((value) => String(value || '').toLowerCase())
     .join(' ');
 
+const blockTitleOnly = (block: DailyProgramBlock): string =>
+  String(block.title || '').trim().toLowerCase();
+
 const hasKeyword = (source: string, keywords: string[]): boolean =>
   keywords.some((keyword) => source.includes(keyword));
+
+/** True if block title contains any of the given keywords (used to avoid assigning wrong anchor to a block). */
+const blockTitleMatchesKeywords = (block: DailyProgramBlock, keywords: string[]): boolean =>
+  hasKeyword(blockTitleOnly(block), keywords);
 
 type ToiletRoutinePolicy = {
   requiredPerDay: number;
   beforeBreakfast: boolean;
   beforeLunch: boolean;
   beforeNap: boolean;
+  maxDurationMinutes: number | null;
+};
+
+type AnchorRuleKey = 'morning_prayer' | 'circle_time' | 'breakfast' | 'lunch' | 'nap';
+
+type AnchorRuleDefinition = {
+  key: AnchorRuleKey;
+  label: string;
+  keywords: string[];
+  blockType: DailyProgramBlockType;
+  defaultDurationMinutes: number;
+};
+
+type AnchorRule = AnchorRuleDefinition & {
+  startTime: string;
+};
+
+type PreflightAnchorPolicy = {
+  anchors: AnchorRule[];
+  toiletMaxDurationMinutes: number | null;
+};
+
+type AnchorDiagnostics = {
+  requested: string[];
+  applied: string[];
+  skippedConflicts: string[];
+};
+
+type AnchorPolicyEnforcementOutcome = {
+  blocks: DailyProgramBlock[];
+  policy: PreflightAnchorPolicy;
+  appliedCount: number;
+  insertedCount: number;
+  toiletCappedCount: number;
+  anchorDiagnostics: AnchorDiagnostics;
 };
 
 const TOILET_KEYWORDS = ['toilet', 'bathroom', 'washroom', 'restroom', 'potty'];
@@ -1254,14 +1297,392 @@ const NUMBER_WORDS: Record<string, number> = {
   six: 6,
 };
 
+const PREFLIGHT_ANCHOR_DEFINITIONS: AnchorRuleDefinition[] = [
+  {
+    key: 'morning_prayer',
+    label: 'Morning Prayer',
+    keywords: ['morning prayer', 'prayer'],
+    blockType: 'circle_time',
+    defaultDurationMinutes: 10,
+  },
+  {
+    key: 'circle_time',
+    label: 'Circle Time',
+    keywords: ['circle time', 'morning circle', 'circle'],
+    blockType: 'circle_time',
+    defaultDurationMinutes: 20,
+  },
+  {
+    key: 'breakfast',
+    label: 'Breakfast',
+    keywords: ['breakfast'],
+    blockType: 'meal',
+    defaultDurationMinutes: 30,
+  },
+  {
+    key: 'lunch',
+    label: 'Lunch',
+    keywords: ['lunch'],
+    blockType: 'meal',
+    defaultDurationMinutes: 30,
+  },
+  {
+    key: 'nap',
+    label: 'Nap / Quiet Time',
+    keywords: ['nap', 'quiet time', 'rest time', 'rest block'],
+    blockType: 'nap',
+    defaultDurationMinutes: 60,
+  },
+];
+
+const TIME_TOKEN_PATTERN = '(?:[01]?\\d|2[0-3]):[0-5]\\d(?:\\s?(?:am|pm))?|(?:0?[1-9]|1[0-2])\\s?(?:am|pm)';
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const minutesToTime = (value: number): string => {
+  const safe = Math.max(0, Math.min(23 * 60 + 59, Math.round(value)));
+  const hours = Math.floor(safe / 60);
+  const minutes = safe % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const parseFlexibleTimeToMinutes = (value: string): number | null => {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return null;
+
+  const hm = raw.match(/^(\d{1,2}):(\d{2})(?:\s*(am|pm))?$/i);
+  if (hm) {
+    let hours = Number(hm[1]);
+    const minutes = Number(hm[2]);
+    const meridian = hm[3]?.toLowerCase();
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || minutes < 0 || minutes > 59) return null;
+    if (meridian) {
+      if (hours < 1 || hours > 12) return null;
+      if (meridian === 'pm' && hours !== 12) hours += 12;
+      if (meridian === 'am' && hours === 12) hours = 0;
+    } else if (hours < 0 || hours > 23) {
+      return null;
+    }
+    return hours * 60 + minutes;
+  }
+
+  const hOnly = raw.match(/^(\d{1,2})\s*(am|pm)$/i);
+  if (hOnly) {
+    let hours = Number(hOnly[1]);
+    if (!Number.isFinite(hours) || hours < 1 || hours > 12) return null;
+    const meridian = hOnly[2].toLowerCase();
+    if (meridian === 'pm' && hours !== 12) hours += 12;
+    if (meridian === 'am' && hours === 12) hours = 0;
+    return hours * 60;
+  }
+
+  return null;
+};
+
+const findAnchorTimeInSource = (source: string, phrases: string[]): string | null => {
+  let best: { index: number; minutes: number } | null = null;
+  const timePrefix = '(?:at|@|from|start\\s+at)\\s*';
+  for (const phrase of phrases) {
+    const escaped = escapeRegExp(phrase);
+    const beforeTime = new RegExp(
+      `${escaped}[^\\n\\r\\.;]{0,48}?${timePrefix}(${TIME_TOKEN_PATTERN})`,
+      'ig',
+    );
+    const afterTime = new RegExp(
+      `${timePrefix}(${TIME_TOKEN_PATTERN})[^\\n\\r\\.;]{0,32}${escaped}`,
+      'ig',
+    );
+    const adjacentTime = new RegExp(`${escaped}[^\\n\\r\\.;]{0,24}?(${TIME_TOKEN_PATTERN})`, 'ig');
+
+    for (const pattern of [beforeTime, afterTime, adjacentTime]) {
+      let match: RegExpExecArray | null;
+      while ((match = pattern.exec(source)) !== null) {
+        const minutes = parseFlexibleTimeToMinutes(match[1]);
+        if (minutes == null) continue;
+        const index = match.index;
+        if (!best || index < best.index) {
+          best = { index, minutes };
+        }
+      }
+    }
+  }
+
+  return best ? minutesToTime(best.minutes) : null;
+};
+
+const parseToiletMaxDurationMinutes = (source: string): number | null => {
+  const patterns = [
+    /(?:toilet|bathroom|potty|washroom)[^\n\r\.]{0,60}?(?:not\s*be\s*(?:more|longer)\s*than|no\s*more\s*than|maximum\s*(?:of)?|max\s*(?:of)?|under|less\s*than|must\s*not\s*exceed|not\s*exceed)\s*(\d{1,2})\s*(?:minutes?|mins?)/i,
+    /(?:not\s*be\s*(?:more|longer)\s*than|no\s*more\s*than|maximum\s*(?:of)?|max\s*(?:of)?|under|less\s*than|must\s*not\s*exceed)\s*(\d{1,2})\s*(?:minutes?|mins?)[^\n\r\.]{0,40}?(?:toilet|bathroom|potty|washroom)/i,
+    /(?:toilet|bathroom|potty|washroom)[^\n\r\.]{0,40}?(\d{1,2})\s*(?:minutes?|mins?)\s*or\s*less/i,
+    /(\d{1,2})\s*(?:minutes?|mins?)\s*or\s*less[^\n\r\.]{0,30}?(?:toilet|bathroom|potty|washroom)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = source.match(pattern);
+    if (!match) continue;
+    const parsed = Number(match[1]);
+    if (!Number.isFinite(parsed)) continue;
+    return Math.max(5, Math.min(30, Math.trunc(parsed)));
+  }
+  return null;
+};
+
+const collectPreflightSections = (
+  input: GenerateWeeklyProgramFromTermInput,
+): string[] => [
+  input.preflightAnswers?.nonNegotiableAnchors,
+  input.preflightAnswers?.fixedWeeklyEvents,
+  input.preflightAnswers?.afterLunchPattern,
+  input.preflightAnswers?.resourceConstraints,
+  input.preflightAnswers?.safetyCompliance,
+]
+  .map((value) => String(value || '').trim())
+  .filter(Boolean);
+
+const parsePreflightAnchorPolicy = (
+  input: GenerateWeeklyProgramFromTermInput,
+): PreflightAnchorPolicy => {
+  const source = collectPreflightSections(input).join(' ');
+
+  if (!source) {
+    return {
+      anchors: [],
+      toiletMaxDurationMinutes: null,
+    };
+  }
+
+  const DEFAULT_ANCHOR_TIMES: Partial<Record<AnchorRuleKey, string>> = {
+    morning_prayer: '08:00',
+    circle_time: '08:10',
+    breakfast: '08:30',
+    nap: '11:30',
+    lunch: '12:30',
+  };
+  const anchors: AnchorRule[] = [];
+  for (const anchor of PREFLIGHT_ANCHOR_DEFINITIONS) {
+    const parsed = findAnchorTimeInSource(source, anchor.keywords);
+    const startTime = parsed ?? DEFAULT_ANCHOR_TIMES[anchor.key] ?? null;
+    if (!startTime) continue;
+    anchors.push({
+      ...anchor,
+      startTime,
+    });
+  }
+  const toiletMax = parseToiletMaxDurationMinutes(source);
+  return {
+    anchors,
+    toiletMaxDurationMinutes: toiletMax ?? (source.toLowerCase().includes('toilet') && source.toLowerCase().includes('20') ? 20 : null),
+  };
+};
+
+const buildAnchorBlock = (
+  day: number,
+  order: number,
+  anchor: AnchorRule,
+): DailyProgramBlock => {
+  const startMinutes = parseTimeToMinutes(anchor.startTime) ?? 0;
+  const endMinutes = Math.min(23 * 60 + 59, startMinutes + anchor.defaultDurationMinutes);
+  const noteSuffix = `Auto-added from preflight non-negotiable anchor (${anchor.label} ${anchor.startTime}).`;
+
+  return {
+    day_of_week: clampDayOfWeek(day),
+    block_order: Math.max(1, order),
+    block_type: anchor.blockType,
+    title: anchor.label,
+    start_time: anchor.startTime,
+    end_time: minutesToTime(endMinutes),
+    objectives: [`Respect daily anchor: ${anchor.label}`],
+    materials: [],
+    transition_cue: 'Keep this anchor fixed, then continue with the next planned activity.',
+    notes: noteSuffix,
+    parent_tip: null,
+  };
+};
+
+const applyAnchorTimingToBlock = (
+  block: DailyProgramBlock,
+  anchor: AnchorRule,
+): DailyProgramBlock => {
+  const existingStart = parseTimeToMinutes(block.start_time);
+  const existingEnd = parseTimeToMinutes(block.end_time);
+  const baseDuration =
+    existingStart != null && existingEnd != null && existingEnd > existingStart
+      ? existingEnd - existingStart
+      : anchor.defaultDurationMinutes;
+
+  let duration = Math.max(10, baseDuration);
+  if (anchor.key === 'morning_prayer') duration = Math.min(duration, 20);
+  if (anchor.key === 'breakfast' || anchor.key === 'lunch') duration = Math.max(20, Math.min(duration, 45));
+  if (anchor.key === 'nap') duration = Math.max(30, duration);
+
+  const startMinutes = parseTimeToMinutes(anchor.startTime) ?? 0;
+  const endMinutes = Math.min(23 * 60 + 59, startMinutes + duration);
+  const shouldForceAnchorTitle = anchor.key === 'breakfast' || anchor.key === 'lunch' || anchor.key === 'nap';
+
+  return {
+    ...block,
+    block_type: anchor.blockType,
+    title: shouldForceAnchorTitle
+      ? anchor.label
+      : (String(block.title || '').trim() || anchor.label),
+    start_time: anchor.startTime,
+    end_time: minutesToTime(endMinutes),
+    notes: appendNote(block.notes, `Anchor locked from preflight: ${anchor.label} at ${anchor.startTime}.`),
+  };
+};
+
+const capToiletBlockDuration = (
+  block: DailyProgramBlock,
+  maxMinutes: number,
+): DailyProgramBlock => {
+  if (!isToiletRoutineBlock(block)) return block;
+  const start = parseTimeToMinutes(block.start_time);
+  const end = parseTimeToMinutes(block.end_time);
+  if (start == null || end == null || end <= start) return block;
+  if (end - start <= maxMinutes) return block;
+  return {
+    ...block,
+    end_time: minutesToTime(start + maxMinutes),
+    notes: appendNote(block.notes, `Toilet routine capped to ${maxMinutes} minutes from preflight rule.`),
+  };
+};
+
+const enforcePreflightAnchorPolicy = (
+  blocks: DailyProgramBlock[],
+  input: GenerateWeeklyProgramFromTermInput,
+): AnchorPolicyEnforcementOutcome => {
+  const policy = parsePreflightAnchorPolicy(input);
+  const requested = policy.anchors.map((anchor) => `${anchor.label} ${anchor.startTime}`);
+  const anchorDiagnostics: AnchorDiagnostics = {
+    requested,
+    applied: [],
+    skippedConflicts: [],
+  };
+  if (policy.anchors.length === 0 && policy.toiletMaxDurationMinutes == null) {
+    return {
+      blocks,
+      policy,
+      appliedCount: 0,
+      insertedCount: 0,
+      toiletCappedCount: 0,
+      anchorDiagnostics,
+    };
+  }
+
+  const grouped = new Map<number, DailyProgramBlock[]>();
+  for (const day of WEEKDAY_SEQUENCE) grouped.set(day, []);
+
+  for (const block of blocks) {
+    const day = clampDayOfWeek(block.day_of_week);
+    if (day >= 1 && day <= 5) {
+      grouped.get(day)?.push(block);
+    }
+  }
+
+  let appliedCount = 0;
+  let insertedCount = 0;
+  let toiletCappedCount = 0;
+
+  for (const day of WEEKDAY_SEQUENCE) {
+    const dayBlocks = (grouped.get(day) || [])
+      .slice()
+      .sort((a, b) => a.block_order - b.block_order);
+    const claimedBlockIndexes = new Set<number>();
+
+    for (const anchor of policy.anchors) {
+      const otherAnchors = policy.anchors.filter((a) => a.key !== anchor.key);
+      const titleMatchIdx = dayBlocks.findIndex(
+        (block, index) =>
+          !claimedBlockIndexes.has(index) &&
+          !isToiletRoutineBlock(block) &&
+          blockTitleMatchesKeywords(block, anchor.keywords),
+      );
+      const keywordMatchIdx =
+        titleMatchIdx >= 0
+          ? -1
+          : dayBlocks.findIndex((block, index) => {
+              if (claimedBlockIndexes.has(index) || isToiletRoutineBlock(block)) return false;
+              if (!hasKeyword(blockText(block), anchor.keywords)) return false;
+              const titleMatchesOther = otherAnchors.some((a) => blockTitleMatchesKeywords(block, a.keywords));
+              return !titleMatchesOther;
+            });
+      if (titleMatchIdx < 0 && keywordMatchIdx < 0) {
+        const skippedToilet = dayBlocks.some(
+          (block, index) =>
+            !claimedBlockIndexes.has(index) &&
+            isToiletRoutineBlock(block) &&
+            hasKeyword(blockText(block), anchor.keywords),
+        );
+        if (skippedToilet) {
+          anchorDiagnostics.skippedConflicts.push(
+            `Day ${day}: ${anchor.label} avoided toilet/hygiene block keyword collision.`,
+          );
+        }
+      }
+      const idx = titleMatchIdx >= 0 ? titleMatchIdx : keywordMatchIdx;
+      if (idx >= 0) {
+        dayBlocks[idx] = applyAnchorTimingToBlock(dayBlocks[idx], anchor);
+        claimedBlockIndexes.add(idx);
+        anchorDiagnostics.applied.push(`Day ${day}: ${anchor.label} -> ${anchor.startTime} (matched existing)`);
+      } else {
+        dayBlocks.push(buildAnchorBlock(day, dayBlocks.length + 1, anchor));
+        claimedBlockIndexes.add(dayBlocks.length - 1);
+        insertedCount += 1;
+        anchorDiagnostics.applied.push(`Day ${day}: ${anchor.label} -> ${anchor.startTime} (inserted)`);
+      }
+      appliedCount += 1;
+    }
+
+    if (policy.toiletMaxDurationMinutes != null) {
+      for (let i = 0; i < dayBlocks.length; i += 1) {
+        const previousEnd = dayBlocks[i].end_time;
+        dayBlocks[i] = capToiletBlockDuration(dayBlocks[i], policy.toiletMaxDurationMinutes);
+        if (dayBlocks[i].end_time !== previousEnd) {
+          toiletCappedCount += 1;
+        }
+      }
+    }
+
+    dayBlocks.sort((a, b) => {
+      const aStart = parseTimeToMinutes(a.start_time);
+      const bStart = parseTimeToMinutes(b.start_time);
+      if (aStart != null && bStart != null && aStart !== bStart) return aStart - bStart;
+      if (aStart != null && bStart == null) return -1;
+      if (aStart == null && bStart != null) return 1;
+      return a.block_order - b.block_order;
+    });
+
+    grouped.set(
+      day,
+      dayBlocks.map((block, index) => ({
+        ...block,
+        day_of_week: day as 1 | 2 | 3 | 4 | 5 | 6 | 7,
+        block_order: index + 1,
+      })),
+    );
+  }
+
+  const normalized: DailyProgramBlock[] = [];
+  for (const day of WEEKDAY_SEQUENCE) {
+    normalized.push(...(grouped.get(day) || []));
+  }
+
+  return {
+    blocks: normalized.sort((a, b) =>
+      a.day_of_week === b.day_of_week ? a.block_order - b.block_order : a.day_of_week - b.day_of_week,
+    ),
+    policy,
+    appliedCount,
+    insertedCount,
+    toiletCappedCount,
+    anchorDiagnostics,
+  };
+};
+
 const parseToiletRoutinePolicy = (input: GenerateWeeklyProgramFromTermInput): ToiletRoutinePolicy => {
-  const preflightText = [
-    input.preflightAnswers?.nonNegotiableAnchors,
-    input.preflightAnswers?.fixedWeeklyEvents,
-    input.preflightAnswers?.afterLunchPattern,
-  ]
-    .map((value) => String(value || '').toLowerCase())
-    .join(' ');
+  const preflightSections = collectPreflightSections(input);
+  const preflightText = preflightSections.map((value) => value.toLowerCase()).join(' ');
 
   const hasToiletLanguage = TOILET_KEYWORDS.some((keyword) => preflightText.includes(keyword));
   let requiredPerDay = input.constraints?.includeToiletRoutine ? 1 : 0;
@@ -1298,11 +1719,15 @@ const parseToiletRoutinePolicy = (input: GenerateWeeklyProgramFromTermInput): To
     requiredPerDay = Math.max(requiredPerDay, anchorCount);
   }
 
+  const maxDuration = parseToiletMaxDurationMinutes(preflightText)
+    ?? (hasToiletLanguage && preflightText.includes('20') ? 20 : null);
+
   return {
     requiredPerDay,
     beforeBreakfast: beforeBreakfast || requiredPerDay >= 3,
     beforeLunch: beforeLunch || requiredPerDay >= 3,
     beforeNap: beforeNap || requiredPerDay >= 3,
+    maxDurationMinutes: maxDuration,
   };
 };
 
@@ -1344,6 +1769,7 @@ const enforceToiletRoutinePolicy = (
   policy: ToiletRoutinePolicy;
   insertedCount: number;
   adjustedDays: number[];
+  toiletCappedCount: number;
 } => {
   const policy = parseToiletRoutinePolicy(input);
   if (policy.requiredPerDay <= 0) {
@@ -1352,6 +1778,7 @@ const enforceToiletRoutinePolicy = (
       policy,
       insertedCount: 0,
       adjustedDays: [],
+      toiletCappedCount: 0,
     };
   }
 
@@ -1365,6 +1792,7 @@ const enforceToiletRoutinePolicy = (
   }
 
   let insertedCount = 0;
+  let toiletCappedCount = 0;
   const adjustedDays: number[] = [];
 
   for (const day of WEEKDAY_SEQUENCE) {
@@ -1394,6 +1822,16 @@ const enforceToiletRoutinePolicy = (
       toiletCount += 1;
     }
 
+    if (policy.maxDurationMinutes != null) {
+      for (let i = 0; i < dayBlocks.length; i += 1) {
+        const previousEnd = dayBlocks[i].end_time;
+        dayBlocks[i] = capToiletBlockDuration(dayBlocks[i], policy.maxDurationMinutes);
+        if (dayBlocks[i].end_time !== previousEnd) {
+          toiletCappedCount += 1;
+        }
+      }
+    }
+
     dayBlocks = normalizeDayOrdering(day, dayBlocks);
     grouped.set(day, dayBlocks);
 
@@ -1415,6 +1853,7 @@ const enforceToiletRoutinePolicy = (
     policy,
     insertedCount,
     adjustedDays: Array.from(new Set(adjustedDays)),
+    toiletCappedCount,
   };
 };
 
@@ -1641,9 +2080,94 @@ const ensureFullDayCoverage = (blocks: DailyProgramBlock[]): DailyProgramBlock[]
   );
 };
 
+/** Fix common AI slips in generated block text (rainy→many, prefflight, truncation). */
+const sanitizeGeneratedBlockText = (str: string | null | undefined): string => {
+  if (str == null || typeof str !== 'string') return '';
+  let out = str.trim();
+  // "if many" is a common truncation of "if rainy" in outdoor fallback phrases
+  out = out.replace(/\bif\s+many\b/gi, 'if rainy');
+  // Double-f preflight typo
+  out = out.replace(/prefflight/gi, 'preflight');
+  out = out.replace(/pre-?flight/gi, 'preflight');
+  return out;
+};
+
+/** Apply text sanitization to a single block's notes, objectives, materials, transition_cue. */
+const sanitizeGeneratedBlockContent = (block: DailyProgramBlock): DailyProgramBlock => {
+  const notes = sanitizeGeneratedBlockText(block.notes);
+  const objectives = (block.objectives || []).map((o) => sanitizeGeneratedBlockText(o)).filter(Boolean);
+  const materials = (block.materials || []).map((m) => sanitizeGeneratedBlockText(m)).filter(Boolean);
+  const transition_cue = block.transition_cue != null ? sanitizeGeneratedBlockText(block.transition_cue) : block.transition_cue;
+  return {
+    ...block,
+    notes: notes || (block.notes ?? undefined),
+    objectives: objectives.length > 0 ? objectives : (block.objectives || []),
+    materials: materials.length > 0 ? materials : (block.materials || []),
+    transition_cue: transition_cue || (block.transition_cue ?? undefined),
+  };
+};
+
+const extractAnchorMinutes = (
+  policy: PreflightAnchorPolicy,
+  key: AnchorRuleKey,
+): number | null => {
+  const anchor = policy.anchors.find((item) => item.key === key);
+  return anchor ? parseFlexibleTimeToMinutes(anchor.startTime) : null;
+};
+
+const detectPolicyConflicts = (
+  input: GenerateWeeklyProgramFromTermInput,
+  policy: PreflightAnchorPolicy,
+): string[] => {
+  const conflicts: string[] = [];
+  const afterLunchPattern = String(input.preflightAnswers?.afterLunchPattern || '').toLowerCase();
+  if (!afterLunchPattern) return conflicts;
+
+  const lunchMinutes = extractAnchorMinutes(policy, 'lunch');
+  const napMinutes = extractAnchorMinutes(policy, 'nap');
+  const requestsNapAfterLunch =
+    afterLunchPattern.includes('after lunch')
+    && (afterLunchPattern.includes('nap') || afterLunchPattern.includes('quiet'));
+
+  if (
+    requestsNapAfterLunch
+    && lunchMinutes != null
+    && napMinutes != null
+    && napMinutes <= lunchMinutes
+  ) {
+    conflicts.push(
+      `Soft after-lunch narrative conflicts with hard anchors (nap ${minutesToTime(
+        napMinutes,
+      )} is not after lunch ${minutesToTime(lunchMinutes)}). Hard anchors kept.`,
+    );
+  }
+
+  return conflicts;
+};
+
+const extractGapsFilledCount = (warnings: string[]): number =>
+  warnings.reduce((total, warning) => {
+    const match = warning.match(/filled\s+(\d+)\s+internal timeline gap/i);
+    if (!match?.[1]) return total;
+    const parsed = Number(match[1]);
+    return Number.isFinite(parsed) ? total + parsed : total;
+  }, 0);
+
+const summarizeDayTimeline = (blocks: DailyProgramBlock[]): Record<number, string[]> => {
+  const summary: Record<number, string[]> = {};
+  for (const day of WEEKDAY_SEQUENCE) {
+    summary[day] = blocks
+      .filter((block) => block.day_of_week === day)
+      .sort((a, b) => a.block_order - b.block_order)
+      .map((block) => `${block.title} [${block.start_time || '--'}-${block.end_time || '--'}]`);
+  }
+  return summary;
+};
+
 const normalizeAIResponse = (
   response: WeeklyProgramAIResponse,
   input: GenerateWeeklyProgramFromTermInput,
+  modelUsed?: string | null,
 ): WeeklyProgramDraft => {
   const weekStart = startOfWeekMonday(input.weekStartDate);
   const weekEnd = addDays(weekStart, 4);
@@ -1661,13 +2185,52 @@ const normalizeAIResponse = (
     ? blocks
     : WEEKDAY_SEQUENCE.flatMap((day) => createFallbackWeekdayBlocks(day));
 
-  const weekdayCoveredBlocks = ensureWeekdayCoverage(safeBlocks);
+  const sanitizedBlocks = safeBlocks.map(sanitizeGeneratedBlockContent);
+  const weekdayCoveredBlocks = ensureWeekdayCoverage(sanitizedBlocks);
   const toiletPolicyOutcome = enforceToiletRoutinePolicy(weekdayCoveredBlocks, input);
-  const fullDayBlocks = ensureFullDayCoverage(toiletPolicyOutcome.blocks);
+  const anchorPolicyOutcome = enforcePreflightAnchorPolicy(toiletPolicyOutcome.blocks, input);
+  const policyConflicts = detectPolicyConflicts(input, anchorPolicyOutcome.policy);
+  const fullDayBlocks = ensureFullDayCoverage(anchorPolicyOutcome.blocks);
   const normalizedBlocks = ensureDailyWeatherRepetition(fullDayBlocks);
-  const initialCoverage = computeCapsCoverage(normalizedBlocks);
-  const correctedBlocks = applyCapsCoverageMetadata(normalizedBlocks, initialCoverage);
+  if (__DEV__) {
+    console.log('[WeeklyProgramCopilot] before stabilization', {
+      modelUsed: modelUsed || null,
+      weekdayInputBlocks: weekdayCoveredBlocks.length,
+      afterToiletPolicyBlocks: toiletPolicyOutcome.blocks.length,
+      afterAnchorPolicyBlocks: anchorPolicyOutcome.blocks.length,
+      requestedAnchors: anchorPolicyOutcome.anchorDiagnostics.requested,
+      appliedAnchors: anchorPolicyOutcome.anchorDiagnostics.applied.length,
+      skippedAnchorConflicts: anchorPolicyOutcome.anchorDiagnostics.skippedConflicts,
+      toiletPolicy: toiletPolicyOutcome.policy,
+      policyConflicts,
+    });
+  }
+  const stabilization = stabilizeDailyRoutineBlocks(normalizedBlocks, {
+    ageGroup: input.ageGroup,
+    arrivalStartTime: input.constraints?.arrivalStartTime || null,
+    pickupCutoffTime: input.constraints?.pickupCutoffTime || null,
+  });
+  const combinedNormalizationWarnings = [
+    ...stabilization.warnings,
+    ...policyConflicts,
+  ];
+  const timingDiagnostics = {
+    gapsFilled: extractGapsFilledCount(stabilization.warnings),
+    overlongToiletCapped:
+      (toiletPolicyOutcome.toiletCappedCount || 0) + (anchorPolicyOutcome.toiletCappedCount || 0),
+  };
+  const initialCoverage = computeCapsCoverage(stabilization.blocks);
+  const correctedBlocks = applyCapsCoverageMetadata(stabilization.blocks, initialCoverage);
   const finalCoverage = computeCapsCoverage(correctedBlocks);
+  if (__DEV__) {
+    console.log('[WeeklyProgramCopilot] after stabilization', {
+      warnings: combinedNormalizationWarnings,
+      metrics: stabilization.metrics,
+      timingDiagnostics,
+      anchorDiagnostics: anchorPolicyOutcome.anchorDiagnostics,
+      timelineByDay: summarizeDayTimeline(correctedBlocks),
+    });
+  }
   const assumptionSummary: string[] = input.preflightAnswers
     ? [
         `Anchors: ${input.preflightAnswers.nonNegotiableAnchors}`,
@@ -1698,11 +2261,49 @@ const normalizeAIResponse = (
       `Toilet routine requirement: at least ${toiletPolicyOutcome.policy.requiredPerDay} per weekday${anchorHints.length > 0 ? ` (${anchorHints.join(', ')})` : ''}.`,
     );
   }
+  if (toiletPolicyOutcome.policy.maxDurationMinutes != null) {
+    assumptionSummary.push(
+      `Toilet max duration parsed from preflight: ${toiletPolicyOutcome.policy.maxDurationMinutes} minutes.`,
+    );
+  }
   if (toiletPolicyOutcome.insertedCount > 0) {
     assumptionSummary.push(
       `Auto-enforced toilet routines: inserted ${toiletPolicyOutcome.insertedCount} block(s) across day(s) ${toiletPolicyOutcome.adjustedDays.join(', ')} to satisfy preflight constraints.`,
     );
   }
+  if (anchorPolicyOutcome.policy.anchors.length > 0) {
+    assumptionSummary.push(
+      `Anchor locks detected: ${anchorPolicyOutcome.policy.anchors
+        .map((anchor) => `${anchor.label} ${anchor.startTime}`)
+        .join('; ')}`,
+    );
+  }
+  if (anchorPolicyOutcome.appliedCount > 0) {
+    assumptionSummary.push(
+      `Anchor enforcement applied ${anchorPolicyOutcome.appliedCount} time(s) across weekdays (${anchorPolicyOutcome.insertedCount} anchor block(s) added).`,
+    );
+  }
+  if (anchorPolicyOutcome.policy.toiletMaxDurationMinutes != null) {
+    assumptionSummary.push(
+      `Toilet duration cap enforced at ${anchorPolicyOutcome.policy.toiletMaxDurationMinutes} minutes per timed block.`,
+    );
+  }
+  if (timingDiagnostics.overlongToiletCapped > 0) {
+    assumptionSummary.push(
+      `Toilet duration caps applied to ${timingDiagnostics.overlongToiletCapped} block(s).`,
+    );
+  }
+  if (modelUsed) {
+    assumptionSummary.push(`AI model used: ${modelUsed}`);
+  }
+  if (combinedNormalizationWarnings.length > 0) {
+    assumptionSummary.push(
+      `Normalization warnings: ${combinedNormalizationWarnings.join(' | ')}`,
+    );
+  }
+  assumptionSummary.push(
+    `Normalization metrics: overlaps resolved=${stabilization.metrics.overlapsResolved}, deduped blocks=${stabilization.metrics.dedupedBlocks}, anchor locks=${stabilization.metrics.anchorLocksApplied}.`,
+  );
 
   return {
     preschool_id: input.preschoolId,
@@ -1718,7 +2319,13 @@ const normalizeAIResponse = (
     generation_context: {
       preflight: input.preflightAnswers,
       assumptionSummary,
+      modelUsed: modelUsed || null,
       capsCoverage: finalCoverage,
+      normalizationWarnings: combinedNormalizationWarnings,
+      normalizationMetrics: stabilization.metrics,
+      anchorDiagnostics: anchorPolicyOutcome.anchorDiagnostics,
+      policyConflicts,
+      timingDiagnostics,
     },
     blocks: correctedBlocks,
   };
@@ -1794,7 +2401,16 @@ const buildPrompt = (input: GenerateWeeklyProgramFromTermInput): string => {
   }
 
   const arrivalStart = constraints.arrivalStartTime || '06:00';
-  const pickupCutoff = constraints.pickupCutoffTime || '14:00';
+  const arrivalCutoff = constraints.arrivalCutoffTime || '08:00';
+  const pickupStart = constraints.pickupStartTime || '14:00';
+  const pickupCutoff = constraints.pickupCutoffTime || '16:00';
+
+  const strictArrivalPickupLines = [
+    `STRICT ARRIVAL AND PICKUP WINDOWS (do not schedule outside these):`,
+    `- Arrival window: from ${arrivalStart} until ${arrivalCutoff}. The first block of the day (e.g. Arrival/greeting) must start at ${arrivalStart} or later. Formal program (e.g. Morning Prayer, Circle Time) should align so that by ${arrivalCutoff} children are in the main routine.`,
+    `- Pickup window: from ${pickupStart} to ${pickupCutoff}. The last block of every day MUST end by ${pickupCutoff}. Dismissal/pack-up must finish within this window.`,
+    `- No block may start before ${arrivalStart} or end after ${pickupCutoff}.`,
+  ];
 
   return [
     'Generate a CAPS-aligned preschool weekly school routine from term context.',
@@ -1811,6 +2427,7 @@ const buildPrompt = (input: GenerateWeeklyProgramFromTermInput): string => {
       : []),
     `Weekly objectives: ${objectivesText}`,
     `Constraints: ${JSON.stringify(constraints)}`,
+    ...strictArrivalPickupLines,
     ...(preflight
       ? [
           'MANDATORY PREFLIGHT ANSWERS (do not ignore):',
@@ -1819,6 +2436,8 @@ const buildPrompt = (input: GenerateWeeklyProgramFromTermInput): string => {
           `- After-lunch pattern + transitions: ${preflight.afterLunchPattern}`,
           `- Resource/staff constraints: ${preflight.resourceConstraints}`,
           `- Safety/compliance + fallback rules: ${preflight.safetyCompliance}`,
+          'If preflight includes explicit clock times, treat them as hard locks and apply them exactly in block start_time.',
+          'Do not shift non-negotiable anchors unless a fixed weekly event explicitly conflicts with that exact time.',
         ]
       : []),
     ...(routineRequirements.length > 0
@@ -1833,9 +2452,9 @@ const buildPrompt = (input: GenerateWeeklyProgramFromTermInput): string => {
       ? ['If naming the school anywhere, use the exact provided school name only and do not invent alternatives.']
       : []),
     'Include a daily weather check-in or weather-circle block for every weekday (Monday-Friday) to reinforce repetition routines.',
-    `MANDATORY FULL-DAY COVERAGE: The program MUST span from approximately ${arrivalStart} all the way to at least 13:30 (with ${pickupCutoff} as the latest pickup window). The LAST block of every day MUST end at or after 13:30. NEVER truncate or end the day before 13:30.`,
+    `MANDATORY FULL-DAY COVERAGE: The program MUST span from ${arrivalStart} (first block start) to no later than ${pickupCutoff} (last block end). The LAST block of every day MUST end by ${pickupCutoff}. NEVER schedule any block to end after ${pickupCutoff}.`,
     'Required daily structure (approximate — use actual school times):',
-    `- Morning: Arrival/greeting block (${arrivalStart}) → Morning circle/weather → Focused learning`,
+    `- Morning: Arrival/greeting block starting at ${arrivalStart} (arrival window until ${arrivalCutoff}) → Morning circle/weather → Focused learning`,
     '- Mid-morning: Snack + hygiene break → Outdoor/gross-motor play',
     '- Late morning: Second learning block (mathematics or home language focus)',
     '- Midday: Lunch break',
@@ -1844,6 +2463,11 @@ const buildPrompt = (input: GenerateWeeklyProgramFromTermInput): string => {
     'CRITICAL - CONSISTENCY: Use the SAME time slots and block sequence for Monday through Friday. The ONLY variation across days should be learning block titles and activity focus (e.g., Literacy Monday, Mathematics Tuesday). Do NOT change block types, start/end times, or block order between days. Thursday and Friday must mirror Monday–Wednesday structure.',
     'LESSON ALIGNMENT: Learning blocks must use consistent time windows (e.g., 08:30–09:30, 11:00–12:00) across all weekdays so teachers can schedule lessons into them. Keep learning blocks 30–60 minutes. Use block_type "learning" for lesson-schedulable blocks.',
     'MANDATORY: Include ALL five weekdays (Monday=1, Tuesday=2, Wednesday=3, Thursday=4, Friday=5). No exceptions. Every day must have 6-10 blocks. Never omit a weekday.',
+    'TEXT QUALITY - write complete, robust copy:',
+    '- For outdoor blocks with a rainy-day fallback, always write the full phrase "replace with indoor [activity type] if rainy" (e.g. "replace with indoor gross-motor if rainy"). Never truncate to "if many" or similar.',
+    '- Spell "preflight" with one "f" in all notes and anchor references.',
+    '- Use professional, complete sentences in notes and objectives. Avoid conversational asides; if you mention timing (e.g. dismissal), state it as a clear rule (e.g. "Dismissal block ends at 13:30; extend only if school closing time is later.").',
+    '- Do not leave partial phrases or placeholders in any block.',
     'Keep output token-safe:',
     '- Monday-Friday only (day_of_week 1..5).',
     '- 6-10 blocks per day.',
@@ -1873,7 +2497,7 @@ const buildPrompt = (input: GenerateWeeklyProgramFromTermInput): string => {
     '    }',
     '  ]',
     '}',
-    `Cover Monday-Friday with practical preschool activities, smooth transitions, and a healthy full school-day rhythm from ${arrivalStart} to ${pickupCutoff}. The days array MUST contain exactly 5 entries (one per weekday). The last block of every day MUST end at or after 13:30.`,
+    `Cover Monday-Friday with practical preschool activities, smooth transitions, and a healthy full school-day rhythm. Strict windows: first block starts at or after ${arrivalStart}; last block ends by ${pickupCutoff}. The days array MUST contain exactly 5 entries (one per weekday).`,
   ].join('\n');
 };
 
@@ -1944,9 +2568,9 @@ export class WeeklyProgramCopilotService {
         payload: {
           prompt,
         },
-        // Prefer OpenAI first for routine generation. ai-proxy still falls back
-        // to Anthropic automatically when OpenAI is not configured or fails.
-        prefer_openai: true,
+        // Prefer Anthropic first for stricter instruction-following on
+        // non-negotiable routine anchors. ai-proxy still cross-falls back.
+        prefer_openai: false,
         stream: false,
         enable_tools: false,
         metadata: {
@@ -1969,10 +2593,14 @@ export class WeeklyProgramCopilotService {
     }
 
     const content = extractAIContent(data);
+    const modelUsed =
+      data && typeof data === 'object' && typeof (data as Record<string, unknown>).model === 'string'
+        ? String((data as Record<string, unknown>).model)
+        : null;
 
     const parsed = extractJson(content);
     if (parsed) {
-      return normalizeAIResponse(parsed, input);
+      return normalizeAIResponse(parsed, input, modelUsed);
     }
 
     const repaired = await repairWeeklyProgramJson(
@@ -1983,7 +2611,7 @@ export class WeeklyProgramCopilotService {
       if (__DEV__) {
         console.log('[WeeklyProgramCopilot] Successfully repaired non-JSON AI output');
       }
-      return normalizeAIResponse(repaired, input);
+      return normalizeAIResponse(repaired, input, modelUsed);
     }
 
     if (__DEV__) {

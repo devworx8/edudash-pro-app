@@ -7,13 +7,14 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { assertSupabase } from '@/lib/supabase';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
+import { getEmailChangeRedirectUrl as getEmailChangeRedirectUrlFromAuth } from '@/lib/auth/authRedirectUrls';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+
 function getEmailChangeRedirectUrl(): string {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    return `${window.location.origin}/landing?flow=email-change`;
-  }
-  return 'https://www.edudashpro.org.za/landing?flow=email-change';
+  const platform = Platform.OS === 'web' ? 'web' : (Platform.OS as 'ios' | 'android');
+  const webOrigin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
+  return getEmailChangeRedirectUrlFromAuth(platform, webOrigin);
 }
 
 function isValidEmail(value: string): boolean {

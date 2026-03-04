@@ -467,15 +467,38 @@ function normalizeTierName(input: unknown): string {
   return String(input || 'free').trim().toLowerCase();
 }
 
+function getAnthropicSonnet4Model(): string {
+  return getEnv('ANTHROPIC_SONNET_4_MODEL') || 'claude-sonnet-4-20250514';
+}
+
+function getAnthropicSonnet45Model(): string {
+  return getEnv('ANTHROPIC_SONNET_4_5_MODEL') || 'claude-sonnet-4-5-20250514';
+}
+
+function getAnthropicSonnet37Model(): string {
+  return getEnv('ANTHROPIC_SONNET_3_7_MODEL') || 'claude-3-7-sonnet-20250219';
+}
+
+function getAnthropicHaiku4xModel(): string {
+  return (
+    getEnv('ANTHROPIC_HAIKU_4X_MODEL')
+    || getEnv('ANTHROPIC_HAIKU_4_MODEL')
+    || 'claude-3-5-haiku-20241022'
+  );
+}
+
 /** Default model ID by tier when client does not send model. Aligned with lib/ai/models.ts getDefaultModelForTier. */
 function getDefaultModelIdForTierProxy(tierRaw: string): string {
   const tier = normalizeTierName(tierRaw);
-  const haiku35 = getEnv('ANTHROPIC_HAIKU_3_5_MODEL') || 'claude-3-5-haiku-20241022';
-  const sonnet4 = getEnv('ANTHROPIC_SONNET_4_MODEL') || 'claude-sonnet-4-20250514';
+  const sonnet4 = getAnthropicSonnet4Model();
+  const sonnet37 = getAnthropicSonnet37Model();
+  const haiku4x = getAnthropicHaiku4xModel();
+
   if (tier.includes('enterprise') || tier === 'superadmin' || tier === 'super_admin') return sonnet4;
-  if (tier.includes('premium') || tier.includes('pro') || tier.includes('plus') || tier.includes('basic')) return haiku35;
-  if (tier.includes('starter') || tier === 'trial') return haiku35;
-  return 'claude-3-haiku-20240307';
+  if (tier.includes('premium') || tier.includes('plus') || tier.includes('pro') || tier.includes('trial') || tier === 'trial') return sonnet4;
+  if (tier.includes('basic') || tier.includes('starter')) return sonnet37;
+  if (tier.includes('free')) return haiku4x;
+  return haiku4x;
 }
 
 function isFreeOrTrialTier(tier: string): boolean {
@@ -1204,8 +1227,10 @@ function normalizeRequestedModel(raw?: string | null): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
   const key = trimmed.toLowerCase();
-  const sonnet4 = getEnv('ANTHROPIC_SONNET_4_MODEL') || 'claude-sonnet-4-20250514';
-  const sonnet45 = getEnv('ANTHROPIC_SONNET_4_5_MODEL') || 'claude-sonnet-4-5-20250514';
+  const sonnet4 = getAnthropicSonnet4Model();
+  const sonnet45 = getAnthropicSonnet45Model();
+  const sonnet37 = getAnthropicSonnet37Model();
+  const haiku4x = getAnthropicHaiku4xModel();
   const sonnet35 = getEnv('ANTHROPIC_SONNET_3_5_MODEL') || 'claude-3-5-sonnet-20241022';
   const aliases: Record<string, string> = {
     'claude-3-haiku': 'claude-3-haiku-20240307',
@@ -1220,13 +1245,19 @@ function normalizeRequestedModel(raw?: string | null): string | null {
     'claude-3-5-sonnet': sonnet35,
     'claude-3-5-sonnet-latest': sonnet35,
     'claude-3-5-sonnet-20241022': sonnet35,
-    'claude-3-7-sonnet': 'claude-3-7-sonnet-20250219',
-    'claude-3-7-sonnet-latest': 'claude-3-7-sonnet-20250219',
+    'claude-3-7-sonnet': sonnet37,
+    'claude-3-7-sonnet-latest': sonnet37,
+    'claude-sonnet-3.7': sonnet37,
+    'claude-sonnet-3-7': sonnet37,
     'claude-sonnet-4': sonnet4,
     'claude-sonnet-4-latest': sonnet4,
     'claude-sonnet-4.5': sonnet45,
     'claude-sonnet-4-5': sonnet45,
     'claude-sonnet-4-5-latest': sonnet45,
+    'claude-haiku-4x': haiku4x,
+    'claude-haiku-4': haiku4x,
+    'claude-haiku-4-latest': haiku4x,
+    'haiku-4x': haiku4x,
   };
 
   return aliases[key] || trimmed;
@@ -1236,6 +1267,21 @@ function normalizeAnthropicAllowedModels(models: string[]): string[] {
   const unique = new Set<string>();
   for (const raw of models) {
     const normalized = normalizeRequestedModel(raw) || String(raw || '').trim();
+    if (normalized) unique.add(normalized);
+  }
+  return Array.from(unique);
+}
+
+function normalizeAnthropicAllowedModelsWithTierDefaults(models: string[]): string[] {
+  const unique = new Set<string>(normalizeAnthropicAllowedModels(models));
+  const defaults = [
+    getAnthropicSonnet4Model(),
+    getAnthropicSonnet45Model(),
+    getAnthropicSonnet37Model(),
+    getAnthropicHaiku4xModel(),
+  ];
+  for (const candidate of defaults) {
+    const normalized = normalizeRequestedModel(candidate) || String(candidate || '').trim();
     if (normalized) unique.add(normalized);
   }
   return Array.from(unique);
@@ -2238,7 +2284,7 @@ function callAnthropicStreaming(
   const apiKey = getAnthropicApiKey();
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured.');
 
-  const allowed = normalizeAnthropicAllowedModels(
+  const allowed = normalizeAnthropicAllowedModelsWithTierDefaults(
     allowedOverride || parseAllowedModels('ANTHROPIC_ALLOWED_MODELS', DEFAULT_ANTHROPIC_ALLOWED_MODELS)
   );
   const fallbackModel = normalizeRequestedModel(DEFAULT_ANTHROPIC_ALLOWED_MODELS[0]) || DEFAULT_ANTHROPIC_ALLOWED_MODELS[0];
@@ -2992,7 +3038,7 @@ async function callAnthropic(
   if (!apiKey) {
     throw new Error('ANTHROPIC_API_KEY is not configured.');
   }
-  const allowed = normalizeAnthropicAllowedModels(
+  const allowed = normalizeAnthropicAllowedModelsWithTierDefaults(
     allowedOverride || parseAllowedModels('ANTHROPIC_ALLOWED_MODELS', DEFAULT_ANTHROPIC_ALLOWED_MODELS)
   );
   const fallbackModel = normalizeRequestedModel(DEFAULT_ANTHROPIC_ALLOWED_MODELS[0]) || DEFAULT_ANTHROPIC_ALLOWED_MODELS[0];
@@ -3484,7 +3530,7 @@ serve(async (req) => {
       parseAllowedModels('SUPERADMIN_ANTHROPIC_MODELS', DEFAULT_SUPERADMIN_ALLOWED_MODELS)
     );
     const openaiAllowed = parseAllowedModels('OPENAI_ALLOWED_MODELS', DEFAULT_OPENAI_ALLOWED_MODELS);
-    const anthropicAllowed = normalizeAnthropicAllowedModels(
+    const anthropicAllowed = normalizeAnthropicAllowedModelsWithTierDefaults(
       parseAllowedModels('ANTHROPIC_ALLOWED_MODELS', DEFAULT_ANTHROPIC_ALLOWED_MODELS)
     );
     let requestedModel = normalizedRequestedModel;

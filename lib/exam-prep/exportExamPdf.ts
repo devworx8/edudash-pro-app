@@ -24,16 +24,20 @@ function toSafeFilename(value: string): string {
 }
 
 function base64ToBlob(base64: string, mimeType: string): Blob {
-  const binary = atob(base64);
+  const decoder = (globalThis as any).atob;
+  if (typeof decoder !== 'function') {
+    throw new Error('Base64 decoder is unavailable in this browser.');
+  }
+  const binary = decoder(base64);
   const chunkSize = 1024;
-  const chunks: Uint8Array[] = [];
+  const chunks: ArrayBuffer[] = [];
   for (let offset = 0; offset < binary.length; offset += chunkSize) {
     const slice = binary.slice(offset, offset + chunkSize);
     const bytes = new Uint8Array(slice.length);
     for (let index = 0; index < slice.length; index += 1) {
       bytes[index] = slice.charCodeAt(index);
     }
-    chunks.push(bytes);
+    chunks.push(bytes.buffer as ArrayBuffer);
   }
   return new Blob(chunks, { type: mimeType });
 }

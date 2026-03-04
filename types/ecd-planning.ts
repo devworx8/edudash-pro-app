@@ -176,6 +176,7 @@ export interface WeeklyProgramDraft {
       safetyCompliance: string;
     };
     assumptionSummary?: string[];
+    modelUsed?: string | null;
     capsCoverage?: {
       homeLanguageDays: number[];
       mathematicsDays: number[];
@@ -186,6 +187,22 @@ export interface WeeklyProgramDraft {
         missingStrands: string[];
       }>;
       coverageScore: number;
+    };
+    normalizationWarnings?: string[];
+    normalizationMetrics?: {
+      overlapsResolved: number;
+      dedupedBlocks: number;
+      anchorLocksApplied: number;
+    };
+    anchorDiagnostics?: {
+      requested: string[];
+      applied: string[];
+      skippedConflicts: string[];
+    };
+    policyConflicts?: string[];
+    timingDiagnostics?: {
+      gapsFilled: number;
+      overlongToiletCapped: number;
     };
   } | null;
   blocks: DailyProgramBlock[];

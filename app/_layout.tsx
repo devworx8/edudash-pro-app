@@ -31,7 +31,6 @@ import '../lib/NotificationService';
 import { initializeTools } from '../services/dash-ai/tools';
 initializeTools();
 import { StatusBar } from 'expo-status-bar';
-import * as NavigationBar from 'expo-navigation-bar';
 import { Stack, router, usePathname } from 'expo-router';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import ToastProvider from '../components/ui/ToastProvider';
@@ -63,6 +62,7 @@ import { ActiveChildProvider } from '../contexts/ActiveChildContext';
 import { OrganizationBrandingProvider } from '../contexts/OrganizationBrandingContext';
 import { AppTutorial } from '../components/onboarding/AppTutorial';
 import { FloatingCallOverlay } from '../components/calls/FloatingCallOverlay';
+import { BirthdayReminderStickyModal } from '../components/notifications/BirthdayReminderStickyModal';
 import { PlayStoreUpdateChecker } from '../components/updates/PlayStoreUpdateChecker';
 import { LoadingOverlayProvider, useLoadingOverlay } from '../contexts/LoadingOverlayContext';
 import GlobalLoadingOverlay from '../components/ui/GlobalLoadingOverlay';
@@ -94,7 +94,7 @@ const STACK_SCREEN_OPTIONS = {
   animationTypeForReplace: 'push' as const,
   contentStyle: { backgroundColor: 'transparent' },
 };
-const WEB_BOTTOM_NAV_SCROLL_CLEARANCE = 64;
+const WEB_BOTTOM_NAV_SCROLL_CLEARANCE = 120;
 
 const shouldHideBottomNavForPath = (pathname?: string | null): boolean => {
   if (!pathname) return true;
@@ -154,30 +154,6 @@ function LayoutContent() {
   useAuthGuard();
   useMobileWebGuard();
   useRouteInterstitial();
-  
-  // Configure Android navigation bar to match theme
-  useEffect(() => {
-    if (Platform.OS === 'android') {
-      const configureNavigationBar = async () => {
-        try {
-          // Android 15+ (API 35) enforces edge-to-edge; these APIs are no-ops/deprecated
-          const apiLevel = typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10);
-          if (apiLevel >= 35) return;
-
-          // Set navigation bar background color to match theme
-          await NavigationBar.setBackgroundColorAsync(isDark ? '#0a0a0f' : '#ffffff');
-          // Set button style (light buttons for dark bg, dark buttons for light bg)
-          await NavigationBar.setButtonStyleAsync(isDark ? 'light' : 'dark');
-          // Set border color to match or be slightly different
-          await NavigationBar.setBorderColorAsync(isDark ? '#1a1a2e' : '#e5e7eb');
-        } catch (error) {
-          // Navigation bar API may not be available on all devices
-          logger.debug(TAG, 'NavigationBar setup skipped:', error);
-        }
-      };
-      configureNavigationBar();
-    }
-  }, [isDark]);
   
   // FAB visibility logic
   const { shouldHideFAB } = useFABVisibility(pathname);
@@ -275,6 +251,9 @@ function LayoutContent() {
       
       {/* Floating Call Overlay - persists across all screens and when backgrounded */}
       <FloatingCallOverlay />
+
+      {/* Sticky acknowledgment for upcoming birthday reminders (7/5-day pipeline) */}
+      <BirthdayReminderStickyModal />
 
       <GlobalLoadingOverlay
         visible={shouldShowOverlay}

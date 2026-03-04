@@ -12,6 +12,7 @@ import type {
 const BUCKET_NAME = 'birthday-memories';
 
 type RowRecord = Record<string, unknown>;
+type UploadBody = Uint8Array | Blob | File;
 
 function mapEvent(row: RowRecord): BirthdayMemoryEvent {
   return {
@@ -63,9 +64,24 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return new Uint8Array(output);
 }
 
-async function createBodyFromUri(uri: string): Promise<Uint8Array | null> {
+async function createBodyFromUri(uri: string, webFile?: Blob | File): Promise<UploadBody | null> {
   try {
     if (Platform.OS === 'web') {
+      if (webFile) {
+        return webFile;
+      }
+
+      if (uri.startsWith('data:')) {
+        const payload = uri.split(',', 2)[1];
+        if (!payload) return null;
+        return base64ToUint8Array(payload);
+      }
+
+      if (uri.startsWith('blob:')) {
+        console.warn('[BirthdayMemories] Blob URI upload requires web file payload.');
+        return null;
+      }
+
       const response = await fetch(uri);
       if (!response.ok) {
         throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
@@ -164,7 +180,7 @@ export class BirthdayMemoriesService {
     let uploadUri = input.fileUri;
     let contentType = input.mediaType === 'video' ? `video/${safeExt}` : 'image/jpeg';
 
-    if (input.mediaType === 'image') {
+    if (input.mediaType === 'image' && Platform.OS !== 'web') {
       const processed = await manipulateAsync(
         input.fileUri,
         [{ resize: { width: 1280 } }],
@@ -174,7 +190,11 @@ export class BirthdayMemoriesService {
       contentType = 'image/jpeg';
     }
 
-    const body = await createBodyFromUri(uploadUri);
+    if (Platform.OS === 'web' && input.webFile && typeof (input.webFile as File).type === 'string' && (input.webFile as File).type) {
+      contentType = (input.webFile as File).type;
+    }
+
+    const body = await createBodyFromUri(uploadUri, input.webFile);
     if (!body) {
       return null;
     }

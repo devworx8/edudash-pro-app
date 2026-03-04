@@ -316,6 +316,20 @@ export default function AdaptiveAdminDashboardScreen() {
             }}
             refreshing={isRefetching}
           >
+            <View style={styles.birthdayReminderCard}>
+              <View style={styles.birthdayReminderTextWrap}>
+                <Text style={styles.birthdayReminderTitle}>Birthday Reminders</Text>
+                <Text style={styles.birthdayReminderSubtitle}>
+                  Open the birthday reminder center and notify parents who still need to contribute.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.birthdayReminderButton}
+                onPress={() => router.push('/screens/birthday-donation-reminders' as any)}
+              >
+                <Text style={styles.birthdayReminderButtonText}>Open</Text>
+              </TouchableOpacity>
+            </View>
             <AdminOperationalSnapshot
               metrics={operationalSnapshot}
               loading={operationalSnapshotLoading}
@@ -373,5 +387,45 @@ const createStyles = (theme: any) =>
       color: theme.onPrimary,
       fontSize: 13,
       fontWeight: '800',
+    },
+    birthdayReminderCard: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 4,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.surface,
+      padding: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    birthdayReminderTextWrap: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
+    },
+    birthdayReminderTitle: {
+      color: theme.text,
+      fontSize: 14,
+      fontWeight: '800',
+    },
+    birthdayReminderSubtitle: {
+      color: theme.textSecondary,
+      fontSize: 12,
+      lineHeight: 17,
+    },
+    birthdayReminderButton: {
+      backgroundColor: theme.primary,
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    birthdayReminderButtonText: {
+      color: theme.onPrimary,
+      fontSize: 12,
+      fontWeight: '700',
     },
   });

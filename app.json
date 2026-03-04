@@ -5,7 +5,7 @@
     "owner": "dash-ts-organization",
     "version": "1.0.28",
     "runtimeVersion": "1.0.23",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "edudashpro",
@@ -59,7 +59,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
       "package": "com.edudashpro.app",
       "permissions": [
@@ -210,7 +210,8 @@
       "./plugins/withForegroundService.js",
       "./plugins/withFirebaseMessaging.js",
       "./plugins/withCallSounds.js",
-      "./plugins/withAndroid15BootFix.js"
+      "./plugins/withAndroid15BootFix.js",
+      "./plugins/withAndroidPlayCompatibility.js"
     ],
     "experiments": {
       "typedRoutes": false

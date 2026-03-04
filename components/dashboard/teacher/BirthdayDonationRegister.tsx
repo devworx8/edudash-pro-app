@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { View, Text, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useBirthdayDonations } from './birthday-donation/useBirthdayDonations';
@@ -8,6 +8,7 @@ import type { BirthdayDonationRegisterProps } from './birthday-donation/types';
 
 export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> = ({ organizationId }) => {
   const { t } = useTranslation();
+  const [studentSearch, setStudentSearch] = useState('');
   const {
     isPreschool, useSchoolWide,
     selectedClassId, setSelectedClassId, classGroups, selectedClass,
@@ -27,6 +28,16 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
     styles, theme, showAlert, AlertModalComponent,
   } = useBirthdayDonations({ organizationId });
 
+  const searchQuery = studentSearch.trim().toLowerCase();
+  const filteredUnpaidStudents = useMemo(
+    () => unpaidStudents.filter((student) => (`${student.firstName} ${student.lastName}`).toLowerCase().includes(searchQuery)),
+    [unpaidStudents, searchQuery]
+  );
+  const filteredPaidStudents = useMemo(
+    () => paidStudents.filter((student) => (`${student.firstName} ${student.lastName}`).toLowerCase().includes(searchQuery)),
+    [paidStudents, searchQuery]
+  );
+
   if (!organizationId) {
     return (
       <View style={styles.card}>
@@ -40,7 +51,7 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
     <View style={styles.card}>
       <Text style={styles.title}>{t('dashboard.birthday_donations.title', { defaultValue: 'Birthday Donations' })}</Text>
       <Text style={styles.subtitle}>
-        {isPreschool && useSchoolWide
+        {useSchoolWide
           ? t('dashboard.birthday_donations.subtitle_school', { defaultValue: 'Mark R25 birthday contributions for the whole school.' })
           : t('dashboard.birthday_donations.subtitle', { defaultValue: 'Mark R25 birthday contributions for your class.' })}
       </Text>
@@ -52,7 +63,7 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
         </View>
       ) : (
         <>
-          {!isPreschool && classGroups.length > 1 && (
+          {!useSchoolWide && classGroups.length > 1 && (
             <View style={styles.classRow}>
               {classGroups.map((group) => {
                 const selected = group.id === selectedClassId;
@@ -69,7 +80,7 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
             </View>
           )}
 
-          {!isPreschool && !selectedClass && (
+          {!useSchoolWide && !selectedClass && (
             <Text style={styles.muted}>{t('dashboard.birthday_donations.no_class', { defaultValue: 'No class assigned yet.' })}</Text>
           )}
 
@@ -175,7 +186,7 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
               <View style={styles.summaryGrid}>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>
-                    {isPreschool && useSchoolWide
+                    {useSchoolWide
                       ? t('dashboard.birthday_donations.expected_school', { defaultValue: 'School target' })
                       : t('dashboard.birthday_donations.expected_amount', { defaultValue: 'Expected' })}
                   </Text>
@@ -183,7 +194,7 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>
-                    {isPreschool && useSchoolWide
+                    {useSchoolWide
                       ? t('dashboard.birthday_donations.received_school', { defaultValue: 'School received' })
                       : t('dashboard.birthday_donations.total_received', { defaultValue: 'Received' })}
                   </Text>
@@ -191,14 +202,14 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryLabel}>
-                    {isPreschool && useSchoolWide
+                    {useSchoolWide
                       ? t('dashboard.birthday_donations.remaining_school', { defaultValue: 'School remaining' })
                       : t('dashboard.birthday_donations.remaining', { defaultValue: 'Remaining' })}
                   </Text>
                   <Text style={styles.summaryValue}>R{remainingAmount.toFixed(2)}</Text>
                 </View>
               </View>
-              {isPreschool && !useSchoolWide && (
+              {!useSchoolWide && (
                 <Text style={styles.muted}>
                   {t('dashboard.birthday_donations.class_progress', {
                     defaultValue: 'Your class: R{{received}} of R{{expected}}',
@@ -242,10 +253,27 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
               {error && <Text style={styles.errorText}>{error}</Text>}
 
               <View style={styles.listSection}>
+                <View style={styles.searchRow}>
+                  <TextInput
+                    value={studentSearch}
+                    onChangeText={setStudentSearch}
+                    placeholder={t('dashboard.birthday_donations.search_student', { defaultValue: 'Search learner...' })}
+                    placeholderTextColor={theme.textSecondary}
+                    style={styles.searchInput}
+                  />
+                  {!!studentSearch && (
+                    <TouchableOpacity style={styles.searchClearButton} onPress={() => setStudentSearch('')}>
+                      <Text style={styles.searchClearText}>
+                        {t('common.clear', { defaultValue: 'Clear' })}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <View style={styles.sectionHeaderRow}>
                   <Text style={[styles.sectionTitle, styles.sectionTitleInline]}>
                     {t('dashboard.birthday_donations.pending_title', { defaultValue: 'Not paid yet' })}
-                    {` (${unpaidStudents.length})`}
+                    {` (${filteredUnpaidStudents.length}/${unpaidStudents.length})`}
                   </Text>
                   <TouchableOpacity
                     style={[
@@ -301,74 +329,96 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
                 )}
                 {loadingDonations ? (
                   <Text style={styles.muted}>{t('common.loading', { defaultValue: 'Loading...' })}</Text>
-                ) : unpaidStudents.length === 0 ? (
-                  <Text style={styles.muted}>{t('dashboard.birthday_donations.all_paid', { defaultValue: 'Everyone is paid up 🎉' })}</Text>
+                ) : filteredUnpaidStudents.length === 0 ? (
+                  <Text style={styles.muted}>
+                    {searchQuery
+                      ? t('dashboard.birthday_donations.no_search_results', { defaultValue: 'No learners match your search.' })
+                      : t('dashboard.birthday_donations.all_paid', { defaultValue: 'Everyone is paid up 🎉' })}
+                  </Text>
                 ) : (
-                  unpaidStudents.map((student) => (
-                    <View key={student.id} style={styles.studentRow}>
-                      <Text style={styles.studentName}>{student.firstName} {student.lastName}</Text>
-                      <TouchableOpacity
-                        style={styles.payButton}
-                        onPress={() => handleMarkPaid(student)}
-                        disabled={savingId === student.id}
-                      >
-                        <Text style={styles.payButtonText}>
-                          {savingId === student.id
-                            ? t('common.saving', { defaultValue: 'Saving...' })
-                            : t('dashboard.birthday_donations.mark_paid', { defaultValue: 'Mark paid' })}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))
+                  <ScrollView
+                    style={styles.studentListScroll}
+                    contentContainerStyle={styles.studentListContent}
+                    showsVerticalScrollIndicator
+                    nestedScrollEnabled
+                  >
+                    {filteredUnpaidStudents.map((student) => (
+                      <View key={student.id} style={styles.studentRow}>
+                        <Text style={styles.studentName}>{student.firstName} {student.lastName}</Text>
+                        <TouchableOpacity
+                          style={styles.payButton}
+                          onPress={() => handleMarkPaid(student)}
+                          disabled={savingId === student.id}
+                        >
+                          <Text style={styles.payButtonText}>
+                            {savingId === student.id
+                              ? t('common.saving', { defaultValue: 'Saving...' })
+                              : t('dashboard.birthday_donations.mark_paid', { defaultValue: 'Mark paid' })}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </ScrollView>
                 )}
               </View>
 
               <View style={styles.listSection}>
                 <Text style={styles.sectionTitle}>
                   {t('dashboard.birthday_donations.paid_title', { defaultValue: 'Paid' })}
-                  {` (${paidStudents.length})`}
+                  {` (${filteredPaidStudents.length}/${paidStudents.length})`}
                 </Text>
-                {paidStudents.length === 0 ? (
-                  <Text style={styles.muted}>{t('dashboard.birthday_donations.no_paid', { defaultValue: 'No payments recorded yet.' })}</Text>
+                {filteredPaidStudents.length === 0 ? (
+                  <Text style={styles.muted}>
+                    {searchQuery
+                      ? t('dashboard.birthday_donations.no_search_results', { defaultValue: 'No learners match your search.' })
+                      : t('dashboard.birthday_donations.no_paid', { defaultValue: 'No payments recorded yet.' })}
+                  </Text>
                 ) : (
-                  paidStudents.map((student) => (
-                    <View key={student.id} style={styles.studentRow}>
-                      <Text style={styles.studentName}>{student.firstName} {student.lastName}</Text>
-                      <View style={styles.paidActions}>
-                        <Text style={styles.paidBadge}>{t('dashboard.birthday_donations.paid_badge', { defaultValue: 'Paid' })}</Text>
-                        <TouchableOpacity
-                          style={styles.unpayButton}
-                          onPress={() => {
-                            const donationEntry = paidEntriesByStudentId.get(student.id);
-                            if (!donationEntry) return;
-                            showAlert({
-                              title: t('dashboard.birthday_donations.confirm_unpaid_title', { defaultValue: 'Mark unpaid?' }),
-                              message: t('dashboard.birthday_donations.confirm_unpaid_message', {
-                                defaultValue: 'This will remove the payment for {{name}}.',
-                                name: `${student.firstName} ${student.lastName}`.trim(),
-                              }),
-                              type: 'warning',
-                              buttons: [
-                                { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
-                                {
-                                  text: t('dashboard.birthday_donations.confirm_unpaid_cta', { defaultValue: 'Mark unpaid' }),
-                                  style: 'destructive',
-                                  onPress: () => handleMarkUnpaid(student, donationEntry),
-                                },
-                              ],
-                            });
-                          }}
-                          disabled={savingId === student.id}
-                        >
-                          <Text style={styles.unpayButtonText}>
-                            {savingId === student.id
-                              ? t('common.saving', { defaultValue: 'Saving...' })
-                              : t('dashboard.birthday_donations.mark_unpaid', { defaultValue: 'Mark unpaid' })}
-                          </Text>
-                        </TouchableOpacity>
+                  <ScrollView
+                    style={styles.studentListScroll}
+                    contentContainerStyle={styles.studentListContent}
+                    showsVerticalScrollIndicator
+                    nestedScrollEnabled
+                  >
+                    {filteredPaidStudents.map((student) => (
+                      <View key={student.id} style={styles.studentRow}>
+                        <Text style={styles.studentName}>{student.firstName} {student.lastName}</Text>
+                        <View style={styles.paidActions}>
+                          <Text style={styles.paidBadge}>{t('dashboard.birthday_donations.paid_badge', { defaultValue: 'Paid' })}</Text>
+                          <TouchableOpacity
+                            style={styles.unpayButton}
+                            onPress={() => {
+                              const donationEntry = paidEntriesByStudentId.get(student.id);
+                              if (!donationEntry) return;
+                              showAlert({
+                                title: t('dashboard.birthday_donations.confirm_unpaid_title', { defaultValue: 'Mark unpaid?' }),
+                                message: t('dashboard.birthday_donations.confirm_unpaid_message', {
+                                  defaultValue: 'This will remove the payment for {{name}}.',
+                                  name: `${student.firstName} ${student.lastName}`.trim(),
+                                }),
+                                type: 'warning',
+                                buttons: [
+                                  { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+                                  {
+                                    text: t('dashboard.birthday_donations.confirm_unpaid_cta', { defaultValue: 'Mark unpaid' }),
+                                    style: 'destructive',
+                                    onPress: () => handleMarkUnpaid(student, donationEntry),
+                                  },
+                                ],
+                              });
+                            }}
+                            disabled={savingId === student.id}
+                          >
+                            <Text style={styles.unpayButtonText}>
+                              {savingId === student.id
+                                ? t('common.saving', { defaultValue: 'Saving...' })
+                                : t('dashboard.birthday_donations.mark_unpaid', { defaultValue: 'Mark unpaid' })}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                  ))
+                    ))}
+                  </ScrollView>
                 )}
               </View>
             </>

@@ -19,6 +19,7 @@ import {
   buildReminderEventsFromBlocks,
   useNextActivityReminder,
 } from '@/hooks/useNextActivityReminder';
+import { getRoutineBlockTypePresentation } from '@/lib/routines/blockTypePresentation';
 
 type ChildRow = {
   id: string;
@@ -170,12 +171,6 @@ function toStringList(value: unknown): string[] {
       .filter(Boolean);
   }
   return [];
-}
-
-function formatBlockType(blockType: string | null | undefined): string {
-  const normalized = String(blockType || '').trim().toLowerCase();
-  if (!normalized) return 'routine';
-  return normalized.replace(/_/g, ' ');
 }
 
 export default function ParentDailyProgramScreen() {
@@ -735,71 +730,92 @@ export default function ParentDailyProgramScreen() {
                 </Text>
               ) : (
                 <View style={styles.blockList}>
-                  {dayBlocks.map((block, index) => (
-                    <View key={block.id} style={[styles.blockCard, { borderColor: theme.border, backgroundColor: theme.background }]}>
-                      <TouchableOpacity
-                        style={styles.blockHeader}
-                        activeOpacity={0.85}
-                        onPress={() =>
-                          setExpandedBlockIds((prev) => ({
-                            ...prev,
-                            [block.id]: !prev[block.id],
-                          }))
-                        }
+                  {dayBlocks.map((block, index) => {
+                    const blockType = getRoutineBlockTypePresentation(block.block_type);
+                    return (
+                      <View
+                        key={block.id}
+                        style={[
+                          styles.blockCard,
+                          {
+                            borderColor: theme.border,
+                            backgroundColor: theme.background,
+                            borderLeftColor: blockType.textColor,
+                          },
+                        ]}
                       >
-                        <View style={styles.blockHeaderMain}>
-                          <Text style={[styles.blockTitle, { color: theme.text }]}>
-                            {index + 1}. {block.title}
-                          </Text>
-                          <View style={[styles.blockTypeChip, { backgroundColor: `${theme.info}1f` }]}>
-                            <Text style={[styles.blockTypeText, { color: theme.info }]}>
-                              {formatBlockType(block.block_type)}
+                        <TouchableOpacity
+                          style={styles.blockHeader}
+                          activeOpacity={0.85}
+                          onPress={() =>
+                            setExpandedBlockIds((prev) => ({
+                              ...prev,
+                              [block.id]: !prev[block.id],
+                            }))
+                          }
+                        >
+                          <View style={styles.blockHeaderMain}>
+                            <Text style={[styles.blockTitle, { color: theme.text }]}>
+                              {index + 1}. {block.title}
                             </Text>
+                            <View
+                              style={[
+                                styles.blockTypeChip,
+                                {
+                                  backgroundColor: blockType.backgroundColor,
+                                  borderColor: blockType.borderColor,
+                                },
+                              ]}
+                            >
+                              <Text style={[styles.blockTypeText, { color: blockType.textColor }]}>
+                                {blockType.label}
+                              </Text>
+                            </View>
                           </View>
-                        </View>
-                        <Ionicons
-                          name={expandedBlockIds[block.id] ? 'chevron-up' : 'chevron-down'}
-                          size={16}
-                          color={theme.textSecondary}
-                        />
-                      </TouchableOpacity>
-                      <Text style={[styles.blockTime, { color: theme.textSecondary }]}>
-                        {formatTimeRange(block.start_time, block.end_time)}
-                      </Text>
-                      {expandedBlockIds[block.id] ? (
-                        <View style={[styles.blockDetails, { borderTopColor: theme.border }]}>
-                          {Array.isArray(block.objectives) && block.objectives.length > 0 ? (
-                            <View style={styles.blockDetailSection}>
-                              <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Objectives</Text>
-                              <Text style={[styles.blockDetailText, { color: theme.text }]}>
-                                {block.objectives.join(' • ')}
-                              </Text>
-                            </View>
-                          ) : null}
-                          {Array.isArray(block.materials) && block.materials.length > 0 ? (
-                            <View style={styles.blockDetailSection}>
-                              <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Materials</Text>
-                              <Text style={[styles.blockDetailText, { color: theme.text }]}>
-                                {block.materials.join(' • ')}
-                              </Text>
-                            </View>
-                          ) : null}
-                          {block.transition_cue ? (
-                            <View style={styles.blockDetailSection}>
-                              <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Transition Cue</Text>
-                              <Text style={[styles.blockDetailText, { color: theme.text }]}>{block.transition_cue}</Text>
-                            </View>
-                          ) : null}
-                          {block.notes ? (
-                            <View style={styles.blockDetailSection}>
-                              <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Notes</Text>
-                              <Text style={[styles.blockDetailText, { color: theme.text }]}>{block.notes}</Text>
-                            </View>
-                          ) : null}
-                        </View>
-                      ) : null}
-                    </View>
-                  ))}
+                          <Ionicons
+                            name={expandedBlockIds[block.id] ? 'chevron-up' : 'chevron-down'}
+                            size={16}
+                            color={theme.textSecondary}
+                          />
+                        </TouchableOpacity>
+                        <Text style={[styles.blockTime, { color: theme.textSecondary }]}>
+                          {formatTimeRange(block.start_time, block.end_time)}
+                        </Text>
+                        {expandedBlockIds[block.id] ? (
+                          <View style={[styles.blockDetails, { borderTopColor: theme.border }]}>
+                            {Array.isArray(block.objectives) && block.objectives.length > 0 ? (
+                              <View style={styles.blockDetailSection}>
+                                <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Objectives</Text>
+                                <Text style={[styles.blockDetailText, { color: theme.text }]}>
+                                  {block.objectives.join(' • ')}
+                                </Text>
+                              </View>
+                            ) : null}
+                            {Array.isArray(block.materials) && block.materials.length > 0 ? (
+                              <View style={styles.blockDetailSection}>
+                                <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Materials</Text>
+                                <Text style={[styles.blockDetailText, { color: theme.text }]}>
+                                  {block.materials.join(' • ')}
+                                </Text>
+                              </View>
+                            ) : null}
+                            {block.transition_cue ? (
+                              <View style={styles.blockDetailSection}>
+                                <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Transition Cue</Text>
+                                <Text style={[styles.blockDetailText, { color: theme.text }]}>{block.transition_cue}</Text>
+                              </View>
+                            ) : null}
+                            {block.notes ? (
+                              <View style={styles.blockDetailSection}>
+                                <Text style={[styles.blockDetailLabel, { color: theme.textSecondary }]}>Notes</Text>
+                                <Text style={[styles.blockDetailText, { color: theme.text }]}>{block.notes}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -1064,6 +1080,8 @@ const createStyles = (theme: any) =>
     },
     blockCard: {
       borderWidth: 1,
+      borderLeftWidth: 3,
+      borderLeftColor: 'transparent',
       borderRadius: 10,
       paddingHorizontal: 11,
       paddingVertical: 10,
@@ -1086,13 +1104,13 @@ const createStyles = (theme: any) =>
     },
     blockTypeChip: {
       borderRadius: 999,
+      borderWidth: 1,
       paddingHorizontal: 8,
       paddingVertical: 4,
     },
     blockTypeText: {
       fontSize: 11,
       fontWeight: '700',
-      textTransform: 'capitalize',
     },
     blockTime: {
       fontSize: 13,

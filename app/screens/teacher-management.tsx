@@ -23,6 +23,7 @@ import { AddTeacherActionSheet } from '@/components/teacher/AddTeacherActionShee
 import { InviteTeacherModal } from '@/components/teacher/InviteTeacherModal';
 import { InviteShareModal } from '@/components/teacher/InviteShareModal';
 import { CreateTeacherModal } from '@/components/teacher/CreateTeacherModal';
+import { BasicHiringProcedureChecklist } from '@/components/hiring/BasicHiringProcedureChecklist';
 import { useTeacherDocUpload } from '@/hooks/useTeacherDocUpload';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import type { Teacher } from '@/types/teacher-management';
@@ -354,7 +355,9 @@ export default function TeacherManagementScreen() {
           )}
 
           {currentView === 'hiring' && (
-            <HiringView
+            <>
+              <BasicHiringProcedureChecklist theme={theme} defaultCollapsed={true} />
+              <HiringView
               availableTeachers={availableTeachers}
               invites={invites}
               hiringSearch={hiringSearch}
@@ -375,6 +378,7 @@ export default function TeacherManagementScreen() {
                 setShowCreateTeacherModal(true);
               }}
             />
+            </>
           )}
 
           {currentView === 'applications' && (

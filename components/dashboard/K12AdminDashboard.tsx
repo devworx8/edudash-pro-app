@@ -209,7 +209,7 @@ export function K12AdminDashboard() {
         title: 'Announcements',
         icon: 'megaphone-outline',
         color: '#EC4899',
-        onPress: () => router.push('/screens/announcements'),
+        onPress: () => router.push('/screens/principal-announcement'),
       },
       {
         id: 'dash-advisor',

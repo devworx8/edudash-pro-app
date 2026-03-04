@@ -195,12 +195,17 @@ export default function StudentDetailScreen() {
       setChangeDraft(getDefaultChangeDraft(result.student));
 
       if (canSubmitChangeRequest || canManageChangeRequests) {
-        const requests = await listStudentChangeRequests({
-          studentId,
-          userId: user.id,
-          isPrincipal: canManageChangeRequests,
-        });
-        setStudentChangeRequests(requests);
+        try {
+          const requests = await listStudentChangeRequests({
+            studentId,
+            userId: user.id,
+            isPrincipal: canManageChangeRequests,
+          });
+          setStudentChangeRequests(requests);
+        } catch (changeRequestError: any) {
+          logger.warn(TAG, 'Continuing without student change requests:', changeRequestError);
+          setStudentChangeRequests([]);
+        }
       } else {
         setStudentChangeRequests([]);
       }

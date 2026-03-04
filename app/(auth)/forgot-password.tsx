@@ -11,26 +11,7 @@ import { GlassCard } from '@/components/marketing/GlassCard';
 import { GradientButton } from '@/components/marketing/GradientButton';
 import { supabase } from '@/lib/supabase';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
-
-// Get proper redirect URL based on platform
-// For password reset, route through auth-callback so we can extract tokens and open reset UI.
-const getRedirectUrl = (path: string) => {
-  if (Platform.OS === 'web') {
-    if (path === 'reset-password') {
-      return `${window.location.origin}/auth-callback?type=recovery`;
-    }
-    return `${window.location.origin}/${path}`;
-  }
-  // For native apps, use custom scheme so the app opens directly.
-  // auth-callback will handle recovery and route to reset-password.
-  if (path === 'reset-password') {
-    // Use custom scheme so recovery opens the native app directly.
-    // Supabase will append the recovery code/token to this URL.
-    return `edudashpro://auth-callback?type=recovery`;
-  }
-  // Fallback for other paths
-  return `https://www.edudashpro.org.za/${path}`;
-};
+import { getPasswordResetRedirectUrl } from '@/lib/auth/authRedirectUrls';
 
 export default function ForgotPassword() {
   const { t } = useTranslation();
@@ -54,8 +35,10 @@ export default function ForgotPassword() {
     setLoading(true);
     
     try {
+      const platform = Platform.OS === 'web' ? 'web' : (Platform.OS as 'ios' | 'android');
+      const webOrigin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: getRedirectUrl('reset-password'),
+        redirectTo: getPasswordResetRedirectUrl(platform, webOrigin),
       });
 
       if (error) {

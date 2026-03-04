@@ -15,6 +15,7 @@ import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
 import { invokeAIGatewayWithRetry, formatAIGatewayErrorMessage } from '@/lib/ai-gateway/invokeWithRetry';
 import { LessonGeneratorService } from '@/lib/ai/lessonGenerator';
 import { incrementUsage, logUsageEvent } from '@/lib/ai/usage';
+import { getRoutineBlockTypePresentation } from '@/lib/routines/blockTypePresentation';
 
 const WEEKDAYS_MONDAY_TO_FRIDAY = [1, 2, 3, 4, 5] as const;
 
@@ -619,19 +620,25 @@ export default function TeacherDailyProgramPlannerScreen() {
 
               <View style={styles.blockListCard}>
                 <Text style={styles.sectionTitle}>Today's blocks</Text>
-                {routine.blocks.map((block, index) => (
-                  <View key={block.id} style={styles.blockRow}>
-                    <View style={styles.blockIndex}>
-                      <Text style={styles.blockIndexText}>{index + 1}</Text>
+                {routine.blocks.map((block, index) => {
+                  const blockType = getRoutineBlockTypePresentation(block.blockType);
+                  return (
+                    <View key={block.id} style={[styles.blockRow, { borderLeftColor: blockType.textColor }]}>
+                      <View style={styles.blockIndex}>
+                        <Text style={styles.blockIndexText}>{index + 1}</Text>
+                      </View>
+                      <View style={styles.blockBody}>
+                        <Text style={styles.blockTitle}>{block.title}</Text>
+                        <View style={styles.blockMetaRow}>
+                          <Text style={styles.blockTimeText}>{formatRange(block.startTime, block.endTime)}</Text>
+                          <View style={[styles.blockTypeChip, { backgroundColor: blockType.backgroundColor, borderColor: blockType.borderColor }]}>
+                            <Text style={[styles.blockTypeChipText, { color: blockType.textColor }]}>{blockType.label}</Text>
+                          </View>
+                        </View>
+                      </View>
                     </View>
-                    <View style={styles.blockBody}>
-                      <Text style={styles.blockTitle}>{block.title}</Text>
-                      <Text style={styles.blockMeta}>
-                        {formatRange(block.startTime, block.endTime)} • {block.blockType}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             </>
           ) : (
@@ -928,7 +935,9 @@ const createStyles = (theme: any) =>
       alignItems: 'flex-start',
       gap: 10,
       borderWidth: 1,
+      borderLeftWidth: 3,
       borderColor: theme.border,
+      borderLeftColor: 'transparent',
       borderRadius: 12,
       padding: 10,
       backgroundColor: theme.background,
@@ -948,17 +957,34 @@ const createStyles = (theme: any) =>
     },
     blockBody: {
       flex: 1,
-      gap: 2,
+      gap: 6,
     },
     blockTitle: {
       color: theme.text,
       fontSize: 15,
       fontWeight: '700',
     },
-    blockMeta: {
+    blockMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: 8,
+    },
+    blockTimeText: {
       color: theme.textSecondary,
       fontSize: 12,
-      textTransform: 'capitalize',
+    },
+    blockTypeChip: {
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+    },
+    blockTypeChipText: {
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 0.3,
     },
     actionsCard: {
       backgroundColor: theme.surface,

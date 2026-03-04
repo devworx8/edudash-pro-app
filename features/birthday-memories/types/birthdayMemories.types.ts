@@ -28,4 +28,5 @@ export interface UploadBirthdayMediaInput {
   mediaType: BirthdayMediaType;
   fileUri: string;
   fileName?: string;
+  webFile?: Blob | File;
 }

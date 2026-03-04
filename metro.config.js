@@ -100,10 +100,15 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
       };
     }
 
-    // 1.25. Block Sentry Expo package (including deep imports) on web.
-    // Some dependency graphs resolve sentry-expo via explicit subpaths,
-    // so we guard both the package root and package-internal module paths.
-    if (moduleName === 'sentry-expo' || moduleName.startsWith('sentry-expo/')) {
+    // 1.25. Block Sentry modules on web.
+    // Some dependency graphs resolve Sentry via sentry-expo, @sentry/*
+    // and @sentry-internal/* packages. Route all of them to a single no-op stub.
+    if (
+      moduleName === 'sentry-expo' ||
+      moduleName.startsWith('sentry-expo/') ||
+      moduleName.startsWith('@sentry/') ||
+      moduleName.startsWith('@sentry-internal/')
+    ) {
       return {
         filePath: require.resolve('./lib/stubs/sentry-expo-stub.js'),
         type: 'sourceFile',

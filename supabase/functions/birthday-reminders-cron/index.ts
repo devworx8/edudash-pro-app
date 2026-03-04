@@ -1,20 +1,24 @@
 /**
  * Birthday Reminders Cron Job
- * 
+ *
  * Runs daily to send birthday reminder notifications:
- * - 7 days before: First reminder to parents
- * - 1 day before: Final reminder to parents + teacher notification
- * - Day of: Birthday wishes to the student (if applicable)
- * 
- * Also notifies teachers about upcoming birthdays in their class
+ * - 7 days before: Upcoming birthday reminder (sticky acknowledgment required)
+ * - 5 days before: Upcoming birthday reminder (sticky acknowledgment required)
+ * - 1 day before: Final reminder to parents + teacher reminder
+ * - Day of: Birthday wishes to parents + teacher alert
+ *
+ * Also sends donation reminders at 28/21/14/7 days and tracks sends with idempotency logs.
  */
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { serve } from 'std/http/server.ts'
+import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 const CRON_SECRET = Deno.env.get('CRON_SECRET') || 'your-cron-secret'
+
+const UPCOMING_REMINDER_DAYS = [7, 5]
+const DONATION_REMINDER_DAYS = [28, 21, 14, 7]
 
 interface StudentBirthday {
   id: string;
@@ -26,6 +30,18 @@ interface StudentBirthday {
   guardian_id: string | null;
   preschool_id: string;
   avatar_url: string | null;
+  classes?:
+    | {
+        id: string;
+        name: string;
+        teacher_id: string | null;
+      }
+    | Array<{
+        id: string;
+        name: string;
+        teacher_id: string | null;
+      }>
+    | null;
 }
 
 interface BirthdayReminder {
@@ -35,44 +51,173 @@ interface BirthdayReminder {
   age: number;
   classId: string | null;
   className: string | null;
-      parentId: string | null;
-      guardianId: string | null;
-      teacherId: string | null;
-      preschoolId: string;
-      birthdayDate: string;
+  parentId: string | null;
+  guardianId: string | null;
+  teacherId: string | null;
+  preschoolId: string;
+  birthdayDate: string;
+}
+
+type ReminderStats = {
+  sent: number;
+  failed: number;
+  skipped: number;
+}
+
+interface SendReminderOptions {
+  supabase: SupabaseClient;
+  schoolId: string;
+  schoolName: string;
+  studentId: string;
+  studentName: string;
+  birthdayDateIso: string;
+  birthdayYear: number;
+  eventType: string;
+  reminderOffsetDays: number;
+  recipients: string[];
+  context: Record<string, unknown>;
+  stats: ReminderStats;
+  customPayload?: Record<string, unknown>;
+}
+
+let birthdayReminderLogsAvailable = true
+
+function isMissingReminderLogsTable(error: unknown): boolean {
+  const message = String((error as { message?: string })?.message || error || '').toLowerCase()
+  return message.includes('birthday_reminder_logs') && message.includes('does not exist')
+}
+
+function uniqueRecipients(ids: Array<string | null | undefined>): string[] {
+  return [...new Set(ids.filter((id): id is string => Boolean(id)))]
 }
 
 // Calculate age they will be turning
 function calculateAge(dateOfBirth: string, birthdayDate: Date): number {
-  const dob = new Date(dateOfBirth);
-  return birthdayDate.getFullYear() - dob.getFullYear();
+  const dob = new Date(dateOfBirth)
+  return birthdayDate.getFullYear() - dob.getFullYear()
 }
 
-// Get this year's birthday date
+// Get upcoming birthday date (this year, or next year if already passed)
 function getThisYearsBirthday(dateOfBirth: string): Date {
-  const dob = new Date(dateOfBirth);
-  const today = new Date();
-  const thisYearBirthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate());
-  
-  // If birthday has passed this year, get next year's
-  if (thisYearBirthday < today) {
-    thisYearBirthday.setFullYear(today.getFullYear() + 1);
+  const dob = new Date(dateOfBirth)
+  const now = new Date()
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+
+  const birthday = new Date(today.getFullYear(), dob.getMonth(), dob.getDate())
+  birthday.setHours(0, 0, 0, 0)
+
+  if (birthday < today) {
+    birthday.setFullYear(today.getFullYear() + 1)
   }
-  
-  return thisYearBirthday;
+
+  return birthday
 }
 
 // Calculate days until birthday
 function getDaysUntil(date: Date): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(date);
-  target.setHours(0, 0, 0, 0);
-  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(date)
+  target.setHours(0, 0, 0, 0)
+  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+async function sendReminderWithIdempotency(options: SendReminderOptions): Promise<void> {
+  const {
+    supabase,
+    schoolId,
+    schoolName,
+    studentId,
+    studentName,
+    birthdayDateIso,
+    birthdayYear,
+    eventType,
+    reminderOffsetDays,
+    recipients,
+    context,
+    stats,
+    customPayload,
+  } = options
+
+  for (const recipientId of recipients) {
+    if (birthdayReminderLogsAvailable) {
+      const { data: existingLog, error: existingLogError } = await supabase
+        .from('birthday_reminder_logs')
+        .select('id')
+        .eq('student_id', studentId)
+        .eq('recipient_user_id', recipientId)
+        .eq('event_type', eventType)
+        .eq('reminder_offset_days', reminderOffsetDays)
+        .eq('birthday_year', birthdayYear)
+        .maybeSingle()
+
+      if (existingLogError) {
+        if (isMissingReminderLogsTable(existingLogError)) {
+          birthdayReminderLogsAvailable = false
+          console.warn('[birthday-reminders-cron] birthday_reminder_logs missing; continuing without idempotency')
+        } else {
+          console.error('[birthday-reminders-cron] Failed log pre-check:', existingLogError)
+          stats.failed++
+          continue
+        }
+      } else if (existingLog?.id) {
+        stats.skipped++
+        continue
+      }
+    }
+
+    const { error: notifyError } = await supabase.functions.invoke('notifications-dispatcher', {
+      body: {
+        event_type: eventType,
+        user_ids: [recipientId],
+        preschool_id: schoolId,
+        context,
+        custom_payload: customPayload,
+      },
+    })
+
+    if (notifyError) {
+      console.error(`[birthday-reminders-cron] Failed ${eventType} for ${studentName}:`, notifyError)
+      stats.failed++
+      continue
+    }
+
+    if (birthdayReminderLogsAvailable) {
+      const { error: logInsertError } = await supabase
+        .from('birthday_reminder_logs')
+        .insert({
+          preschool_id: schoolId,
+          student_id: studentId,
+          recipient_user_id: recipientId,
+          event_type: eventType,
+          reminder_offset_days: reminderOffsetDays,
+          birthday_year: birthdayYear,
+          metadata: {
+            school_name: schoolName,
+            student_name: studentName,
+            birthday_date: birthdayDateIso,
+          },
+        })
+
+      if (logInsertError) {
+        if (isMissingReminderLogsTable(logInsertError)) {
+          birthdayReminderLogsAvailable = false
+          console.warn('[birthday-reminders-cron] birthday_reminder_logs missing during insert; continuing without idempotency')
+        } else {
+          console.error('[birthday-reminders-cron] Failed log insert:', logInsertError)
+          stats.failed++
+          continue
+        }
+      }
+    }
+
+    stats.sent++
+    await new Promise((resolve) => setTimeout(resolve, 120))
+  }
 }
 
 serve(async (req: Request): Promise<Response> => {
-  // CORS handling
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       headers: {
@@ -80,64 +225,68 @@ serve(async (req: Request): Promise<Response> => {
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
-    });
+    })
   }
 
   try {
-    // Verify authorization - check for service role key in header
-    const authHeader = req.headers.get('Authorization');
-    const token = authHeader?.replace('Bearer ', '');
-    
-    // Check if token matches service role key or contains service_role in JWT payload
-    const isServiceRole = token === SUPABASE_SERVICE_ROLE_KEY;
-    const isCronJob = token === CRON_SECRET;
-    
-    // Also validate by decoding JWT and checking role claim
-    let isValidServiceRole = false;
+    const authHeader = req.headers.get('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+
+    const isServiceRole = token === SUPABASE_SERVICE_ROLE_KEY
+    const isCronJob = token === CRON_SECRET
+
+    let isValidServiceRole = false
     if (token && !isServiceRole && !isCronJob) {
       try {
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        isValidServiceRole = payload.role === 'service_role';
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        isValidServiceRole = payload.role === 'service_role'
       } catch {
-        // Invalid token format
+        // Ignore invalid JWT shape
       }
     }
-    
+
     if (!isCronJob && !isServiceRole && !isValidServiceRole) {
-      console.log('[birthday-reminders-cron] Authorization failed');
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+      console.log('[birthday-reminders-cron] Authorization failed')
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
 
-    console.log('[birthday-reminders-cron] Starting birthday reminder check...');
+    console.log('[birthday-reminders-cron] Starting birthday reminder check...')
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+
+    const upcoming7Day = { sent: 0, failed: 0, skipped: 0 } as ReminderStats
+    const upcoming5Day = { sent: 0, failed: 0, skipped: 0 } as ReminderStats
+    const donationReminders = { sent: 0, failed: 0, skipped: 0 } as ReminderStats
 
     const results = {
-      parentReminders7Day: { sent: 0, failed: 0 },
-      parentReminders1Day: { sent: 0, failed: 0 },
-      teacherReminders: { sent: 0, failed: 0 },
-      birthdayWishes: { sent: 0, failed: 0 },
+      // Backward-compatible key kept for existing dashboards/scripts.
+      parentReminders7Day: upcoming7Day,
+      // New explicit keys.
+      upcomingReminders7Day: upcoming7Day,
+      upcomingReminders5Day: upcoming5Day,
+      donationReminders,
+      parentReminders1Day: { sent: 0, failed: 0, skipped: 0 } as ReminderStats,
+      teacherReminders: { sent: 0, failed: 0, skipped: 0 } as ReminderStats,
+      birthdayWishes: { sent: 0, failed: 0, skipped: 0 } as ReminderStats,
       totalProcessed: 0,
-    };
+    }
 
-    // Fetch all active schools
     const { data: schools, error: schoolsError } = await supabase
       .from('preschools')
       .select('id, name')
-      .eq('is_active', true);
+      .eq('is_active', true)
 
     if (schoolsError) {
-      console.error('[birthday-reminders-cron] Error fetching schools:', schoolsError);
-      throw schoolsError;
+      console.error('[birthday-reminders-cron] Error fetching schools:', schoolsError)
+      throw schoolsError
     }
 
-    console.log(`[birthday-reminders-cron] Processing ${schools?.length || 0} schools`);
+    console.log(`[birthday-reminders-cron] Processing ${schools?.length || 0} schools`)
 
     for (const school of schools || []) {
-      // Fetch all students with birthdays in this school
       const { data: students, error: studentsError } = await supabase
         .from('students')
         .select(`
@@ -154,31 +303,35 @@ serve(async (req: Request): Promise<Response> => {
         `)
         .eq('preschool_id', school.id)
         .eq('is_active', true)
-        .not('date_of_birth', 'is', null);
+        .not('date_of_birth', 'is', null)
 
       if (studentsError) {
-        console.error(`[birthday-reminders-cron] Error fetching students for school ${school.id}:`, studentsError);
-        continue;
+        console.error(`[birthday-reminders-cron] Error fetching students for school ${school.id}:`, studentsError)
+        continue
       }
 
-      // Process each student
-      for (const student of students || []) {
-        const birthdayDate = getThisYearsBirthday(student.date_of_birth);
-        const daysUntil = getDaysUntil(birthdayDate);
-        
-        const weeklyDonationDays = [28, 21, 14, 7];
-        const shouldSendWeeklyDonation = weeklyDonationDays.includes(daysUntil);
+      for (const student of (students || []) as StudentBirthday[]) {
+        const birthdayDate = getThisYearsBirthday(student.date_of_birth)
+        const birthdayYear = birthdayDate.getFullYear()
+        const daysUntil = getDaysUntil(birthdayDate)
 
-        // Only process weekly donation reminders, 1-day, and day-of birthdays
-        if (!shouldSendWeeklyDonation && daysUntil !== 1 && daysUntil !== 0) {
-          continue;
+        const shouldSendDonationReminder = DONATION_REMINDER_DAYS.includes(daysUntil)
+        const shouldSendUpcomingReminder = UPCOMING_REMINDER_DAYS.includes(daysUntil)
+
+        if (!shouldSendDonationReminder && !shouldSendUpcomingReminder && daysUntil !== 1 && daysUntil !== 0) {
+          continue
         }
 
-        results.totalProcessed++;
+        results.totalProcessed++
 
-        const classData = Array.isArray(student.classes) ? student.classes[0] : student.classes;
-        const age = calculateAge(student.date_of_birth, birthdayDate);
-        const studentName = `${student.first_name} ${student.last_name}`;
+        const classData = Array.isArray(student.classes) ? student.classes[0] : student.classes
+        const age = calculateAge(student.date_of_birth, birthdayDate)
+        const studentName = `${student.first_name} ${student.last_name}`
+        const birthdayDateDisplay = birthdayDate.toLocaleDateString('en-ZA', {
+          weekday: 'long',
+          month: 'long',
+          day: 'numeric',
+        })
 
         const reminder: BirthdayReminder = {
           studentId: student.id,
@@ -192,141 +345,185 @@ serve(async (req: Request): Promise<Response> => {
           teacherId: classData?.teacher_id || null,
           preschoolId: school.id,
           birthdayDate: birthdayDate.toISOString(),
-        };
-
-        // Weekly donation reminder to parent/guardian
-        if (shouldSendWeeklyDonation && (student.parent_id || student.guardian_id)) {
-          try {
-            await supabase.functions.invoke('notifications-dispatcher', {
-              body: {
-                event_type: 'birthday_donation_reminder',
-                user_ids: [student.parent_id, student.guardian_id].filter(Boolean),
-                preschool_id: school.id,
-                context: {
-                  child_name: studentName,
-                  student_name: student.first_name,
-                  student_full_name: studentName,
-                  days_until: daysUntil,
-                  age: age,
-                  donation_amount: 25,
-                  birthday_date: birthdayDate.toLocaleDateString('en-ZA', {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                  }),
-                  class_name: reminder.className,
-                  school_name: school.name,
-                },
-              },
-            });
-            results.parentReminders7Day.sent++;
-            console.log(`[birthday-reminders-cron] Sent donation reminder (${daysUntil} days) for ${studentName}`);
-          } catch (err) {
-            console.error(`[birthday-reminders-cron] Failed donation reminder for ${studentName}:`, err);
-            results.parentReminders7Day.failed++;
-          }
         }
 
-        // 1-day reminder to parent
-        if (daysUntil === 1 && (student.parent_id || student.guardian_id)) {
-          try {
-            await supabase.functions.invoke('notifications-dispatcher', {
-              body: {
-                event_type: 'birthday_reminder_tomorrow',
-                user_ids: [student.parent_id, student.guardian_id].filter(Boolean),
-                preschool_id: school.id,
-                context: {
-                  student_name: student.first_name,
-                  student_full_name: studentName,
-                  age: age,
-                  class_name: reminder.className,
-                  school_name: school.name,
-                },
-              },
-            });
-            results.parentReminders1Day.sent++;
-            console.log(`[birthday-reminders-cron] Sent 1-day reminder for ${studentName}`);
-          } catch (err) {
-            console.error(`[birthday-reminders-cron] Failed 1-day reminder for ${studentName}:`, err);
-            results.parentReminders1Day.failed++;
-          }
+        const parentRecipients = uniqueRecipients([student.parent_id, student.guardian_id])
+
+        if (shouldSendUpcomingReminder && parentRecipients.length > 0) {
+          const isSevenDay = daysUntil === 7
+          const eventType = isSevenDay ? 'birthday_reminder_week' : 'birthday_reminder_5_days'
+          const stats = isSevenDay ? results.upcomingReminders7Day : results.upcomingReminders5Day
+
+          await sendReminderWithIdempotency({
+            supabase,
+            schoolId: school.id,
+            schoolName: school.name,
+            studentId: reminder.studentId,
+            studentName,
+            birthdayDateIso: reminder.birthdayDate,
+            birthdayYear,
+            eventType,
+            reminderOffsetDays: daysUntil,
+            recipients: parentRecipients,
+            context: {
+              student_name: student.first_name,
+              student_full_name: studentName,
+              days_until: daysUntil,
+              age,
+              class_name: reminder.className,
+              school_name: school.name,
+              birthday_date: birthdayDateDisplay,
+            },
+            customPayload: {
+              sticky_popup: true,
+              requires_swipe_ack: true,
+              reminder_kind: 'birthday_upcoming',
+              reminder_offset_days: daysUntil,
+            },
+            stats,
+          })
         }
 
-        // Teacher notification (1 day before)
+        if (shouldSendDonationReminder && parentRecipients.length > 0) {
+          await sendReminderWithIdempotency({
+            supabase,
+            schoolId: school.id,
+            schoolName: school.name,
+            studentId: reminder.studentId,
+            studentName,
+            birthdayDateIso: reminder.birthdayDate,
+            birthdayYear,
+            eventType: 'birthday_donation_reminder',
+            reminderOffsetDays: daysUntil,
+            recipients: parentRecipients,
+            context: {
+              child_name: studentName,
+              student_name: student.first_name,
+              student_full_name: studentName,
+              days_until: daysUntil,
+              age,
+              donation_amount: 25,
+              birthday_date: birthdayDateDisplay,
+              class_name: reminder.className,
+              school_name: school.name,
+            },
+            customPayload: {
+              reminder_kind: 'birthday_donation',
+              reminder_offset_days: daysUntil,
+            },
+            stats: results.donationReminders,
+          })
+        }
+
+        if (daysUntil === 1 && parentRecipients.length > 0) {
+          await sendReminderWithIdempotency({
+            supabase,
+            schoolId: school.id,
+            schoolName: school.name,
+            studentId: reminder.studentId,
+            studentName,
+            birthdayDateIso: reminder.birthdayDate,
+            birthdayYear,
+            eventType: 'birthday_reminder_tomorrow',
+            reminderOffsetDays: 1,
+            recipients: parentRecipients,
+            context: {
+              student_name: student.first_name,
+              student_full_name: studentName,
+              age,
+              class_name: reminder.className,
+              school_name: school.name,
+            },
+            customPayload: {
+              reminder_kind: 'birthday_tomorrow',
+              reminder_offset_days: 1,
+            },
+            stats: results.parentReminders1Day,
+          })
+        }
+
         if (daysUntil === 1 && reminder.teacherId) {
-          try {
-            await supabase.functions.invoke('notifications-dispatcher', {
-              body: {
-                event_type: 'birthday_reminder_teacher',
-                user_ids: [reminder.teacherId],
-                preschool_id: school.id,
-                context: {
-                  student_name: student.first_name,
-                  student_full_name: studentName,
-                  age: age,
-                  class_name: reminder.className,
-                },
-              },
-            });
-            results.teacherReminders.sent++;
-            console.log(`[birthday-reminders-cron] Sent teacher reminder for ${studentName}`);
-          } catch (err) {
-            console.error(`[birthday-reminders-cron] Failed teacher reminder for ${studentName}:`, err);
-            results.teacherReminders.failed++;
-          }
+          await sendReminderWithIdempotency({
+            supabase,
+            schoolId: school.id,
+            schoolName: school.name,
+            studentId: reminder.studentId,
+            studentName,
+            birthdayDateIso: reminder.birthdayDate,
+            birthdayYear,
+            eventType: 'birthday_reminder_teacher',
+            reminderOffsetDays: 1,
+            recipients: [reminder.teacherId],
+            context: {
+              student_name: student.first_name,
+              student_full_name: studentName,
+              age,
+              class_name: reminder.className,
+              school_name: school.name,
+            },
+            customPayload: {
+              reminder_kind: 'birthday_teacher',
+              reminder_offset_days: 1,
+            },
+            stats: results.teacherReminders,
+          })
         }
 
-        // Day-of birthday wishes
-        if (daysUntil === 0) {
-          // Notify parent/guardian with birthday wishes
-          if (student.parent_id || student.guardian_id) {
-            try {
-              await supabase.functions.invoke('notifications-dispatcher', {
-                body: {
-                  event_type: 'birthday_today',
-                  user_ids: [student.parent_id, student.guardian_id].filter(Boolean),
-                  preschool_id: school.id,
-                  context: {
-                    student_name: student.first_name,
-                    student_full_name: studentName,
-                    age: age,
-                    school_name: school.name,
-                  },
-                },
-              });
-              results.birthdayWishes.sent++;
-              console.log(`[birthday-reminders-cron] Sent birthday wishes for ${studentName}`);
-            } catch (err) {
-              console.error(`[birthday-reminders-cron] Failed birthday wishes for ${studentName}:`, err);
-              results.birthdayWishes.failed++;
-            }
-          }
+        if (daysUntil === 0 && parentRecipients.length > 0) {
+          await sendReminderWithIdempotency({
+            supabase,
+            schoolId: school.id,
+            schoolName: school.name,
+            studentId: reminder.studentId,
+            studentName,
+            birthdayDateIso: reminder.birthdayDate,
+            birthdayYear,
+            eventType: 'birthday_today',
+            reminderOffsetDays: 0,
+            recipients: parentRecipients,
+            context: {
+              student_name: student.first_name,
+              student_full_name: studentName,
+              age,
+              school_name: school.name,
+            },
+            customPayload: {
+              reminder_kind: 'birthday_today',
+              reminder_offset_days: 0,
+            },
+            stats: results.birthdayWishes,
+          })
+        }
 
-          // Notify teacher about today's birthday
-          if (reminder.teacherId) {
-            try {
-              await supabase.functions.invoke('notifications-dispatcher', {
-                body: {
-                  event_type: 'birthday_today_teacher',
-                  user_ids: [reminder.teacherId],
-                  preschool_id: school.id,
-                  context: {
-                    student_name: student.first_name,
-                    student_full_name: studentName,
-                    age: age,
-                    class_name: reminder.className,
-                  },
-                },
-              });
-            } catch (err) {
-              console.error(`[birthday-reminders-cron] Failed teacher birthday alert for ${studentName}:`, err);
-            }
-          }
+        if (daysUntil === 0 && reminder.teacherId) {
+          await sendReminderWithIdempotency({
+            supabase,
+            schoolId: school.id,
+            schoolName: school.name,
+            studentId: reminder.studentId,
+            studentName,
+            birthdayDateIso: reminder.birthdayDate,
+            birthdayYear,
+            eventType: 'birthday_today_teacher',
+            reminderOffsetDays: 0,
+            recipients: [reminder.teacherId],
+            context: {
+              student_name: student.first_name,
+              student_full_name: studentName,
+              age,
+              class_name: reminder.className,
+            },
+            customPayload: {
+              reminder_kind: 'birthday_today_teacher',
+              reminder_offset_days: 0,
+            },
+            stats: results.teacherReminders,
+          })
         }
       }
     }
 
-    console.log('[birthday-reminders-cron] Completed:', results);
+    console.log('[birthday-reminders-cron] Completed:', results)
 
     return new Response(
       JSON.stringify({
@@ -334,23 +531,22 @@ serve(async (req: Request): Promise<Response> => {
         results,
         timestamp: new Date().toISOString(),
       }),
-      { 
+      {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
-
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
   } catch (error) {
-    console.error('[birthday-reminders-cron] Error:', error);
+    console.error('[birthday-reminders-cron] Error:', error)
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
       }),
-      { 
+      {
         status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      }
-    );
+        headers: { 'Content-Type': 'application/json' },
+      },
+    )
   }
-});
+})

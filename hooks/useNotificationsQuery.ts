@@ -101,6 +101,7 @@ function mapNotificationType(notifType: string): NotificationType {
     'school_event_reminder': 'calendar',
     // Birthdays
     'birthday_reminder_week': 'birthday',
+    'birthday_reminder_5_days': 'birthday',
     'birthday_reminder_tomorrow': 'birthday',
     'birthday_reminder_teacher': 'birthday',
     'birthday_today': 'birthday',

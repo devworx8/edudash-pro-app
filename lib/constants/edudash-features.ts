@@ -617,7 +617,7 @@ export const EDUDASH_SCREENS: Record<string, Screen> = {
   },
 
   announcements: {
-    route: '/screens/announcements',
+    route: '/screens/principal-announcement',
     title: 'Announcements',
     description: 'Create and manage preschool announcements',
     roles: ['principal', 'teacher'],

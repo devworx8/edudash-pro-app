@@ -21,6 +21,13 @@ export type {
   AuthState,
 } from './AuthService';
 
+// Redirect URL helpers (forgot-password, email-change)
+export {
+  getPasswordResetRedirectUrl,
+  getEmailChangeRedirectUrl,
+} from './authRedirectUrls';
+export type { AuthRedirectPlatform } from './authRedirectUrls';
+
 // React hooks for authentication
 export {
   useAuth,

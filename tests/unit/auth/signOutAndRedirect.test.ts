@@ -49,12 +49,11 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
+// After signOut(), hasActiveSupabaseSession() must see no session so navigation runs.
 jest.mock('@/lib/supabase', () => ({
   assertSupabase: jest.fn(() => ({
     auth: {
-      getSession: jest.fn().mockResolvedValue({
-        data: { session: { user: { id: 'user-1' } } },
-      }),
+      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
     },
   })),
 }));
@@ -114,8 +113,8 @@ describe('signOutAndRedirect', () => {
 
   it('navigates after sign-out', async () => {
     await signOutAndRedirect();
-    // Mobile path uses setTimeout(100) fire-and-forget for router.replace
-    await new Promise(r => setTimeout(r, 200));
+    // Mobile path: 300ms wait then setTimeout(100) for router.replace
+    await new Promise(r => setTimeout(r, 450));
 
     const navCalled =
       mockRouter.replace.mock.calls.length > 0 ||
@@ -125,7 +124,7 @@ describe('signOutAndRedirect', () => {
 
   it('adds fresh=1 param to sign-in redirect', async () => {
     await signOutAndRedirect();
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 450));
 
     const calls = mockRouter.replace.mock.calls;
     const hasFresh = calls.some((c: any[]) => String(c[0]).includes('fresh=1'));
@@ -150,7 +149,7 @@ describe('signOutAndRedirect', () => {
 
   it('navigates to custom redirectTo route', async () => {
     await signOutAndRedirect({ redirectTo: '/landing' });
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 450));
 
     const calls = mockRouter.replace.mock.calls;
     const hasLanding = calls.some((c: any[]) => String(c[0]).includes('/landing'));
@@ -159,7 +158,7 @@ describe('signOutAndRedirect', () => {
 
   it('resets sign-out flag after completion', async () => {
     await signOutAndRedirect();
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 450));
     expect(isSignOutInProgress()).toBe(false);
   }, 10_000);
 });

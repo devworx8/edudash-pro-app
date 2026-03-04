@@ -9,6 +9,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { track } from '@/lib/analytics';
 import { useTheme } from '@/contexts/ThemeContext';
 import { navigateTo } from '@/lib/navigation/router-utils';
+import { logger } from '@/lib/logger';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 type PaymentStatus = 'processing' | 'success' | 'cancelled' | 'failed';
@@ -62,7 +63,7 @@ export default function PaymentReturnScreen() {
               .maybeSingle();
 
             if (txErr && (txErr as any)?.code !== 'PGRST116') {
-              console.warn('Payment transaction polling error:', txErr);
+              logger.warn('PaymentReturn', 'Payment transaction polling error', txErr);
             }
 
             if (tx?.status === 'completed') {
@@ -91,11 +92,13 @@ export default function PaymentReturnScreen() {
                 polling_attempts: attempt,
               });
 
-              // Refresh both subscription + profile (tier/capabilities) so dashboards update
+              // Refresh both subscription + profile (tier/capabilities) so dashboards update.
+              // Server-side (PayFast webhook / payments flow) must update profiles.subscription_tier
+              // or subscriptions so that refreshProfile() and SubscriptionContext see the new tier.
               try {
                 await refreshProfile();
               } catch (e) {
-                console.warn('refreshProfile failed after payment:', e);
+                logger.warn('PaymentReturn', 'refreshProfile failed after payment', e);
               }
               try {
                 refreshSubscription();
@@ -108,7 +111,7 @@ export default function PaymentReturnScreen() {
             }
           }
         } catch (error: any) {
-          console.error('Payment verification error:', error);
+          logger.error('PaymentReturn', 'Payment verification error', error);
           setPaymentStatus('failed');
           setMessage('Unable to verify payment status. Please contact support.');
           track('payment_verification_error', {
@@ -143,8 +146,8 @@ export default function PaymentReturnScreen() {
       const scope = String(params.scope || '').toLowerCase();
       
       if (isParent) {
-        // Parent subscription - always go to parent dashboard
-        router.push('/dashboard/parent' as any);
+        // Parent subscription - go to parent dashboard (matches profiles-gate and app routes)
+        router.push('/screens/parent-dashboard' as any);
       } else if (scope === 'school' || !!subscription) {
         // School subscription - go to seat management
         router.push('/screens/principal-seat-management');
@@ -153,8 +156,8 @@ export default function PaymentReturnScreen() {
         router.push('/');
       }
     } else {
-      // Go back to pricing
-      router.push('/marketing/pricing' as any);
+      // Go back to pricing (app pricing route)
+      router.push('/pricing' as any);
     }
   };
 

@@ -31,6 +31,12 @@ import { incrementUsage } from '@/lib/ai/usage';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useAlertModal } from '@/components/ui/AlertModal';
 import { fetchThemeForWeek } from '@/lib/services/curriculumThemeService';
+import { getRoutineBlockTypePresentation } from '@/lib/routines/blockTypePresentation';
+import {
+  classifyRoutineBlockIntent,
+  countRoutineDayOverlaps,
+  isAgeGroupFourToSix,
+} from '@/lib/routines/dailyRoutineNormalization';
 
 const DAY_ORDER = [1, 2, 3, 4, 5] as const;
 const DAY_LABELS: Record<number, string> = {
@@ -43,7 +49,6 @@ const DAY_LABELS: Record<number, string> = {
   7: 'Sunday',
 };
 const MIN_DAY_END_MINUTES = 13 * 60 + 30; // 13:30
-const DEFAULT_DAY_CLOSE_MINUTES = 14 * 60; // 14:00
 
 function toDateOnly(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -109,6 +114,20 @@ function dateToTime(d: Date): string {
   const h = d.getHours();
   const m = d.getMinutes();
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+function extractDraftModelUsed(draft: WeeklyProgramDraft | null | undefined): string | null {
+  if (!draft?.generation_context) return null;
+  const context = draft.generation_context as Record<string, unknown>;
+  const direct = typeof context.modelUsed === 'string' ? context.modelUsed.trim() : '';
+  if (direct) return direct;
+  const assumptions = Array.isArray(context.assumptionSummary) ? context.assumptionSummary : [];
+  for (const line of assumptions) {
+    const text = String(line || '').trim();
+    const match = text.match(/^AI model used:\s*(.+)$/i);
+    if (match?.[1]) return match[1].trim();
+  }
+  return null;
 }
 
 const buildDefaultRules = (): ProgramTimeRules => ({
@@ -380,131 +399,111 @@ function toHHMM(totalMinutes: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-function enforceMinimumDayEndCoverage(
-  day: (typeof DAY_ORDER)[number],
-  dayBlocks: DailyProgramBlock[],
-  pickupCutoffMinutes: number,
-): DailyProgramBlock[] {
-  if (dayBlocks.length === 0) return dayBlocks;
+const SHARED_RESOURCE_STAGGER_KEYWORDS = [
+  'toilet',
+  'bathroom',
+  'potty',
+  'washroom',
+  'restroom',
+  'hygiene',
+  'hand wash',
+  'handwash',
+  'meal',
+  'snack',
+  'breakfast',
+  'lunch',
+];
 
-  let latestEndMinutes: number | null = null;
-  for (const block of dayBlocks) {
-    const end = block.end_time ? toMinutes(String(block.end_time)) : null;
-    if (end !== null && (latestEndMinutes === null || end > latestEndMinutes)) {
-      latestEndMinutes = end;
-    }
-  }
-
-  if (latestEndMinutes !== null && latestEndMinutes >= MIN_DAY_END_MINUTES) {
-    return dayBlocks;
-  }
-
-  const startMinutes = latestEndMinutes ?? Math.max(0, MIN_DAY_END_MINUTES - 45);
-  const endMinutes = Math.max(
-    MIN_DAY_END_MINUTES,
-    Math.min(pickupCutoffMinutes, Math.max(startMinutes + 30, DEFAULT_DAY_CLOSE_MINUTES)),
-  );
-
-  const extended = [
-    ...dayBlocks,
-    {
-      day_of_week: day as 1 | 2 | 3 | 4 | 5 | 6 | 7,
-      block_order: dayBlocks.length + 1,
-      block_type: 'transition',
-      title: 'Afternoon Close & Dismissal Preparation',
-      start_time: toHHMM(startMinutes),
-      end_time: toHHMM(endMinutes),
-      objectives: ['Orderly end-of-day reflection', 'Prepare learners for pickup'],
-      materials: ['Routine chart', 'School bags'],
-      transition_cue: 'Pack away and prepare for pickup calmly.',
-      notes: 'Auto-added so the daily routine always runs to at least 13:30.',
-      parent_tip: null,
-    } as DailyProgramBlock,
-  ];
-
-  return extended.map((block, index) => ({
-    ...block,
-    day_of_week: day as 1 | 2 | 3 | 4 | 5 | 6 | 7,
-    block_order: index + 1,
-  }));
+function isSharedResourceBlock(block: DailyProgramBlock): boolean {
+  const haystack = [
+    block.block_type,
+    block.title,
+    block.notes,
+    ...(block.objectives || []),
+    ...(block.materials || []),
+  ]
+    .map((value) => String(value || '').toLowerCase())
+    .join(' ');
+  return SHARED_RESOURCE_STAGGER_KEYWORDS.some((keyword) => haystack.includes(keyword));
 }
 
-function applyTimeRulesToBlocks(
+function buildStaggeredClassVariant(
   blocks: DailyProgramBlock[],
   rules: ProgramTimeRules,
-  requestedDailyMinutes: number,
+  staggerMinutes: number,
 ): DailyProgramBlock[] {
-  const arrivalStart = toMinutes(rules.arrivalStartTime);
-  const rawPickupCutoff = toMinutes(rules.pickupCutoffTime);
-  if (arrivalStart === null || rawPickupCutoff === null || rawPickupCutoff <= arrivalStart) {
-    return blocks;
-  }
-  const pickupCutoff = Math.max(rawPickupCutoff, MIN_DAY_END_MINUTES);
+  const offset = Math.max(5, Math.min(60, Math.trunc(staggerMinutes)));
+  const arrivalStart = toMinutes(rules.arrivalStartTime) ?? 0;
+  const pickupCutoff = toMinutes(rules.pickupCutoffTime) ?? 23 * 60 + 59;
 
-  const weekdayBlocks = blocks.filter((block) =>
-    DAY_ORDER.includes(Number(block.day_of_week) as (typeof DAY_ORDER)[number]),
+  const weekdayBlocks = blocks
+    .filter((block) => DAY_ORDER.includes(Number(block.day_of_week) as (typeof DAY_ORDER)[number]))
+    .slice()
+    .sort((a, b) =>
+      a.day_of_week === b.day_of_week
+        ? Number(a.block_order || 0) - Number(b.block_order || 0)
+        : Number(a.day_of_week || 0) - Number(b.day_of_week || 0),
+    );
+  const nonWeekdayBlocks = blocks.filter(
+    (block) => !DAY_ORDER.includes(Number(block.day_of_week) as (typeof DAY_ORDER)[number]),
   );
-  const nonWeekdayBlocks = blocks.filter((block) =>
-    !DAY_ORDER.includes(Number(block.day_of_week) as (typeof DAY_ORDER)[number]),
-  );
-  const timedBlocks: DailyProgramBlock[] = [];
 
+  const result: DailyProgramBlock[] = [];
   for (const day of DAY_ORDER) {
     const dayBlocks = weekdayBlocks
       .filter((block) => Number(block.day_of_week) === day)
       .slice()
       .sort((a, b) => Number(a.block_order || 0) - Number(b.block_order || 0));
-
     if (dayBlocks.length === 0) continue;
 
-    const hasStrictValidTimes = dayBlocks.every((block) => {
+    const starts = dayBlocks
+      .map((block) => toMinutes(String(block.start_time || '')))
+      .filter((value): value is number => value !== null);
+    const ends = dayBlocks
+      .map((block) => toMinutes(String(block.end_time || '')))
+      .filter((value): value is number => value !== null);
+
+    const dayStart = starts.length > 0 ? Math.max(arrivalStart, Math.min(...starts)) : arrivalStart;
+    const dayEnd = ends.length > 0 ? Math.min(pickupCutoff, Math.max(...ends)) : pickupCutoff;
+    let cursor = dayStart;
+
+    dayBlocks.forEach((block, index) => {
       const start = toMinutes(String(block.start_time || ''));
       const end = toMinutes(String(block.end_time || ''));
-      return start !== null && end !== null && start >= arrivalStart && end <= pickupCutoff && end > start;
-    });
+      if (start === null || end === null || end <= start) {
+        result.push({
+          ...block,
+          day_of_week: day as 1 | 2 | 3 | 4 | 5 | 6 | 7,
+          block_order: index + 1,
+        });
+        return;
+      }
 
-    if (hasStrictValidTimes) {
-      const normalizedDay = dayBlocks.map((block, index) => ({
+      const duration = Math.max(5, end - start);
+      const preferredStart = start + (isSharedResourceBlock(block) ? offset : 0);
+      let nextStart = Math.max(preferredStart, cursor);
+      const maxStart = Math.max(dayStart, dayEnd - duration);
+      if (nextStart > maxStart) nextStart = maxStart;
+      if (nextStart < cursor) nextStart = cursor;
+      let nextEnd = Math.min(dayEnd, nextStart + duration);
+      if (nextEnd <= nextStart) nextEnd = Math.min(dayEnd, nextStart + 5);
+
+      result.push({
         ...block,
         day_of_week: day as 1 | 2 | 3 | 4 | 5 | 6 | 7,
         block_order: index + 1,
-        start_time: normalizeTime(String(block.start_time || '')),
-        end_time: normalizeTime(String(block.end_time || '')),
-      }));
-      timedBlocks.push(
-        ...enforceMinimumDayEndCoverage(day, normalizedDay, pickupCutoff),
-      );
-      continue;
-    }
-
-    const totalWindow = pickupCutoff - arrivalStart;
-    const targetMinutes = Math.max(120, Number.isFinite(requestedDailyMinutes) ? requestedDailyMinutes : totalWindow);
-    const usableMinutes = Math.max(60, Math.min(totalWindow, targetMinutes));
-    const slotMinutes = Math.max(20, Math.floor(usableMinutes / dayBlocks.length));
-    const dayEnd = Math.min(pickupCutoff, Math.max(MIN_DAY_END_MINUTES, arrivalStart + usableMinutes));
-
-    let cursor = arrivalStart;
-    const autoTimedDayBlocks: DailyProgramBlock[] = [];
-    dayBlocks.forEach((block, index) => {
-      const start = cursor;
-      const preferredEnd = index === dayBlocks.length - 1 ? dayEnd : start + slotMinutes;
-      let end = Math.min(pickupCutoff, preferredEnd);
-      if (end <= start) end = Math.min(pickupCutoff, start + 20);
-      if (end <= start) end = Math.min(pickupCutoff, start + 1);
-
-      autoTimedDayBlocks.push({
-        ...block,
-        day_of_week: day as 1 | 2 | 3 | 4 | 5 | 6 | 7,
-        block_order: index + 1,
-        start_time: toHHMM(start),
-        end_time: toHHMM(end),
+        start_time: toHHMM(nextStart),
+        end_time: toHHMM(nextEnd),
+        notes: isSharedResourceBlock(block)
+          ? `${String(block.notes || '').trim()} Auto-staggered by ${offset} minutes for shared-resource coordination.`
+              .trim()
+          : block.notes,
       });
-      cursor = end;
+      cursor = Math.max(cursor, nextEnd);
     });
-    timedBlocks.push(...enforceMinimumDayEndCoverage(day, autoTimedDayBlocks, pickupCutoff));
   }
 
-  return [...timedBlocks, ...nonWeekdayBlocks].sort((a, b) =>
+  return [...result, ...nonWeekdayBlocks].sort((a, b) =>
     a.day_of_week === b.day_of_week
       ? Number(a.block_order || 0) - Number(b.block_order || 0)
       : Number(a.day_of_week || 0) - Number(b.day_of_week || 0),
@@ -616,6 +615,9 @@ export default function PrincipalDailyProgramPlannerScreen() {
   const [classOptions, setClassOptions] = useState<SchoolClassOption[]>([]);
   const [loadingClasses, setLoadingClasses] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [pairedGenerationEnabled, setPairedGenerationEnabled] = useState(false);
+  const [pairedSecondaryClassId, setPairedSecondaryClassId] = useState<string | null>(null);
+  const [pairedStaggerMinutes, setPairedStaggerMinutes] = useState('20');
   const [timePickerField, setTimePickerField] = useState<'arrivalStart' | 'arrivalCutoff' | 'pickupStart' | 'pickupCutoff' | null>(null);
   const [plannerPreferencesReady, setPlannerPreferencesReady] = useState(false);
 
@@ -945,6 +947,51 @@ export default function PrincipalDailyProgramPlannerScreen() {
       return;
     }
 
+    const pairedModeActive = pairedGenerationEnabled;
+    const staggerMinutes = Math.max(5, Math.min(60, Number(pairedStaggerMinutes) || 20));
+    if (pairedModeActive) {
+      if (!selectedClassId) {
+        showAlert({
+          title: 'Primary class required',
+          message: 'Select the first class group before paired generation.',
+          type: 'warning',
+        });
+        return;
+      }
+      if (!pairedSecondaryClassId) {
+        showAlert({
+          title: 'Second class required',
+          message: 'Select the second class group for paired generation.',
+          type: 'warning',
+        });
+        return;
+      }
+      if (pairedSecondaryClassId === selectedClassId) {
+        showAlert({
+          title: 'Classes must differ',
+          message: 'Choose two different class groups for paired generation.',
+          type: 'warning',
+        });
+        return;
+      }
+      if (classOptions.length < 2) {
+        showAlert({
+          title: 'Insufficient classes',
+          message: 'Create at least two class groups before using paired generation.',
+          type: 'warning',
+        });
+        return;
+      }
+      if (!Number.isFinite(staggerMinutes) || staggerMinutes < 5) {
+        showAlert({
+          title: 'Invalid stagger',
+          message: 'Use a stagger between 5 and 60 minutes.',
+          type: 'warning',
+        });
+        return;
+      }
+    }
+
     setGenerationMode(mode);
     setGenerating(true);
 
@@ -1002,28 +1049,103 @@ export default function PrincipalDailyProgramPlannerScreen() {
         },
       });
 
-      const generatedBlocks = applyTimeRulesToBlocks(
-        (generated.blocks || []).map((block) => ({ ...block, parent_tip: null })),
-        rules,
-        Math.max(120, safeDailyMinutes || 300),
+      // Keep generation-time normalization single-sourced from the service layer.
+      const generatedBlocks = (generated.blocks || []).map((block) => ({ ...block, parent_tip: null }));
+      const generatedAssumptions = Array.isArray(generated.generation_context?.assumptionSummary)
+        ? generated.generation_context.assumptionSummary
+            .map((line) => String(line || '').trim())
+            .filter(Boolean)
+        : [];
+      const mergedAssumptions = Array.from(
+        new Set(
+          [...generatedAssumptions, ...confirmedAssumptions.map((line) => String(line || '').trim()).filter(Boolean)]
+            .map((line) => line.toLowerCase())
+        )
+      ).map((lower) =>
+        [...generatedAssumptions, ...confirmedAssumptions]
+          .map((line) => String(line || '').trim())
+          .find((line) => line.toLowerCase() === lower) || lower
       );
 
-      setDraft({
+      const baseDraft: WeeklyProgramDraft = {
         ...generated,
         class_id: selectedClassId,
         title: withSchoolNamedTitle(generated.title, schoolName, themeTitle),
         blocks: generatedBlocks,
         generation_context: {
+          ...(generated.generation_context || {}),
           preflight: {
             ...preflight,
           },
-          assumptionSummary: confirmedAssumptions,
+          assumptionSummary: mergedAssumptions,
         },
         preschool_id: organizationId,
         created_by: userId,
         week_start_date: startOfWeekMonday(weekStartDate),
         week_end_date: addDays(startOfWeekMonday(weekStartDate), 4),
-      });
+      };
+      const generatedModelUsed = extractDraftModelUsed(baseDraft);
+
+      if (pairedModeActive && selectedClassId && pairedSecondaryClassId) {
+        const primaryClass = classOptions.find((option) => option.id === selectedClassId) || null;
+        const secondaryClass = classOptions.find((option) => option.id === pairedSecondaryClassId) || null;
+        const secondaryBlocks = buildStaggeredClassVariant(generatedBlocks, rules, staggerMinutes);
+
+        const primaryTitleCore = withSchoolNamedTitle(generated.title, schoolName, themeTitle);
+        const primaryTitle = primaryClass
+          ? `${primaryTitleCore} • ${formatClassLabel(primaryClass)}`
+          : primaryTitleCore;
+        const secondaryTitle = secondaryClass
+          ? `${primaryTitleCore} • ${formatClassLabel(secondaryClass)}`
+          : `${primaryTitleCore} • Group 2`;
+
+        const secondaryDraft: WeeklyProgramDraft = {
+          ...baseDraft,
+          id: undefined,
+          class_id: pairedSecondaryClassId,
+          title: secondaryTitle,
+          generation_context: {
+            ...(baseDraft.generation_context || {}),
+            assumptionSummary: [
+              ...(baseDraft.generation_context?.assumptionSummary || confirmedAssumptions),
+              `Secondary class auto-stagger: ${staggerMinutes} minutes for shared-resource blocks (toilet/hygiene/meals).`,
+            ],
+          },
+          blocks: secondaryBlocks,
+        };
+
+        const primarySaved = await WeeklyProgramService.saveWeeklyProgram({
+          weeklyProgram: {
+            ...baseDraft,
+            id: undefined,
+            class_id: selectedClassId,
+            title: primaryTitle,
+          },
+          rules,
+        });
+        const secondarySaved = await WeeklyProgramService.saveWeeklyProgram({
+          weeklyProgram: secondaryDraft,
+          rules,
+        });
+
+        setDraft(primarySaved);
+        setSaveAdvisory(primarySaved.save_warnings?.[0] || secondarySaved.save_warnings?.[0] || null);
+        setDraftViewMode('cards');
+        await loadPrograms();
+
+        void incrementUsage('lesson_generation', 1).catch(() => {
+          /* best-effort; quota refresh will reflect server state */
+        });
+
+        showAlert({
+          title: 'Paired plans ready',
+          message: `Generated and saved two class-specific routines with a ${staggerMinutes}-minute stagger for shared-resource blocks.\n\nPrimary: ${primaryClass ? formatClassLabel(primaryClass) : 'Class 1'}\nSecondary: ${secondaryClass ? formatClassLabel(secondaryClass) : 'Class 2'}${generatedModelUsed ? `\nModel: ${generatedModelUsed}` : ''}`,
+          type: 'success',
+        });
+        return;
+      }
+
+      setDraft(baseDraft);
       setSaveAdvisory(null);
       setDraftViewMode('cards');
 
@@ -1036,13 +1158,13 @@ export default function PrincipalDailyProgramPlannerScreen() {
         showAlert({
           title: 'Draft refreshed',
           message:
-            'Dash regenerated this routine using your current setup and preflight answers. Saved plans remain unchanged until you save again.',
+            `Dash regenerated this routine using your current setup and preflight answers. Saved plans remain unchanged until you save again.${generatedModelUsed ? `\n\nModel: ${generatedModelUsed}` : ''}`,
           type: 'success',
         });
       } else {
         showAlert({
           title: 'Draft ready',
-          message: 'AI generated your daily routine. Review and share when ready.',
+          message: `AI generated your daily routine. Review and share when ready.${generatedModelUsed ? `\n\nModel: ${generatedModelUsed}` : ''}`,
           type: 'success',
         });
       }
@@ -1079,6 +1201,10 @@ export default function PrincipalDailyProgramPlannerScreen() {
     rules,
     preflight,
     preflightComplete,
+    pairedGenerationEnabled,
+    pairedSecondaryClassId,
+    pairedStaggerMinutes,
+    classOptions,
     confirmedAssumptions,
     refreshLessonQuota,
     showAlert,
@@ -1145,12 +1271,9 @@ export default function PrincipalDailyProgramPlannerScreen() {
             },
             assumptionSummary: confirmedAssumptions,
           },
-          blocks: applyTimeRulesToBlocks(
-            (draft.blocks || []).map((block) => ({ ...block, parent_tip: null })),
-            rules,
-            Math.max(120, Number(dailyMinutes) || 300),
-          ),
+          blocks: (draft.blocks || []).map((block) => ({ ...block, parent_tip: null })),
         },
+        rules,
       });
 
       setDraft(saved);
@@ -1174,7 +1297,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     } finally {
       setSaving(false);
     }
-  }, [ageGroup, dailyMinutes, draft, loadPrograms, organizationId, schoolName, selectedClassId, themeTitle, userId, weekStartDate, preflight, confirmedAssumptions, rules, showAlert]);
+  }, [ageGroup, draft, loadPrograms, organizationId, schoolName, selectedClassId, themeTitle, userId, weekStartDate, preflight, confirmedAssumptions, rules, showAlert]);
 
   const shareWithParents = useCallback(async (programOverride?: WeeklyProgramDraft) => {
     const activeProgram = programOverride || draft;
@@ -1561,6 +1684,25 @@ export default function PrincipalDailyProgramPlannerScreen() {
     () => classOptions.find((option) => option.id === selectedClassId) || null,
     [classOptions, selectedClassId],
   );
+  const pairedSecondaryClassOptions = useMemo(
+    () => classOptions.filter((option) => option.id !== selectedClassId),
+    [classOptions, selectedClassId],
+  );
+  const pairedSecondaryClassOption = useMemo(
+    () => classOptions.find((option) => option.id === pairedSecondaryClassId) || null,
+    [classOptions, pairedSecondaryClassId],
+  );
+
+  useEffect(() => {
+    if (!pairedGenerationEnabled) return;
+    if (!selectedClassId) {
+      setPairedSecondaryClassId(null);
+      return;
+    }
+    if (pairedSecondaryClassId && pairedSecondaryClassId !== selectedClassId) return;
+    const fallback = classOptions.find((option) => option.id !== selectedClassId)?.id || null;
+    setPairedSecondaryClassId(fallback);
+  }, [classOptions, pairedGenerationEnabled, pairedSecondaryClassId, selectedClassId]);
 
   const capsCoverage = useMemo(() => {
     const rawCoverage = (draft?.generation_context as any)?.capsCoverage;
@@ -1575,6 +1717,8 @@ export default function PrincipalDailyProgramPlannerScreen() {
       coverageScore: Number(rawCoverage.coverageScore) || 0,
     };
   }, [draft?.generation_context]);
+
+  const activeGenerationModel = useMemo(() => extractDraftModelUsed(draft), [draft]);
 
   const recentThemeSuggestions = useMemo(() => {
     const seen = new Set<string>();
@@ -1791,6 +1935,41 @@ export default function PrincipalDailyProgramPlannerScreen() {
       return latestEnd === null || latestEnd < MIN_DAY_END_MINUTES;
     });
 
+    const overlapDays = DAY_ORDER.filter((day) =>
+      countRoutineDayOverlaps(dayBlocksByDay.get(day) || []) > 0,
+    );
+    if (overlapDays.length > 0) {
+      missingEssentials.push(`Overlapping time ranges (${overlapDays.map((day) => DAY_LABELS[day]).join(', ')})`);
+    }
+
+    const duplicateLunchDays = DAY_ORDER.filter((day) => {
+      const dayBlocks = dayBlocksByDay.get(day) || [];
+      const lunchCount = dayBlocks.filter((block) => classifyRoutineBlockIntent(block) === 'lunch').length;
+      return lunchCount > 1;
+    });
+    if (duplicateLunchDays.length > 0) {
+      missingEssentials.push(`Duplicate Lunch blocks (${duplicateLunchDays.map((day) => DAY_LABELS[day]).join(', ')})`);
+    }
+
+    if (isAgeGroupFourToSix(ageGroup)) {
+      const duplicateNapDays = DAY_ORDER.filter((day) => {
+        const dayBlocks = dayBlocksByDay.get(day) || [];
+        const napCount = dayBlocks.filter((block) => classifyRoutineBlockIntent(block) === 'nap').length;
+        return napCount > 1;
+      });
+      if (duplicateNapDays.length > 0) {
+        missingEssentials.push(`More than one Nap / Quiet Time block (${duplicateNapDays.map((day) => DAY_LABELS[day]).join(', ')})`);
+      }
+    }
+
+    const outOfPolicyCountDays = DAY_ORDER.filter((day) => {
+      const count = (dayBlocksByDay.get(day) || []).length;
+      return count < 6 || count > 10;
+    });
+    if (outOfPolicyCountDays.length > 0) {
+      missingEssentials.push(`Block count must be 6-10 per day (${outOfPolicyCountDays.map((day) => DAY_LABELS[day]).join(', ')})`);
+    }
+
     return {
       total: blocks.length,
       missingTimes,
@@ -1813,6 +1992,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     routineOptions.storyCircle,
     routineOptions.toiletRoutine,
     routineOptions.transitionCues,
+    ageGroup,
     ruleValidation.normalized.arrivalStartTime,
     ruleValidation.normalized.pickupCutoffTime,
   ]);
@@ -2044,6 +2224,61 @@ export default function PrincipalDailyProgramPlannerScreen() {
               </Text>
             </View>
           ) : null}
+          {classOptions.length > 1 && (
+            <>
+              <View style={styles.toggleRow}>
+                <TouchableOpacity
+                  style={[styles.togglePill, pairedGenerationEnabled && styles.togglePillActive]}
+                  onPress={() => setPairedGenerationEnabled((prev) => !prev)}
+                >
+                  <Text style={[styles.toggleText, pairedGenerationEnabled && styles.toggleTextActive]}>
+                    Paired Class Generation
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {pairedGenerationEnabled && (
+                <>
+                  <Text style={styles.fieldSubHint}>
+                    Generate two class plans from one copilot run. Shared-resource blocks (toilet/hygiene/meals) are staggered automatically.
+                  </Text>
+                  <Text style={styles.fieldLabel}>Second Class Group</Text>
+                  <View style={styles.chipRow}>
+                    {pairedSecondaryClassOptions.map((option) => {
+                      const isActive = pairedSecondaryClassId === option.id;
+                      return (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[styles.quickChipGhost, isActive && styles.togglePillActive]}
+                          onPress={() => setPairedSecondaryClassId(option.id)}
+                        >
+                          <Text style={[styles.quickChipGhostText, isActive && styles.toggleTextActive]}>
+                            {formatClassLabel(option)}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {pairedSecondaryClassOption ? (
+                    <View style={styles.schoolNamePill}>
+                      <Ionicons name="git-network-outline" size={14} color={theme.primary} />
+                      <Text style={styles.schoolNamePillText}>
+                        Secondary Class: {formatClassLabel(pairedSecondaryClassOption)}
+                      </Text>
+                    </View>
+                  ) : null}
+                  <Text style={styles.fieldLabel}>Stagger Minutes (5-60)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={pairedStaggerMinutes}
+                    onChangeText={(value) => setPairedStaggerMinutes(value.replace(/[^\d]/g, '').slice(0, 2))}
+                    placeholder="20"
+                    keyboardType="number-pad"
+                    placeholderTextColor={theme.textSecondary}
+                  />
+                </>
+              )}
+            </>
+          )}
           <Text style={styles.fieldLabel}>Week Start (Monday)</Text>
           <TextInput
             style={styles.input}
@@ -2402,6 +2637,14 @@ export default function PrincipalDailyProgramPlannerScreen() {
             </View>
           </View>
 
+          {activeGenerationModel ? (
+            <View style={styles.modelUsageRow}>
+              <Ionicons name="hardware-chip-outline" size={14} color={theme.primary} />
+              <Text style={styles.modelUsageLabel}>Model</Text>
+              <Text style={styles.modelUsageValue}>{activeGenerationModel}</Text>
+            </View>
+          ) : null}
+
           {capsCoverage && (
             <View style={styles.capsCoverageBox}>
               <View style={styles.capsCoverageHeader}>
@@ -2609,36 +2852,47 @@ export default function PrincipalDailyProgramPlannerScreen() {
                       <Text style={styles.dayEmpty}>No blocks yet.</Text>
                     ) : (
                       <View style={styles.previewBlockWrap}>
-                        {dayBlocks.map((block) => (
-                          <View key={`${day}-${block.block_order}`} style={styles.previewBlockCard}>
-                            <View style={styles.previewBlockMetaRow}>
-                              <Text style={styles.previewBlockOrder}>#{block.block_order}</Text>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                {!!block.block_type && (
-                                  <View style={[styles.statusPill, { paddingHorizontal: 6, paddingVertical: 2 }]}>
-                                    <Text style={[styles.statusPillText, { fontSize: 10 }]}>
-                                      {String(block.block_type).replace('_', ' ')}
-                                    </Text>
-                                  </View>
-                                )}
-                                <Text style={styles.previewBlockTime}>
-                                  {(block.start_time && String(block.start_time)) || '--:--'} - {(block.end_time && String(block.end_time)) || '--:--'}
-                                </Text>
+                        {dayBlocks.map((block) => {
+                          const blockType = getRoutineBlockTypePresentation(block.block_type);
+                          return (
+                            <View key={`${day}-${block.block_order}`} style={[styles.previewBlockCard, { borderLeftColor: blockType.textColor }]}>
+                              <View style={styles.previewBlockMetaRow}>
+                                <Text style={styles.previewBlockOrder}>#{block.block_order}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  {!!block.block_type && (
+                                    <View
+                                      style={[
+                                        styles.routineTypePill,
+                                        {
+                                          backgroundColor: blockType.backgroundColor,
+                                          borderColor: blockType.borderColor,
+                                        },
+                                      ]}
+                                    >
+                                      <Text style={[styles.routineTypePillText, { color: blockType.textColor }]}>
+                                        {blockType.label}
+                                      </Text>
+                                    </View>
+                                  )}
+                                  <Text style={styles.previewBlockTime}>
+                                    {(block.start_time && String(block.start_time)) || '--:--'} - {(block.end_time && String(block.end_time)) || '--:--'}
+                                  </Text>
+                                </View>
                               </View>
-                            </View>
-                            <Text style={styles.previewBlockTitle}>
-                              {String(block.title || '').trim() || 'Untitled block'}
-                            </Text>
-                            {Array.isArray(block.objectives) && block.objectives.length > 0 && (
-                              <Text style={[styles.previewBlockNote, { color: theme.primary + 'cc' }]}>
-                                {block.objectives.slice(0, 2).join(' • ')}
+                              <Text style={styles.previewBlockTitle}>
+                                {String(block.title || '').trim() || 'Untitled block'}
                               </Text>
-                            )}
-                            {!!String(block.notes || '').trim() && (
-                              <Text style={styles.previewBlockNote}>{String(block.notes)}</Text>
-                            )}
-                          </View>
-                        ))}
+                              {Array.isArray(block.objectives) && block.objectives.length > 0 && (
+                                <Text style={[styles.previewBlockNote, { color: theme.primary + 'cc' }]}>
+                                  {block.objectives.slice(0, 2).join(' • ')}
+                                </Text>
+                              )}
+                              {!!String(block.notes || '').trim() && (
+                                <Text style={styles.previewBlockNote}>{String(block.notes)}</Text>
+                              )}
+                            </View>
+                          );
+                        })}
                       </View>
                     )}
                   </View>
@@ -2702,14 +2956,31 @@ export default function PrincipalDailyProgramPlannerScreen() {
                           <View style={styles.chipRow}>
                             {(['circle_time', 'learning', 'movement', 'outdoor', 'meal', 'nap', 'assessment', 'transition', 'other'] as const).map((bt) => {
                               const active = block.block_type === bt;
+                              const blockType = getRoutineBlockTypePresentation(bt, {
+                                backgroundAlpha: active ? 0.24 : 0.12,
+                                borderAlpha: active ? 0.5 : 0.3,
+                              });
                               return (
                                 <TouchableOpacity
                                   key={bt}
-                                  style={[styles.quickChip, active && { backgroundColor: theme.primary }]}
+                                  style={[
+                                    styles.quickChip,
+                                    {
+                                      borderColor: blockType.borderColor,
+                                      backgroundColor: blockType.backgroundColor,
+                                    },
+                                    active && styles.quickChipTypeActive,
+                                  ]}
                                   onPress={() => updateDraftBlock(day, block.block_order, { block_type: bt })}
                                 >
-                                  <Text style={[styles.quickChipText, active && { color: '#fff' }]}>
-                                    {bt.replace('_', ' ')}
+                                  <Text
+                                    style={[
+                                      styles.quickChipText,
+                                      { color: blockType.textColor },
+                                      active && styles.quickChipTypeTextActive,
+                                    ]}
+                                  >
+                                    {blockType.label}
                                   </Text>
                                 </TouchableOpacity>
                               );
@@ -2868,7 +3139,7 @@ const createStyles = (theme: any) =>
     content: {
       padding: 16,
       gap: 12,
-      paddingBottom: 36,
+      paddingBottom: Platform.OS === 'web' ? 88 : 36,
       width: '100%',
       maxWidth: 1280,
       alignSelf: 'center',
@@ -3152,10 +3423,16 @@ const createStyles = (theme: any) =>
       paddingHorizontal: 10,
       paddingVertical: 5,
     },
+    quickChipTypeActive: {
+      borderWidth: 1.5,
+    },
     quickChipText: {
       color: theme.primary,
       fontSize: 11,
       fontWeight: '700',
+    },
+    quickChipTypeTextActive: {
+      fontWeight: '800',
     },
     quickChipGhost: {
       borderRadius: 999,
@@ -3383,6 +3660,31 @@ const createStyles = (theme: any) =>
     },
     readinessPillTextActive: {
       color: '#10b981',
+    },
+    modelUsageRow: {
+      marginTop: 8,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: theme.primary + '45',
+      backgroundColor: theme.primary + '12',
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    modelUsageLabel: {
+      color: theme.textSecondary,
+      fontSize: 11,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+      letterSpacing: 0.3,
+    },
+    modelUsageValue: {
+      flex: 1,
+      color: theme.text,
+      fontSize: 12,
+      fontWeight: '800',
     },
     capsCoverageBox: {
       borderRadius: 10,
@@ -3619,7 +3921,9 @@ const createStyles = (theme: any) =>
     },
     previewBlockCard: {
       borderWidth: 1,
+      borderLeftWidth: 3,
       borderColor: theme.primary + '35',
+      borderLeftColor: theme.primary + '65',
       borderRadius: 12,
       backgroundColor: theme.primary + '12',
       paddingVertical: 9,
@@ -3640,6 +3944,17 @@ const createStyles = (theme: any) =>
       color: theme.textSecondary,
       fontSize: 11,
       fontWeight: '700',
+    },
+    routineTypePill: {
+      borderRadius: 999,
+      borderWidth: 1,
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+    },
+    routineTypePillText: {
+      fontSize: 10,
+      fontWeight: '800',
+      letterSpacing: 0.3,
     },
     previewBlockTitle: {
       color: theme.text,

@@ -19,8 +19,10 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
   const { user, profile } = useAuth();
   const orgType = useMemo(() => getOrganizationType(profile), [profile]);
   const isPreschool = orgType === 'preschool';
-  const isTeacherRole = profile?.role === 'teacher';
-  const useSchoolWide = isPreschool && !isTeacherRole;
+  const normalizedRole = String(profile?.role || '').toLowerCase().trim();
+  const isTeacherRole = normalizedRole === 'teacher';
+  const canManageDonations = ['teacher', 'principal', 'principal_admin', 'admin', 'super_admin', 'org_admin'].includes(normalizedRole);
+  const useSchoolWide = canManageDonations && !isTeacherRole;
 
   // ── State ────────────────────────────────────────────────────────────────
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -92,8 +94,8 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
   }, [activeStudents, useSchoolWide, unassignedLabel]);
 
   useEffect(() => {
-    if (!isPreschool && !selectedClassId && classGroups.length > 0) setSelectedClassId(classGroups[0].id);
-  }, [classGroups, isPreschool, selectedClassId]);
+    if (!useSchoolWide && !selectedClassId && classGroups.length > 0) setSelectedClassId(classGroups[0].id);
+  }, [classGroups, useSchoolWide, selectedClassId]);
 
   const selectedClass = useMemo(
     () => classGroups.find((g) => g.id === selectedClassId) || null,
@@ -119,7 +121,7 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
   }, [useSchoolWide, reminderClassGroups, reminderClassId]);
 
   // ── Birthday window ──────────────────────────────────────────────────────
-  const classStudents = isPreschool ? teacherStudents : (selectedClass?.students ?? []);
+  const classStudents = selectedClass?.students ?? [];
   const birthdaySourceStudents = useSchoolWide ? schoolStudents : classStudents;
   const upcomingBirthdays = useMemo(
     () => getBirthdayWindow(birthdaySourceStudents, birthdayWindowMode),
@@ -152,7 +154,7 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
     : undefined;
 
   const emptyMessage = useMemo(() => {
-    const scope = isPreschool && useSchoolWide;
+    const scope = useSchoolWide;
     if (birthdayWindowMode === 'recent') {
       return t(scope ? 'dashboard.birthday_donations.no_birthdays_recent_school' : 'dashboard.birthday_donations.no_birthdays_recent', {
         defaultValue: scope ? 'No recent birthdays for the school.' : 'No recent birthdays for this class.',
@@ -166,7 +168,7 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
     return t(scope ? 'dashboard.birthday_donations.no_birthdays_school' : 'dashboard.birthday_donations.no_birthdays', {
       defaultValue: scope ? 'No upcoming birthdays for the school.' : 'No upcoming birthdays for this class.',
     });
-  }, [birthdayWindowMode, isPreschool, useSchoolWide, t]);
+  }, [birthdayWindowMode, useSchoolWide, t]);
 
   // ── Donations data ───────────────────────────────────────────────────────
   const loadDonations = useCallback(async () => {

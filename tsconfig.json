@@ -17,6 +17,7 @@
     "module": "esnext",
     "lib": ["esnext", "dom"],
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "isolatedModules": true,
     "resolveJsonModule": true
