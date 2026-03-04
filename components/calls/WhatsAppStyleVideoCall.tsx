@@ -155,6 +155,9 @@ export function WhatsAppStyleVideoCall({
   // CRITICAL: State to trigger realtime subscription when call ID is set
   // Refs don't cause re-renders, so we need state to properly subscribe to call status changes
   const [activeCallId, setActiveCallId] = useState<string | null>(callId || null);
+  // Network quality monitoring: 'good' | 'fair' | 'poor' | null
+  const [networkQuality, setNetworkQuality] = useState<'good' | 'fair' | 'poor' | null>(null);
+  const networkStatsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const dailyRef = useRef<any>(null);
   const callIdRef = useRef<string | null>(callId || null);
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -395,6 +398,42 @@ export function WhatsAppStyleVideoCall({
       deactivateKeepAwake(VIDEO_CALL_KEEP_AWAKE_TAG);
     };
   }, [isOpen, callState]);
+
+  // Network quality monitoring — polls Daily.co getNetworkStats() every 5s
+  useEffect(() => {
+    if (callState !== 'connected' || !dailyRef.current) {
+      setNetworkQuality(null);
+      if (networkStatsIntervalRef.current) {
+        clearInterval(networkStatsIntervalRef.current);
+        networkStatsIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const pollNetworkQuality = async () => {
+      try {
+        const stats = await dailyRef.current?.getNetworkStats?.();
+        if (!stats?.stats) return;
+        const { videoRecvPacketLoss, audioRecvPacketLoss } = stats.stats;
+        const maxLoss = Math.max(videoRecvPacketLoss ?? 0, audioRecvPacketLoss ?? 0);
+        if (maxLoss < 0.02) setNetworkQuality('good');
+        else if (maxLoss < 0.08) setNetworkQuality('fair');
+        else setNetworkQuality('poor');
+      } catch {
+        // getNetworkStats may not be available on all SDK versions
+      }
+    };
+
+    pollNetworkQuality();
+    networkStatsIntervalRef.current = setInterval(pollNetworkQuality, 5000);
+
+    return () => {
+      if (networkStatsIntervalRef.current) {
+        clearInterval(networkStatsIntervalRef.current);
+        networkStatsIntervalRef.current = null;
+      }
+    };
+  }, [callState]);
 
   // Format duration as MM:SS or HH:MM:SS
   const formatDuration = (seconds: number): string => {
@@ -1741,11 +1780,30 @@ export function WhatsAppStyleVideoCall({
         
         <View style={styles.callInfo}>
           <Text style={styles.callerName}>{remoteUserName}</Text>
-          <Text style={styles.callDuration}>
-            {callState === 'connected' ? formatDuration(callDuration) :
-             callState === 'ringing' ? 'Ringing...' :
-             callState === 'connecting' ? 'Connecting...' : ''}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.callDuration}>
+              {callState === 'connected' ? formatDuration(callDuration) :
+               callState === 'ringing' ? 'Ringing...' :
+               callState === 'connecting' ? 'Connecting...' : ''}
+            </Text>
+            {callState === 'connected' && networkQuality && (
+              <View style={[
+                styles.networkBadge,
+                networkQuality === 'good' && styles.networkGood,
+                networkQuality === 'fair' && styles.networkFair,
+                networkQuality === 'poor' && styles.networkPoor,
+              ]}>
+                <Ionicons
+                  name={networkQuality === 'poor' ? 'warning' : 'wifi'}
+                  size={10}
+                  color="#fff"
+                />
+                <Text style={styles.networkBadgeText}>
+                  {networkQuality === 'good' ? 'HD' : networkQuality === 'fair' ? 'SD' : 'Low'}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <TouchableOpacity style={styles.topButton} onPress={flipCamera}>
@@ -2163,6 +2221,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  networkBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    gap: 3,
+  },
+  networkGood: {
+    backgroundColor: 'rgba(34, 197, 94, 0.8)',
+  },
+  networkFair: {
+    backgroundColor: 'rgba(234, 179, 8, 0.8)',
+  },
+  networkPoor: {
+    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+  },
+  networkBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
   },
 });
 

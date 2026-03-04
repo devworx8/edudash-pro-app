@@ -188,6 +188,10 @@ Deno.serve(async (req: Request) => {
         enable_recording: enableRecording ? 'cloud' : undefined,
         owner_only_broadcast: false,
         eject_at_room_exp: true,
+        // Krisp noise cancellation — critical for school environments
+        enable_noise_cancellation_ui: true,
+        // Enable network quality monitoring for call quality indicators
+        enable_network_ui: true,
       },
     };
 

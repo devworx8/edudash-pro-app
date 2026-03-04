@@ -1380,7 +1380,7 @@ const parseFlexibleTimeToMinutes = (value: string): number | null => {
 };
 
 const findAnchorTimeInSource = (source: string, phrases: string[]): string | null => {
-  let best: { index: number; minutes: number } | null = null;
+  let best: { patternWeight: number; index: number; minutes: number } | null = null;
   const timePrefix = '(?:at|@|from|start\\s+at)\\s*';
   for (const phrase of phrases) {
     const escaped = escapeRegExp(phrase);
@@ -1394,14 +1394,24 @@ const findAnchorTimeInSource = (source: string, phrases: string[]): string | nul
     );
     const adjacentTime = new RegExp(`${escaped}[^\\n\\r\\.;]{0,24}?(${TIME_TOKEN_PATTERN})`, 'ig');
 
-    for (const pattern of [beforeTime, afterTime, adjacentTime]) {
+    const patterns = [
+      { pattern: beforeTime, patternWeight: 0 },
+      { pattern: adjacentTime, patternWeight: 1 },
+      { pattern: afterTime, patternWeight: 3 },
+    ];
+
+    for (const { pattern, patternWeight } of patterns) {
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(source)) !== null) {
         const minutes = parseFlexibleTimeToMinutes(match[1]);
         if (minutes == null) continue;
         const index = match.index;
-        if (!best || index < best.index) {
-          best = { index, minutes };
+        if (
+          !best
+          || patternWeight < best.patternWeight
+          || (patternWeight === best.patternWeight && index < best.index)
+        ) {
+          best = { patternWeight, index, minutes };
         }
       }
     }
@@ -1444,6 +1454,7 @@ const parsePreflightAnchorPolicy = (
   input: GenerateWeeklyProgramFromTermInput,
 ): PreflightAnchorPolicy => {
   const source = collectPreflightSections(input).join(' ');
+  const nonNegotiableSource = String(input.preflightAnswers?.nonNegotiableAnchors || '').trim();
 
   if (!source) {
     return {
@@ -1461,7 +1472,9 @@ const parsePreflightAnchorPolicy = (
   };
   const anchors: AnchorRule[] = [];
   for (const anchor of PREFLIGHT_ANCHOR_DEFINITIONS) {
-    const parsed = findAnchorTimeInSource(source, anchor.keywords);
+    const parsed =
+      findAnchorTimeInSource(nonNegotiableSource, anchor.keywords)
+      ?? findAnchorTimeInSource(source, anchor.keywords);
     const startTime = parsed ?? DEFAULT_ANCHOR_TIMES[anchor.key] ?? null;
     if (!startTime) continue;
     anchors.push({

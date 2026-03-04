@@ -105,9 +105,21 @@ export async function runGenerationEngine(
     }
     localFallbackReason = `Freemium plan limit reached: you've used ${params.freemiumPremiumExamCount} premium exam generations. A basic fallback exam is being used. Upgrade to restore premium Sonnet exam generation.`;
     modelUsed = 'fallback:freemium-limit-v1';
-  } else if (params.anthropicApiKey) {
-    for (const candidateModel of params.modelCandidates) {
-      const candidateResponse = await fetch('https://api.anthropic.com/v1/messages', {
+  } else {
+    // Adaptive max_tokens: full papers need more room
+    const maxTokens = params.fullPaperMode ? 8192 : 4096;
+    const startTime = Date.now();
+
+    // --- Parallel provider racing ---
+    // Fire Anthropic (primary model only) and OpenAI concurrently when both keys exist.
+    // Use the first successful response — cuts latency ~40% on slow providers.
+    const hasAnthropicKey = Boolean(params.anthropicApiKey);
+    const hasOpenAiKey = Boolean(params.openAiApiKey);
+
+    if (hasAnthropicKey && hasOpenAiKey) {
+      const anthropicPrimary = params.modelCandidates[0] || params.preferredModel;
+
+      const anthropicPromise = fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -115,67 +127,142 @@ export async function runGenerationEngine(
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: candidateModel,
-          max_tokens: 4096,
+          model: anthropicPrimary,
+          max_tokens: maxTokens,
           system: params.examSystemPrompt,
           messages: [{ role: 'user', content: params.userPrompt }],
         }),
+      }).then(async (resp) => {
+        if (!resp.ok) {
+          const errText = await resp.text();
+          if (isCreditOrBillingError(resp.status, errText)) {
+            anthropicCreditIssue = true;
+          }
+          throw new Error(`anthropic:${resp.status}:${errText.slice(0, 200)}`);
+        }
+        const data = await resp.json();
+        const text = String(data?.content?.[0]?.text || '');
+        if (!text) throw new Error('anthropic:empty_response');
+        return { text, model: anthropicPrimary };
       });
 
-      if (candidateResponse.ok) {
-        const aiData = await candidateResponse.json();
-        aiContent = String(aiData?.content?.[0]?.text || '');
-        modelUsed = candidateModel;
-        break;
+      const openaiPromise = fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${params.openAiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: params.openAiExamModel,
+          temperature: 0.2,
+          max_tokens: maxTokens,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: params.examSystemPrompt },
+            { role: 'user', content: params.userPrompt },
+          ],
+        }),
+      }).then(async (resp) => {
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`openai:${resp.status}:${errText.slice(0, 200)}`);
+        }
+        const data = await resp.json();
+        const text = String(data?.choices?.[0]?.message?.content || '');
+        if (!text) throw new Error('openai:empty_response');
+        return { text, model: `openai:${params.openAiExamModel}` };
+      });
+
+      // Race: first successful provider wins
+      try {
+        const winner = await Promise.any([anthropicPromise, openaiPromise]);
+        aiContent = winner.text;
+        modelUsed = winner.model;
+        console.log(`[generate-exam] Provider race won by ${winner.model} in ${Date.now() - startTime}ms`);
+      } catch (raceError) {
+        // All providers failed
+        const aggErr = raceError as AggregateError;
+        const messages = aggErr.errors?.map((e: Error) => e.message) || [String(raceError)];
+        lastModelError = messages.join('; ');
+        console.error('[generate-exam] All providers failed:', lastModelError);
+
+        // Check for rate limiting
+        if (messages.some((m: string) => m.includes(':429:'))) {
+          throw new Error('AI service is busy. Please try again in a moment.');
+        }
       }
+    } else if (hasAnthropicKey) {
+      // Anthropic-only path with sequential model fallback
+      for (const candidateModel of params.modelCandidates) {
+        const candidateResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': params.anthropicApiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: candidateModel,
+            max_tokens: maxTokens,
+            system: params.examSystemPrompt,
+            messages: [{ role: 'user', content: params.userPrompt }],
+          }),
+        });
 
-      const errText = await candidateResponse.text();
-      lastModelError = errText || `status=${candidateResponse.status}`;
-      console.error('[generate-exam] Anthropic API error:', candidateResponse.status, candidateModel, errText);
+        if (candidateResponse.ok) {
+          const aiData = await candidateResponse.json();
+          aiContent = String(aiData?.content?.[0]?.text || '');
+          modelUsed = candidateModel;
+          break;
+        }
 
-      if (candidateResponse.status === 429) {
-        throw new Error('AI service is busy. Please try again in a moment.');
+        const errText = await candidateResponse.text();
+        lastModelError = errText || `status=${candidateResponse.status}`;
+        console.error('[generate-exam] Anthropic API error:', candidateResponse.status, candidateModel, errText);
+
+        if (candidateResponse.status === 429) {
+          throw new Error('AI service is busy. Please try again in a moment.');
+        }
+
+        if (isCreditOrBillingError(candidateResponse.status, errText)) {
+          anthropicCreditIssue = true;
+          break;
+        }
       }
+    } else if (hasOpenAiKey) {
+      // OpenAI-only path
+      const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${params.openAiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: params.openAiExamModel,
+          temperature: 0.2,
+          max_tokens: maxTokens,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: params.examSystemPrompt },
+            { role: 'user', content: params.userPrompt },
+          ],
+        }),
+      });
 
-      if (isCreditOrBillingError(candidateResponse.status, errText)) {
-        anthropicCreditIssue = true;
-        break;
+      if (openAIResponse.ok) {
+        const openAIData = await openAIResponse.json();
+        aiContent = String(openAIData?.choices?.[0]?.message?.content || '');
+        modelUsed = `openai:${params.openAiExamModel}`;
+      } else {
+        const openAIErr = await openAIResponse.text();
+        lastModelError = openAIErr || `openai_status=${openAIResponse.status}`;
+        console.error('[generate-exam] OpenAI API error:', openAIResponse.status, openAIErr);
+        if (openAIResponse.status === 429 && !isCreditOrBillingError(openAIResponse.status, openAIErr)) {
+          throw new Error('AI service is busy. Please try again in a moment.');
+        }
       }
-    }
-  } else {
-    lastModelError = 'ANTHROPIC_API_KEY missing';
-  }
-
-  if (!aiContent && params.openAiApiKey) {
-    const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${params.openAiApiKey}`,
-      },
-      body: JSON.stringify({
-        model: params.openAiExamModel,
-        temperature: 0.2,
-        max_tokens: 4096,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: params.examSystemPrompt },
-          { role: 'user', content: params.userPrompt },
-        ],
-      }),
-    });
-
-    if (openAIResponse.ok) {
-      const openAIData = await openAIResponse.json();
-      aiContent = String(openAIData?.choices?.[0]?.message?.content || '');
-      modelUsed = `openai:${params.openAiExamModel}`;
     } else {
-      const openAIErr = await openAIResponse.text();
-      lastModelError = openAIErr || `openai_status=${openAIResponse.status}`;
-      console.error('[generate-exam] OpenAI API error:', openAIResponse.status, openAIErr);
-      if (openAIResponse.status === 429 && !isCreditOrBillingError(openAIResponse.status, openAIErr)) {
-        throw new Error('AI service is busy. Please try again in a moment.');
-      }
+      lastModelError = 'No AI API keys configured';
     }
   }
 

@@ -43,7 +43,7 @@ export async function attemptExamQualityRepair(params: RepairParams): Promise<st
       body: JSON.stringify({
         model: params.openAiExamModel,
         temperature: 0.1,
-        max_tokens: 4096,
+        max_tokens: 8192,
         response_format: { type: 'json_object' },
         messages: [
           { role: 'system', content: params.examSystemPrompt },
@@ -82,7 +82,7 @@ export async function attemptExamQualityRepair(params: RepairParams): Promise<st
     },
     body: JSON.stringify({
       model: repairModel,
-      max_tokens: 4096,
+      max_tokens: 8192,
       system: params.examSystemPrompt,
       messages: [{ role: 'user', content: repairPrompt }],
     }),

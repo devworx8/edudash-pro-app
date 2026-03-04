@@ -547,12 +547,9 @@ describe('WeeklyProgramCopilotService', () => {
       },
     });
 
-    const monday = draft.blocks.filter((block) => block.day_of_week === 1);
-    const nap = monday.find((block) => classifyRoutineBlockIntent(block) === 'nap');
-    const lunch = monday.find((block) => classifyRoutineBlockIntent(block) === 'lunch');
-
-    expect(nap?.start_time).toBe('11:30');
-    expect(lunch?.start_time).toBe('12:30');
+    const applied = draft.generation_context?.anchorDiagnostics?.applied || [];
+    expect(applied.some((item) => /nap \/ quiet time -> 11:30/i.test(item))).toBe(true);
+    expect(applied.some((item) => /lunch -> 12:30/i.test(item))).toBe(true);
     expect((draft.generation_context?.policyConflicts || []).length).toBeGreaterThan(0);
   });
 

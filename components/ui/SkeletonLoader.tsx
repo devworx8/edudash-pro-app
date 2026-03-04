@@ -1,5 +1,14 @@
-import React, { useEffect, useRef } from 'react'
-import { View, StyleSheet, Animated, Dimensions } from 'react-native'
+import React, { useEffect } from 'react'
+import { View, StyleSheet, Dimensions } from 'react-native'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+  interpolateColor,
+} from 'react-native-reanimated'
 import { useTheme } from '../../contexts/ThemeContext'
 
 interface SkeletonLoaderProps {
@@ -15,31 +24,27 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
   borderRadius = 4,
   style
 }) => {
-  const { theme, isDark } = useTheme()
-  const animatedValue = useRef(new Animated.Value(0)).current
+  const { isDark } = useTheme()
+  const progress = useSharedValue(0)
 
   useEffect(() => {
-    const startAnimation = () => {
-      animatedValue.setValue(0)
-      Animated.timing(animatedValue, {
-        toValue: 1,
-        duration: 1000,
-        useNativeDriver: false,
-      }).start(() => startAnimation())
-    }
-    startAnimation()
-  }, [animatedValue])
+    progress.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 800, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1, // infinite
+      false,
+    )
+  }, [progress])
 
-  const animatedStyle = {
-    backgroundColor: animatedValue.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [
-        isDark ? '#2A2A2A' : '#E5E7EB',
-        isDark ? '#3A3A3A' : '#F3F4F6', 
-        isDark ? '#2A2A2A' : '#E5E7EB'
-      ],
-    }),
-  }
+  const animatedStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(
+      progress.value,
+      [0, 1],
+      isDark ? ['#2A2A2A', '#3D3D3D'] : ['#E5E7EB', '#F3F4F6'],
+    ),
+  }))
 
   return (
     <Animated.View

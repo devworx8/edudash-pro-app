@@ -321,7 +321,43 @@ export default function TeacherDailyProgramPlannerScreen() {
         return;
       }
 
-      const gate = await canUseFeature('lesson_generation', activeWeekdays.length);
+      // Smart conflict detection: skip days that already have generated lessons
+      const weekStart = routine.weekStartDate || new Date().toISOString().slice(0, 10);
+      const weekEnd = routine.weekEndDate || new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const { data: existingLessons } = await supabase
+        .from('lessons')
+        .select('title')
+        .eq('teacher_id', teacherProfile.id)
+        .gte('created_at', weekStart)
+        .lte('created_at', `${weekEnd}T23:59:59Z`)
+        .like('description', '%Auto-generated from weekly routine%');
+
+      const existingDayNames = new Set(
+        (existingLessons || []).map((l) => {
+          const match = String(l.title || '').match(/^(Monday|Tuesday|Wednesday|Thursday|Friday):/i);
+          return match ? match[1] : null;
+        }).filter(Boolean).map((d) => String(d).toLowerCase()),
+      );
+
+      const daysToGenerate = activeWeekdays.filter((day) => {
+        const dayName = (WEEKDAY_LABELS[day] || '').toLowerCase();
+        return !existingDayNames.has(dayName);
+      });
+
+      if (daysToGenerate.length === 0) {
+        toast.info?.('All weekdays already have generated lessons for this week.') ?? toast.warn('All weekdays already have generated lessons.');
+        return;
+      }
+
+      if (daysToGenerate.length < activeWeekdays.length) {
+        const skippedDays = activeWeekdays
+          .filter((d) => !daysToGenerate.includes(d))
+          .map((d) => WEEKDAY_LABELS[d])
+          .join(', ');
+        toast.warn(`Skipping ${skippedDays} (lessons already exist).`);
+      }
+
+      const gate = await canUseFeature('lesson_generation', daysToGenerate.length);
       if (!gate.allowed) {
         const status = gate.status || await getQuotaStatus('lesson_generation');
         Alert.alert(
@@ -376,11 +412,15 @@ export default function TeacherDailyProgramPlannerScreen() {
       let skipped = 0;
       const warnings: string[] = [];
 
-      for (const dayOfWeek of WEEKDAYS_MONDAY_TO_FRIDAY) {
+      // Generate in parallel batches of 2 for speed (avoids rate limits)
+      const BATCH_SIZE = 2;
+      for (let batchStart = 0; batchStart < daysToGenerate.length; batchStart += BATCH_SIZE) {
+        const batch = daysToGenerate.slice(batchStart, batchStart + BATCH_SIZE);
+        const batchResults = await Promise.allSettled(batch.map(async (dayOfWeek) => {
         const dayBlocks = normalizedBlocks.filter((block) => Number(block.day_of_week || 0) === dayOfWeek);
         if (dayBlocks.length === 0) {
           skipped += 1;
-          continue;
+          return { status: 'skipped' as const };
         }
 
         const weekdayLabel = WEEKDAY_LABELS[dayOfWeek] || `Day ${dayOfWeek}`;
@@ -436,16 +476,12 @@ export default function TeacherDailyProgramPlannerScreen() {
         });
 
         if (error) {
-          failed += 1;
-          warnings.push(`${weekdayLabel}: ${formatAIGatewayErrorMessage(error, 'Generation failed')}`);
-          continue;
+          return { status: 'failed' as const, warning: `${weekdayLabel}: ${formatAIGatewayErrorMessage(error, 'Generation failed')}` };
         }
 
         const lessonContent = String(data?.content || '').trim();
         if (!lessonContent) {
-          failed += 1;
-          warnings.push(`${weekdayLabel}: AI returned empty lesson content.`);
-          continue;
+          return { status: 'failed' as const, warning: `${weekdayLabel}: AI returned empty lesson content.` };
         }
 
         const saved = await LessonGeneratorService.saveGeneratedLesson({
@@ -464,12 +500,9 @@ export default function TeacherDailyProgramPlannerScreen() {
         });
 
         if (!saved.success) {
-          failed += 1;
-          warnings.push(`${weekdayLabel}: ${saved.error || 'Could not save generated lesson.'}`);
-          continue;
+          return { status: 'failed' as const, warning: `${weekdayLabel}: ${saved.error || 'Could not save generated lesson.'}` };
         }
 
-        created += 1;
         try {
           await incrementUsage('lesson_generation', 1);
           await logUsageEvent({
@@ -483,7 +516,22 @@ export default function TeacherDailyProgramPlannerScreen() {
         } catch {
           // Usage logging failures are non-fatal for batch lesson generation.
         }
-      }
+        return { status: 'created' as const };
+        }));
+
+        // Tally batch results
+        for (const result of batchResults) {
+          if (result.status === 'rejected') {
+            failed += 1;
+            warnings.push(result.reason?.message || 'Unknown batch error');
+          } else {
+            const val = result.value;
+            if (val.status === 'created') created += 1;
+            else if (val.status === 'failed') { failed += 1; if (val.warning) warnings.push(val.warning); }
+            else if (val.status === 'skipped') skipped += 1;
+          }
+        }
+      } // end batch loop
 
       const summary = `Created ${created} lesson(s), skipped ${skipped}, failed ${failed}.`;
       if (created > 0) {

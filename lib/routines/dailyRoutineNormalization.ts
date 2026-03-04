@@ -751,6 +751,87 @@ function stabilizeDayBlocks(
     }
   }
 
+  if (normalizedPlaced.length > MAX_BLOCKS_PER_DAY) {
+    let mergedTransitions = 0;
+    while (normalizedPlaced.length > MAX_BLOCKS_PER_DAY) {
+      const transitionIdx = normalizedPlaced.findIndex((block, index) => {
+        if (index <= 0 || index >= normalizedPlaced.length - 1) return false;
+        if (block.__locked) return false;
+        if (block.__intent !== 'transition') return false;
+
+        const previous = normalizedPlaced[index - 1];
+        const next = normalizedPlaced[index + 1];
+        if (!previous || !next) return false;
+
+        const disallowedIntents: RoutineBlockIntent[] = ['toilet', 'breakfast', 'lunch', 'nap', 'meal'];
+        const previousCanAbsorb = !previous.__locked && !disallowedIntents.includes(previous.__intent);
+        const nextCanAbsorb = !next.__locked && !disallowedIntents.includes(next.__intent);
+        return previousCanAbsorb || nextCanAbsorb;
+      });
+
+      if (transitionIdx >= 0) {
+        const previous = normalizedPlaced[transitionIdx - 1];
+        const next = normalizedPlaced[transitionIdx + 1];
+        const transition = normalizedPlaced[transitionIdx];
+        const transitionStart = toMinutes(transition.start_time);
+        const transitionEnd = toMinutes(transition.end_time);
+
+        const disallowedIntents: RoutineBlockIntent[] = ['toilet', 'breakfast', 'lunch', 'nap', 'meal'];
+        const previousCanAbsorb = Boolean(
+          previous
+          && !previous.__locked
+          && !disallowedIntents.includes(previous.__intent),
+        );
+        const nextCanAbsorb = Boolean(
+          next
+          && !next.__locked
+          && !disallowedIntents.includes(next.__intent),
+        );
+
+        if (previousCanAbsorb && previous && transitionStart != null && transitionEnd != null) {
+          const previousEnd = toMinutes(previous.end_time);
+          if (previousEnd != null && previousEnd <= transitionStart) {
+            previous.end_time = toHHMM(Math.max(previousEnd, transitionEnd));
+          }
+        } else if (nextCanAbsorb && next && transitionStart != null && transitionEnd != null) {
+          const nextStart = toMinutes(next.start_time);
+          if (nextStart != null && transitionEnd <= nextStart) {
+            next.start_time = toHHMM(transitionStart);
+          }
+        }
+
+        normalizedPlaced.splice(transitionIdx, 1);
+        metrics.dedupedBlocks += 1;
+        mergedTransitions += 1;
+        continue;
+      }
+
+      const rankedCandidates = normalizedPlaced
+        .map((block, index) => ({
+          index,
+          score: block.__locked ? Number.POSITIVE_INFINITY : blockPriority(block),
+          removable: !block.__locked
+            && !['morning_prayer', 'circle', 'breakfast', 'lunch', 'nap', 'toilet'].includes(block.__intent),
+        }))
+        .sort((a, b) => a.score - b.score || a.index - b.index);
+
+      const removable =
+        rankedCandidates.find((candidate) => candidate.removable && Number.isFinite(candidate.score))
+        ?? rankedCandidates.find((candidate) => Number.isFinite(candidate.score));
+
+      if (!removable) break;
+      normalizedPlaced.splice(removable.index, 1);
+      metrics.dedupedBlocks += 1;
+    }
+
+    if (mergedTransitions > 0) {
+      warnings.push(`Day ${day}: merged ${mergedTransitions} transition block(s) to keep the day within 10 blocks.`);
+    }
+    if (normalizedPlaced.length > MAX_BLOCKS_PER_DAY) {
+      warnings.push(`Day ${day}: pruned low-priority blocks to keep the day within 10 blocks.`);
+    }
+  }
+
   const postOverlapCount = countOverlaps(normalizedPlaced);
   if (preOverlapCount > postOverlapCount) {
     metrics.overlapsResolved += (preOverlapCount - postOverlapCount);

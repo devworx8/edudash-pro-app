@@ -149,7 +149,7 @@ export function createWebRTCSession(): WebRTCSession {
           const sessionConfig = {
             type: 'session.update',
             session: {
-              turn_detection: { type: 'server_vad', silence_duration_ms: Math.max(300, Math.min(2000, opts.vadSilenceMs ?? 700)) },
+              turn_detection: { type: 'server_vad', silence_duration_ms: Math.max(300, Math.min(2000, opts.vadSilenceMs ?? 500)) },
               input_audio_transcription: {
                 model: opts.transcriptionModel || 'whisper-1',
                 ...(langToSend ? { language: langToSend } : {}),
