@@ -460,7 +460,8 @@ export function WhatsAppStyleVideoCall({
       console.log('[VideoCall] Removing realtime subscription for call:', activeCallId);
       getSupabase().removeChannel(channel);
     };
-  }, [activeCallId, callState, onClose]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCallId, callState, onClose, cleanupCall]);
 
   // Cleanup call resources
   const cleanupCall = useCallback(async () => {
@@ -871,7 +872,7 @@ export function WhatsAppStyleVideoCall({
             const { data: callerProfile } = await getSupabase()
               .from('profiles')
               .select('first_name, last_name')
-              .eq('auth_user_id', user.id)
+              .eq('id', user.id)
               .maybeSingle();
 
             const callerName = callerProfile
@@ -1886,7 +1887,7 @@ export function WhatsAppStyleVideoCall({
         meetingUrl={meetingUrl || null}
         callerName={userName}
         callType="video"
-        excludeUserIds={remoteParticipants.map(p => p.user_id).filter(Boolean)}
+        excludeUserIds={remoteParticipants.map(p => p.user_id).filter((id): id is string => Boolean(id))}
       />
     </Animated.View>
   );

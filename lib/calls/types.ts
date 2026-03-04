@@ -37,6 +37,7 @@ export interface CallSignalPayload {
   meeting_url?: string;
   call_type?: CallType;
   caller_name?: string;
+  thread_id?: string | null;
 }
 
 export interface CallSignal {
