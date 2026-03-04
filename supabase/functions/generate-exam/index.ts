@@ -40,6 +40,8 @@ import {
   parseUploadedStudyMaterials,
 } from './studyMaterialMemory.ts';
 import { EXAM_SYSTEM_PROMPT } from './examPrompts.ts';
+import { runGenerationEngine } from './generationEngine.ts';
+import { persistExamResult } from './persistResult.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
