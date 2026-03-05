@@ -237,6 +237,8 @@ async function showIncomingCallNotification(callData: IncomingCallNotificationDa
           autoCancel: false,
           // Run as foreground service so Android cannot kill it
           asForegroundService: true,
+          // Auto-dismiss after 30s to avoid stale notifications
+          timeoutAfter: 30000,
           // Full-screen intent for lock screen
           fullScreenAction: {
             id: 'default',

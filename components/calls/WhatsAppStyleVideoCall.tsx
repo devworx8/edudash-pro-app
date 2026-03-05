@@ -408,6 +408,57 @@ export function WhatsAppStyleVideoCall({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Cleanup call resources
+  const cleanupCall = useCallback(async () => {
+    // Release audio mode session
+    if (audioSessionRef.current) {
+      try {
+        await audioSessionRef.current.release();
+        console.log('[VideoCall] Audio session released');
+        audioSessionRef.current = null;
+      } catch (err) {
+        console.warn('[VideoCall] Audio session release error:', err);
+      }
+    }
+    
+    // Stop custom ringback
+    if (ringbackPlayerRef.current) {
+      try {
+        ringbackPlayerRef.current.pause();
+        ringbackPlayerRef.current.remove();
+      } catch (err) {
+        // Ignore errors
+      }
+      ringbackPlayerRef.current = null;
+      ringbackStartedRef.current = false;
+    }
+    
+    // Stop InCallManager
+    if (InCallManager) {
+      try {
+        InCallManager.stopRingback();
+        InCallManager.stop();
+        console.log('[VideoCall] InCallManager stopped');
+      } catch (err) {
+        console.warn('[VideoCall] InCallManager cleanup error:', err);
+      }
+    }
+    
+    // Stop Daily
+    if (dailyRef.current) {
+      try {
+        dailyRef.current.leave();
+        dailyRef.current.destroy();
+      } catch (err) {
+        console.warn('[VideoCall] Cleanup error:', err);
+      }
+      dailyRef.current = null;
+    }
+    
+    // Clear active call ID state
+    setActiveCallId(null);
+  }, []);
+
   // CRITICAL: Sync activeCallId state with callId prop when set (callee case)
   // The prop (not ref) is used because props trigger re-renders when changed
   useEffect(() => {
@@ -462,57 +513,6 @@ export function WhatsAppStyleVideoCall({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCallId, callState, onClose, cleanupCall]);
-
-  // Cleanup call resources
-  const cleanupCall = useCallback(async () => {
-    // Release audio mode session
-    if (audioSessionRef.current) {
-      try {
-        await audioSessionRef.current.release();
-        console.log('[VideoCall] Audio session released');
-        audioSessionRef.current = null;
-      } catch (err) {
-        console.warn('[VideoCall] Audio session release error:', err);
-      }
-    }
-    
-    // Stop custom ringback
-    if (ringbackPlayerRef.current) {
-      try {
-        ringbackPlayerRef.current.pause();
-        ringbackPlayerRef.current.remove();
-      } catch (err) {
-        // Ignore errors
-      }
-      ringbackPlayerRef.current = null;
-      ringbackStartedRef.current = false;
-    }
-    
-    // Stop InCallManager
-    if (InCallManager) {
-      try {
-        InCallManager.stopRingback();
-        InCallManager.stop();
-        console.log('[VideoCall] InCallManager stopped');
-      } catch (err) {
-        console.warn('[VideoCall] InCallManager cleanup error:', err);
-      }
-    }
-    
-    // Stop Daily
-    if (dailyRef.current) {
-      try {
-        dailyRef.current.leave();
-        dailyRef.current.destroy();
-      } catch (err) {
-        console.warn('[VideoCall] Cleanup error:', err);
-      }
-      dailyRef.current = null;
-    }
-    
-    // Clear active call ID state
-    setActiveCallId(null);
-  }, []);
 
   // Ringing timeout - end call if not answered within 30 seconds
   useEffect(() => {
@@ -804,11 +804,15 @@ export function WhatsAppStyleVideoCall({
         callTelemetryRef.current.joinedAt = null;
         callTelemetryRef.current.ringbackStartedAt = null;
         callTelemetryRef.current.firstRemoteAudioAt = null;
-        track('edudash.calls.init_started', { call_type: 'video', is_owner: isOwner });
+        
+        // Detect voice→video upgrade: meetingUrl provided AND isOwner
+        const isUpgradeFromVoice = isOwner && !!meetingUrl;
+        track('edudash.calls.init_started', { call_type: 'video', is_owner: isOwner, is_upgrade: isUpgradeFromVoice });
 
-        setCallState('connecting');
+        // For upgrades, skip connecting/ringing states — the call is already active
+        setCallState(isUpgradeFromVoice ? 'connected' : 'connecting');
         setError(null);
-        setCallDuration(0);
+        if (!isUpgradeFromVoice) setCallDuration(0);
 
         // Get valid session token first
         let { data: sessionData, error: sessionError } = await getSupabase().auth.getSession();
@@ -830,12 +834,28 @@ export function WhatsAppStyleVideoCall({
 
         if (isCleanedUp) return;
 
-        await cleanupCall();
+        // Clean up previous call only if one exists (skip for fresh calls)
+        if (dailyRef.current) {
+          await cleanupCall();
+        }
 
         let roomUrl = meetingUrl;
 
+        // UPGRADE PATH: If meetingUrl is provided with isOwner, this is a
+        // voice→video upgrade. Skip room creation, skip signaling — just join
+        // the existing room with video enabled.
+        const isUpgrade = isOwner && !!roomUrl;
+        if (isUpgrade) {
+          console.log('[VideoCall] 🔄 Voice→Video upgrade: reusing existing room', roomUrl);
+          // Use existing callId if provided (from the upgrade)
+          if (callId && !callIdRef.current) {
+            callIdRef.current = callId;
+            setActiveCallId(callId);
+          }
+        }
+
         if (isOwner && !roomUrl) {
-          // Create a new room via API
+          // Create a new room via API (fresh call, NOT an upgrade)
           const response = await fetch(
             `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/daily-rooms`,
             {
@@ -915,18 +935,22 @@ export function WhatsAppStyleVideoCall({
                 console.warn('[VideoCall] incoming call push dispatch failed:', err);
               });
 
-            await getSupabase().from('call_signals').insert({
-              call_id: newCallId,
-              from_user_id: user.id,
-              to_user_id: calleeId,
-              signal_type: 'offer',
-              payload: {
-                meeting_url: roomUrl,
-                call_type: 'video',
-                caller_name: callerName,
-                thread_id: threadId,
-              },
-            });
+            // OPTIMIZATION: Fire signal insert in parallel with token fetch below
+            const signalPromise = Promise.resolve(
+              getSupabase().from('call_signals').insert({
+                call_id: newCallId,
+                from_user_id: user.id,
+                to_user_id: calleeId,
+                signal_type: 'offer',
+                payload: {
+                  meeting_url: roomUrl,
+                  call_type: 'video',
+                  caller_name: callerName,
+                  thread_id: threadId,
+                },
+              })
+            ).then(() => console.log('[VideoCall] Signal sent'))
+              .catch(err => console.warn('[VideoCall] Signal insert failed:', err));
 
             setCallState('ringing');
           }
@@ -938,12 +962,11 @@ export function WhatsAppStyleVideoCall({
 
         if (isCleanedUp) return;
 
-        // Get room name from URL for token generation
+        // OPTIMIZATION: Fetch token in parallel with Daily.co object creation
         const actualRoomName = roomUrl.split('/').pop() || `video-${Date.now()}`;
+        console.log('[VideoCall] Getting token + creating call object in parallel...');
 
-        // Get meeting token for authentication
-        console.log('[VideoCall] Getting meeting token for room:', actualRoomName);
-        const tokenResponse = await fetch(
+        const tokenPromise = fetch(
           `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/daily-token`,
           {
             method: 'POST',
@@ -957,31 +980,29 @@ export function WhatsAppStyleVideoCall({
               isOwner: isOwner,
             }),
           }
-        );
+        ).then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            console.log('[VideoCall] ✅ Got meeting token');
+            return data?.token as string | null;
+          }
+          console.warn('[VideoCall] Token fetch failed:', res.status);
+          return null;
+        }).catch((err) => {
+          console.warn('[VideoCall] Token fetch error:', err);
+          return null;
+        });
 
-        if (!tokenResponse.ok) {
-          const errorData = await tokenResponse.json();
-          console.warn('[VideoCall] Token fetch failed:', errorData);
-          // Continue without token - room might be public
-        }
-
-        const tokenData = tokenResponse.ok ? await tokenResponse.json() : null;
-        const meetingToken = tokenData?.token;
+        const meetingToken = await tokenPromise;
 
         callTelemetryRef.current.tokenReceivedAt = Date.now();
         track('edudash.calls.token_received', {
           call_type: 'video',
-          ok: tokenResponse.ok,
+          ok: !!meetingToken,
           duration_ms: callTelemetryRef.current.initStartedAt
             ? callTelemetryRef.current.tokenReceivedAt - callTelemetryRef.current.initStartedAt
             : undefined,
         });
-
-        if (meetingToken) {
-          console.log('[VideoCall] ✅ Got meeting token');
-        } else {
-          console.log('[VideoCall] ⚠️ Joining without token (room may be public)');
-        }
 
         if (isCleanedUp) return;
 

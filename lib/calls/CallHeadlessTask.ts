@@ -80,6 +80,29 @@ try {
 // See: https://github.com/react-native-webrtc/react-native-callkeep/issues/866-869
 // Incoming calls now handled via push notifications + WhatsAppStyleIncomingCall UI
 
+/**
+ * Ensure the Notifee foreground service runner is registered.
+ * CRITICAL for killed-app scenario: index.js may not have executed yet,
+ * so the runner from registerCallForegroundService() isn't set up.
+ * Without it, `asForegroundService: true` silently fails.
+ */
+let foregroundServiceRegistered = false;
+function ensureNotifeeServiceRegistered(): void {
+  if (foregroundServiceRegistered) return;
+  if (Platform.OS !== 'android' || !notifee) return;
+  try {
+    notifee.registerForegroundService((notification) => {
+      return new Promise(() => {
+        console.log('[CallHeadlessTask] Foreground service runner started for:', notification.id);
+      });
+    });
+    foregroundServiceRegistered = true;
+    console.log('[CallHeadlessTask] ✅ Foreground service runner registered (headless)');
+  } catch (error) {
+    console.warn('[CallHeadlessTask] Failed to register foreground service:', error);
+  }
+}
+
 // Conditionally import Firebase Messaging
 let messaging: any = null;
 try {
@@ -280,6 +303,8 @@ async function showIncomingCallNotification(callData: IncomingCallData): Promise
           autoCancel: false, // Don't dismiss when tapped
           // Run as foreground service so Android cannot kill it
           asForegroundService: true,
+          // Auto-dismiss after 30s to avoid stale notifications
+          timeoutAfter: 30000,
           // Full-screen intent shows on lock screen
           fullScreenAction: {
             id: 'default',
@@ -437,15 +462,19 @@ async function CallHeadlessTask(remoteMessage: any): Promise<void> {
     callType: callData.call_type,
   });
   
+  // CRITICAL: Register the Notifee foreground service runner BEFORE showing
+  // the notification. When the app is killed, index.js may not have run yet,
+  // so the runner isn't registered. Without it, asForegroundService: true
+  // in the notification silently fails and Android can kill the task.
+  ensureNotifeeServiceRegistered();
+  
   // Save call data for when the app opens
   await savePendingCall(callData);
   
   // Show notification - this is the primary way to handle incoming calls now
-  // CallKeep has been removed due to Expo SDK 54+ compatibility issues
   await showIncomingCallNotification(callData);
   
-  // Log that CallKeep is disabled
-  console.log('[CallHeadlessTask] Call notification shown (CallKeep disabled)');
+  console.log('[CallHeadlessTask] Call notification shown');
 }
 
 /**

@@ -82,25 +82,6 @@ export function WhatsAppStyleIncomingCall({
   const ring2Anim = useRef(new Animated.Value(0)).current;
   const ring3Anim = useRef(new Animated.Value(0)).current;
   const soundRef = useRef<AudioPlayer | null>(null);
-  
-  // Track app state via ref to avoid unnecessary re-renders.
-  // The component already returns null when !isVisible, so we only
-  // need this for the rare case where an incoming call arrives mid-background.
-  const shouldShowUIRef = React.useRef(true);
-  const [shouldShowUI, setShouldShowUI] = React.useState(true);
-  
-  useEffect(() => {
-    const { AppState } = require('react-native');
-    const subscription = AppState.addEventListener('change', (nextAppState: string) => {
-      const prev = shouldShowUIRef.current;
-      const next = nextAppState === 'active';
-      if (prev === next) return; // skip redundant updates
-      shouldShowUIRef.current = next;
-      setShouldShowUI(next);
-    });
-    
-    return () => subscription.remove();
-  }, []);
 
   // Ring pulse animation (WhatsApp style)
   useEffect(() => {
@@ -334,8 +315,7 @@ export function WhatsAppStyleIncomingCall({
     onReject();
   }, [onReject]);
 
-  // Don't show UI when backgrounded - notification handles it
-  if (!isVisible || !shouldShowUI) return null;
+  if (!isVisible) return null;
 
   const getInitials = (name: string) => {
     return name

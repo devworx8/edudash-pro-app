@@ -275,10 +275,10 @@ export function useVoiceCallDaily({
 
     const initializeCall = async () => {
       try {
-        // CRITICAL: Clean up previous call FIRST before setting state
-        // This ensures audioInitializedRef is reset before the audio effect runs
-        // Must await to ensure refs are reset synchronously before state changes
-        await cleanupCall();
+        // Clean up previous call only if one exists (skip for fresh calls)
+        if (dailyRef.current) {
+          await cleanupCall();
+        }
         
         setCallState('connecting');
         setError(null);
@@ -416,19 +416,23 @@ export function useVoiceCallDaily({
             // NOTE: CallKeep removed - library broken with Expo SDK 54+ (duplicate method exports)
             // Incoming calls now rely on push notifications + WhatsAppStyleIncomingCall UI
 
-            // Send signal
-            await getSupabase().from('call_signals').insert({
-              call_id: newCallId,
-              from_user_id: user.id,
-              to_user_id: calleeId,
-              signal_type: 'offer',
-              payload: {
-                meeting_url: roomUrl,
-                call_type: 'voice',
-                caller_name: callerName,
-                thread_id: threadId,
-              },
-            });
+            // OPTIMIZATION: Fire signal insert in parallel with token fetch below
+            // (non-critical for call setup — peer gets notified via push + realtime)
+            const signalPromise = Promise.resolve(
+              getSupabase().from('call_signals').insert({
+                call_id: newCallId,
+                from_user_id: user.id,
+                to_user_id: calleeId,
+                signal_type: 'offer',
+                payload: {
+                  meeting_url: roomUrl,
+                  call_type: 'voice',
+                  caller_name: callerName,
+                  thread_id: threadId,
+                },
+              })
+            ).then(() => console.log('[VoiceCallDaily] Signal sent'))
+              .catch(err => console.warn('[VoiceCallDaily] Signal insert failed:', err));
 
             setCallState('ringing');
           }
@@ -440,43 +444,38 @@ export function useVoiceCallDaily({
 
         if (isCleanedUp) return;
 
-        // Get room name from URL for token generation
+        // OPTIMIZATION: Fetch token in parallel with Daily.co object creation
         const actualRoomName = roomUrl.split('/').pop() || `voice-${Date.now()}`;
+        console.log('[VoiceCallDaily] Getting token + creating call object in parallel...');
 
-        // Get meeting token for authentication
-        console.log('[VoiceCallDaily] Getting meeting token for room:', actualRoomName);
-        let meetingToken: string | null = null;
-        try {
-          const tokenResponse = await fetch(
-            `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/daily-token`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${accessToken}`,
-              },
-              body: JSON.stringify({
-                roomName: actualRoomName,
-                userName: userName,
-                isOwner: isOwner,
-              }),
-            }
-          );
-
-          if (tokenResponse.ok) {
-            const tokenData = await tokenResponse.json();
-            meetingToken = tokenData?.token;
-            console.log('[VoiceCallDaily] ✅ Got meeting token');
-          } else {
-            console.warn('[VoiceCallDaily] Token fetch failed:', await tokenResponse.text());
+        const tokenPromise = fetch(
+          `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/daily-token`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              roomName: actualRoomName,
+              userName: userName,
+              isOwner: isOwner,
+            }),
           }
-        } catch (tokenError) {
-          console.warn('[VoiceCallDaily] Token fetch error:', tokenError);
-        }
+        ).then(async (res) => {
+          if (res.ok) {
+            const data = await res.json();
+            console.log('[VoiceCallDaily] ✅ Got meeting token');
+            return data?.token as string | null;
+          }
+          console.warn('[VoiceCallDaily] Token fetch failed:', res.status);
+          return null;
+        }).catch((err) => {
+          console.warn('[VoiceCallDaily] Token fetch error:', err);
+          return null;
+        });
 
-        if (!meetingToken) {
-          console.log('[VoiceCallDaily] ⚠️ Joining without token (room may be public)');
-        }
+        const meetingToken = await tokenPromise;
 
         if (isCleanedUp) return;
 

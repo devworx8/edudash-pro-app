@@ -1007,6 +1007,10 @@ export function CallProvider({ children }: CallProviderProps) {
   }, [answeringCall, outgoingCall]);
 
   // Switch from voice to video without ending the active call session.
+  // isSwitchingMode is set to true BEFORE the callType changes, and cleared
+  // AFTER a short delay so the video component has mounted and joined.
+  // During isSwitchingMode, participant-left events are suppressed on the
+  // peer side (via the upgrade_to_video signal) to avoid premature call end.
   const switchToVideoCall = useCallback(async () => {
     if (!currentUserId || isSwitchingMode) return;
 
@@ -1045,11 +1049,13 @@ export function CallProvider({ children }: CallProviderProps) {
         return;
       }
 
+      // Update call type to video in DB
       await getSupabase()
         .from('active_calls')
         .update({ call_type: 'video' })
         .eq('call_id', callRecord.call_id);
 
+      // Send upgrade signal to peer
       await getSupabase().from('call_signals').insert({
         call_id: callRecord.call_id,
         from_user_id: currentUserId,
@@ -1061,6 +1067,10 @@ export function CallProvider({ children }: CallProviderProps) {
           thread_id: callRecord.thread_id || outgoingCall?.threadId || answeringCall?.thread_id,
         },
       });
+
+      // CRITICAL: Set callState to 'connected' to prevent the video component
+      // from showing ringback or ringing UI — this is an upgrade, not a new call
+      setCallState('connected');
 
       setOutgoingCall((prev) => {
         if (!prev) return prev;
@@ -1087,7 +1097,9 @@ export function CallProvider({ children }: CallProviderProps) {
       console.warn('[CallProvider] Failed to switch to video:', error);
       toast.error('Could not switch to video. Please try again.');
     } finally {
-      setIsSwitchingMode(false);
+      // Delay clearing isSwitchingMode so the video component has time to mount
+      // and join the room before participant-left events are processed
+      setTimeout(() => setIsSwitchingMode(false), 3000);
     }
   }, [answeringCall, currentUserId, isSwitchingMode, outgoingCall]);
 
