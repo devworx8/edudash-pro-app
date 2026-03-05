@@ -25,6 +25,7 @@ import { ChildSwitcher } from '@/components/dashboard/parent';
 import { ActivityPlayer } from '@/components/activities/ActivityPlayer';
 import { ActivityComplete } from '@/components/activities/ActivityComplete';
 import { useKidVoice } from '@/hooks/useKidVoice';
+import { usePlaygroundAudio } from '@/hooks/usePlaygroundAudio';
 import { track } from '@/lib/analytics';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { DOMAIN_LABELS } from '@/lib/activities/preschoolActivities.data';
@@ -104,6 +105,8 @@ export default function DashPlaygroundScreen() {
     beginActivitySession,
   } = useKidVoice({ tier });
 
+  const audio = usePlaygroundAudio();
+
   const [activeChildId, setActiveChildId] = useState<string | null>(null);
   const [activeAssignment, setActiveAssignment] = useState<AssignedPlaygroundActivity | null>(null);
   const [activityResult, setActivityResult] = useState<ActivityResult | null>(null);
@@ -115,6 +118,30 @@ export default function DashPlaygroundScreen() {
     () => children.find((c: any) => c.id === activeChildId) || children[0],
     [children, activeChildId],
   );
+
+  /** Compute child's age in years for age-based filtering */
+  const childAgeYears = useMemo(() => {
+    if (!activeChild) return null;
+    const dob = (activeChild as any).dateOfBirth || (activeChild as any).date_of_birth;
+    if (dob) {
+      const birthDate = new Date(dob);
+      if (!isNaN(birthDate.getTime())) {
+        const now = new Date();
+        let age = now.getFullYear() - birthDate.getFullYear();
+        const monthDiff = now.getMonth() - birthDate.getMonth();
+        if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthDate.getDate())) {
+          age--;
+        }
+        return age;
+      }
+    }
+    // Fallback: try to infer from grade
+    const grade = (activeChild as any).grade || '';
+    if (/grade\s*r|reception/i.test(grade)) return 5;
+    if (/grade\s*rr|pre-grade|preschool|pre-school/i.test(grade)) return 4;
+    if (/baby|toddler|playgroup/i.test(grade)) return 3;
+    return null;
+  }, [activeChild]);
 
   useEffect(() => {
     if (children.length > 0 && !activeChildId) {
@@ -481,6 +508,20 @@ export default function DashPlaygroundScreen() {
                               <Ionicons name="time-outline" size={12} color="#fff" />
                               <Text style={styles.metaChipText}>{activity.durationMinutes}m</Text>
                             </View>
+                            <View style={styles.metaChip}>
+                              <Ionicons name="people-outline" size={12} color="#fff" />
+                              <Text style={styles.metaChipText}>Age {activity.ageRange}</Text>
+                            </View>
+                            {childAgeYears !== null && (() => {
+                              const [min, max] = activity.ageRange.split('-').map(Number);
+                              const isMatch = childAgeYears >= min && childAgeYears <= max;
+                              return isMatch ? (
+                                <View style={[styles.metaChip, { backgroundColor: 'rgba(16,185,129,0.4)' }]}>
+                                  <Ionicons name="checkmark-circle" size={12} color="#fff" />
+                                  <Text style={styles.metaChipText}>Age match</Text>
+                                </View>
+                              ) : null;
+                            })()}
                             {item.dueDate && (
                               <View style={styles.metaChip}>
                                 <Ionicons name="calendar-outline" size={12} color="#fff" />
@@ -512,6 +553,7 @@ export default function DashPlaygroundScreen() {
               onComplete={handleComplete}
               onClose={handleCloseActivity}
               onSpeak={speak}
+              audio={audio}
             />
           </SafeAreaView>
         )}
