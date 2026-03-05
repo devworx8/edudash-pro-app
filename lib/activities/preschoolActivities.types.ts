@@ -18,7 +18,8 @@ export type ActivityGameType =
   | 'memory_flip'        // Memory card game
   | 'sorting_fun'        // Sort items into categories
   | 'rhyme_time'         // Find the rhyming word
-  | 'size_order';        // Order items by size
+  | 'size_order'         // Order items by size
+  | 'emotion_match';     // Match faces/emojis to feelings
 
 /** Difficulty levels for preschool range */
 export type PreschoolDifficulty = 'easy' | 'medium' | 'tricky';
@@ -52,6 +53,11 @@ export interface MovementStep {
   durationSeconds: number;
 }
 
+/** A memory-flip card pair */
+export interface MemoryPair {
+  emoji: string;
+}
+
 /** A single step/round in an activity */
 export interface ActivityRound {
   id: string;
@@ -64,6 +70,10 @@ export interface ActivityRound {
   confirmOnly?: boolean;
   /** Movement steps for body_move activities */
   movements?: MovementStep[];
+  /** Memory card pairs for memory_flip rounds */
+  memoryPairs?: MemoryPair[];
+  /** Auto-confirm when movement timer completes */
+  timedConfirm?: boolean;
   /** Celebration text when completed */
   celebration?: string;
   /** Hint text shown after wrong answer */

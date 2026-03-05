@@ -2,19 +2,21 @@
  * ActivityPlayer — Interactive Game Component
  *
  * Renders a preschool activity round-by-round with:
+ * - Sound effects via usePlaygroundAudio (correct/wrong/celebrate/tap/whoosh)
  * - Haptic feedback on every interaction (correct/wrong/tap)
  * - Dash speaking bubble — voice + visual presence
+ * - CountdownTimer for body_move timed rounds
+ * - MemoryFlipGrid for real memory_flip card games
+ * - In-session adaptive difficulty (streak-based)
  * - Auto-reveal after 3 wrong attempts (never let child get stuck)
  * - Never-freeze: auto-advance after 8s celebration timeout
  * - Encouragement between rounds
  * - Animated feedback (correct/incorrect/celebration)
  * - Hint system on wrong answers
  * - Star rating at completion
- *
- * ≤400 lines (WARP.md compliant)
  */
 
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -27,9 +29,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCelebration } from '@/hooks/useCelebration';
 import type { PreschoolActivity, ActivityResult, ActivityRound } from '@/lib/activities/preschoolActivities.types';
+import type { UsePlaygroundAudioReturn } from '@/hooks/usePlaygroundAudio';
+import {
+  createAdaptiveState,
+  recordCorrect,
+  recordWrong,
+  applyAdaptive,
+  getAdaptiveLabel,
+  type AdaptiveState,
+} from '@/lib/activities/adaptiveDifficulty';
 import { createActivityPlayerStyles } from './ActivityPlayer.styles';
 import { AnimatedEmojiGrid } from './animated/AnimatedEmojiGrid';
 import { AnimatedOptions } from './animated/AnimatedOptions';
+import { CountdownTimer } from './animated/CountdownTimer';
+import { MemoryFlipGrid } from './animated/MemoryFlipGrid';
 
 /** Max wrong before auto-revealing — child NEVER gets stuck */
 const MAX_WRONG = 3;
@@ -47,9 +60,11 @@ interface ActivityPlayerProps {
   onComplete: (result: ActivityResult) => void;
   onClose: () => void;
   onSpeak?: (text: string) => void;
+  /** Sound effects from usePlaygroundAudio */
+  audio?: UsePlaygroundAudioReturn;
 }
 
-export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak }: ActivityPlayerProps) {
+export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak, audio }: ActivityPlayerProps) {
   const { theme } = useTheme();
   const styles = createActivityPlayerStyles(theme);
   const { successHaptic, errorHaptic, milestoneHaptic, selectionHaptic } = useCelebration();
@@ -64,20 +79,37 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
   const [usedHints, setUsedHints] = useState(false);
   const [dashMessage, setDashMessage] = useState<string | null>(null);
   const [autoRevealed, setAutoRevealed] = useState(false);
+  const [adaptiveState, setAdaptiveState] = useState<AdaptiveState>(createAdaptiveState);
 
   const bounceAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const starAnim = useRef(new Animated.Value(0)).current;
   const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const currentRound = activity.rounds[roundIndex] as ActivityRound | undefined;
+  const rawRound = activity.rounds[roundIndex] as ActivityRound | undefined;
+  // Apply adaptive difficulty to current round's options
+  const currentRound = useMemo(
+    () => rawRound ? applyAdaptive(rawRound, adaptiveState, roundIndex) : undefined,
+    [rawRound, adaptiveState, roundIndex],
+  );
   const isLastRound = roundIndex >= activity.rounds.length - 1;
   const progress = (roundIndex + 1) / activity.rounds.length;
+
+  // Total movement duration for timed confirm rounds
+  const movementDuration = useMemo(() => {
+    if (!currentRound?.movements?.length || !currentRound.timedConfirm) return 0;
+    return currentRound.movements.reduce((sum, m) => sum + m.durationSeconds, 0);
+  }, [currentRound]);
+
+  const isMemoryRound = activity.gameType === 'memory_flip' && !!currentRound?.memoryPairs?.length;
+  const isTimedMovement = movementDuration > 0;
+  const adaptiveLabel = getAdaptiveLabel(adaptiveState);
 
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
+      audio?.stopAll();
     };
   }, []);
 
@@ -100,6 +132,8 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
     setDashMessage(null);
     fadeAnim.setValue(0);
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+    // Whoosh on round transition
+    if (roundIndex > 0) audio?.playSound('whoosh');
   }, [roundIndex]);
 
   // Never-freeze: auto-advance after 8s if celebration is showing
@@ -138,16 +172,18 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
 
   /** Counting mode: Dash says each number as child taps */
   const handleCountTap = useCallback((count: number) => {
+    audio?.playSound('tap');
     if (NUMBER_WORDS[count - 1]) {
       onSpeak?.(NUMBER_WORDS[count - 1] + '!');
     }
-  }, [onSpeak]);
+  }, [onSpeak, audio]);
 
   /** Counting mode: celebrate when all emojis counted */
   const handleCountComplete = useCallback((total: number) => {
+    audio?.playSound('celebrate');
     setDashMessage(`You counted ${total}! 🌟 Now pick the right number!`);
     onSpeak?.(`Great counting! You counted ${total}! Now pick the right number!`);
-  }, [onSpeak]);
+  }, [onSpeak, audio]);
 
   /** Auto-reveal correct answer when child is stuck */
   const autoReveal = () => {
@@ -159,6 +195,7 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
     setCorrectCount(c => c + 1);
     animateBounce();
     successHaptic();
+    audio?.playSound('correct');
     const helpText = "That's okay! The answer is " + correct.label + ". You'll get it next time!";
     setDashMessage(helpText);
     if (onSpeak) onSpeak(helpText);
@@ -175,8 +212,10 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
     if (option.isCorrect) {
       setCorrectCount(c => c + 1);
       setShowCelebration(true);
+      setAdaptiveState(s => recordCorrect(s));
       animateBounce();
       successHaptic();
+      audio?.playSound('correct');
       if (onSpeak && currentRound?.celebration) onSpeak(currentRound.celebration);
     } else {
       const newWrong = wrongAttempts + 1;
@@ -184,12 +223,12 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
       const shouldShowHint = newWrong >= hintThreshold;
       setWrongAttempts(newWrong);
       setShowHint(shouldShowHint);
+      setAdaptiveState(s => recordWrong(s));
       if (shouldShowHint) {
         setUsedHints(true);
       }
       errorHaptic();
-
-      // AnimatedOptions handles its own shake animation
+      audio?.playSound('wrong');
 
       // After MAX_WRONG, auto-reveal so child never gets stuck
       if (newWrong >= MAX_WRONG) {
@@ -205,8 +244,46 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
     setShowCelebration(true);
     animateBounce();
     successHaptic();
+    audio?.playSound('celebrate');
     if (onSpeak && currentRound?.celebration) onSpeak(currentRound.celebration);
   };
+
+  /** Timer auto-confirm for timed movement rounds */
+  const handleTimerComplete = useCallback(() => {
+    audio?.playSound('celebrate');
+    handleConfirm();
+  }, [audio]);
+
+  /** Countdown sound at 3-2-1 */
+  const handleFinalCountdown = useCallback(() => {
+    audio?.playSound('countdown');
+  }, [audio]);
+
+  /** Memory flip grid: card flip sound */
+  const handleMemoryFlip = useCallback(() => {
+    audio?.playSound('flip');
+  }, [audio]);
+
+  /** Memory flip grid: match found */
+  const handleMemoryMatch = useCallback(() => {
+    audio?.playSound('match');
+  }, [audio]);
+
+  /** Memory flip grid: mismatch */
+  const handleMemoryMismatch = useCallback(() => {
+    audio?.playSound('wrong');
+  }, [audio]);
+
+  /** Memory flip grid: all pairs matched */
+  const handleMemoryComplete = useCallback((moves: number) => {
+    setCorrectCount(c => c + 1);
+    setShowCelebration(true);
+    animateBounce();
+    successHaptic();
+    audio?.playSound('celebrate');
+    setDashMessage(`Amazing memory! You did it in ${moves} flips! 🧠`);
+    if (onSpeak && currentRound?.celebration) onSpeak(currentRound.celebration);
+  }, [onSpeak, currentRound, audio]);
 
   const handleNext = () => {
     if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
@@ -219,6 +296,10 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
 
       animateStars();
       milestoneHaptic();
+      // Play star sounds
+      for (let i = 0; i < stars; i++) {
+        setTimeout(() => audio?.playSound('star'), i * 300);
+      }
       if (onSpeak) onSpeak(activity.dashCelebration);
 
       setTimeout(() => {
@@ -254,6 +335,7 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
               <Text style={styles.headerTitle}>{activity.title}</Text>
               <Text style={styles.roundLabel}>
                 Round {roundIndex + 1} of {activity.rounds.length}
+                {adaptiveLabel ? `  •  ${adaptiveLabel}` : ''}
               </Text>
             </View>
           </View>
@@ -281,8 +363,21 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Text style={styles.prompt}>{currentRound.prompt}</Text>
 
+          {/* Memory Flip Grid — real card matching game */}
+          {isMemoryRound && currentRound.memoryPairs && (
+            <MemoryFlipGrid
+              pairs={currentRound.memoryPairs}
+              roundId={currentRound.id}
+              onFlip={handleMemoryFlip}
+              onMatch={handleMemoryMatch}
+              onMismatch={handleMemoryMismatch}
+              onComplete={handleMemoryComplete}
+              disabled={showCelebration}
+            />
+          )}
+
           {/* Emoji Grid — animated per-item with counting support */}
-          {currentRound.emojiGrid && currentRound.emojiGrid.length > 0 && (
+          {!isMemoryRound && currentRound.emojiGrid && currentRound.emojiGrid.length > 0 && (
             <AnimatedEmojiGrid
               emojis={currentRound.emojiGrid}
               gameType={activity.gameType}
@@ -293,7 +388,7 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
             />
           )}
 
-          {/* Movements */}
+          {/* Movements with countdown timer */}
           {currentRound.movements && currentRound.movements.length > 0 && (
             <View style={styles.movementCard}>
               {currentRound.movements.map((m, i) => (
@@ -305,11 +400,20 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
                   </View>
                 </View>
               ))}
+              {/* Countdown timer for timed movement rounds */}
+              {isTimedMovement && !showCelebration && (
+                <CountdownTimer
+                  durationSeconds={movementDuration}
+                  onComplete={handleTimerComplete}
+                  onFinalCountdown={handleFinalCountdown}
+                  color={activity.gradient[0]}
+                />
+              )}
             </View>
           )}
 
           {/* Options — animated with stagger, bounce, shake */}
-          {currentRound.options && !currentRound.confirmOnly && (
+          {currentRound.options && !currentRound.confirmOnly && !isMemoryRound && (
             <AnimatedOptions
               options={currentRound.options}
               roundId={currentRound.id}
@@ -321,8 +425,8 @@ export function ActivityPlayer({ activity, childId, onComplete, onClose, onSpeak
             />
           )}
 
-          {/* Confirm Only */}
-          {currentRound.confirmOnly && !showCelebration && (
+          {/* Confirm Only (only for non-timed rounds — timed auto-confirms) */}
+          {currentRound.confirmOnly && !showCelebration && !isTimedMovement && !isMemoryRound && (
             <TouchableOpacity style={styles.confirmBtn} onPress={handleConfirm} activeOpacity={0.8}>
               <Ionicons name="checkmark-done" size={24} color="#fff" />
               <Text style={styles.confirmText}>Done!</Text>

@@ -36,7 +36,7 @@ const CACHE_DIR = `${FileSystem.cacheDirectory}playground-sounds/`;
 
 // ── Hook ─────────────────────────────────────────────────────
 
-interface UsePlaygroundAudioReturn {
+export interface UsePlaygroundAudioReturn {
   /** Play a bundled sound effect */
   playSound: (name: BundledSoundName) => void;
   /** Convenience shortcuts */
