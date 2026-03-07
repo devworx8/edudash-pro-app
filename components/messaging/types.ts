@@ -35,6 +35,11 @@ export interface Message {
   forwarded_from_id?: string;
   edited_at?: string;
   is_starred?: boolean;
+  is_pinned?: boolean;
+  pinned_at?: string | null;
+  pinned_by?: string | null;
+  scheduled_at?: string | null;
+  is_scheduled?: boolean;
   reply_to_id?: string | null;
   reply_to?: {
     id: string;

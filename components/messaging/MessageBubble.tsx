@@ -43,6 +43,8 @@ interface MessageBubbleProps {
   isLastInGroup?: boolean;
   /** Called when user taps a failed message to retry */
   onRetry?: (localId: string) => void;
+  /** Tap handler for "Seen by X of Y" in group messages */
+  onSeenByPress?: (messageId: string) => void;
   translatedText?: string;
   onToggleTranslation?: () => void;
   showTranslation?: boolean;
@@ -71,6 +73,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   isFirstInGroup = true,
   isLastInGroup = true,
   onRetry,
+  onSeenByPress,
   translatedText,
   onToggleTranslation,
   showTranslation = false,
@@ -181,7 +184,20 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
       !isFirstInGroup && styles.groupedMessage,
     ]}>
       {!isOwn && showSenderName && isFirstInGroup && !!name && (
-        <Text style={styles.name}>{name}</Text>
+        <View style={styles.senderRow}>
+          <Text style={styles.name}>{name}</Text>
+          {msg.sender?.role && ['teacher', 'principal', 'principal_admin', 'admin'].includes(msg.sender.role) && (
+            <View style={[styles.roleBadge, {
+              backgroundColor: msg.sender.role === 'teacher' ? '#dbeafe' : '#ede9fe',
+            }]}>
+              <Text style={[styles.roleBadgeText, {
+                color: msg.sender.role === 'teacher' ? '#2563eb' : '#7c3aed',
+              }]}>
+                {msg.sender.role === 'teacher' ? 'Teacher' : 'Principal'}
+              </Text>
+            </View>
+          )}
+        </View>
       )}
       {msg.forwarded_from_id && (
         <View style={styles.forwardedLabel}>
@@ -415,6 +431,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
                 <Ionicons name="alert-circle" size={14} color="#ef4444" style={{ marginLeft: 2 }} />
               )}
             </View>
+            {/* Seen by X of Y — group messages owned by sender */}
+            {isOwn && otherParticipantIds.length > 1 && !msg._pending && !msg._failed && (() => {
+              const readByOthers = (msg.read_by || []).filter((id: string) => otherParticipantIds.includes(id));
+              if (readByOthers.length === 0) return null;
+              return (
+                <TouchableOpacity
+                  style={styles.seenByRow}
+                  onPress={() => onSeenByPress?.(msg.id)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="eye-outline" size={11} color="rgba(255,255,255,0.5)" />
+                  <Text style={styles.seenByText}>
+                    Seen by {readByOthers.length} of {otherParticipantIds.length}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })()}
           </LinearGradient>
         </Pressable>
       </View>
@@ -560,9 +593,33 @@ const styles = StyleSheet.create({
   name: { 
     fontSize: 12, 
     fontWeight: '600', 
-    marginBottom: 4, 
-    marginLeft: 6,
     color: '#a78bfa',
+  },
+  senderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+    marginLeft: 6,
+    gap: 6,
+  },
+  roleBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  roleBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  seenByRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  seenByText: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
   },
   bubble: { 
     borderRadius: 18, 

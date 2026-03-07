@@ -441,8 +441,9 @@ export function useClassTeacherManagement({
 
     try {
       const schoolId = orgId;
+      const client = assertSupabase();
 
-      const { error } = await assertSupabase()
+      const { data: newClass, error } = await client
         .from('classes')
         .insert({
           name: classForm.name.trim(),
@@ -452,11 +453,38 @@ export function useClassTeacherManagement({
           teacher_id: classForm.teacher_id || null,
           preschool_id: schoolId,
           active: true,
-        });
+        })
+        .select('id')
+        .single();
 
       if (error) {
         showAlert({ title: 'Error', message: error.message || 'Failed to create class', type: 'error' });
         return;
+      }
+
+      // Auto-create class messaging group if org setting is enabled
+      if (newClass?.id) {
+        try {
+          const { data: preschool } = await client
+            .from('preschools')
+            .select('auto_create_class_groups')
+            .eq('id', schoolId)
+            .single();
+
+          if (preschool?.auto_create_class_groups !== false) {
+            const { data: { user } } = await client.auth.getUser();
+            if (user) {
+              await client.rpc('create_class_group', {
+                p_class_id: newClass.id,
+                p_preschool_id: schoolId,
+                p_created_by: user.id,
+                p_group_name: null,
+              });
+            }
+          }
+        } catch {
+          // Non-blocking — class was created successfully
+        }
       }
 
       showAlert({ title: 'Success', message: 'Class created successfully', type: 'success' });

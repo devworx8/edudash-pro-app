@@ -6,7 +6,7 @@
  * Styles extracted → parent-message-thread.styles.ts
  * Hooks: useMessageActions, useThreadOptions (pre-existing)
  */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Platform, KeyboardAvoidingView, ImageBackground, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,7 @@ import {
 } from '@/components/messaging';
 import { SwipeableMessageRow } from '@/components/messaging/SwipeableMessageRow';
 import { MessageScheduler } from '@/components/messaging/MessageScheduler';
+import { TemplatePickerSheet } from '@/components/messaging/TemplatePickerSheet';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useParentMessageThread, type ChatRow } from '@/hooks/useParentMessageThread';
 import { useAutoTranslateTranscribe } from '@/hooks/messaging/useAutoTranslateTranscribe';
@@ -97,6 +98,14 @@ export default function ParentMessageThreadScreen() {
     setReplyingTo: h.setReplyingTo, setOptimisticMsgs: h.setOptimisticMsgs,
     showAlert: ({ title, message, buttons }) => showThreadAlert(title, message, buttons),
   });
+
+  // Pinned messages
+  const pinnedMessages = useMemo(() =>
+    h.allMessages.filter((m: any) => m.is_pinned),
+  [h.allMessages]);
+
+  // Template picker
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
   // Thread options hook
   const routeRecipientId =
@@ -421,7 +430,25 @@ export default function ParentMessageThreadScreen() {
               <Text style={styles.emptySub}>Send your first message to {displayName}</Text>
             </View>
           ) : (
-            <FlashList ref={h.listRef} data={h.rowsAsc} renderItem={renderRow} keyExtractor={item => item.key}
+            <>
+              {pinnedMessages.length > 0 && (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(59,130,246,0.12)', paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}
+                  onPress={() => handleScrollToMessage(pinnedMessages[pinnedMessages.length - 1].id)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pin" size={16} color={theme.primary} />
+                  <Text style={{ color: theme.text, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                    {pinnedMessages[pinnedMessages.length - 1].content}
+                  </Text>
+                  {pinnedMessages.length > 1 && (
+                    <Text style={{ color: theme.textSecondary, fontSize: 11 }}>
+                      +{pinnedMessages.length - 1}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              <FlashList ref={h.listRef} data={h.rowsAsc} renderItem={renderRow} keyExtractor={item => item.key}
               getItemType={item => item.type} onScroll={h.handleScroll} scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
               removeClippedSubviews={false}
@@ -431,6 +458,7 @@ export default function ParentMessageThreadScreen() {
                 keyboardHeight: h.keyboardHeight,
               }}
               contentContainerStyle={[styles.messagesContent, { paddingBottom: 2 }]} />
+            </>
           )}
         </View>
 
@@ -466,6 +494,8 @@ export default function ParentMessageThreadScreen() {
               sending={h.sending} replyingTo={h.replyingTo} onCancelReply={() => h.setReplyingTo(null)}
               onTyping={h.setTyping} editingMessage={actions.editingMessage} onCancelEdit={actions.cancelEdit}
               showAlert={(config) => showThreadAlert(config.title, config.message, config.buttons)}
+              onSchedule={(text) => { h.setPendingScheduleText(text); h.setShowScheduler(true); }}
+              onOpenTemplates={() => setShowTemplatePicker(true)}
             />
           )}
         </View>
@@ -502,15 +532,19 @@ export default function ParentMessageThreadScreen() {
           showAddToWeeklyProgram={showAddToWeeklyProgram}
           onAddToWeeklyProgram={showAddToWeeklyProgram ? handleAddToWeeklyProgram : undefined}
           showConvertToRoutineRequest={showConvertToRoutineRequest}
-          onConvertToRoutineRequest={showConvertToRoutineRequest ? handleConvertToRoutineRequest : undefined} />
+          onConvertToRoutineRequest={showConvertToRoutineRequest ? handleConvertToRoutineRequest : undefined}
+          onPin={actions.handlePinMessage}
+          isPinned={!!(h.selectedMessage as any)?.is_pinned} />
       )}
       <ForwardMessagePicker visible={actions.showForwardPicker} onSelect={actions.confirmForward} onCancel={actions.cancelForward} />
       <ChatSearchOverlay visible={opts.showSearchOverlay} query={opts.searchQuery} results={opts.searchResults as any[]}
         isSearching={opts.isSearching} onSearch={opts.performSearch} onClose={opts.closeSearch} />
       <MediaGalleryView visible={opts.showMediaGallery} threadId={threadId} onClose={opts.closeMediaGallery} />
       <StarredMessagesView visible={opts.showStarredMessages} threadId={threadId} onClose={opts.closeStarredMessages} />
-      <MessageScheduler visible={h.showScheduler} onClose={() => h.setShowScheduler(false)}
-        onSchedule={(scheduledAt) => { toast.success(`Message scheduled for ${scheduledAt.toLocaleString()}`); h.setShowScheduler(false); }} />
+      <MessageScheduler visible={h.showScheduler} onClose={() => { h.setShowScheduler(false); h.setPendingScheduleText(null); }}
+        onSchedule={(scheduledAt) => { h.handleScheduledSend(scheduledAt); }} />
+      <TemplatePickerSheet visible={showTemplatePicker} onClose={() => setShowTemplatePicker(false)}
+        onSelect={(tpl) => { h.handleSend(tpl.body); setShowTemplatePicker(false); }} />
       <AlertModal {...alertProps} />
     </KeyboardAvoidingView>
   );
