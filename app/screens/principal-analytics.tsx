@@ -21,8 +21,10 @@ import {
   type AnalyticsData 
 } from '@/hooks/usePrincipalAnalytics';
 import { exportAnalyticsPdf } from '@/lib/services/analytics/exportAnalyticsPdf';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { getAgeGroupColor } from '@/hooks/student-management/studentHelpers';
+import { clampPercent } from '@/lib/progress/clampPercent';
 // Period options for analytics
 const PERIODS = ['week', 'month', 'quarter', 'year'] as const;
 
@@ -142,7 +144,7 @@ const UpgradeBanner: React.FC<{ theme: any }> = ({ theme }) => (
     </Text>
     <TouchableOpacity 
       style={[styles_static.bannerButton, { backgroundColor: theme.primary }]}
-      onPress={() => router.push('/screens/subscription-upgrade-post?reason=analytics' as any)}
+      onPress={() => navigateToUpgrade({ source: 'principal_analytics', reason: 'feature_needed' })}
     >
       <Text style={styles_static.bannerButtonText}>Upgrade</Text>
     </TouchableOpacity>
@@ -211,17 +213,18 @@ const EnrollmentSection: React.FC<{ analytics: AnalyticsData; theme: any }> = ({
         <Text style={[styles_static.analyticsLabel, { color: theme.textSecondary, marginTop: 8 }]}>
           No age group data available. Configure age groups in Settings.
         </Text>
-      ) : (
-        analytics.enrollment.ageGroupDistribution.map((group, index) => {
-          const color = getAgeGroupColor(group.ageGroup, 'preschool');
-          const pct = Math.round((group.count / activeTotal) * 100);
-          return (
-            <View key={index} style={[styles_static.distributionRow, { marginBottom: 10 }]}>
-              <View style={[styles_static.ageGroupDot, { backgroundColor: color }]} />
-              <Text style={[styles_static.distributionLabel, { color: theme.text, flex: 1 }]}>{group.ageGroup}</Text>
-              <View style={[styles_static.distributionBar, { backgroundColor: theme.border, flex: 2 }]}>
-                <View style={[styles_static.distributionFill, { width: `${pct}%`, backgroundColor: color }]} />
-              </View>
+	      ) : (
+	        analytics.enrollment.ageGroupDistribution.map((group, index) => {
+	          const color = getAgeGroupColor(group.ageGroup, 'preschool');
+	          const pct = Math.round((group.count / activeTotal) * 100);
+          const pctWidth = clampPercent(pct, { source: 'principal-analytics.age-group-distribution' });
+	          return (
+	            <View key={index} style={[styles_static.distributionRow, { marginBottom: 10 }]}>
+	              <View style={[styles_static.ageGroupDot, { backgroundColor: color }]} />
+	              <Text style={[styles_static.distributionLabel, { color: theme.text, flex: 1 }]}>{group.ageGroup}</Text>
+	              <View style={[styles_static.distributionBar, { backgroundColor: theme.border, flex: 2 }]}>
+	                <View style={[styles_static.distributionFill, { width: `${pctWidth}%`, backgroundColor: color }]} />
+	              </View>
               <Text style={[styles_static.distributionValue, { color: theme.text, minWidth: 36, textAlign: 'right' }]}>
                 {group.count} <Text style={{ color: theme.textSecondary, fontSize: 11 }}>({pct}%)</Text>
               </Text>

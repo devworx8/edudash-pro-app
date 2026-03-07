@@ -1,4 +1,4 @@
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import { Platform } from 'react-native';
 import { initPostHog } from '@/lib/posthogClient';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
@@ -57,18 +57,17 @@ function configureSentryForAndroid() {
   
   return {
     dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || '',
-    enableInExpoDevelopment: true,
     debug: process.env.EXPO_PUBLIC_DEBUG_MODE === 'true',
     tracesSampleRate: parseFloat(process.env.EXPO_PUBLIC_SENTRY_TRACE_SAMPLE_RATE || '0.2'),
     
-    // Disable native features since @sentry/react-native is not installed
+    // Native crash/perf collection is intentionally disabled for this release hardening phase.
     enableNative: false,
     enableNativeCrashHandling: false,
     enableAutoPerformanceTracing: false,
     enableAutoBreadcrumbTracking: true,
     
     // PII scrubbing
-beforeSend: (event: any) => {
+    beforeSend: (event: any) => {
       if (!flags.production_db_dev_mode && process.env.EXPO_PUBLIC_PII_SCRUBBING_ENABLED === 'true') {
         // In production, scrub PII from all event data
         event = scrubPII(event);
@@ -76,7 +75,7 @@ beforeSend: (event: any) => {
       return event;
     },
     
-beforeBreadcrumb: (breadcrumb: any) => {
+    beforeBreadcrumb: (breadcrumb: any) => {
       // Scrub PII from breadcrumbs
       if (process.env.EXPO_PUBLIC_PII_SCRUBBING_ENABLED === 'true') {
         breadcrumb = scrubPII(breadcrumb);
@@ -145,13 +144,12 @@ export function initMonitoring(config?: { enableInDevelopment?: boolean; environ
   try {
     Sentry.init({
       dsn,
-      enableInExpoDevelopment: config?.enableInDevelopment ?? __DEV__,
       debug: __DEV__,
       environment: config?.environment || process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
       tracesSampleRate: __DEV__ ? 1.0 : 0.2,
       beforeSend: (event) => {
         // Enhanced PII scrubbing
-        return scrubPII(event);
+        return scrubPII(event) as any;
       },
     });
 
@@ -184,16 +182,11 @@ export function startMonitoring() {
     try {
       const sentryConfig = configureSentryForAndroid();
       Sentry.init(sentryConfig);
-
-      // Add Android-specific context only if Native API exists (no warning logs)
-      const Native = (Sentry as any).Native;
-      if (Native && typeof Native.setContext === 'function') {
-        Native.setContext('testing_environment', {
-          android_only: flags.android_only_mode,
-          production_db_dev: flags.production_db_dev_mode,
-          admob_test_ids: flags.admob_test_ids,
-        });
-      }
+      Sentry.setContext('testing_environment', {
+        android_only: flags.android_only_mode,
+        production_db_dev: flags.production_db_dev_mode,
+        admob_test_ids: flags.admob_test_ids,
+      });
 
       console.log('Sentry initialized');
     } catch (error) {
@@ -248,33 +241,13 @@ export function reportError(error: Error, context?: Record<string, any>) {
     const scrubbed = process.env.EXPO_PUBLIC_PII_SCRUBBING_ENABLED === 'true'
       ? scrubPII(context)
       : context;
-
-    const Native = (Sentry as any).Native;
-    if (Native && typeof Native.captureException === 'function') {
-      Native.captureException(error, {
-        extra: scrubbed,
-        tags: {
-          component: 'app_error',
-          platform: Platform.OS,
-        },
-      });
-    } else if ((Sentry as any).Browser && typeof (Sentry as any).Browser.captureException === 'function') {
-      (Sentry as any).Browser.captureException(error, {
-        extra: scrubbed,
-        tags: {
-          component: 'app_error',
-          platform: Platform.OS,
-        },
-      });
-    } else if (typeof (Sentry as any).captureException === 'function') {
-      (Sentry as any).captureException(error, {
-        extra: scrubbed,
-        tags: {
-          component: 'app_error',
-          platform: Platform.OS,
-        },
-      } as any);
-    }
+    Sentry.captureException(error, {
+      extra: scrubbed,
+      tags: {
+        component: 'app_error',
+        platform: Platform.OS,
+      },
+    } as any);
   } catch (reportingError) {
     if (process.env.EXPO_PUBLIC_DEBUG_MODE === 'true') {
       console.error('Failed to report error:', reportingError);
@@ -297,35 +270,19 @@ export function trackPerformance(eventName: string, duration: number, context?: 
         ? (scrubPII(context) as Record<string, any> || {})
         : context)
       : {};
-
-    const Native = (Sentry as any).Native;
-    if (Native && typeof Native.addBreadcrumb === 'function') {
-      Native.addBreadcrumb({
-        category: 'performance',
-        message: eventName,
-        level: 'info',
-        data: {
-          duration_ms: duration,
-          platform: Platform.OS,
-          ...scrubbed,
-        },
-      });
-    } else if (typeof (Sentry as any).addBreadcrumb === 'function') {
-      (Sentry as any).addBreadcrumb({
-        category: 'performance',
-        message: eventName,
-        level: 'info',
-        data: {
-          duration_ms: duration,
-          platform: Platform.OS,
-          ...scrubbed,
-        },
-      });
-    }
+    Sentry.addBreadcrumb({
+      category: 'performance',
+      message: eventName,
+      level: 'info',
+      data: {
+        duration_ms: duration,
+        platform: Platform.OS,
+        ...scrubbed,
+      },
+    });
   } catch (error) {
     if (process.env.EXPO_PUBLIC_DEBUG_MODE === 'true') {
       console.error('Failed to track performance:', error);
     }
   }
 }
-

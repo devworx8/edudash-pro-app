@@ -102,20 +102,27 @@ jest.mock('expo-router', () => {
   };
 });
 
-// Mock sentry-expo (ESM module that Jest can't transform)
-jest.mock('sentry-expo', () => ({
+// Mock @sentry/react-native (ESM module that Jest can't transform)
+jest.mock('@sentry/react-native', () => ({
   __esModule: true,
   init: jest.fn(),
+  addBreadcrumb: jest.fn(),
   captureException: jest.fn(),
+  captureMessage: jest.fn(),
+  setContext: jest.fn(),
   setUser: jest.fn(),
   Native: {
     addBreadcrumb: jest.fn(),
     setUser: jest.fn(),
     captureException: jest.fn(),
+    captureMessage: jest.fn(),
+    setContext: jest.fn(),
   },
   Browser: {
     addBreadcrumb: jest.fn(),
     setUser: jest.fn(),
+    captureException: jest.fn(),
+    captureMessage: jest.fn(),
   },
 }));
 

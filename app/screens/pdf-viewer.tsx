@@ -37,6 +37,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 interface PDFViewerParams {
   url?: string;
   storagePath?: string;
+  localUri?: string;
   title: string;
   bookId?: string;
 }
@@ -58,10 +59,12 @@ export default function PDFViewerScreen() {
 
   const rawUrl = Array.isArray(params.url) ? params.url[0] : params.url;
   const rawStoragePath = Array.isArray(params.storagePath) ? params.storagePath[0] : params.storagePath;
+  const rawLocalUri = Array.isArray(params.localUri) ? params.localUri[0] : params.localUri;
   const rawTitle = Array.isArray(params.title) ? params.title[0] : params.title;
   const rawBookId = Array.isArray(params.bookId) ? params.bookId[0] : params.bookId;
   const url = typeof rawUrl === 'string' ? rawUrl : '';
   const storagePath = typeof rawStoragePath === 'string' ? rawStoragePath : '';
+  const localUriParam = typeof rawLocalUri === 'string' ? rawLocalUri : '';
   const title = typeof rawTitle === 'string' ? rawTitle : '';
   const bookId = typeof rawBookId === 'string' ? rawBookId : undefined;
 
@@ -202,6 +205,14 @@ export default function PDFViewerScreen() {
     setDownloadProgress(0);
 
     try {
+      const candidateLocalUri = String(localUriParam || '').trim();
+      if (candidateLocalUri) {
+        setRemotePdfUrl(candidateLocalUri);
+        setLocalUri(candidateLocalUri);
+        setLoading(false);
+        return;
+      }
+
       const resolved = await resolveDownloadTarget();
       const targetUrl = resolved.downloadUrl;
       const resolvedStoragePath = resolved.resolvedStoragePath;
@@ -277,6 +288,7 @@ export default function PDFViewerScreen() {
       setLoading(false);
     }
   }, [
+    localUriParam,
     resolveDownloadTarget,
     checkLocalCache,
     getFilenameFromSource,

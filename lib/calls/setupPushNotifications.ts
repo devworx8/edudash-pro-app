@@ -11,6 +11,7 @@ import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getFCMToken, onFCMTokenRefresh } from './CallHeadlessTask';
 import { upsertPushDeviceViaRPC } from '@/lib/notifications';
+import { reactivateUserTokens } from '@/lib/pushTokenUtils';
 
 // Resolve project ID from active EAS runtime config first.
 // Avoid hardcoded legacy project fallback to prevent cross-project token drift.
@@ -173,6 +174,12 @@ export async function savePushTokenToProfile(userId: string): Promise<boolean> {
       console.error('[PushNotifications] Failed to save token to push_devices:', rpcResult.error);
     } else {
       console.log('[PushNotifications] ✅ Push token saved to push_devices');
+      try {
+        // Ensure this device only has the current account active for push delivery.
+        await reactivateUserTokens(userId);
+      } catch (activationError) {
+        console.warn('[PushNotifications] Token activation normalization failed:', activationError);
+      }
     }
 
     // Incoming calls and dispatcher rely on push_devices; mark ready only if that registration succeeded.

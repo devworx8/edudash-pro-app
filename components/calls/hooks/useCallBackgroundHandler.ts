@@ -30,13 +30,16 @@ export const CALL_NOTIFICATION_EVENTS = {
   END_CALL: 'call:notification:end-call',
   MUTE: 'call:notification:mute',
   SPEAKER: 'call:notification:speaker',
+  RETURN: 'call:notification:return',
 } as const;
+
+export const PENDING_RETURN_TO_CALL_KEY = 'edudash_pending_return_to_call';
 
 // Foreground service can be unstable on some Android device/ROM combinations.
 // Keep it opt-in via env flag while preserving call stability.
 // Set EXPO_PUBLIC_CALL_FOREGROUND_SERVICE_ENABLED=true to enable.
 const ENABLE_FOREGROUND_SERVICE =
-  String(process.env.EXPO_PUBLIC_CALL_FOREGROUND_SERVICE_ENABLED || '').toLowerCase() === 'true';
+  String(process.env.EXPO_PUBLIC_CALL_FOREGROUND_SERVICE_ENABLED || 'true').toLowerCase() !== 'false';
 
 // Conditionally import InCallManager
 let InCallManager: any = null;
@@ -192,6 +195,7 @@ export function setupForegroundEventListener(): () => void {
     // Handle notification body press - open call screen
     if (type === EventType.PRESS && detail?.notification?.id === CALL_NOTIFICATION_ID) {
       console.log('[CallBackgroundHandler] Notification pressed - returning to call');
+      DeviceEventEmitter.emit(CALL_NOTIFICATION_EVENTS.RETURN);
     }
   });
   
@@ -292,6 +296,16 @@ export function registerCallNotificationBackgroundHandler(): void {
       
       // Handle notification press - return to app/call screen
       if (type === EventType.PRESS) {
+        if (detail?.notification?.id === CALL_NOTIFICATION_ID) {
+          console.log('[CallBackgroundHandler] Ongoing call notification pressed (background)');
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          await AsyncStorage.setItem(PENDING_RETURN_TO_CALL_KEY, JSON.stringify({
+            action: 'return_to_call',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
         console.log('[CallBackgroundHandler] Notification pressed - app will be opened');
         // If this is an incoming call notification, save it for CallProvider
         const callData = detail?.notification?.data;

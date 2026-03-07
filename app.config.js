@@ -54,6 +54,7 @@ module.exports = ({ config }) => {
   
   // Google Services file: use EAS env file path if available, fallback to local root file
   const googleServicesFile = process.env.GOOGLE_SERVICES_JSON || './google-services.json';
+  const iosGoogleServicesFile = process.env.GOOGLE_SERVICE_INFO_PLIST || config.ios?.googleServicesFile;
 
   // Get AdMob IDs from environment (fallback to test IDs)
   const androidAdMobId = process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID || 'ca-app-pub-3940256099942544~3347511713';
@@ -94,12 +95,17 @@ module.exports = ({ config }) => {
     ios: {
       ...config.ios,
       bundleIdentifier: 'com.k1ngdevops.edudashpro.dev',
+      ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
     },
   } : {
     // Production config also needs googleServicesFile
     android: {
       ...config.android,
       googleServicesFile,
+    },
+    ios: {
+      ...config.ios,
+      ...(iosGoogleServicesFile ? { googleServicesFile: iosGoogleServicesFile } : {}),
     },
   };
 
@@ -126,7 +132,6 @@ module.exports = ({ config }) => {
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       EXPO_PUBLIC_API_BASE: process.env.EXPO_PUBLIC_API_BASE,
       EXPO_PUBLIC_USD_TO_ZAR_RATE: process.env.EXPO_PUBLIC_USD_TO_ZAR_RATE,
-      DAILY_API_KEY: process.env.DAILY_API_KEY,
     },
   };
 };

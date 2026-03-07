@@ -27,14 +27,11 @@ import { useAds } from '@/contexts/AdsContext';
 import SubscriptionAdGate from '@/components/ui/SubscriptionAdGate';
 import AdBannerWithUpgrade from '@/components/ui/AdBannerWithUpgrade';
 import { PLACEMENT_KEYS } from '@/lib/ads/placements';
-
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 // Soil of Africa organization ID
 const SOIL_OF_AFRICA_ORG_ID = '63b6139a-e21f-447c-b322-376fb0828992';
-
 // Soil of Africa logo
 const SOA_LOGO = require('@/assets/branding/png/icon-512.png');
-
 export default function LearnerDashboard() {
   const { user, profile, profileLoading, loading } = useAuth();
   const { theme, isDark } = useTheme();
@@ -42,44 +39,33 @@ export default function LearnerDashboard() {
   const { tier, ready: subscriptionReady, tierSource } = useSubscription();
   const { maybeShowInterstitial } = useAds();
   const styles = React.useMemo(() => createStyles(theme, isDark), [theme, isDark]);
-  
   // State for mobile nav drawer
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
-  
   // Guard against React StrictMode double-invoke in development
   const navigationAttempted = useRef(false);
-
   // Fetch learner dashboard data (aggregated)
   const learnerDashboard = useLearnerDashboard();
   const enrollments = learnerDashboard.data?.enrollments ?? [];
   const progress = learnerDashboard.data?.progress ?? null;
   const submissions = learnerDashboard.data?.submissions ?? [];
-
   // Handle both organization_id (new RBAC) and preschool_id (legacy) fields
   const orgId = extractOrganizationId(profile);
-  
   // Get organization from branding context (fetched from organization_members table)
   const { organizationId: memberOrgId } = useOrganizationBranding();
-  
   // Use memberOrgId (from organization_members) or orgId (from profile) for organization checks
   const effectiveOrgId = memberOrgId || orgId;
-  
   // Fetch organization details
   const { data: organization, isLoading: orgLoading } = useOrganization();
   const orgName = organization?.name || null;
   const orgSlug = organization?.slug || null;
-  
   // Wait for auth and profile to finish loading before making routing decisions
   const isStillLoading = loading || profileLoading;
-
   // CONSOLIDATED NAVIGATION EFFECT: Single source of truth for all routing decisions
   useEffect(() => {
     // Skip if still loading data
     if (isStillLoading) return;
-    
     // Guard against double navigation (React StrictMode in dev)
     if (navigationAttempted.current) return;
-    
     // Decision 1: No user -> sign in
     if (!user) {
       navigationAttempted.current = true;
@@ -90,22 +76,17 @@ export default function LearnerDashboard() {
       }
       return;
     }
-    
     // Decision 2: User exists but no organization -> allow access with join prompt
     // Learners can access dashboard without organization and join via program codes
     // No redirect needed - dashboard will show join prompt
-    
     // Decision 3: All good, stay on dashboard (no navigation needed)
   }, [isStillLoading, user, orgId, profile]);
-
   const handleRefresh = () => {
     learnerDashboard.refetchAll();
   };
-
   // Show interstitial ad after dashboard loads (with delay to not disrupt UX)
   useEffect(() => {
     if (isStillLoading || !user) return;
-    
     // Delay interstitial by 3 seconds after dashboard loads
     const timer = setTimeout(async () => {
       try {
@@ -114,10 +95,8 @@ export default function LearnerDashboard() {
         console.debug('[LearnerDashboard] Failed to show interstitial ad:', error);
       }
     }, 3000);
-
     return () => clearTimeout(timer);
   }, [isStillLoading, user, maybeShowInterstitial]);
-
   // Show loading state while auth/profile is loading
   if (isStillLoading) {
     return (
@@ -130,7 +109,6 @@ export default function LearnerDashboard() {
       </View>
     );
   }
-
   // If auth/profile finished but user is missing, show a minimal fallback while navigation runs.
   if (!user) {
     return (
@@ -143,10 +121,8 @@ export default function LearnerDashboard() {
       </View>
     );
   }
-
   const isLoading = learnerDashboard.isLoading;
   const draftCount = learnerDashboard.data?.draftCount ?? 0;
-
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <Stack.Screen 
@@ -199,7 +175,6 @@ export default function LearnerDashboard() {
           <Ionicons name="person-circle-outline" size={26} color={theme.text} />
         </TouchableOpacity>
       </View>
-      
       <DashboardWallpaperBackground>
       <ScrollView
         contentContainerStyle={styles.content}
@@ -234,14 +209,12 @@ export default function LearnerDashboard() {
             ) : null}
           </View>
         </View>
-
         {/* 
           NOTE: Subscription upgrade flow is currently disabled for learners.
           The PayFast subscription flow is designed for schools/principals, not individual learners.
           TODO: Implement proper learner subscription flow via RevenueCat or organization-based plans.
           When ready, re-enable the SubscriptionStatusCard here.
         */}
-
         {/* AI Quota Display - Assignment Help */}
         {user && (
           <View style={{ marginBottom: 16 }}>
@@ -252,7 +225,6 @@ export default function LearnerDashboard() {
             />
           </View>
         )}
-
         {/* Progress Overview */}
         {progress && (
           <Card padding={20} margin={0} elevation="medium" style={styles.progressCard}>
@@ -280,7 +252,6 @@ export default function LearnerDashboard() {
             </View>
           </Card>
         )}
-
         {/* Quick Actions */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t('learner.quick_actions', { defaultValue: 'Quick Actions' })}</Text>
@@ -303,6 +274,12 @@ export default function LearnerDashboard() {
                 title: t('learner.assignment_help', { defaultValue: 'Assignment Help' }),
                 subtitle: t('learner.get_ai_help', { defaultValue: 'Get AI-powered help' }),
                 onPress: () => router.push('/screens/ai-homework-helper'),
+              },
+              {
+                icon: 'calculator-outline',
+                title: t('learner.calculator', { defaultValue: 'Calculator' }),
+                subtitle: t('learner.calculator_subtitle', { defaultValue: 'Scientific calculator for maths' }),
+                onPress: () => router.push('/(k12)/student/calculator'),
               },
               {
                 icon: 'school-outline',
@@ -361,17 +338,14 @@ export default function LearnerDashboard() {
             ]}
           />
         </View>
-
         {/* Upcoming assignments (derived from submissions until full assignments feed is implemented) */}
         <View style={styles.section}>
           <AssignmentWidget submissions={submissions} onPressSeeAll={() => router.push('/screens/learner/assignments')} />
         </View>
-
         {/* Recent activity */}
         <View style={styles.section}>
           <ActivityFeed submissions={submissions} />
         </View>
-
         {/* Recent Enrollments */}
         {enrollments.length > 0 && (
           <View style={styles.section}>
@@ -390,7 +364,6 @@ export default function LearnerDashboard() {
             ))}
           </View>
         )}
-
         {/* Loading State */}
         {isLoading && enrollments.length === 0 && (
           <View style={styles.empty}>
@@ -398,7 +371,6 @@ export default function LearnerDashboard() {
             <Text style={styles.loadingText}>{t('dashboard.loading', { defaultValue: 'Loading...' })}</Text>
           </View>
         )}
-
         {/* No Organization - Create Membership Prompt (only show if user has no enrollments) */}
         {!orgId && enrollments.length === 0 && !isLoading && (
           <Card padding={32} margin={0} elevation="small" style={{ marginBottom: 24 }}>
@@ -425,7 +397,6 @@ export default function LearnerDashboard() {
             </View>
           </Card>
         )}
-
         {/* Empty State - Has Org but No Enrollments */}
         {!isLoading && orgId && enrollments.length === 0 && (
           <Card padding={32} margin={0} elevation="small">
@@ -452,7 +423,6 @@ export default function LearnerDashboard() {
             </View>
           </Card>
         )}
-
         {/* Banner Ad - Free tier users only */}
         <SubscriptionAdGate>
           <AdBannerWithUpgrade 
@@ -463,7 +433,6 @@ export default function LearnerDashboard() {
         </SubscriptionAdGate>
       </ScrollView>
       </DashboardWallpaperBackground>
-      
       {/* Mobile Navigation Drawer */}
       <MobileNavDrawer
         isOpen={isDrawerOpen}
@@ -474,6 +443,7 @@ export default function LearnerDashboard() {
           { id: 'browse', label: t('learner.browse_programs', { defaultValue: 'Browse Programs' }), icon: 'search', route: '/screens/learner/browse-programs' },
           { id: 'assignments', label: t('learner.submissions', { defaultValue: 'Assignments' }), icon: 'document-text', route: '/screens/learner/submissions' },
           { id: 'ai-help', label: t('learner.assignment_help', { defaultValue: 'Assignment Help' }), icon: 'help-circle', route: '/screens/ai-homework-helper' },
+          { id: 'calculator', label: t('learner.calculator', { defaultValue: 'Calculator' }), icon: 'calculator', route: '/(k12)/student/calculator' },
           { id: 'portfolio', label: t('learner.portfolio', { defaultValue: 'Portfolio' }), icon: 'folder', route: '/screens/learner/portfolio' },
           { id: 'account', label: t('common.account', { defaultValue: 'Account' }), icon: 'person-circle', route: '/screens/account' },
           { id: 'settings', label: t('common.settings', { defaultValue: 'Settings' }), icon: 'settings', route: '/screens/settings' },
@@ -482,7 +452,6 @@ export default function LearnerDashboard() {
     </SafeAreaView>
   );
 }
-
 const createStyles = (theme: ThemeColors, isDark: boolean) => StyleSheet.create({
   container: { 
     flex: 1, 

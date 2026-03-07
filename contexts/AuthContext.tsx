@@ -31,7 +31,7 @@ import { destroyVisibilityHandler } from '@/lib/visibilityHandler';
 import { mark, measure } from '@/lib/perf';
 import { showLoadingOverlay, hideLoadingOverlay } from '@/contexts/LoadingOverlayContext';
 import type { User } from '@supabase/supabase-js';
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import { getPostHog } from '@/lib/posthogClient';
 
 // Extracted modules
@@ -138,7 +138,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try { queryClient.clear(); } catch { /* noop */ }
       Promise.resolve().then(async () => {
         try { await getPostHog()?.reset(); } catch { /* noop */ }
-        try { Sentry.Native.setUser(null as any); } catch { /* noop */ }
+        try { Sentry.setUser(null as any); } catch { /* noop */ }
       });
     } catch (error) {
       logger.error('AuthContext', 'Sign out failed:', error);
@@ -202,6 +202,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (qEvent === 'SIGNED_OUT' && !skipSignOutCleanup) await clearStoredAuthData();
             else if (qEvent !== 'SIGNED_OUT') await syncSessionFromSupabase(qS ?? null);
           } catch { /* noop */ }
+
+          // Single-session: when this device signs in, revoke all other sessions (other devices log out)
+          const singleSessionEnabled = process.env.EXPO_PUBLIC_SINGLE_SESSION_ENABLED !== 'false';
+          if (qEvent === 'SIGNED_IN' && qS?.user?.id && singleSessionEnabled) {
+            assertSupabase()
+              .auth.signOut({ scope: 'others' } as { scope: 'others' })
+              .catch(() => {});
+          }
 
           // Keep biometric session restore reliable by persisting rotated refresh tokens.
           // Supabase refresh tokens rotate; if we don't update biometric storage on TOKEN_REFRESHED,

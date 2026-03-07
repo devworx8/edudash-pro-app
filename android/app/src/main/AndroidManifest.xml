@@ -128,7 +128,7 @@
     </intent>
   </queries>
   <application android:name=".MainApplication" android:label="@string/app_name" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:allowBackup="true" android:theme="@style/AppTheme" android:supportsRtl="true" android:enableOnBackInvokedCallback="false" android:appComponentFactory="androidx.core.app.CoreComponentFactory" android:fullBackupContent="@xml/secure_store_backup_rules" android:dataExtractionRules="@xml/secure_store_data_extraction_rules">
-    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-3940256099942544~3347511713" tools:replace="android:value"/>
+    <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-2808416461095370~5255516826" tools:replace="android:value"/>
     <meta-data android:name="com.google.android.gms.ads.flag.OPTIMIZE_AD_LOADING" android:value="true" tools:replace="android:value"/>
     <meta-data android:name="com.google.android.gms.ads.flag.OPTIMIZE_INITIALIZATION" android:value="true" tools:replace="android:value"/>
     <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" tools:replace="android:value" android:value="incoming-calls"/>
@@ -146,7 +146,7 @@
     <service android:name="expo.modules.audio.service.AudioControlsService" android:foregroundServiceType="mediaPlayback" android:exported="false" tools:replace="android:foregroundServiceType"/>
     <service android:name="expo.modules.audio.service.AudioRecordingService" android:foregroundServiceType="microphone" android:exported="false" tools:replace="android:foregroundServiceType"/>
     <service android:name="app.notifee.core.ForegroundService" android:exported="false" android:foregroundServiceType="phoneCall|mediaPlayback|microphone" tools:replace="android:foregroundServiceType"/>
-    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|locale|layoutDirection" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait" android:supportsPictureInPicture="true" android:resizeableActivity="true">
+    <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|locale|layoutDirection" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="unspecified" android:supportsPictureInPicture="true" android:resizeableActivity="true">
       <intent-filter>
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
@@ -166,6 +166,11 @@
         <category android:name="android.intent.category.DEFAULT"/>
       </intent-filter>
     </activity>
+    <activity
+      android:name="com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity"
+      android:screenOrientation="unspecified"
+      android:resizeableActivity="true"
+      tools:replace="android:screenOrientation,android:resizeableActivity"/>
     <receiver android:name="expo.modules.audio.AudioBroadcastReceiver" tools:node="remove"/>
     <receiver android:name="expo.modules.audio.AudioModule$AudioBroadcastReceiver" tools:node="remove"/>
     <receiver android:name="expo.modules.audio.service.AudioBroadcastReceiver" tools:node="remove"/>

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { createOrganization } from '@/services/OrganizationService';
 import { assertSupabase } from '@/lib/supabase';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
@@ -104,7 +105,7 @@ export default function OrgOnboardingScreen() {
         email: email.trim(),
         password: password,
         options: {
-          emailRedirectTo: 'https://www.edudashpro.org.za/landing?flow=email-confirm',
+          emailRedirectTo: buildEduDashWebUrl('/landing?flow=email-confirm'),
           data: {
             first_name: firstName.trim(),
             last_name: lastName.trim(),

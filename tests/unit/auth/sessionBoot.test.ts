@@ -65,8 +65,8 @@ jest.mock('@/lib/rbac', () => ({
   createPermissionChecker: jest.fn(() => ({})),
 }));
 
-jest.mock('sentry-expo', () => ({
-  Native: { setUser: jest.fn() },
+jest.mock('@sentry/react-native', () => ({
+  setUser: jest.fn(),
 }));
 
 jest.mock('@/contexts/auth/profileUtils', () => ({

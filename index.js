@@ -18,22 +18,23 @@ import Constants from 'expo-constants';
 const isExpoGo = Constants.appOwnership === 'expo';
 
 // Only initialize Sentry if NOT running in Expo Go
-// The sentry-expo import itself triggers native client errors in Expo Go
+// The @sentry/react-native import itself can trigger native client errors in Expo Go
 if (!isExpoGo) {
   const SENTRY_DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
   if (SENTRY_DSN && /https?:\/\/.+@.+/i.test(SENTRY_DSN)) {
     try {
       // Dynamic import to avoid loading native modules in Expo Go
-      const Sentry = require('sentry-expo');
+      const Sentry = require('@sentry/react-native');
       Sentry.init({
         dsn: SENTRY_DSN,
         enableInExpoDevelopment: false,
         debug: __DEV__,
         environment: process.env.EXPO_PUBLIC_ENVIRONMENT || (__DEV__ ? 'development' : 'production'),
         tracesSampleRate: __DEV__ ? 1.0 : 0.2,
-        enableNative: true,
-        enableNativeCrashHandling: true,
-        enableAutoPerformanceTracing: !__DEV__,
+        // Native crash/perf collection is intentionally disabled for now.
+        enableNative: false,
+        enableNativeCrashHandling: false,
+        enableAutoPerformanceTracing: false,
         enableAutoBreadcrumbTracking: true,
       });
       console.log('[Sentry] ✅ Initialized at app entry point');

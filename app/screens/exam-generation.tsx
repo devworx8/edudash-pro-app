@@ -5,7 +5,7 @@
  * Handles loading, error+retry, then renders interactive exam view.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,7 @@ import { examGenerationStyles as styles } from '@/features/exam-generation/style
 import { ExamGenerationReadyContent } from '@/features/exam-generation/ExamGenerationReadyContent';
 import { ExamGenerationStatusState } from '@/features/exam-generation/ExamGenerationStatusState';
 import { useExamGenerationController } from '@/features/exam-generation/useExamGenerationController';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 type ExamGenerationParams = {
   grade?: string;
@@ -30,6 +31,7 @@ type ExamGenerationParams = {
   useTeacherContext?: string;
   fallbackPolicy?: string;
   qualityMode?: string;
+  allowOverQuota?: string;
   draftId?: string;
   examId?: string;
   loadSaved?: string;
@@ -61,30 +63,57 @@ export default function ExamGenerationScreen() {
   const useTeacherContext = toBool(toSafeParam(params.useTeacherContext), true);
   const fallbackPolicy = toSafeParam(params.fallbackPolicy) || 'provider_outage_only';
   const qualityMode = toSafeParam(params.qualityMode) || 'standard';
+  const allowOverQuota = toBool(toSafeParam(params.allowOverQuota), false);
   const draftId = toSafeParam(params.draftId);
   const savedExamId = toSafeParam(params.examId);
   const loadSaved = toBool(toSafeParam(params.loadSaved), false);
   const retakeMode = toBool(toSafeParam(params.retake), false);
 
-  const controller = useExamGenerationController({
-    grade,
-    subject,
-    examType,
-    language,
-    studentId,
-    classId,
-    schoolId,
-    childName,
-    useTeacherContext,
-    fallbackPolicy,
-    qualityMode,
-    draftId,
-    savedExamId,
-    loadSaved,
-  });
+  const controllerParams = useMemo(
+    () => ({
+      grade,
+      subject,
+      examType,
+      language,
+      studentId,
+      classId,
+      schoolId,
+      childName,
+      useTeacherContext,
+      fallbackPolicy,
+      qualityMode,
+      allowOverQuota,
+      draftId,
+      savedExamId,
+      loadSaved,
+    }),
+    [
+      grade,
+      subject,
+      examType,
+      language,
+      studentId,
+      classId,
+      schoolId,
+      childName,
+      useTeacherContext,
+      fallbackPolicy,
+      qualityMode,
+      allowOverQuota,
+      draftId,
+      savedExamId,
+      loadSaved,
+    ],
+  );
+
+  const controller = useExamGenerationController(controllerParams);
 
   const handleBack = useCallback(() => {
     router.back();
+  }, []);
+
+  const handleUpgrade = useCallback(() => {
+    navigateToUpgrade({ source: 'exam_generation', reason: 'limit_reached' });
   }, []);
 
   if (controller.readyWithPayload) {
@@ -163,11 +192,13 @@ export default function ExamGenerationScreen() {
             examQuotaUsed={controller.examQuotaUsed}
             examQuotaWarning={controller.examQuotaWarning}
             generationLabel={controller.generationLabel}
+            isQuotaExhausted={controller.isQuotaExhausted}
             state={controller.state}
             theme={theme}
             useTeacherContext={controller.useTeacherContext}
             onBack={handleBack}
             onRetry={controller.generateExam}
+            onUpgradePlan={handleUpgrade}
           />
         </View>
       </View>

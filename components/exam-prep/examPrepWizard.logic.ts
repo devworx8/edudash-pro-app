@@ -115,6 +115,7 @@ export async function fetchContextPreview(params: {
 }
 
 type BuildGenerationHrefParams = {
+  allowOverQuota?: boolean;
   childName?: string;
   classId?: string;
   customPrompt?: string;
@@ -141,6 +142,7 @@ export function buildGenerationHref(params: BuildGenerationHrefParams): string {
         ? 'strict'
         : 'standard',
     useTeacherContext: params.useTeacherContext,
+    allowOverQuota: params.allowOverQuota,
     draftId: params.draftId,
     contextIds: {
       childName: params.childName,

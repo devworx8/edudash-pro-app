@@ -10,6 +10,15 @@ const crypto = require('crypto');
 const SUPABASE_URL = 'https://lvvvjywrmpcqrpvuptdi.supabase.co';
 const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/payfast-webhook`;
 
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    console.error(`Missing required environment variable: ${name}`);
+    process.exit(1);
+  }
+  return value;
+}
+
 function parseArgs() {
   return Object.fromEntries(process.argv.slice(2).map(a => {
     const m = a.match(/^--([^=]+)=(.*)$/); return m ? [m[1], m[2]] : [a.replace(/^--/, ''), true];
@@ -25,7 +34,12 @@ function encodeRFC1738(v) {
   const scope = (args.scope === 'school' || args.scope === 'user') ? args.scope : 'user';
   const billing = (args.billing === 'annual') ? 'annual' : 'monthly';
 
-  const s = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const supabaseServiceRoleKey = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
+  const merchantId = requireEnv('PAYFAST_MERCHANT_ID');
+  const merchantKey = requireEnv('PAYFAST_MERCHANT_KEY');
+  const passphrase = requireEnv('PAYFAST_PASSPHRASE');
+
+  const s = createClient(SUPABASE_URL, supabaseServiceRoleKey);
 
   // Get plan
   const { data: plan } = await s.from('subscription_plans').select('id').eq('tier', 'premium').maybeSingle();
@@ -53,10 +67,6 @@ function encodeRFC1738(v) {
     payment_method: 'payfast',
     metadata: { scope, billing, seats: 1 },
   });
-
-  const merchantId = process.env.PAYFAST_MERCHANT_ID || '10041710';
-  const merchantKey = process.env.PAYFAST_MERCHANT_KEY || 'fdqf15u93s7qi';
-  const passphrase = (process.env.PAYFAST_PASSPHRASE || 'SuperAdmin-EDU');
 
   const data = {
     merchant_id: merchantId,

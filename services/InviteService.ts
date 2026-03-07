@@ -16,6 +16,7 @@ import { track } from '@/lib/analytics';
 import { Linking, Platform, Share } from 'react-native';
 import { logger } from '@/lib/logger';
 import Constants from 'expo-constants';
+import { getSoaWebBaseUrl } from '@/lib/config/urls';
 
 // Types matching the database enums
 export type JoinRequestType = 
@@ -530,7 +531,7 @@ export class InviteService {
   private static generateInviteLink(code: string | null, token: string | null): string {
     // Get the app scheme and web URL
     const scheme = Constants.expoConfig?.scheme || 'edudashpro';
-    const webUrl = Constants.expoConfig?.extra?.webUrl || 'https://www.soilofafrica.org';
+    const webUrl = getSoaWebBaseUrl();
     
     // For web, use the web URL
     if (Platform.OS === 'web') {

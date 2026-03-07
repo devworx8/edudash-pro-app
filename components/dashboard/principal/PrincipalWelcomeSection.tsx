@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
 import TierBadge from '@/components/ui/TierBadge';
 import { useNotificationCounts } from '@/contexts/NotificationContext';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 const { width } = Dimensions.get('window');
 const isTablet = width > 768;
@@ -87,7 +88,7 @@ export const PrincipalWelcomeSection: React.FC<PrincipalWelcomeSectionProps> = (
                 {subscriptionReady ? (
                   <TouchableOpacity
                     style={styles.manageButton}
-                    onPress={() => router.push('/screens/subscription-upgrade-post')}
+                    onPress={() => navigateToUpgrade({ source: 'principal_welcome_manage' })}
                     activeOpacity={0.85}
                   >
                     <Text style={styles.manageButtonText}>
@@ -150,7 +151,7 @@ export const PrincipalWelcomeSection: React.FC<PrincipalWelcomeSectionProps> = (
             </View>
             <TouchableOpacity
               style={styles.upgradePromptButton}
-              onPress={() => router.push('/screens/subscription-upgrade-post')}
+              onPress={() => navigateToUpgrade({ source: 'principal_welcome_prompt', reason: 'feature_needed' })}
             >
               <Text style={styles.upgradePromptButtonText}>{t('common.upgrade')}</Text>
               <Ionicons name="arrow-forward" size={12} color={theme.primary} />

@@ -18,3 +18,5 @@ export type { VoiceCallTimeoutOptions } from './useVoiceCallTimeout';
 
 export { useCallBackgroundHandler, CALL_NOTIFICATION_EVENTS, setupForegroundEventListener } from './useCallBackgroundHandler';
 export type { CallBackgroundHandlerOptions, CallBackgroundHandlerReturn } from './useCallBackgroundHandler';
+export { useWhatsAppVideoCallControls } from './useWhatsAppVideoCallControls';
+export { useWhatsAppVideoCallAudioEffects } from './useWhatsAppVideoCallAudioEffects';

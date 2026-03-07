@@ -10,6 +10,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { routeAfterLogin, COMMUNITY_SCHOOL_ID } from '@/lib/routeAfterLogin';
 import { useAlertModal } from '@/components/ui/AlertModal';
 import { logger } from '@/lib/logger';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 const ACTIVE_ORG_KEY = '@active_organization';
 
@@ -75,7 +76,7 @@ export default function ParentRegistrationScreen() {
           email: registration.email,
           password: registration.password,
           options: {
-            emailRedirectTo: 'https://www.edudashpro.org.za/landing?flow=email-confirm',
+            emailRedirectTo: buildEduDashWebUrl('/landing?flow=email-confirm'),
             data: {
               first_name: registration.firstName,
               last_name: registration.lastName,

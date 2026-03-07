@@ -5,6 +5,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { renderEduDashProEmail } from '../_shared/edudashproEmail.ts';
+import { buildWebUrl } from '../_shared/urls.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -98,8 +99,8 @@ ${nextStepsBlock}
     preheader: title,
     bodyHtml,
     cta: !data.has_proof
-      ? { label: 'Upload proof of payment', url: 'https://www.edudashpro.org.za/aftercare' }
-      : { label: 'Open EduDash Pro', url: 'https://www.edudashpro.org.za/sign-in' },
+      ? { label: 'Upload proof of payment', url: buildWebUrl('/aftercare') }
+      : { label: 'Open EduDash Pro', url: buildWebUrl('/sign-in') },
     secondaryCta: { label: 'Join WhatsApp Group', url: WHATSAPP_GROUP_LINK },
     supportEmail: SUPPORT_EMAIL,
   });

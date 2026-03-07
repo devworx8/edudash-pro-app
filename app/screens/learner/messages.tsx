@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { assertSupabase } from '@/lib/supabase';
+import { getMessageDisplayText } from '@/lib/utils/messageContent';
 import { useQuery } from '@tanstack/react-query';
 import { useCallSafe } from '@/components/calls/CallProvider';
 
@@ -75,19 +76,20 @@ export default function LearnerMessagesScreen() {
     enabled: !!profile?.id,
   });
 
-  const handleStartChat = (userId: string, userName: string) => {
-    router.push(`/screens/learner/chat?user_id=${userId}&name=${encodeURIComponent(userName)}`);
+  const handleStartChat = (userId: string, userName: string, threadId?: string) => {
+    const threadQuery = threadId ? `&thread_id=${threadId}` : '';
+    router.push(`/screens/learner/chat?user_id=${userId}&name=${encodeURIComponent(userName)}${threadQuery}`);
   };
 
-  const handleVideoCall = (userId: string, userName: string) => {
+  const handleVideoCall = (userId: string, userName: string, threadId?: string) => {
     if (callContext) {
-      callContext.startVideoCall(userId, userName);
+      callContext.startVideoCall(userId, userName, threadId ? { threadId } : undefined);
     }
   };
 
-  const handleVoiceCall = (userId: string, userName: string) => {
+  const handleVoiceCall = (userId: string, userName: string, threadId?: string) => {
     if (callContext) {
-      callContext.startVoiceCall(userId, userName);
+      callContext.startVoiceCall(userId, userName, threadId ? { threadId } : undefined);
     }
   };
 
@@ -130,7 +132,7 @@ export default function LearnerMessagesScreen() {
           return (
             <Card key={thread.id} padding={16} margin={0} elevation="small" style={styles.conversationCard}>
               <TouchableOpacity
-                onPress={() => handleStartChat(otherProfile.id, participantName)}
+                onPress={() => handleStartChat(otherProfile.id, participantName, thread.id)}
                 style={styles.conversationRow}
               >
                 <View style={styles.avatarContainer}>
@@ -155,7 +157,7 @@ export default function LearnerMessagesScreen() {
                   </View>
                   {thread.last_message && (
                     <Text style={styles.lastMessage} numberOfLines={1}>
-                      {thread.last_message.content}
+                      {getMessageDisplayText(thread.last_message.content)}
                     </Text>
                   )}
                   <View style={styles.conversationActions}>
@@ -170,13 +172,13 @@ export default function LearnerMessagesScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.actionButton, { backgroundColor: theme.primary + '20' }]}
-                      onPress={() => handleVoiceCall(otherProfile.id, participantName)}
+                      onPress={() => handleVoiceCall(otherProfile.id, participantName, thread.id)}
                     >
                       <Ionicons name="call" size={18} color={theme.primary} />
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.actionButton, { backgroundColor: theme.primary + '20' }]}
-                      onPress={() => handleVideoCall(otherProfile.id, participantName)}
+                      onPress={() => handleVideoCall(otherProfile.id, participantName, thread.id)}
                     >
                       <Ionicons name="videocam" size={18} color={theme.primary} />
                     </TouchableOpacity>
@@ -231,4 +233,3 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   actionButtonText: { fontSize: 12, fontWeight: '600' },
 });
-

@@ -175,6 +175,19 @@ export const NativeAdCard: React.FC<NativeAdProps> = ({
   }
 
   const unitId = getAdUnitId(placement);
+  if (!unitId) {
+    return showFallback && fallbackContent ? (
+      <FallbackNativeCard
+        content={fallbackContent}
+        theme={theme}
+        onClose={() => {
+          setDismissed(true);
+          onClose?.();
+        }}
+        style={style}
+      />
+    ) : null;
+  }
 
   // Native ad event handlers
   const handleNativeAdLoaded = () => {

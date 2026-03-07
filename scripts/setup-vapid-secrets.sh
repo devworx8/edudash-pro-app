@@ -26,7 +26,7 @@ if [ ! -f "supabase/config.toml" ]; then
 fi
 
 echo "📋 Option 1: Generate NEW keys (RECOMMENDED - old key is compromised)"
-echo "📋 Option 2: Use existing keys temporarily (NOT SECURE)"
+echo "📋 Option 2: Set existing keys manually (if you already generated new keys)"
 echo ""
 read -p "Enter choice (1 or 2): " choice
 
@@ -45,27 +45,30 @@ if [ "$choice" == "1" ]; then
 fi
 
 if [ "$choice" == "2" ]; then
-    # Using old keys TEMPORARILY (for migration only)
     echo ""
-    echo "⚠️  WARNING: Setting TEMPORARY keys (old compromised keys)"
-    echo "   You MUST regenerate keys after migration!"
+    echo "Paste your NEW keys (do not use old/compromised keys):"
     echo ""
-    
-    PUBLIC_KEY="BLXiYIECWZGIlbDkQKKPhl3t86tGQRQDAHnNq5JHMg9btdbjiVgt3rLDeGhz5LveRarHS-9vY84aFkQrfApmNpE"
-    PRIVATE_KEY="qdFtH6ruCn2b__D7mT_vIAJKhK8i9mhYXVeISRKzGpM"
-    
+
+    read -r -p "VAPID_PUBLIC_KEY: " PUBLIC_KEY
+    read -r -p "VAPID_PRIVATE_KEY: " PRIVATE_KEY
+    read -r -p "VAPID_SUBJECT (default: mailto:noreply@edudashpro.org.za): " VAPID_SUBJECT
+
+    if [ -z "$PUBLIC_KEY" ] || [ -z "$PRIVATE_KEY" ]; then
+        echo "❌ Error: Both VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY are required."
+        exit 1
+    fi
+
+    if [ -z "$VAPID_SUBJECT" ]; then
+        VAPID_SUBJECT="mailto:noreply@edudashpro.org.za"
+    fi
+
     echo "Setting secrets..."
     supabase secrets set VAPID_PUBLIC_KEY="$PUBLIC_KEY"
     supabase secrets set VAPID_PRIVATE_KEY="$PRIVATE_KEY"
-    supabase secrets set VAPID_SUBJECT="mailto:noreply@edudashpro.org.za"
+    supabase secrets set VAPID_SUBJECT="$VAPID_SUBJECT"
     
     echo ""
-    echo "✅ Secrets set (using old keys temporarily)"
-    echo ""
-    echo "🚨 CRITICAL TODO: Generate new keys ASAP"
-    echo "   1. Run: npx web-push generate-vapid-keys"
-    echo "   2. Update secrets with new keys"
-    echo "   3. Update service worker registration with new public key"
+    echo "✅ Secrets set (using provided keys)"
     echo ""
 else
     echo "❌ Invalid choice"

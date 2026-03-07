@@ -77,6 +77,9 @@ export default function AdBanner({
   }
 
   const unitId = getAdUnitId(placement);
+  if (!unitId) {
+    return showFallback ? <FallbackBanner theme={theme} placement={placement} /> : null;
+  }
 
   // Handle ad events
   const handleAdLoaded = () => {

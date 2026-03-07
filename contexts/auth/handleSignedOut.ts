@@ -12,7 +12,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { getPostHog } from '@/lib/posthogClient';
 import { track } from '@/lib/analytics';
 import { createPermissionChecker, type EnhancedUserProfile, type PermissionChecker } from '@/lib/rbac';
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import type { User } from '@supabase/supabase-js';
 
 export interface SignedOutDeps {
@@ -72,7 +72,7 @@ export async function handleSignedOut(
 
   // Clear monitoring
   try { await getPostHog()?.reset(); } catch { /* noop */ }
-  try { Sentry.Native.setUser(null as any); } catch { /* noop */ }
+  try { Sentry.setUser(null as any); } catch { /* noop */ }
 
   track('edudash.auth.signed_out', {});
 

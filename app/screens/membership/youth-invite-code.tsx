@@ -17,6 +17,7 @@ import { generateTemporaryPassword } from '@/lib/memberRegistrationUtils';
 import { MEMBER_TYPE_LABELS } from '@/components/membership/types';
 import { useOrganizationRegions, OrganizationRegion } from '@/hooks/membership';
 import Constants from 'expo-constants';
+import { getSoaWebBaseUrl } from '@/lib/config/urls';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { logger } from '@/lib/logger';
@@ -267,9 +268,7 @@ export default function YouthInviteCodeScreen() {
 
   // Generate registration URLs (web and mobile deep link)
   const generateRegistrationUrl = (code: string, memberType: string = 'youth_member'): { webUrl: string; mobileUrl: string } => {
-    // SOA Web Project URL - always use soilofafrica.org for SOA membership invites
-    // This is the dedicated Soil of Africa web portal (soa-web project), not edudashpro.vercel.app
-    const soaWebBaseUrl = 'https://www.soilofafrica.org';
+    const soaWebBaseUrl = getSoaWebBaseUrl();
     const appScheme = Constants.expoConfig?.scheme || 'edudashpro';
     
     // Always use /join route for web registration - it handles all member types and auto-fills the form

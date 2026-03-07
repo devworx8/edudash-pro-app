@@ -23,6 +23,10 @@ out/
 .env.production
 .env.*.local
 .env.eas
+**/.env
+**/.env.local
+**/.env.*
+!.env.example
 
 # Expo
 .expo/
@@ -46,7 +50,11 @@ credentials-backup/
 *.key
 *SERVICE_ROLE_KEY*
 *EDUSITE*KEY*
-t *
+google-services.json
+app/google-services.json
+android/app/google-services.json
+GoogleService-Info.plist
+ios/GoogleService-Info.plist
 
 # Documentation (in separate repo)
 docs/

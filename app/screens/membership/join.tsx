@@ -12,6 +12,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
+import { buildSoaWebUrl } from '@/lib/config/urls';
 import { MemberType, MEMBER_TYPE_LABELS } from '@/components/membership/types';
 import { getDashboardRoute } from '@/lib/memberRegistrationUtils';
 import { useEffect } from 'react';
@@ -415,7 +416,7 @@ export default function JoinByCodeScreen() {
               last_name: formData.last_name.trim(),
               phone: formData.phone.trim(),
             },
-            emailRedirectTo: 'https://www.soilofafrica.org/auth/callback?flow=email-confirm',
+            emailRedirectTo: buildSoaWebUrl('/auth/callback?flow=email-confirm'),
           },
         });
         

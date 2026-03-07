@@ -32,7 +32,7 @@ jobs:
           npm ci
           # Verify critical Android-only testing dependencies
           npm list react-native-google-mobile-ads
-          npm list sentry-expo
+          npm list @sentry/react-native
           npm list posthog-react-native
 
       - name: Environment validation

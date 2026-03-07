@@ -6,14 +6,12 @@
  * 
  * ≤200 lines — WARP-compliant hook.
  */
-
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
 import { isNextGenDashPolicyEnabled } from '@/lib/featureFlags';
 import { filterActionsByDashboardPolicy } from '@/lib/dashboard/dashboardPolicy';
 import type { ResolvedSchoolType } from '@/lib/schoolTypeResolver';
-
 export type ParentQuickAction = {
   id: string;
   title: string;
@@ -23,13 +21,11 @@ export type ParentQuickAction = {
   subtitle?: string;
   glow?: boolean;
 };
-
 export type ActionSection = {
   id: string;
   title: string;
   icon: string;
 };
-
 interface UseParentQuickActionsOptions {
   resolvedSchoolType: ResolvedSchoolType;
   organizationId?: string | null;
@@ -39,7 +35,6 @@ interface UseParentQuickActionsOptions {
   isDashOrbUnlocked: boolean;
   isDev?: boolean;
 }
-
 export function useParentQuickActions(options: UseParentQuickActionsOptions) {
   const { resolvedSchoolType, organizationId, isEarlyLearner, isFeesDueSoon, feesDueSubtitle, isDashOrbUnlocked, isDev } = options;
   const { t } = useTranslation();
@@ -49,12 +44,10 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
     organizationId,
     resolvedSchoolType,
   });
-
   const quickActions = useMemo<ParentQuickAction[]>(() => {
     const dashTutorSubtitle = isDashOrbUnlocked
       ? t('parent.dash_tutor_subtitle', { defaultValue: 'Homework help, practice, and explanations.' })
       : t('parent.dash_tutor_locked', { defaultValue: 'Upgrade to unlock Dash Tutor.' });
-
     const actions: ParentQuickAction[] = [
       { id: 'view_homework', title: t('parent.view_homework', { defaultValue: "My Child's Homework" }), icon: 'book', color: theme.primary },
       { id: 'daily_program', title: t('parent.daily_program', { defaultValue: 'Daily Program' }), icon: 'time-outline', color: '#06B6D4', subtitle: t('parent.daily_program_subtitle', { defaultValue: 'View today\'s school routine and timings' }) },
@@ -73,12 +66,12 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
       { id: 'calls', title: t('parent.calls', { defaultValue: 'Call Teacher' }), icon: 'call', color: '#10B981' },
       { id: 'homework_history', title: t('parent.homework_history', { defaultValue: 'Homework History' }), icon: 'time', color: '#6366F1' },
       { id: 'ai_help', title: t('parent.ai_help', { defaultValue: 'AI Help Hub' }), icon: 'sparkles', color: '#8B5CF6' },
+      { id: 'calculator', title: t('parent.calculator', { defaultValue: 'Calculator' }), icon: 'calculator-outline', color: '#0D9488', subtitle: t('parent.calculator_subtitle', { defaultValue: 'Scientific calculator for maths' }) },
       { id: 'generate_image', title: t('parent.generate_image', { defaultValue: 'Generate Image' }), icon: 'image-outline', color: '#2563EB', subtitle: t('parent.generate_image_subtitle', { defaultValue: 'Create learning visuals with Dash.' }) },
       { id: 'my_exams', title: t('parent.my_exams', { defaultValue: 'My Exams' }), icon: 'school', color: '#F59E0B' },
       { id: 'upgrade', title: t('parent.upgrade', { defaultValue: 'Upgrade Plan' }), icon: 'arrow-up-circle', color: '#10B981', subtitle: t('parent.upgrade_subtitle', { defaultValue: 'Unlock premium features' }) },
       { id: 'payments', title: t('parent.payments', { defaultValue: 'Fees & Payments' }), icon: 'card', color: isFeesDueSoon ? theme.warning : '#059669', subtitle: feesDueSubtitle, glow: isFeesDueSoon },
     ];
-
     if (isDev) {
       actions.push({
         id: 'dev_notifications',
@@ -88,7 +81,6 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
         subtitle: 'Test push + badge',
       });
     }
-
     if (!isDashOrbUnlocked) {
       actions.push({
         id: 'dash_tutor',
@@ -99,7 +91,6 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
         disabled: true,
       });
     }
-
     const shouldShowLearningHub = !isK12School || isEarlyLearner;
     if (shouldShowLearningHub) {
       actions.splice(3, 0, {
@@ -117,7 +108,6 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
         glow: true,
       });
     }
-
     let scopedActions = actions;
     if (isEarlyLearner) {
       const hiddenForPreschool = new Set(['view_grades', 'my_exams', 'homework_history']);
@@ -140,9 +130,7 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
     organizationId,
     resolvedSchoolType,
   ]);
-
   const hasLockedActions = useMemo(() => quickActions.some((a) => a.disabled), [quickActions]);
-
   // ─── Sub-section headings (Mission Control groups) ─────
   const missionControlSections = useMemo<ActionSection[]>(
     () => [
@@ -153,7 +141,6 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
     ],
     [t],
   );
-
   // ─── Group actions into sections ────────────────────────
   const groupedQuickActions = useMemo(() => {
     const groupMap: Record<string, ParentQuickAction[]> = {
@@ -170,6 +157,7 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
       assigned_lessons: 'learning',
       check_attendance: 'learning',
       view_grades: 'learning',
+      calculator: 'learning',
       learning_hub: 'learning',
       dash_playground: 'learning',
       family_activity: 'learning',
@@ -188,15 +176,12 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
       dash_quiz: 'ai',
       dash_study_plan: 'ai',
     };
-
     quickActions.forEach((action) => {
       const groupKey = categoryById[action.id] || 'learning';
       groupMap[groupKey].push(action);
     });
-
     return groupMap;
   }, [quickActions]);
-
   return {
     quickActions,
     hasLockedActions,
@@ -204,5 +189,4 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
     groupedQuickActions,
   };
 }
-
 export default useParentQuickActions;

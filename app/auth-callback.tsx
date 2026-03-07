@@ -116,12 +116,8 @@ export default function AuthCallback() {
         try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
       }
 
-      const routeToResetPassword = (session: { access_token: string; refresh_token: string }) => {
-        const params = new URLSearchParams();
-        params.set('access_token', session.access_token);
-        params.set('refresh_token', session.refresh_token);
-        params.set('type', 'recovery');
-        router.replace(`/reset-password?${params.toString()}` as `/${string}`);
+      const routeToResetPassword = () => {
+        router.replace('/reset-password?type=recovery' as `/${string}`);
       };
 
       const handleEmailChange = async (session: {
@@ -200,17 +196,11 @@ export default function AuthCallback() {
 
           if (isRecovery) {
             try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
-            const session = data.session;
-            if (session?.access_token && session?.refresh_token) {
-              setMessage('Opening password reset...');
-              routeToResetPassword(session);
-            } else {
-              setMessage('Opening password reset...');
-              routeToResetPassword({
-                access_token,
-                refresh_token: refresh_token || '',
-              });
+            if (!data.session) {
+              throw new Error('Recovery session not established. Please retry the recovery link.');
             }
+            setMessage('Opening password reset...');
+            routeToResetPassword();
             return;
           }
 
@@ -316,7 +306,7 @@ export default function AuthCallback() {
           if (isRecoveryCodeExchange && data.session) {
             if (debugEnabled) logger.debug('AuthCallback', 'Recovery detected - routing to native reset-password');
             try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
-            routeToResetPassword(data.session);
+            routeToResetPassword();
             return;
           }
 
@@ -393,7 +383,7 @@ export default function AuthCallback() {
           if (isRecoveryOtp && sessionData.session) {
             if (debugEnabled) logger.debug('AuthCallback', 'Recovery detected - routing to native reset-password');
             try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
-            routeToResetPassword(sessionData.session);
+            routeToResetPassword();
             return;
           }
 

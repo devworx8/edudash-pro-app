@@ -96,6 +96,7 @@ export function K12ParentQuickActions({
 
   const quickActions: QuickAction[] = useMemo(() => [
     { id: 'homework', actionId: 'homework', icon: 'document-text', label: t('dashboard.parent.nav.homework', { defaultValue: 'Homework' }), color: '#06B6D4' },
+    { id: 'calculator', actionId: 'calculator', icon: 'calculator', label: t('dashboard.parent.nav.calculator', { defaultValue: 'Calculator' }), color: '#0D9488' },
     { id: 'messages', actionId: 'messages', icon: 'chatbubbles', label: t('navigation.messages', { defaultValue: 'Messages' }), color: '#3B82F6' },
     { id: 'children', actionId: 'children', icon: 'people', label: t('dashboard.parent.nav.my_children', { defaultValue: 'My Children' }), color: '#4F46E5' },
     { id: 'payments', actionId: 'payments', icon: 'card', label: t('dashboard.parent.nav.payments', { defaultValue: 'Payments' }), color: '#8B5CF6' },

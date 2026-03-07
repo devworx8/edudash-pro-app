@@ -100,7 +100,8 @@ function getLegacyAdUnitId(adType: keyof typeof ADMOB_TEST_IDS.android): string 
       return productionId;
     }
     
-    warn(`AdMob: Production ${adType} ad ID not configured, falling back to test ID`);
+    warn(`AdMob: Production ${adType} ad ID not configured; ad disabled in production mode`);
+    return '';
   }
   
   return ADMOB_TEST_IDS[platform][adType];
@@ -193,6 +194,9 @@ async function loadInterstitialAd(): Promise<boolean> {
   try {
     const { InterstitialAd, AdEventType, TestIds } = require('react-native-google-mobile-ads');
     const adUnitId = resolveAdUnitId('interstitial', undefined, TestIds.INTERSTITIAL);
+    if (!adUnitId) {
+      return false;
+    }
     
     interstitialAd = InterstitialAd.createForAdRequest(adUnitId, {
       requestNonPersonalizedAdsOnly: true,
@@ -238,6 +242,9 @@ export async function showInterstitialAd(placementKey?: string): Promise<boolean
   try {
     const { InterstitialAd, AdEventType, TestIds } = require('react-native-google-mobile-ads');
     const adUnitId = resolveAdUnitId('interstitial', placementKey, TestIds.INTERSTITIAL);
+    if (!adUnitId) {
+      return false;
+    }
     
     const ad = InterstitialAd.createForAdRequest(adUnitId, {
       requestNonPersonalizedAdsOnly: true,
@@ -323,6 +330,9 @@ export async function showAppOpenAd(placementKey?: string): Promise<boolean> {
     }
 
     const adUnitId = resolveAdUnitId('interstitial', placementKey, TestIds.APP_OPEN);
+    if (!adUnitId) {
+      return false;
+    }
 
     const orientation = AppOpenAdOrientation?.PORTRAIT;
     const ad = orientation !== undefined
@@ -412,6 +422,9 @@ export async function showRewardedAd(placementKey?: string): Promise<{
   try {
     const { RewardedAd, RewardedAdEventType, TestIds } = require('react-native-google-mobile-ads');
     const adUnitId = resolveAdUnitId('rewarded', placementKey, TestIds.REWARDED);
+    if (!adUnitId) {
+      return { shown: false, rewarded: false };
+    }
     
     const ad = RewardedAd.createForAdRequest(adUnitId, {
       requestNonPersonalizedAdsOnly: true,

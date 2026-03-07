@@ -1,34 +1,14 @@
-/**
- * WhatsApp-Style Video Call Interface
- * 
- * A modern video call UI inspired by WhatsApp with:
- * - Floating local video preview (draggable)
- * - Minimizable call view
- * - Speaker/Bluetooth toggle
- * - Better control layout
- * - Smooth animations
- */
-
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
-  Dimensions,
   PanResponder,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
   Platform,
-  StatusBar,
-  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import { type AudioPlayer } from 'expo-audio';
 import { assertSupabase } from '@/lib/supabase';
 import { DeviceEventEmitter } from '@/lib/utils/eventEmitter';
 import AudioModeCoordinator, { type AudioModeSession } from '@/lib/AudioModeCoordinator';
@@ -36,82 +16,34 @@ import { getPrewarmedCallObject } from '@/lib/calls/CallPrewarming';
 import { sendIncomingCallPush } from '@/lib/calls/sendIncomingCallPush';
 import { track } from '@/lib/analytics';
 import { usePictureInPicture } from '@/hooks/usePictureInPicture';
-import { useCallBackgroundHandler } from './hooks';
+import {
+  useCallBackgroundHandler,
+  useWhatsAppVideoCallAudioEffects,
+  useWhatsAppVideoCallControls,
+} from './hooks';
 import { AddParticipantModal } from './AddParticipantModal';
 import type { CallState, DailyParticipant } from './types';
+import { LOCAL_VIDEO_WIDTH, MINIMIZED_SIZE, SCREEN_WIDTH } from './WhatsAppStyleVideoCall.constants';
+import { WhatsAppStyleVideoCallPresentation } from './WhatsAppStyleVideoCallPresentation';
+import {
+  Daily,
+  DailyMediaView,
+  InCallManager,
+  RINGBACK_SOUND,
+  VIDEO_CALL_KEEP_AWAKE_TAG,
+} from './WhatsAppStyleVideoCall.runtime';
+import type { WhatsAppStyleVideoCallProps } from './WhatsAppStyleVideoCall.types';
+import {
+  formatCallDuration,
+  getParticipantVideoTrack,
+  logRenderDecision,
+  resolveMainVideoTrack,
+} from './WhatsAppStyleVideoCall.helpers';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
-// NOTE: Promise.any polyfill is loaded via Metro's getModulesRunBeforeMainModule
-// in metro.config.js, which ensures it runs BEFORE any module initialization.
-// No need for inline polyfill here.
-
 // Lazy getter to avoid accessing supabase at module load time
 const getSupabase = () => assertSupabase();
-
-// KeepAwake tag for video calls
-const VIDEO_CALL_KEEP_AWAKE_TAG = 'active-video-call';
-
-// InCallManager for audio routing and ringback tones
-let InCallManager: any = null;
-try {
-  InCallManager = require('react-native-incall-manager').default;
-} catch (error) {
-  console.warn('[VideoCall] InCallManager not available:', error);
-}
-
-// CRITICAL: Preload ringback sound at module level for instant playback
-// This ensures the audio is ready when making outgoing calls
-let RINGBACK_SOUND: any = null;
-let RINGBACK_LOAD_ERROR: string | null = null;
-try {
-  RINGBACK_SOUND = require('@/assets/sounds/ringback.mp3');
-  console.log('[VideoCall] ✅ Ringback sound loaded at module level');
-} catch (error) {
-  RINGBACK_LOAD_ERROR = String(error);
-  console.warn('[VideoCall] ❌ Failed to load ringback sound:', error);
-  // Try fallback to notification sound
-  try {
-    RINGBACK_SOUND = require('@/assets/sounds/notification.wav');
-    RINGBACK_LOAD_ERROR = null;
-    console.log('[VideoCall] ✅ Using notification.wav as ringback fallback');
-  } catch (e2) {
-    console.error('[VideoCall] ❌ Fallback sound also failed:', e2);
-  }
-}
-
-// Note: Daily.co React Native SDK is conditionally imported
-let Daily: any = null;
-let DailyMediaView: any = null;
-try {
-  const dailyModule = require('@daily-co/react-native-daily-js');
-  Daily = dailyModule.default;
-  DailyMediaView = dailyModule.DailyMediaView;
-} catch (error) {
-  console.warn('[VideoCall] Daily.co SDK not available:', error);
-}
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const LOCAL_VIDEO_WIDTH = 120;
-const LOCAL_VIDEO_HEIGHT = 160;
-const MINIMIZED_SIZE = 100;
-
-interface WhatsAppStyleVideoCallProps {
-  isOpen: boolean;
-  onClose: () => void;
-  roomName?: string;
-  userName?: string;
-  userPhoto?: string | null;
-  remoteUserName?: string;
-  remoteUserPhoto?: string | null;
-  isOwner?: boolean;
-  calleeId?: string;
-  callId?: string;
-  meetingUrl?: string;
-  threadId?: string;
-  onCallStateChange?: (state: CallState) => void;
-  onMinimize?: () => void;
-}
 
 export function WhatsAppStyleVideoCall({
   isOpen,
@@ -160,6 +92,7 @@ export function WhatsAppStyleVideoCall({
   const callTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const controlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ringingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cleanupInProgressRef = useRef(false);
   const audioSessionRef = useRef<AudioModeSession | null>(null);
   // Custom ringback via expo-audio (fallback when InCallManager ringback fails)
   const ringbackPlayerRef = useRef<AudioPlayer | null>(null);
@@ -379,7 +312,6 @@ export function WhatsAppStyleVideoCall({
     }
   }, [callState]);
 
-  // Keep screen awake during video call
   useEffect(() => {
     const isCallActive = callState === 'connecting' || callState === 'ringing' || callState === 'connected';
     
@@ -396,20 +328,14 @@ export function WhatsAppStyleVideoCall({
     };
   }, [isOpen, callState]);
 
-  // Format duration as MM:SS or HH:MM:SS
-  const formatDuration = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    if (hrs > 0) {
-      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const formatDuration = formatCallDuration;
 
-  // Cleanup call resources
   const cleanupCall = useCallback(async () => {
+    if (cleanupInProgressRef.current) {
+      return;
+    }
+    cleanupInProgressRef.current = true;
+
     // Release audio mode session
     if (audioSessionRef.current) {
       try {
@@ -457,10 +383,9 @@ export function WhatsAppStyleVideoCall({
     
     // Clear active call ID state
     setActiveCallId(null);
+    cleanupInProgressRef.current = false;
   }, []);
 
-  // CRITICAL: Sync activeCallId state with callId prop when set (callee case)
-  // The prop (not ref) is used because props trigger re-renders when changed
   useEffect(() => {
     if (callId && !activeCallId) {
       console.log('[VideoCall] Syncing activeCallId from prop:', callId);
@@ -472,8 +397,6 @@ export function WhatsAppStyleVideoCall({
     }
   }, [callId, activeCallId]);
 
-  // Listen for call status changes (other party hung up or rejected)
-  // CRITICAL: Uses activeCallId STATE (not ref) to properly trigger re-subscription
   useEffect(() => {
     if (!activeCallId || callState === 'ended') {
       console.log('[VideoCall] No activeCallId or call ended, skipping realtime subscription');
@@ -514,7 +437,6 @@ export function WhatsAppStyleVideoCall({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCallId, callState, onClose, cleanupCall]);
 
-  // Ringing timeout - end call if not answered within 30 seconds
   useEffect(() => {
     if (callState === 'ringing' && isOwner) {
       console.log('[VideoCall] Starting ring timeout:', RING_TIMEOUT_MS, 'ms');
@@ -583,207 +505,17 @@ export function WhatsAppStyleVideoCall({
     setRemoteParticipants(remote);
   }, []);
 
-  // Continuous earpiece enforcement during ringing/connecting
-  // This prevents Android from auto-switching to speaker during ringback
-  const earpieceEnforcerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  
-  useEffect(() => {
-    if (!InCallManager) return;
-    
-    const shouldEnforceEarpiece = (callState === 'connecting' || callState === 'ringing') && !isSpeakerOn;
-    
-    if (shouldEnforceEarpiece) {
-      // Single enforcement on state transition — no interval loop
-      // to avoid disrupting expo-audio ringback pipeline
-      try {
-        InCallManager.setForceSpeakerphoneOn(false);
-        console.log('[VideoCall] Earpiece enforced on state transition');
-      } catch (e) {
-        console.warn('[VideoCall] Earpiece enforcement failed:', e);
-      }
-
-      earpieceEnforcerRef.current = setInterval(() => {
-        if (!isSpeakerOn && (callState === 'connecting' || callState === 'ringing')) {
-          try {
-            InCallManager.setForceSpeakerphoneOn(false);
-          } catch {
-            // best-effort route stabilization
-          }
-        }
-      }, 1200);
-    }
-    
-    return () => {
-      if (earpieceEnforcerRef.current) {
-        clearInterval(earpieceEnforcerRef.current);
-        earpieceEnforcerRef.current = null;
-      }
-    };
-  }, [callState, isSpeakerOn]);
-
-  /**
-   * Play ringback tone for the caller while waiting for callee to answer.
-   * We use expo-audio for stable earpiece routing on Android while ringing.
-   */
-  const playCustomRingback = useCallback(async (retryAttempt = 0) => {
-    if (ringbackStartedRef.current && ringbackPlayerRef.current?.playing) {
-      console.log('[VideoCall] Ringback already playing, skipping');
-      return;
-    }
-    
-    console.log('[VideoCall] 🔊 playCustomRingback called', {
-      attempt: retryAttempt + 1,
-      hasAsset: !!RINGBACK_SOUND,
-    });
-    
-    // Use expo-audio with bundled sound for stable earpiece routing.
-    if (!RINGBACK_SOUND) {
-      console.error('[VideoCall] ❌ No ringback sound available');
-      return;
-    }
-    
-    const MAX_RETRIES = 3;
-    const retryDelay = Math.min(500 * Math.pow(2, retryAttempt), 2000);
-    
-    try {
-      console.log(`[VideoCall] 🔊 Starting ringback via expo-audio fallback (attempt ${retryAttempt + 1}/${MAX_RETRIES})`);
-      
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        interruptionMode: 'duckOthers',
-        allowsRecording: true,
-        shouldPlayInBackground: true,
-        shouldRouteThroughEarpiece: true,
-      });
-      
-      const player = createAudioPlayer(RINGBACK_SOUND);
-      player.loop = true;
-      player.volume = 1.0;
-      ringbackPlayerRef.current = player;
-      
-      player.play();
-      await new Promise(resolve => setTimeout(resolve, 200));
-      
-      ringbackStartedRef.current = true;
-      if (!callTelemetryRef.current.ringbackStartedAt) {
-        callTelemetryRef.current.ringbackStartedAt = Date.now();
-        track('edudash.calls.ringback_started', { call_type: 'video', source: 'expo-audio' });
-      }
-      console.log('[VideoCall] ✅ expo-audio ringback playing (fallback)');
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    } catch (error) {
-      console.error(`[VideoCall] ❌ expo-audio ringback failed (attempt ${retryAttempt + 1}):`, error);
-      ringbackStartedRef.current = false;
-      ringbackPlayerRef.current = null;
-      
-      if (retryAttempt < MAX_RETRIES - 1) {
-        console.log(`[VideoCall] 🔄 Retrying ringback in ${retryDelay}ms...`);
-        setTimeout(() => {
-          playCustomRingback(retryAttempt + 1);
-        }, retryDelay);
-      }
-    }
-  }, []);
-
-  /**
-   * Stop custom ringback
-   */
-  const stopCustomRingback = useCallback(() => {
-    if (ringbackStartedRef.current) {
-      const startedAt = callTelemetryRef.current.ringbackStartedAt;
-      track('edudash.calls.ringback_stopped', {
-        call_type: 'video',
-        duration_ms: typeof startedAt === 'number' ? Date.now() - startedAt : undefined,
-      });
-      callTelemetryRef.current.ringbackStartedAt = null;
-    }
-    // Stop expo-audio player if used
-    if (ringbackPlayerRef.current) {
-      try {
-        ringbackPlayerRef.current.pause();
-        ringbackPlayerRef.current.remove();
-      } catch (e) {
-        // Ignore errors
-      }
-      ringbackPlayerRef.current = null;
-    }
-    ringbackStartedRef.current = false;
-  }, []);
-
-  // InCallManager owns audio session; ringback audio is played via expo-audio.
-  useEffect(() => {
-    if (callState === 'connecting' || callState === 'ringing') {
-      const initAudio = async () => {
-        // STEP 1: Start InCallManager first to acquire audio session
-        if (InCallManager) {
-          try {
-            InCallManager.start({ 
-              media: 'audio',
-              auto: false,
-              ringback: ''
-            });
-            InCallManager.setForceSpeakerphoneOn(false);
-            setIsSpeakerOn(false);
-            InCallManager.setKeepScreenOn(true);
-            console.log('[VideoCall] InCallManager started');
-          } catch (err) {
-            console.warn('[VideoCall] Failed to start InCallManager:', err);
-          }
-        }
-
-        // STEP 2: Small delay to let audio session stabilize
-        await new Promise(resolve => setTimeout(resolve, 150));
-
-        // STEP 3: Set expo-audio mode AFTER InCallManager owns the session
-        try {
-          await setAudioModeAsync({
-            playsInSilentMode: true,
-            interruptionMode: 'duckOthers',
-            allowsRecording: true,
-            shouldPlayInBackground: true,
-            shouldRouteThroughEarpiece: true,
-          });
-        } catch (err) {
-          console.warn('[VideoCall] setAudioModeAsync failed:', err);
-        }
-
-        // STEP 4: Play ringback only for caller
-        if (isOwner) {
-          playCustomRingback();
-        }
-      };
-
-      initAudio();
-    } else if (callState === 'connected') {
-      // Stop custom ringback when connected
-      stopCustomRingback();
-      
-      if (InCallManager) {
-        try {
-          // Apply current speaker state (earpiece by default, unless user toggled)
-          InCallManager.setForceSpeakerphoneOn(isSpeakerOn);
-          console.log('[VideoCall] Call connected, audio on:', isSpeakerOn ? 'speaker' : 'earpiece');
-        } catch (err) {
-          console.warn('[VideoCall] Failed to update speaker state:', err);
-        }
-      }
-    } else if (callState === 'ended' || callState === 'failed') {
-      // Stop ringback on call end
-      stopCustomRingback();
-    }
-
-    return () => {
-      // Cleanup on unmount
-      stopCustomRingback();
-      if (InCallManager) {
-        try {
-          InCallManager.stop();
-        } catch (err) {
-          // Ignore cleanup errors
-        }
-      }
-    };
-  }, [callState, isOwner, isSpeakerOn, playCustomRingback, stopCustomRingback]);
+  useWhatsAppVideoCallAudioEffects({
+    callState,
+    isOwner,
+    isSpeakerOn,
+    inCallManager: InCallManager,
+    ringbackSound: RINGBACK_SOUND,
+    ringbackPlayerRef,
+    ringbackStartedRef,
+    callTelemetryRef,
+    setIsSpeakerOn,
+  });
 
   // Initialize call
   useEffect(() => {
@@ -795,6 +527,20 @@ export function WhatsAppStyleVideoCall({
     }
 
     let isCleanedUp = false;
+
+    const getErrorText = (error: unknown): string => {
+      if (!error) return '';
+      if (typeof error === 'string') return error;
+      if (error instanceof Error && typeof error.message === 'string') return error.message;
+      const maybeError = error as { errorMsg?: unknown; error?: { message?: unknown } };
+      if (typeof maybeError.errorMsg === 'string') return maybeError.errorMsg;
+      if (typeof maybeError.error?.message === 'string') return maybeError.error.message;
+      try {
+        return JSON.stringify(error);
+      } catch {
+        return String(error);
+      }
+    };
 
     const initializeCall = async () => {
       try {
@@ -830,6 +576,14 @@ export function WhatsAppStyleVideoCall({
         const user = sessionData.session?.user;
         if (!user) {
           throw new Error('Not authenticated');
+        }
+
+        if (isOwner && calleeId && calleeId === user.id) {
+          console.warn('[VideoCall] Blocking self-call attempt');
+          setError('You cannot call your own account.');
+          setCallState('ended');
+          setTimeout(() => onClose(), 500);
+          return;
         }
 
         if (isCleanedUp) return;
@@ -1007,17 +761,35 @@ export function WhatsAppStyleVideoCall({
         if (isCleanedUp) return;
 
         // Create Daily call object (prefer prewarmed object to reduce startup latency)
-        const daily =
-          getPrewarmedCallObject(true) ||
-          Daily.createCallObject({
+        let daily = getPrewarmedCallObject(true);
+        if (daily) {
+          try {
+            // Validate prewarmed instance before binding listeners / joining.
+            daily.meetingState?.();
+          } catch (err) {
+            const prewarmedError = getErrorText(err);
+            console.warn('[VideoCall] Discarding stale prewarmed Daily call object:', prewarmedError);
+            try {
+              daily.destroy?.();
+            } catch {
+              // Ignore stale object destroy errors.
+            }
+            daily = null;
+          }
+        }
+        if (!daily) {
+          daily = Daily.createCallObject({
             audioSource: true,
             videoSource: true,
           });
+        }
 
         dailyRef.current = daily;
+        const isCallDisposed = () => isCleanedUp || dailyRef.current !== daily;
 
         // Event listeners
         daily.on('joined-meeting', async () => {
+          if (isCallDisposed()) return;
           console.log('[VideoCall] Joined meeting');
           if (!callTelemetryRef.current.joinedAt) {
             callTelemetryRef.current.joinedAt = Date.now();
@@ -1034,6 +806,7 @@ export function WhatsAppStyleVideoCall({
           
           // CRITICAL: Subscribe to all tracks automatically (required for receiving remote video/audio)
           try {
+            if (isCallDisposed()) return;
             await daily.setSubscribeToTracksAutomatically(true);
             console.log('[VideoCall] ✅ Set auto-subscribe to tracks');
           } catch (err) {
@@ -1042,6 +815,7 @@ export function WhatsAppStyleVideoCall({
           
           // CRITICAL: Explicitly enable receiving video and audio from all participants
           try {
+            if (isCallDisposed()) return;
             await daily.updateReceiveSettings({ '*': { video: true, audio: true } });
             console.log('[VideoCall] ✅ Updated receive settings for video and audio');
           } catch (err) {
@@ -1051,6 +825,7 @@ export function WhatsAppStyleVideoCall({
           // Explicitly enable camera and microphone after joining with retry
           const enableLocalMedia = async (attempt: number = 1) => {
             try {
+              if (isCallDisposed()) return;
               await daily.setLocalVideo(true);
               await daily.setLocalAudio(true);
               setIsVideoEnabled(true);
@@ -1083,6 +858,7 @@ export function WhatsAppStyleVideoCall({
         });
 
         daily.on('left-meeting', () => {
+          if (isCallDisposed()) return;
           console.log('[VideoCall] Left meeting - closing call UI');
           setCallState('ended');
           // CRITICAL: Close the call interface when meeting is left
@@ -1090,6 +866,7 @@ export function WhatsAppStyleVideoCall({
         });
 
         daily.on('participant-joined', () => {
+          if (isCallDisposed()) return;
           console.log('[VideoCall] Participant joined');
           updateParticipants();
           
@@ -1103,11 +880,13 @@ export function WhatsAppStyleVideoCall({
         });
 
         daily.on('participant-left', () => {
+          if (isCallDisposed()) return;
           console.log('[VideoCall] Participant left');
           updateParticipants();
           
           // Check if all remote participants have left (1:1 call ended)
           setTimeout(() => {
+            if (isCallDisposed()) return;
             if (dailyRef.current) {
               const participants = dailyRef.current.participants();
               const remoteCount = Object.values(participants).filter((p: any) => !p.local).length;
@@ -1137,6 +916,7 @@ export function WhatsAppStyleVideoCall({
         });
 
         daily.on('participant-updated', (event: any) => {
+          if (isCallDisposed()) return;
           const participant = event?.participant;
           console.log('[VideoCall] Participant updated:', {
             participant: participant?.session_id,
@@ -1208,6 +988,7 @@ export function WhatsAppStyleVideoCall({
         });
         
         daily.on('track-started', async (event: any) => {
+          if (isCallDisposed()) return;
           const { participant, track } = event || {};
           
           console.log('[VideoCall] Track started:', {
@@ -1221,6 +1002,7 @@ export function WhatsAppStyleVideoCall({
           // For remote participants, ensure we're subscribed to their tracks
           if (!participant?.local && track?.kind) {
             try {
+              if (isCallDisposed()) return;
               // Verify receive settings are correct
               await daily.updateReceiveSettings({
                 [participant.session_id]: { video: true, audio: true },
@@ -1233,6 +1015,7 @@ export function WhatsAppStyleVideoCall({
         });
         
         daily.on('track-stopped', (event: any) => {
+          if (isCallDisposed()) return;
           console.log('[VideoCall] Track stopped:', {
             participant: event?.participant?.session_id,
             track: event?.track?.kind,
@@ -1285,6 +1068,7 @@ export function WhatsAppStyleVideoCall({
           // CRITICAL: Re-enforce earpiece AFTER AudioModeCoordinator applies settings
           // Wait a bit for audio routing to stabilize, then ensure InCallManager takes precedence
           setTimeout(() => {
+            if (isCallDisposed()) return;
             if (InCallManager) {
               try {
                 InCallManager.setForceSpeakerphoneOn(false);
@@ -1298,6 +1082,8 @@ export function WhatsAppStyleVideoCall({
           console.warn('[VideoCall] ⚠️ Failed to acquire audio mode (non-fatal):', audioModeError);
         }
 
+        if (isCallDisposed()) return;
+
         callTelemetryRef.current.joinStartedAt = Date.now();
         track('edudash.calls.join_started', {
           call_type: 'video',
@@ -1306,17 +1092,27 @@ export function WhatsAppStyleVideoCall({
             : undefined,
         });
 
-        await daily.join({ 
-          url: roomUrl,
-          ...(meetingToken ? { token: meetingToken } : {}), // Only include token when valid string
-          subscribeToTracksAutomatically: true,
-          audioSource: true,
-          videoSource: true,
-        });
+        try {
+          await daily.join({
+            url: roomUrl,
+            ...(meetingToken ? { token: meetingToken } : {}), // Only include token when valid string
+            subscribeToTracksAutomatically: true,
+            audioSource: true,
+            videoSource: true,
+          });
+        } catch (joinError) {
+          const message = getErrorText(joinError);
+          if (isCallDisposed() && /use after destroy/i.test(message)) {
+            console.log('[VideoCall] Ignoring stale join error after cleanup');
+            return;
+          }
+          throw joinError;
+        }
         
         // CRITICAL: Final earpiece enforcement after Daily.co join
         // This ensures InCallManager settings take precedence over any audio mode changes
         setTimeout(() => {
+          if (isCallDisposed()) return;
           if (InCallManager) {
             try {
               InCallManager.setForceSpeakerphoneOn(false);
@@ -1327,6 +1123,14 @@ export function WhatsAppStyleVideoCall({
           }
         }, 300);
       } catch (err) {
+        const errText = getErrorText(err);
+        if (
+          /use after destroy/i.test(errText) &&
+          (isCleanedUp || cleanupInProgressRef.current || !dailyRef.current)
+        ) {
+          console.log('[VideoCall] Ignoring stale init error after cleanup:', errText);
+          return;
+        }
         console.error('[VideoCall] Init error:', err);
         setError(err instanceof Error ? err.message : 'Failed to start call');
         setCallState('failed');
@@ -1353,216 +1157,44 @@ export function WhatsAppStyleVideoCall({
     }
   }, [showControls, controlsAnim]);
 
-  // Toggle microphone
-  const toggleAudio = useCallback(async () => {
-    if (!dailyRef.current) return;
-    try {
-      await dailyRef.current.setLocalAudio(!isAudioEnabled);
-      setIsAudioEnabled(!isAudioEnabled);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (err) {
-      console.error('[VideoCall] Toggle audio error:', err);
-    }
-  }, [isAudioEnabled]);
-
-  // Toggle camera with retry logic
-  const toggleVideo = useCallback(async () => {
-    if (!dailyRef.current) {
-      console.warn('[VideoCall] Cannot toggle video - Daily object not available');
-      return;
-    }
-    
-    const newState = !isVideoEnabled;
-    console.log('[VideoCall] Toggling video to:', newState);
-    
-    // Retry logic for enabling camera (can fail if system hasn't released camera)
-    const setVideo = async (enabled: boolean, attempt: number = 1) => {
-      try {
-        await dailyRef.current.setLocalVideo(enabled);
-        setIsVideoEnabled(enabled);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        console.log('[VideoCall] ✅ Video toggled to', enabled, 'on attempt', attempt);
-        
-        // Update participants to get new track state
-        setTimeout(() => updateParticipants(), 300);
-      } catch (err) {
-        console.warn('[VideoCall] Toggle video failed attempt', attempt, ':', err);
-        
-        // Only retry when ENABLING (turning camera on is more likely to need retry)
-        if (enabled && attempt < 3) {
-          console.log('[VideoCall] Retrying enable video...');
-          setTimeout(() => setVideo(enabled, attempt + 1), 500);
-        } else {
-          setError(enabled ? 'Failed to enable camera. Try again.' : 'Failed to disable camera.');
-          setTimeout(() => setError(null), 3000);
-        }
-      }
-    };
-    
-    await setVideo(newState);
-  }, [isVideoEnabled, updateParticipants]);
-
-  // Flip camera
-  const flipCamera = useCallback(async () => {
-    if (!dailyRef.current) return;
-    try {
-      await dailyRef.current.cycleCamera();
-      setIsFrontCamera(!isFrontCamera);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (err) {
-      console.error('[VideoCall] Flip camera error:', err);
-    }
-  }, [isFrontCamera]);
-
-  // Toggle speaker
-  const toggleSpeaker = useCallback(async () => {
-    const newState = !isSpeakerOn;
-    try {
-      if (InCallManager) {
-        InCallManager.setForceSpeakerphoneOn(newState);
-        console.log('[VideoCall] Speaker toggled to:', newState ? 'speaker' : 'earpiece');
-      }
-      setIsSpeakerOn(newState);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch (err) {
-      console.error('[VideoCall] Toggle speaker error:', err);
-    }
-  }, [isSpeakerOn]);
-
-  // Toggle screen sharing
-  const toggleScreenShare = useCallback(async () => {
-    if (!dailyRef.current) return;
-    
-    // Check iOS screen share extension requirement
-    if (Platform.OS === 'ios' && Platform.Version && Number(Platform.Version) < 14) {
-      setError('Screen share requires iOS 14 or later');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-    
-    try {
-      if (isScreenSharing) {
-        await dailyRef.current.stopScreenShare();
-        console.log('[VideoCall] Screen share stopped');
-      } else {
-        console.log('[VideoCall] Starting screen share...');
-        await dailyRef.current.startScreenShare();
-        console.log('[VideoCall] Screen share started');
-      }
-      setIsScreenSharing(!isScreenSharing);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (err: any) {
-      console.error('[VideoCall] Screen share error:', err);
-      
-      // Platform-specific error messages
-      if (Platform.OS === 'ios') {
-        // iOS requires Screen Share Extension to be set up
-        if (err?.message?.includes('extension') || err?.message?.includes('broadcast')) {
-          setError('Screen share extension not configured. Contact app developer.');
-        } else if (err?.message?.includes('permission') || err?.message?.includes('denied')) {
-          setError('Screen share permission denied');
-        } else {
-          setError('Screen share not available on this device');
-        }
-      } else {
-        // Android errors
-        if (err?.message?.includes('permission') || err?.message?.includes('denied')) {
-          setError('Screen share permission denied');
-        } else if (err?.message?.includes('FOREGROUND') || err?.message?.includes('mediaProjection')) {
-          setError('Screen share not permitted. Please update the app.');
-        } else {
-          setError('Screen sharing failed. Try again.');
-        }
-      }
-      setTimeout(() => setError(null), 4000);
-    }
-  }, [isScreenSharing]);
-
-  // Copy meeting link to invite others
-  const shareCallLink = useCallback(async () => {
-    if (!meetingUrl) {
-      setError('No meeting link available');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-    try {
-      const { Share } = require('react-native');
-      await Share.share({
-        message: `Join my video call: ${meetingUrl}`,
-        title: 'Join Video Call',
-      });
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (err) {
-      console.error('[VideoCall] Share error:', err);
-    }
-  }, [meetingUrl]);
-
-  // Toggle call recording (only available to room owner)
-  const toggleRecording = useCallback(async () => {
-    if (!dailyRef.current) return;
-    
-    // Only room owner can start/stop recording
-    if (!isOwner) {
-      setError('Only the call host can start recording');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-    
-    try {
-      if (isRecording) {
-        console.log('[VideoCall] Stopping recording...');
-        await dailyRef.current.stopRecording();
-        setError('Recording stopped');
-      } else {
-        console.log('[VideoCall] Starting recording...');
-        // Start cloud recording (stored in Daily.co cloud)
-        await dailyRef.current.startRecording({
-          type: 'cloud',
-        });
-        setError('Recording started');
-      }
-      setTimeout(() => setError(null), 2000);
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    } catch (err: any) {
-      console.error('[VideoCall] Recording toggle error:', err);
-      setError(err?.message || 'Recording failed');
-      setTimeout(() => setError(null), 3000);
-    }
-  }, [isRecording, isOwner]);
-
-  // Toggle view preference (local vs remote in main view)
-  const toggleViewPreference = useCallback(() => {
-    setPreferLocalView(prev => !prev);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    console.log('[VideoCall] View preference toggled to:', !preferLocalView ? 'local' : 'remote');
-  }, [preferLocalView]);
-
-  // End call
-  const handleEndCall = useCallback(async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-
-    if (callIdRef.current) {
-      // Update call status with ended_at timestamp to prevent race conditions
-      await getSupabase()
-        .from('active_calls')
-        .update({ 
-          status: 'ended',
-          ended_at: new Date().toISOString(),
-        })
-        .eq('call_id', callIdRef.current);
-    }
-
-    cleanupCall();
-    setCallState('ended');
-    onClose();
-  }, [cleanupCall, onClose]);
-
-  // Minimize call
-  const handleMinimize = useCallback(() => {
-    setIsMinimized(true);
-    onMinimize?.();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [onMinimize]);
+  const {
+    toggleAudio,
+    toggleVideo,
+    flipCamera,
+    toggleSpeaker,
+    toggleScreenShare,
+    shareCallLink,
+    toggleRecording,
+    toggleViewPreference,
+    handleEndCall,
+    handleMinimize,
+  } = useWhatsAppVideoCallControls({
+    dailyRef,
+    callIdRef,
+    meetingUrl,
+    isAudioEnabled,
+    isVideoEnabled,
+    isFrontCamera,
+    isSpeakerOn,
+    isScreenSharing,
+    isRecording,
+    isOwner,
+    preferLocalView,
+    cleanupCall,
+    onClose,
+    onMinimize,
+    updateParticipants,
+    setIsAudioEnabled,
+    setIsVideoEnabled,
+    setIsFrontCamera,
+    setIsSpeakerOn,
+    setIsScreenSharing,
+    setPreferLocalView,
+    setError,
+    setCallState,
+    setIsMinimized,
+    inCallManager: InCallManager,
+  });
 
   if (!isOpen) return null;
 
@@ -1571,7 +1203,6 @@ export function WhatsAppStyleVideoCall({
     (p: any) => p.tracks?.screenVideo?.state === 'playable'
   );
 
-  const mainParticipant = remoteParticipants[0] || localParticipant;
   const hasRemoteVideo = remoteParticipants[0]?.tracks?.video?.state === 'playable';
   const hasLocalVideo = localParticipant?.tracks?.video?.state === 'playable' && isVideoEnabled;
   // CRITICAL: Only show local video in main view if there are NO remote participants
@@ -1580,327 +1211,82 @@ export function WhatsAppStyleVideoCall({
   const showLocalInMainView = !hasRemoteParticipant && hasLocalVideo;
 
   // Get the actual video track for local video (with fallbacks)
-  const localVideoTrack = localParticipant?.tracks?.video?.persistentTrack 
-    || localParticipant?.tracks?.video?.track 
-    || null;
+  const localVideoTrack = getParticipantVideoTrack(localParticipant);
     
-  // Determine which video track to show in main view
-  // Priority: 1. Remote screen share, 2. User preference (if both videos available), 3. Remote video, 4. Local video
-  const getMainVideoTrack = () => {
-    // Screen share always takes priority
-    if (screenSharingParticipant) {
-      const screenTrack = screenSharingParticipant.tracks?.screenVideo;
-      return screenTrack?.persistentTrack || screenTrack?.track || null;
-    }
-    
-    // If user prefers local view and both videos available, show local
-    if (preferLocalView && hasLocalVideo && hasRemoteVideo) {
-      return localVideoTrack;
-    }
-    
-    // Default: show remote if available
-    if (hasRemoteVideo) {
-      return remoteParticipants[0]?.tracks?.video?.persistentTrack || remoteParticipants[0]?.tracks?.video?.track || null;
-    }
-    
-    // Fallback to local if no remote
-    if (showLocalInMainView) {
-      return localVideoTrack;
-    }
-    return null;
-  };
+  const getMainVideoTrack = () =>
+    resolveMainVideoTrack({
+      screenSharingParticipant,
+      preferLocalView,
+      hasLocalVideo,
+      hasRemoteVideo,
+      localVideoTrack,
+      remoteParticipants,
+      showLocalInMainView,
+    });
   
   // Determine what's showing in main view for view switch button label
   const isShowingLocalInMain = preferLocalView && hasLocalVideo && hasRemoteVideo;
 
-  // DEBUG: Log video rendering decision with full track details
-  console.log('[VideoCall] Render decision:', {
+  logRenderDecision({
     hasRemoteVideo,
     hasLocalVideo,
     hasRemoteParticipant,
     showLocalInMainView,
     isVideoEnabled,
     screenSharing: !!screenSharingParticipant,
-    DailyMediaViewAvailable: !!DailyMediaView,
-    localParticipantExists: !!localParticipant,
-    localVideoState: localParticipant?.tracks?.video?.state,
-    localHasPersistentTrack: !!localParticipant?.tracks?.video?.persistentTrack,
-    localHasTrack: !!localParticipant?.tracks?.video?.track,
-    localVideoTrackExists: !!localVideoTrack,
-    remoteParticipantsCount: remoteParticipants.length,
-    remoteVideoState: remoteParticipants[0]?.tracks?.video?.state,
+    dailyMediaViewAvailable: !!DailyMediaView,
+    localParticipant,
+    localVideoTrack,
+    remoteParticipants,
   });
 
-  // Minimized view (Picture-in-Picture)
-  if (isMinimized) {
-    return (
-      <Animated.View
-        style={[
-          styles.minimizedContainer,
-          {
-            transform: minimizedPosition.getTranslateTransform(),
-          },
-        ]}
-      >
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => setIsMinimized(false)}
-          style={styles.minimizedContent}
-        >
-          {hasRemoteVideo && DailyMediaView ? (
-            <DailyMediaView
-              videoTrack={remoteParticipants[0]?.tracks?.video?.persistentTrack || remoteParticipants[0]?.tracks?.video?.track || null}
-              audioTrack={remoteParticipants[0]?.tracks?.audio?.persistentTrack || remoteParticipants[0]?.tracks?.audio?.track || null}
-              style={styles.minimizedVideo}
-              objectFit="cover"
-            />
-          ) : (
-            <View style={styles.minimizedPlaceholder}>
-              <Ionicons name="videocam" size={24} color="#fff" />
-            </View>
-          )}
-          <View style={styles.minimizedOverlay}>
-            <Text style={styles.minimizedDuration}>{formatDuration(callDuration)}</Text>
-          </View>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.minimizedEndButton}
-          onPress={handleEndCall}
-        >
-          <Ionicons name="call" size={16} color="#fff" />
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  }
-
   return (
-    <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={handleScreenTap}
-        style={styles.mainVideoContainer}
-      >
-        {/* Main Video View - Priority: screen share > remote video > local video */}
-        {(screenSharingParticipant || hasRemoteVideo || showLocalInMainView) && DailyMediaView ? (
-          <DailyMediaView
-            videoTrack={getMainVideoTrack()}
-            audioTrack={remoteParticipants[0]?.tracks?.audio?.persistentTrack || remoteParticipants[0]?.tracks?.audio?.track || null}
-            style={styles.mainVideo}
-            objectFit={screenSharingParticipant ? 'contain' : 'cover'}
-            mirror={showLocalInMainView && !screenSharingParticipant ? isFrontCamera : false}
-          />
-        ) : (
-          <LinearGradient
-            colors={['#1a1a2e', '#16213e', '#0f3460']}
-            style={styles.noVideoContainer}
-          >
-            {remoteUserPhoto ? (
-              <Image source={{ uri: remoteUserPhoto }} style={styles.noVideoAvatar} />
-            ) : (
-              <View style={styles.noVideoAvatarPlaceholder}>
-                <Ionicons name="person" size={80} color="rgba(255,255,255,0.5)" />
-              </View>
-            )}
-            <Text style={styles.noVideoName}>{remoteUserName}</Text>
-            <Text style={styles.noVideoStatus}>
-              {callState === 'connecting' ? 'Connecting...' : 
-               callState === 'ringing' ? 'Ringing...' :
-               remoteParticipants.length === 0 ? 'Waiting for participant...' : 'Camera off'}
-            </Text>
-          </LinearGradient>
-        )}
-      </TouchableOpacity>
-      
-      {/* Screen Share Indicator */}
-      {screenSharingParticipant && (
-        <View style={styles.screenShareIndicator}>
-          <Ionicons name="desktop-outline" size={16} color="#00f5ff" />
-          <Text style={styles.screenShareText}>Screen sharing</Text>
-        </View>
-      )}
+    <>
+      <WhatsAppStyleVideoCallPresentation
+        isMinimized={isMinimized}
+        minimizedPosition={minimizedPosition}
+        localVideoPosition={localVideoPosition}
+        localVideoPanHandlers={localVideoPanResponder.panHandlers}
+        fadeAnim={fadeAnim}
+        controlsAnim={controlsAnim}
+        insetsTop={insets.top}
+        insetsBottom={insets.bottom}
+        DailyMediaView={DailyMediaView}
+        remoteParticipants={remoteParticipants}
+        localParticipant={localParticipant}
+        screenSharingParticipant={screenSharingParticipant}
+        remoteUserName={remoteUserName}
+        remoteUserPhoto={remoteUserPhoto}
+        callState={callState}
+        callDuration={callDuration}
+        error={error}
+        isOwner={isOwner}
+        isRecording={isRecording}
+        isSpeakerOn={isSpeakerOn}
+        isScreenSharing={isScreenSharing}
+        isVideoEnabled={isVideoEnabled}
+        isAudioEnabled={isAudioEnabled}
+        isFrontCamera={isFrontCamera}
+        hasRemoteVideo={hasRemoteVideo}
+        hasLocalVideo={hasLocalVideo}
+        showLocalInMainView={showLocalInMainView}
+        isShowingLocalInMain={isShowingLocalInMain}
+        getMainVideoTrack={getMainVideoTrack}
+        formatDuration={formatDuration}
+        onExpandFromMinimized={() => setIsMinimized(false)}
+        onScreenTap={handleScreenTap}
+        onEndCall={handleEndCall}
+        onMinimize={handleMinimize}
+        onFlipCamera={flipCamera}
+        onToggleSpeaker={toggleSpeaker}
+        onToggleScreenShare={toggleScreenShare}
+        onToggleViewPreference={toggleViewPreference}
+        onToggleRecording={toggleRecording}
+        onShowAddParticipants={() => setShowAddParticipants(true)}
+        onToggleVideo={toggleVideo}
+        onToggleAudio={toggleAudio}
+      />
 
-      {/* Local Video Preview (Draggable) */}
-      {/* Show local video when:
-          1. We have local video AND remote participants (PiP mode), OR
-          2. We have local video AND no remote participants yet (show in main view area as preview) */}
-      {hasLocalVideo && DailyMediaView ? (
-        <Animated.View
-          style={[
-            styles.localVideoContainer,
-            { transform: localVideoPosition.getTranslateTransform() },
-          ]}
-          {...localVideoPanResponder.panHandlers}
-        >
-          <DailyMediaView
-            videoTrack={localParticipant?.tracks?.video?.persistentTrack || localParticipant?.tracks?.video?.track || null}
-            audioTrack={null}
-            style={[styles.localVideo, { width: LOCAL_VIDEO_WIDTH - 4, height: LOCAL_VIDEO_HEIGHT - 4 }]}
-            objectFit="cover"
-            mirror={isFrontCamera}
-            zOrder={1}
-          />
-        </Animated.View>
-      ) : (
-        // Show placeholder if local video conditions not met during call
-        callState === 'connected' && !hasLocalVideo && DailyMediaView && (
-          <View style={[styles.localVideoContainer, { backgroundColor: '#1a1a2e', justifyContent: 'center', alignItems: 'center' }]}>
-            <Ionicons name={isVideoEnabled ? "videocam" : "videocam-off"} size={20} color="rgba(255,255,255,0.5)" />
-            <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, marginTop: 4 }}>
-              {isVideoEnabled ? 'Starting...' : 'Camera off'}
-            </Text>
-          </View>
-        )
-      )}
-
-      {/* Top Bar */}
-      <Animated.View style={[styles.topBar, { opacity: controlsAnim, paddingTop: insets.top + 8 }]}>
-        <TouchableOpacity style={styles.topButton} onPress={handleMinimize}>
-          <Ionicons name="chevron-down" size={28} color="#fff" />
-        </TouchableOpacity>
-        
-        <View style={styles.callInfo}>
-          <Text style={styles.callerName}>{remoteUserName}</Text>
-          <Text style={styles.callDuration}>
-            {callState === 'connected' ? formatDuration(callDuration) :
-             callState === 'ringing' ? 'Ringing...' :
-             callState === 'connecting' ? 'Connecting...' : ''}
-          </Text>
-        </View>
-
-        <TouchableOpacity style={styles.topButton} onPress={flipCamera}>
-          <Ionicons name="camera-reverse" size={24} color="#fff" />
-        </TouchableOpacity>
-      </Animated.View>
-
-      {/* Error Message */}
-      {/* Recording Indicator */}
-      {isRecording && (
-        <View style={[styles.recordingIndicator, { top: insets.top + 60 }]}>
-          <View style={styles.recordingDot} />
-          <Text style={styles.recordingText}>Recording</Text>
-        </View>
-      )}
-
-      {error && (
-        <View style={[styles.errorContainer, { top: insets.top + (isRecording ? 100 : 60) }]}>
-          <Ionicons name="alert-circle" size={18} color="#fff" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-
-      {/* Bottom Controls */}
-      <Animated.View style={[styles.bottomControls, { opacity: controlsAnim, paddingBottom: insets.bottom + 16 }]}>
-        {/* Secondary Controls Row - More features */}
-        <View style={styles.secondaryControls}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={toggleSpeaker}>
-            <Ionicons 
-              name={isSpeakerOn ? 'volume-high' : 'volume-mute'} 
-              size={24} 
-              color="#fff" 
-            />
-            <Text style={styles.secondaryLabel}>Speaker</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.secondaryButton} onPress={flipCamera}>
-            <Ionicons name="camera-reverse" size={24} color="#fff" />
-            <Text style={styles.secondaryLabel}>Flip</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.secondaryButton, isScreenSharing && styles.secondaryButtonActive]} 
-            onPress={toggleScreenShare}
-          >
-            <Ionicons 
-              name={isScreenSharing ? 'stop-circle' : 'share-outline'} 
-              size={24} 
-              color={isScreenSharing ? '#ef4444' : '#fff'} 
-            />
-            <Text style={[styles.secondaryLabel, isScreenSharing && { color: '#ef4444' }]}>
-              {isScreenSharing ? 'Stop' : 'Share'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* View Switch - only show when both local and remote video available */}
-          {hasRemoteVideo && hasLocalVideo && (
-            <TouchableOpacity style={styles.secondaryButton} onPress={toggleViewPreference}>
-              <Ionicons 
-                name={isShowingLocalInMain ? 'person-circle' : 'people-circle'} 
-                size={24} 
-                color="#fff" 
-              />
-              <Text style={styles.secondaryLabel}>
-                {isShowingLocalInMain ? 'Remote' : 'Local'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Recording - only show for room owner */}
-          {isOwner && (
-            <TouchableOpacity 
-              style={[styles.secondaryButton, isRecording && styles.secondaryButtonActive]} 
-              onPress={toggleRecording}
-            >
-              <Ionicons 
-                name={isRecording ? 'stop-circle' : 'radio-button-on'} 
-                size={24} 
-                color={isRecording ? '#ef4444' : '#fff'} 
-              />
-              <Text style={[styles.secondaryLabel, isRecording && { color: '#ef4444' }]}>
-                {isRecording ? 'Stop Rec' : 'Record'}
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowAddParticipants(true)}>
-            <Ionicons name="person-add" size={24} color="#fff" />
-            <Text style={styles.secondaryLabel}>Add</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Main Controls Row */}
-        <View style={styles.mainControls}>
-          <TouchableOpacity
-            style={[styles.controlButton, !isVideoEnabled && styles.controlButtonOff]}
-            onPress={toggleVideo}
-          >
-            <Ionicons
-              name={isVideoEnabled ? 'videocam' : 'videocam-off'}
-              size={28}
-              color="#fff"
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.controlButton, !isAudioEnabled && styles.controlButtonOff]}
-            onPress={toggleAudio}
-          >
-            <Ionicons
-              name={isAudioEnabled ? 'mic' : 'mic-off'}
-              size={28}
-              color="#fff"
-            />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.controlButton, styles.endCallButton]}
-            onPress={handleEndCall}
-          >
-            <Ionicons name="call" size={32} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Participant count indicator */}
-        {remoteParticipants.length > 0 && (
-          <View style={styles.participantCount}>
-            <Ionicons name="people" size={16} color="#fff" />
-            <Text style={styles.participantCountText}>{remoteParticipants.length + 1}</Text>
-          </View>
-        )}
-      </Animated.View>
-
-      {/* Add Participant Modal */}
       <AddParticipantModal
         visible={showAddParticipants}
         onClose={() => setShowAddParticipants(false)}
@@ -1908,283 +1294,10 @@ export function WhatsAppStyleVideoCall({
         meetingUrl={meetingUrl || null}
         callerName={userName}
         callType="video"
-        excludeUserIds={remoteParticipants.map(p => p.user_id).filter((id): id is string => Boolean(id))}
+        excludeUserIds={remoteParticipants.map((p) => p.user_id).filter((id): id is string => Boolean(id))}
       />
-    </Animated.View>
+    </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#000',
-    zIndex: 9999,
-  },
-  mainVideoContainer: {
-    flex: 1,
-  },
-  mainVideo: {
-    flex: 1,
-  },
-  noVideoContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noVideoAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 16,
-  },
-  noVideoAvatarPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  noVideoName: {
-    color: '#fff',
-    fontSize: 24,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  noVideoStatus: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 16,
-  },
-  localVideoContainer: {
-    position: 'absolute',
-    width: LOCAL_VIDEO_WIDTH,
-    height: LOCAL_VIDEO_HEIGHT,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 10,
-    backgroundColor: '#000',
-    zIndex: 100,
-  },
-  localVideo: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#1a1a2e',
-  },
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  topButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  callInfo: {
-    alignItems: 'center',
-  },
-  callerName: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  callDuration: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginTop: 2,
-  },
-  errorContainer: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.9)',
-    padding: 12,
-    borderRadius: 8,
-  },
-  errorText: {
-    color: '#fff',
-    marginLeft: 8,
-    fontSize: 14,
-    flex: 1,
-  },
-  bottomControls: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingTop: 20,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  secondaryControls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 60,
-    marginBottom: 24,
-  },
-  secondaryButton: {
-    alignItems: 'center',
-  },
-  secondaryLabel: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  mainControls: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 24,
-  },
-  controlButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlButtonOff: {
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  endCallButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#FF3B30',
-  },
-  secondaryButtonActive: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-    borderRadius: 8,
-    padding: 4,
-  },
-  participantCount: {
-    position: 'absolute',
-    top: 8,
-    right: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  participantCountText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  minimizedContainer: {
-    position: 'absolute',
-    width: MINIMIZED_SIZE,
-    height: MINIMIZED_SIZE,
-    borderRadius: 12,
-    overflow: 'hidden',
-    zIndex: 9999,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  minimizedContent: {
-    flex: 1,
-  },
-  minimizedVideo: {
-    flex: 1,
-  },
-  minimizedPlaceholder: {
-    flex: 1,
-    backgroundColor: '#1a1a2e',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  minimizedOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingVertical: 4,
-    alignItems: 'center',
-  },
-  minimizedDuration: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
-  },
-  minimizedEndButton: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FF3B30',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  screenShareIndicator: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 120 : 100,
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 245, 255, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    gap: 6,
-  },
-  screenShareText: {
-    color: '#00f5ff',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  recordingIndicator: {
-    position: 'absolute',
-    left: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    gap: 8,
-  },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#fff',
-  },
-  recordingText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-});
 
 export default WhatsAppStyleVideoCall;

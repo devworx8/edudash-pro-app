@@ -21,6 +21,8 @@ export interface RouteParams {
   billing?: 'monthly' | 'annual';
   schoolType?: 'preschool' | 'k12_school' | 'hybrid';
   auto?: '1';
+  source?: string;
+  reason?: string;
 }
 
 export interface SchoolInfo {
@@ -34,6 +36,13 @@ export interface ExistingSubscription {
   status: string;
   seats_total: number;
   seats_used: number;
+}
+
+export interface ParentOverageConfig {
+  quotaType: string;
+  monthlyLimit: number;
+  overageEnabled: boolean;
+  overageUnitPrice: number;
 }
 
 export interface SubscriptionSetupState {

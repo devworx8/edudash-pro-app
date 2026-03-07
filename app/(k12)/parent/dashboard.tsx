@@ -185,6 +185,7 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
 
   const navItems = useMemo(() => [
     { id: 'home', label: t('dashboard.parent.nav.dashboard', { defaultValue: 'Dashboard' }), icon: 'home', route: K12_PARENT_ACTIONS.dashboard_home.route },
+    { id: 'calculator', label: t('dashboard.parent.nav.calculator', { defaultValue: 'Calculator' }), icon: 'calculator', route: K12_PARENT_ACTIONS.calculator.route },
     { id: 'children', label: t('dashboard.parent.nav.my_children', { defaultValue: 'My Children' }), icon: 'people', route: K12_PARENT_ACTIONS.children.route },
     { id: 'progress', label: t('dashboard.progress', { defaultValue: 'Progress' }), icon: 'ribbon', route: K12_PARENT_ACTIONS.progress.route },
     { id: 'attendance', label: t('dashboard.parent.nav.attendance', { defaultValue: 'Attendance' }), icon: 'calendar-outline', route: K12_PARENT_ACTIONS.attendance.route },

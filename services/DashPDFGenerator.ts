@@ -20,7 +20,42 @@ import { assertSupabase } from '@/lib/supabase';
 import { getCurrentSession, getCurrentProfile } from '@/lib/sessionManager';
 import { EducationalPDFService } from '@/lib/services/EducationalPDFService';
 import { PDFTemplateService } from '@/lib/services/PDFTemplateService';
-import { getPDFConfig, DEFAULT_BRANDING, type PDFBranding } from '@/lib/config/pdfConfig';
+import { getPDFConfig, DEFAULT_BRANDING } from '@/lib/config/pdfConfig';
+import {
+  buildGeneralHTML,
+  detectDocumentType,
+  extractTitle,
+  isEducationalType,
+} from './dash-pdf/htmlHelpers';
+import type {
+  ContentSection,
+  CustomTemplate,
+  DashPDFOptions,
+  DocumentSpec,
+  DocumentType,
+  KnowledgeBaseItem,
+  PDFGenerationRequest,
+  PDFGenerationResult,
+  ProgressCallback,
+  UserPDFPreferences,
+} from './dash-pdf/types';
+
+export type {
+  BrandingOptions,
+  ChartData,
+  ContentSection,
+  CustomTemplate,
+  DashPDFOptions,
+  DocumentSpec,
+  DocumentType,
+  KnowledgeBaseItem,
+  PDFGenerationRequest,
+  PDFGenerationResult,
+  ProgressCallback,
+  ProgressPhase,
+  TableData,
+  UserPDFPreferences,
+} from './dash-pdf/types';
 
 // Dynamically import SecureStore for cross-platform compatibility
 let SecureStore: any = null;
@@ -31,210 +66,6 @@ try {
 } catch (e) {
   console.debug('SecureStore import failed (web or unsupported platform)', e);
 }
-
-// ====================================================================
-// TYPE DEFINITIONS
-// ====================================================================
-
-/**
- * Supported document types for PDF generation
- */
-export type DocumentType = 
-  | 'report'
-  | 'letter'
-  | 'invoice'
-  | 'study_guide'
-  | 'lesson_plan'
-  | 'progress_report'
-  | 'assessment'
-  | 'certificate'
-  | 'newsletter'
-  | 'worksheet'
-  | 'general';
-
-/**
- * Content section with rich formatting support
- */
-export interface ContentSection {
-  id: string;
-  title: string;
-  markdown: string;
-  images?: Array<{
-    uri: string;
-    alt?: string;
-    width?: number;
-    height?: number;
-    caption?: string;
-  }>;
-  charts?: Array<{
-    type: 'bar' | 'line' | 'pie';
-    data: { labels: string[]; values: number[]; colors?: string[] };
-    title?: string;
-  }>;
-  tables?: Array<{
-    headers: string[];
-    rows: string[][];
-    caption?: string;
-  }>;
-}
-
-/**
- * Branding options for PDF customization
- */
-export interface BrandingOptions {
-  logoUri?: string;
-  watermarkText?: string;
-  headerHtmlSafe?: string;
-  footerHtmlSafe?: string;
-  primaryColor?: string;
-  secondaryColor?: string;
-  fontFamily?: string;
-}
-
-/**
- * PDF generation options
- */
-export interface DashPDFOptions {
-  theme?: 'professional' | 'colorful' | 'minimalist';
-  paperSize?: 'A4' | 'Letter';
-  orientation?: 'portrait' | 'landscape';
-  enablePageNumbers?: boolean;
-  enableWatermark?: boolean;
-  includeTableOfContents?: boolean;
-  accessibilityEnabled?: boolean;
-  branding?: BrandingOptions;
-}
-
-/**
- * Chart data for visualization
- */
-export interface ChartData {
-  type: 'bar' | 'line' | 'pie';
-  data: {
-    labels: string[];
-    values: number[];
-    colors?: string[];
-  };
-  title?: string;
-}
-
-/**
- * Table data for structured information
- */
-export interface TableData {
-  headers: string[];
-  rows: string[][];
-  caption?: string;
-}
-
-/**
- * PDF generation request
- */
-export interface PDFGenerationRequest {
-  type: DocumentType;
-  title: string;
-  prompt?: string;
-  sections?: ContentSection[];
-  data?: Record<string, any>;
-  assets?: Array<{ uri: string; name: string; type: string }>;
-  preferencesOverride?: Partial<DashPDFOptions>;
-  templateId?: string;
-  includeCharts?: boolean;
-  includeTables?: boolean;
-}
-
-/**
- * PDF generation result
- */
-export interface PDFGenerationResult {
-  success: boolean;
-  uri?: string;
-  filename?: string;
-  storagePath?: string;
-  pageCount?: number;
-  warnings?: string[];
-  error?: string;
-}
-
-/**
- * User preferences for PDF generation
- */
-export interface UserPDFPreferences {
-  id?: string;
-  userId: string;
-  organizationId?: string;
-  defaultTheme?: 'professional' | 'colorful' | 'minimalist';
-  defaultFont?: string;
-  defaultLayout?: Record<string, any>;
-  defaultBranding?: BrandingOptions;
-  headerHtmlSafe?: string;
-  footerHtmlSafe?: string;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-/**
- * Custom template definition
- */
-export interface CustomTemplate {
-  id?: string;
-  ownerUserId: string;
-  organizationId?: string;
-  name: string;
-  description?: string;
-  documentType: DocumentType;
-  templateHtml: string;
-  inputSchema?: Record<string, any>;
-  thumbnailUrl?: string;
-  isOrgShared?: boolean;
-  isPublic?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-/**
- * Document specification from AI parsing
- */
-export interface DocumentSpec {
-  docType: DocumentType;
-  title: string;
-  sections: ContentSection[];
-  images: Array<{ uri: string; alt: string; caption?: string }>;
-  charts?: ChartData[];
-  tables?: TableData[];
-  dataRequirements?: string[];
-  tone?: string;
-  audience?: string;
-  brandingHints?: BrandingOptions;
-  studentId?: string;
-  classId?: string;
-}
-
-/**
- * Knowledge base search result
- */
-export interface KnowledgeBaseItem {
-  id: string;
-  title: string;
-  snippet?: string;
-  content?: string;
-  uri?: string;
-  type: 'document' | 'image' | 'lesson' | 'student' | 'class' | 'assignment' | 'entity';
-  confidence?: number;
-  relevance?: number;
-  source?: string;
-  metadata?: Record<string, any>;
-}
-
-/**
- * Progress callback phases
- */
-export type ProgressPhase = 'parse' | 'retrieve' | 'compose' | 'render' | 'upload';
-
-/**
- * Progress callback
- */
-export type ProgressCallback = (phase: ProgressPhase, progress: number, message?: string) => void;
 
 // ====================================================================
 // DASH PDF GENERATOR CLASS
@@ -939,8 +770,8 @@ class DashPDFGeneratorImpl {
       // TODO: Call ai-gateway with action 'pdf_compose'
       // For now, use heuristic fallback
       
-      const docType = this.detectDocumentType(prompt);
-      const title = this.extractTitle(prompt) || 'Untitled Document';
+      const docType = detectDocumentType(prompt);
+      const title = extractTitle(prompt) || 'Untitled Document';
       
       onProgress?.('parse', 15, 'Structuring content...');
 
@@ -963,62 +794,6 @@ class DashPDFGeneratorImpl {
       console.error('[DashPDFGenerator] parsePromptToSpec failed:', error);
       throw error;
     }
-  }
-
-  /**
-   * Detect document type from prompt
-   */
-  private detectDocumentType(prompt: string): DocumentType {
-    const lower = prompt.toLowerCase();
-    
-    if (/letter|correspondence|memo/i.test(lower)) return 'letter';
-    if (/report|summary|analysis/i.test(lower)) return 'report';
-    if (/invoice|bill|receipt/i.test(lower)) return 'invoice';
-    if (/study\s*guide|review/i.test(lower)) return 'study_guide';
-    if (/lesson\s*plan|teaching/i.test(lower)) return 'lesson_plan';
-    if (/progress\s*report|student\s*report/i.test(lower)) return 'progress_report';
-    if (/test|assessment|quiz|exam/i.test(lower)) return 'assessment';
-    if (/certificate|award|recognition/i.test(lower)) return 'certificate';
-    if (/newsletter|announcement/i.test(lower)) return 'newsletter';
-    if (/worksheet|practice|activity/i.test(lower)) return 'worksheet';
-    
-    return 'general';
-  }
-
-  /**
-   * Extract title from prompt using intelligent heuristics
-   */
-  private extractTitle(prompt: string): string | null {
-    // Check for explicit title markers
-    const titleMatch = prompt.match(/(?:title|name|called?):?\s*["']?([^"'\n]+)["']?/i);
-    if (titleMatch && titleMatch[1].trim().length > 0) {
-      return titleMatch[1].trim().substring(0, 100);
-    }
-    
-    // Check for "about X" or "on X" patterns
-    const topicMatch = prompt.match(/(?:about|on|regarding|concerning)\s+([^,.\n]{5,80})/i);
-    if (topicMatch && topicMatch[1].trim().length > 0) {
-      return topicMatch[1].trim();
-    }
-    
-    // Check for "create a X for Y" patterns
-    const createMatch = prompt.match(/(?:create|make|generate|write)\s+(?:a|an)\s+([^,.\n]{5,80})/i);
-    if (createMatch && createMatch[1].trim().length > 0) {
-      return createMatch[1].trim();
-    }
-    
-    // Fallback: first line or first sentence
-    const firstLine = prompt.split('\n')[0].trim();
-    if (firstLine.length > 0 && firstLine.length < 100) {
-      return firstLine;
-    }
-    
-    const firstSentence = prompt.split(/[.!?]/)[0].trim();
-    if (firstSentence.length > 0 && firstSentence.length < 100) {
-      return firstSentence;
-    }
-    
-    return null;
   }
 
   /**
@@ -1048,266 +823,19 @@ class DashPDFGeneratorImpl {
       };
 
       // For educational document types, delegate to PDFTemplateService if possible
-      if (this.isEducationalType(spec.docType)) {
+      if (isEducationalType(spec.docType)) {
         // TODO: Call PDFTemplateService.render() with appropriate data
         console.log('[DashPDFGenerator] Educational type - delegating to template service');
       }
 
       // Build HTML using helper methods
-      const html = this.buildGeneralHTML(spec, options);
+      const html = buildGeneralHTML(spec, options);
 
       return html;
     } catch (error) {
       console.error('[DashPDFGenerator] composeHTML failed:', error);
       throw error;
     }
-  }
-
-  /**
-   * Check if document type is educational
-   */
-  private isEducationalType(docType: DocumentType): boolean {
-    return [
-      'study_guide',
-      'lesson_plan',
-      'progress_report',
-      'assessment',
-      'certificate',
-      'worksheet'
-    ].includes(docType);
-  }
-
-  /**
-   * Build general HTML for non-educational types
-   */
-  private buildGeneralHTML(spec: DocumentSpec, options: DashPDFOptions): string {
-    const { theme, branding, enablePageNumbers, enableWatermark } = options;
-
-    const themeColors = this.getThemeColors(theme || 'professional');
-    const fontFamily = branding?.fontFamily || 'Arial, sans-serif';
-
-    let html = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${this.escapeHtml(spec.title)}</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    
-    body {
-      font-family: ${fontFamily};
-      font-size: 11pt;
-      line-height: 1.6;
-      color: #333;
-      padding: 40px;
-      background: white;
-    }
-    
-    h1 {
-      color: ${themeColors.primary};
-      font-size: 24pt;
-      margin-bottom: 20px;
-      border-bottom: 2px solid ${themeColors.accent};
-      padding-bottom: 10px;
-    }
-    
-    h2 {
-      color: ${themeColors.primary};
-      font-size: 18pt;
-      margin-top: 30px;
-      margin-bottom: 15px;
-    }
-    
-    h3 {
-      color: ${themeColors.secondary};
-      font-size: 14pt;
-      margin-top: 20px;
-      margin-bottom: 10px;
-    }
-    
-    p {
-      margin-bottom: 12px;
-      text-align: justify;
-    }
-    
-    ul, ol {
-      margin-left: 25px;
-      margin-bottom: 12px;
-    }
-    
-    li {
-      margin-bottom: 6px;
-    }
-    
-    img {
-      max-width: 100%;
-      height: auto;
-      margin: 20px 0;
-    }
-    
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 20px 0;
-    }
-    
-    th, td {
-      border: 1px solid #ddd;
-      padding: 10px;
-      text-align: left;
-    }
-    
-    th {
-      background-color: ${themeColors.primary};
-      color: white;
-      font-weight: bold;
-    }
-    
-    .header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    
-    .footer {
-      margin-top: 50px;
-      padding-top: 20px;
-      border-top: 1px solid #ddd;
-      text-align: center;
-      font-size: 9pt;
-      color: #666;
-    }
-    
-    ${enableWatermark ? `
-    .watermark {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%) rotate(-45deg);
-      font-size: 80pt;
-      opacity: 0.05;
-      pointer-events: none;
-      z-index: -1;
-    }
-    ` : ''}
-    
-    @media print {
-      body { padding: 20px; }
-      .page-break { page-break-after: always; }
-      .no-break { page-break-inside: avoid; }
-    }
-  </style>
-</head>
-<body>
-`;
-
-    // Watermark
-    if (enableWatermark && branding?.watermarkText) {
-      html += `  <div class="watermark">${this.escapeHtml(branding.watermarkText)}</div>\n`;
-    }
-
-    // Header
-    if (branding?.headerHtmlSafe) {
-      html += `  <div class="header">${branding.headerHtmlSafe}</div>\n`;
-    }
-
-    // Title
-    html += `  <h1>${this.escapeHtml(spec.title)}</h1>\n`;
-
-    // Content sections
-    for (const section of spec.sections) {
-      html += `  <div class="no-break">\n`;
-      if (section.title && section.title !== 'Content') {
-        html += `    <h2>${this.escapeHtml(section.title)}</h2>\n`;
-      }
-      html += `    ${this.markdownToHtml(section.markdown)}\n`;
-      
-      // Images
-      if (section.images && section.images.length > 0) {
-        for (const img of section.images) {
-          html += `    <figure>\n`;
-          html += `      <img src="${this.escapeHtml(img.uri)}" alt="${this.escapeHtml(img.alt || '')}" />\n`;
-          if (img.caption) {
-            html += `      <figcaption style="text-align: center; font-style: italic; margin-top: 5px;">${this.escapeHtml(img.caption)}</figcaption>\n`;
-          }
-          html += `    </figure>\n`;
-        }
-      }
-      
-      html += `  </div>\n`;
-    }
-
-    // Footer
-    if (branding?.footerHtmlSafe) {
-      html += `  <div class="footer">${branding.footerHtmlSafe}</div>\n`;
-    } else {
-      html += `  <div class="footer">Generated by Dash AI • EduDash Pro</div>\n`;
-    }
-
-    html += `</body>\n</html>`;
-
-    return html;
-  }
-
-  /**
-   * Get theme colors
-   */
-  private getThemeColors(theme: string): { primary: string; secondary: string; accent: string } {
-    switch (theme) {
-      case 'colorful':
-        return { primary: '#1976d2', secondary: '#388e3c', accent: '#fbc02d' };
-      case 'minimalist':
-        return { primary: '#424242', secondary: '#757575', accent: '#e0e0e0' };
-      case 'professional':
-      default:
-        return { primary: '#1565c0', secondary: '#0d47a1', accent: '#42a5f5' };
-    }
-  }
-
-  /**
-   * Simple markdown to HTML converter
-   */
-  private markdownToHtml(markdown: string): string {
-    let html = markdown;
-
-    // Headers
-    html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-    html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-    html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
-
-    // Bold and italic
-    html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-    // Line breaks and paragraphs
-    html = html.replace(/\n\n/g, '</p><p>');
-    html = html.replace(/\n/g, '<br/>');
-
-    // Wrap in paragraph if not already wrapped
-    if (!html.startsWith('<')) {
-      html = `<p>${html}</p>`;
-    }
-
-    return html;
-  }
-
-  /**
-   * Escape HTML special characters
-   */
-  private escapeHtml(text: string): string {
-    const map: Record<string, string> = {
-      '&': '&amp;',
-      '<': '&lt;',
-      '>': '&gt;',
-      '"': '&quot;',
-      "'": '&#039;'
-    };
-    return text.replace(/[&<>"']/g, (m) => map[m]);
   }
 
   /**

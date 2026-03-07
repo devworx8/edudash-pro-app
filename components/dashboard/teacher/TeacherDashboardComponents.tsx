@@ -1,8 +1,3 @@
-/**
- * Teacher Dashboard Sub-Components
- * Contains Quick Actions, AI Tools, Classes, Assignments, Events
- */
-
 import React from 'react';
 import { View, Text, TouchableOpacity, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,21 +7,20 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAds } from '@/contexts/AdsContext';
 import { Colors } from '@/constants/Colors';
 import { track } from '@/lib/analytics';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { EmptyClassesState, EmptyAssignmentsState, EmptyEventsState } from '@/components/ui/EmptyState';
 import AdBannerWithUpgrade from '@/components/ui/AdBannerWithUpgrade';
 import { getStyles } from './styles';
 import type { Assignment, AITool, QuickAction } from './types';
-
+import { ratioToPercent } from '@/lib/progress/clampPercent';
 // Quick Actions Component
 interface TeacherQuickActionsProps {
   quickActions: QuickAction[];
 }
-
 export const TeacherQuickActions: React.FC<TeacherQuickActionsProps> = ({ quickActions }) => {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const styles = getStyles(theme, isDark);
-
   const renderQuickAction = (action: QuickAction) => (
     <TouchableOpacity
       key={action.id}
@@ -37,7 +31,6 @@ export const TeacherQuickActions: React.FC<TeacherQuickActionsProps> = ({ quickA
       <Text style={styles.quickActionText}>{action.title}</Text>
     </TouchableOpacity>
   );
-
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{t("dashboard.quick_actions_section")}</Text>
@@ -45,7 +38,6 @@ export const TeacherQuickActions: React.FC<TeacherQuickActionsProps> = ({ quickA
     </View>
   );
 };
-
 // AI Tools Component
 interface TeacherAIToolsProps {
   aiTools: AITool[];
@@ -68,7 +60,6 @@ interface TeacherAIToolsProps {
   orgLimits: any;
   userRole: string | undefined;
 }
-
 export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
   aiTools,
   aiLessonEnabled,
@@ -94,7 +85,6 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
   const { theme, isDark } = useTheme();
   const { offerRewarded } = useAds();
   const styles = getStyles(theme, isDark);
-
   const renderAIToolCard = (tool: AITool) => {
     const enabled = hasActiveSeat
       ? tool.id === "lesson-generator"
@@ -115,10 +105,8 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
             : tool.id === "progress-analysis"
               ? (canViewAnalytics && hasPremiumOrHigher)
               : true;
-
     const hasTemporaryUnlock = aiTempUnlocks[tool.id] > 0;
     const isActuallyEnabled = enabled || hasTemporaryUnlock;
-
     const handlePress = async () => {
       if (hasTemporaryUnlock) {
         setAiTempUnlocks(prev => ({
@@ -128,7 +116,6 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
       }
       tool.onPress();
     };
-
     return (
       <TouchableOpacity
         key={tool.id}
@@ -162,7 +149,7 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
               style={{ marginTop: 6, alignSelf: 'flex-start', backgroundColor: '#7C3AED', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 }}
               onPress={(e) => {
                 e.stopPropagation();
-                router.push('/screens/subscription-upgrade-post?reason=ai_progress');
+                navigateToUpgrade({ source: 'teacher_ai_progress', reason: 'feature_needed' });
               }}
             >
               <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>Upgrade</Text>
@@ -190,7 +177,6 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
       </TouchableOpacity>
     );
   };
-
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{t("dashboard.ai_teaching_tools")}</Text>
@@ -209,7 +195,6 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
           {t("dashboard.ai_tools_info", { defaultValue: "AI runs on a secure server. Access and usage are limited by your plan or trial." })}
         </Text>
       </View>
-
       {userRole === "principal_admin" && orgLimits && (
         <View style={styles.orgUsageRow}>
           <Text style={styles.orgUsagePill}>Lessons: {orgLimits.used.lesson_generation}/{orgLimits.quotas.lesson_generation}</Text>
@@ -220,7 +205,6 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
           </TouchableOpacity>
         </View>
       )}
-
       {!(aiLessonCap || aiGradingCap) && showUpgradeNudge && (
         <View style={styles.upgradeNudge}>
           <View style={{ flex: 1 }}>
@@ -241,23 +225,19 @@ export const TeacherAITools: React.FC<TeacherAIToolsProps> = ({
           </TouchableOpacity>
         </View>
       )}
-
       <View style={styles.aiToolsContainer}>{aiTools.map(renderAIToolCard)}</View>
     </View>
   );
 };
-
 // Classes Component
 interface TeacherClassesProps {
   myClasses: any[];
   showAds: boolean;
 }
-
 export const TeacherClasses: React.FC<TeacherClassesProps> = ({ myClasses, showAds }) => {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const styles = getStyles(theme, isDark);
-
   const renderClassCard = (classInfo: any) => (
     <TouchableOpacity
       key={classInfo.id}
@@ -293,7 +273,6 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ myClasses, showA
       )}
     </TouchableOpacity>
   );
-
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{t("dashboard.my_classes")}</Text>
@@ -317,17 +296,14 @@ export const TeacherClasses: React.FC<TeacherClassesProps> = ({ myClasses, showA
     </View>
   );
 };
-
 // Assignments Component
 interface TeacherAssignmentsProps {
   recentAssignments: Assignment[];
 }
-
 export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({ recentAssignments }) => {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const styles = getStyles(theme, isDark);
-
   const renderAssignmentCard = (assignment: Assignment) => (
     <TouchableOpacity
       key={assignment.id}
@@ -358,12 +334,22 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({ recentAs
       <View style={styles.assignmentProgress}>
         <Text style={styles.progressText}>{assignment.submitted}/{assignment.total} submitted</Text>
         <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${(assignment.submitted / assignment.total) * 100}%` }]} />
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: `${ratioToPercent(
+                  assignment.submitted,
+                  assignment.total,
+                  { source: 'teacher-dashboard.assignment-progress' },
+                )}%`,
+              },
+            ]}
+          />
         </View>
       </View>
     </TouchableOpacity>
   );
-
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{t("dashboard.recent_assignments")}</Text>
@@ -377,17 +363,14 @@ export const TeacherAssignments: React.FC<TeacherAssignmentsProps> = ({ recentAs
     </View>
   );
 };
-
 // Events Component
 interface TeacherEventsProps {
   upcomingEvents: any[];
 }
-
 export const TeacherEvents: React.FC<TeacherEventsProps> = ({ upcomingEvents }) => {
   const { t } = useTranslation();
   const { theme, isDark } = useTheme();
   const styles = getStyles(theme, isDark);
-
   return (
     <View style={styles.section}>
       <View style={styles.sectionCard}>

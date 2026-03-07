@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { assertSupabase } from '@/lib/supabase';
+import { buildSoaWebUrl } from '@/lib/config/urls';
 import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 
@@ -227,7 +228,7 @@ export default function BranchManagerInviteCodeScreen() {
   };
 
   const buildShareMessage = (code: string) => {
-    const shareUrl = `https://www.soilofafrica.org/invite/member?code=${encodeURIComponent(code)}`;
+    const shareUrl = buildSoaWebUrl(`/invite/member?code=${encodeURIComponent(code)}`);
     return `🌱 Join Soil of Africa - ${branchName}!\n\nUse invite code: ${code}\n\nDownload the app and enter this code to join:\n${shareUrl}`;
   };
 

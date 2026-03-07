@@ -4,6 +4,7 @@
 import { logger } from '@/lib/logger';
 import { assertSupabase } from '@/lib/supabase';
 import { router } from 'expo-router';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 const TAG = 'LearnerReg';
 
@@ -135,7 +136,7 @@ export async function registerLearner(
         role: 'student',
         organization_id: withProgram ? programInfo?.organizations?.id : null,
       },
-      emailRedirectTo: 'https://www.edudashpro.org.za/landing?flow=email-confirm',
+      emailRedirectTo: buildEduDashWebUrl('/landing?flow=email-confirm'),
     },
   });
 

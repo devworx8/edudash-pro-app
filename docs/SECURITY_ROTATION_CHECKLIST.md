@@ -50,3 +50,17 @@ Use this checklist immediately after any credential exposure or leak suspicion.
 - Record date/time of rotation.
 - Record keys rotated and systems impacted.
 - Record verification evidence and owner sign-off.
+
+## 7) Firebase Web API Key Exposure Runbook (March 2026)
+- Exposure reference: `google-services.json` and `app/google-services.json` previously tracked.
+- Mandatory actions:
+  - Rotate the exposed Firebase Web API key in Google Cloud Console.
+  - Restrict key usage by Android package name + SHA-1 and required APIs only.
+  - Remove tracked Firebase config files from git and keep local copies untracked.
+  - Store production Firebase config as EAS file secrets (`GOOGLE_SERVICES_JSON`, `GOOGLE_SERVICE_INFO_PLIST`).
+  - Run `npm run check:firebase-secrets` before merge/release.
+- Rotation log entry (fill in during incident response):
+  - Rotation completed at (UTC): `____________________`
+  - Rotated by (owner): `____________________`
+  - Verification evidence link: `____________________`
+  - Security sign-off: `____________________`

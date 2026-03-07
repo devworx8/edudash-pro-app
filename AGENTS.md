@@ -200,10 +200,23 @@ A polyfill in `polyfills/promise-shim.js` runs before all app code via Metro's `
 
 ### Environment
 - `.env` at root (gitignored, copy from `.env.example`). Supabase anon key and URL are also committed in `eas.json` (anon role only, public).
+- URL helpers read:
+  - `EXPO_PUBLIC_APP_WEB_URL` (primary EduDash web base URL)
+  - `EXPO_PUBLIC_WEB_URL` (fallback EduDash web base URL)
+  - `EXPO_PUBLIC_SOA_WEB_URL` (Soil of Africa web base URL)
+- Firebase native config files must stay untracked:
+  - `google-services.json`
+  - `app/google-services.json`
+  - `GoogleService-Info.plist`
+  - `ios/GoogleService-Info.plist`
+- For EAS builds, provide file secrets/env paths:
+  - `GOOGLE_SERVICES_JSON` (Android)
+  - `GOOGLE_SERVICE_INFO_PLIST` (iOS)
 - Auth session stored under key `edudash-auth-session`.
 - Backend is cloud-hosted Supabase (project ID: `lvvvjywrmpcqrpvuptdi`). No local database.
 
 ### Production Readiness
+- **Single session (one device):** On sign-in, the app revokes all other sessions so only the current device stays logged in. Set `EXPO_PUBLIC_SINGLE_SESSION_ENABLED=false` to allow multiple devices per account.
 - **Subscription test mode:** `EXPO_PUBLIC_SUBSCRIPTION_TEST_MODE=true` enables a 24-hour trial reset (SubscriptionContext). Disable or leave unset for production so tiers are not auto-reset.
 - **Payment tier sync:** After PayFast success, `app/screens/payments/return.tsx` polls `payment_transactions` and then calls `refreshProfile()` and `refreshSubscription()`. The server (PayFast webhook or checkout completion) must update `profiles.subscription_tier` or the subscriptions table so the app sees the new tier on refresh.
 - **Stubs (web):** RevenueCat, AdMob, biometrics, etc. are stubbed in `lib/stubs/` for Expo web builds. Do not rely on native-only purchase or ad behavior on web.

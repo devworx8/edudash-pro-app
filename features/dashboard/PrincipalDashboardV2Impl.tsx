@@ -40,6 +40,7 @@ import type { AttentionPriority } from '@/components/dashboard/shared/SectionAtt
 import TierBadge from '@/components/ui/TierBadge';
 import { getApprovalStats } from '@/lib/services/teacherApprovalService';
 import { createStyles } from '@/components/dashboard/principal/PrincipalDashboardV2.styles';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 interface PrincipalDashboardV2Props {
   refreshTrigger?: number;
@@ -330,7 +331,7 @@ export const PrincipalDashboardV2: React.FC<PrincipalDashboardV2Props> = () => {
               {subscriptionReady ? (
                 <TouchableOpacity
                   style={styles.manageButton}
-                  onPress={() => router.push('/screens/subscription-upgrade-post')}
+                  onPress={() => navigateToUpgrade({ source: 'principal_dashboard_manage' })}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.manageButtonText}>{t('common.manage', { defaultValue: 'Manage' })}</Text>

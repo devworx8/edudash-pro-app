@@ -22,7 +22,7 @@ import {
 } from '@/lib/rbac';
 import { isPasswordRecoveryInProgress } from '@/lib/sessionManager';
 import { securityAuditor } from '@/lib/security-audit';
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import type { Session, User } from '@supabase/supabase-js';
 import {
   toEnhancedProfile,
@@ -319,7 +319,7 @@ function identifyInMonitoring(user: User, profile: EnhancedUserProfile | null): 
     });
   } catch { /* noop */ }
   try {
-    Sentry.Native.setUser({ id: user.id, email: user.email || undefined } as any);
+    Sentry.setUser({ id: user.id, email: user.email || undefined } as any);
   } catch { /* noop */ }
 }
 

@@ -8,7 +8,7 @@
  * After Supabase redirects here with the session established,
  * this route renders the actual reset password UI.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { assertSupabase } from '@/lib/supabase';
@@ -23,9 +23,18 @@ export default function ResetPasswordRoute() {
   const params = useLocalSearchParams();
   const [checking, setChecking] = useState(true);
   const [hasSession, setHasSession] = useState(false);
+  const normalizedUrlRef = useRef(false);
 
   useEffect(() => {
     const checkAndSetupSession = async () => {
+      const normalizeRecoveryUrl = () => {
+        if (normalizedUrlRef.current) return;
+        const hasSensitiveParams = Boolean(params.code || params.token_hash || params.token);
+        if (!hasSensitiveParams) return;
+        normalizedUrlRef.current = true;
+        router.replace('/reset-password?type=recovery' as `/${string}`);
+      };
+
       try {
         const supabase = assertSupabase();
         
@@ -61,6 +70,7 @@ export default function ResetPasswordRoute() {
           if (data.session) {
             logger.info(TAG, 'PKCE code exchanged successfully');
             setHasSession(true);
+            normalizeRecoveryUrl();
             setChecking(false);
             return;
           }
@@ -84,6 +94,7 @@ export default function ResetPasswordRoute() {
           if (data.session) {
             logger.info(TAG, 'Token verified successfully');
             setHasSession(true);
+            normalizeRecoveryUrl();
             setChecking(false);
             return;
           }
@@ -107,6 +118,7 @@ export default function ResetPasswordRoute() {
           if (data.session) {
             logger.info(TAG, 'PKCE token verified successfully');
             setHasSession(true);
+            normalizeRecoveryUrl();
             setChecking(false);
             return;
           }
@@ -124,6 +136,7 @@ export default function ResetPasswordRoute() {
         if (session && session.user) {
           // We have a valid session from the PKCE flow
           setHasSession(true);
+          normalizeRecoveryUrl();
         } else {
           // No session - the link might be expired or user needs to request new one
           logger.info(TAG, 'No valid session found');

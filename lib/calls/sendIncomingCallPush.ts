@@ -51,6 +51,17 @@ export async function sendIncomingCallPush(
     errorCodes: [],
   };
 
+  if (params.calleeUserId === params.callerId) {
+    console.warn(`[${tag}] Blocking self-targeted incoming call push`, {
+      call_id: params.callId,
+      user_id: params.callerId,
+    });
+    return {
+      ...defaultResult,
+      errorCodes: ['SELF_CALL_BLOCKED'],
+    };
+  }
+
   if (!supabaseUrl) {
     console.warn(`[${tag}] Missing EXPO_PUBLIC_SUPABASE_URL; skipping call push dispatch`);
     return defaultResult;
@@ -115,11 +126,15 @@ export async function sendIncomingCallPush(
       event_type: 'incoming_call',
       user_ids: [params.calleeUserId],
       call_id: params.callId,
+      callee_id: params.calleeUserId,
       caller_id: params.callerId,
       caller_name: params.callerName,
       call_type: params.callType,
       meeting_url: params.meetingUrl,
       thread_id: params.threadId,
+      custom_payload: {
+        callee_id: params.calleeUserId,
+      },
     };
 
     if (platformFilter) {

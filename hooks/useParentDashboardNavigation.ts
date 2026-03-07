@@ -95,6 +95,9 @@ export function useParentDashboardNavigation({ activeChild, children, showAlert 
       case 'ai_help':
         router.push('/screens/parent-ai-help');
         break;
+      case 'calculator':
+        router.push('/(k12)/student/calculator');
+        break;
       case 'upgrade':
         router.push('/screens/parent-upgrade');
         break;
