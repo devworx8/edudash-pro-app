@@ -1,0 +1,16 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.edudashpro.app",
+      "sha256_cert_fingerprints": [
+        "EC:CA:33:C8:7F:52:99:7D:1F:26:77:D9:88:FC:0B:C7:18:69:10:E2:14:03:60:49:5D:7E:54:87:5D:B0:B6:BB",
+        "B5:61:AA:D7:6D:97:63:D1:C9:41:C4:10:B9:5F:57:DE:A7:71:92:99:94:0D:2F:AF:42:C9:9E:31:CB:CD:94:38"
+      ]
+    }
+  }
+]

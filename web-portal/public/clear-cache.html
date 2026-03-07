@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Cache & Service Workers</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .log {
+            background: #1e293b;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #22c55e; }
+        .error { color: #ef4444; }
+        .info { color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <h1>🧹 Clear Cache & Service Workers</h1>
+    <p>Use this page to completely clear all cached data and unregister service workers.</p>
+    
+    <button onclick="clearAll()">Clear Everything</button>
+    <button onclick="clearServiceWorkers()">Unregister Service Workers</button>
+    <button onclick="clearCaches()">Clear Cache Storage</button>
+    <button onclick="clearLocalStorage()">Clear Local Storage</button>
+    <button onclick="window.location.reload()">Reload Page</button>
+    
+    <div class="log" id="log"></div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const time = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `<div class="${type}">[${time}] ${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function clearServiceWorkers() {
+            log('🔍 Checking for service workers...', 'info');
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            
+            if (registrations.length === 0) {
+                log('✅ No service workers found', 'success');
+                return;
+            }
+
+            for (let registration of registrations) {
+                log(`🗑️  Unregistering: ${registration.scope}`, 'info');
+                await registration.unregister();
+                log(`✅ Unregistered: ${registration.scope}`, 'success');
+            }
+            
+            log(`✅ All ${registrations.length} service worker(s) unregistered`, 'success');
+        }
+
+        async function clearCaches() {
+            log('🔍 Checking cache storage...', 'info');
+            const cacheNames = await caches.keys();
+            
+            if (cacheNames.length === 0) {
+                log('✅ No caches found', 'success');
+                return;
+            }
+
+            for (let cacheName of cacheNames) {
+                log(`🗑️  Deleting cache: ${cacheName}`, 'info');
+                await caches.delete(cacheName);
+                log(`✅ Deleted: ${cacheName}`, 'success');
+            }
+            
+            log(`✅ All ${cacheNames.length} cache(s) deleted`, 'success');
+        }
+
+        function clearLocalStorage() {
+            log('🗑️  Clearing localStorage...', 'info');
+            const itemCount = localStorage.length;
+            localStorage.clear();
+            log(`✅ Cleared ${itemCount} localStorage items`, 'success');
+            
+            log('🗑️  Clearing sessionStorage...', 'info');
+            const sessionCount = sessionStorage.length;
+            sessionStorage.clear();
+            log(`✅ Cleared ${sessionCount} sessionStorage items`, 'success');
+        }
+
+        async function clearIndexedDB() {
+            log('🔍 Checking IndexedDB...', 'info');
+            const dbs = await indexedDB.databases();
+            
+            if (dbs.length === 0) {
+                log('✅ No IndexedDB databases found', 'success');
+                return;
+            }
+
+            for (let db of dbs) {
+                log(`🗑️  Deleting database: ${db.name}`, 'info');
+                indexedDB.deleteDatabase(db.name);
+                log(`✅ Deleted: ${db.name}`, 'success');
+            }
+        }
+
+        async function clearAll() {
+            log('🚀 Starting complete cleanup...', 'info');
+            log('═══════════════════════════', 'info');
+            
+            try {
+                await clearServiceWorkers();
+                await clearCaches();
+                clearLocalStorage();
+                await clearIndexedDB();
+                
+                log('═══════════════════════════', 'success');
+                log('✅ Everything cleared successfully!', 'success');
+                log('💡 Click "Reload Page" to refresh', 'info');
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run on load
+        log('Ready to clear cache and service workers', 'info');
+        log('Click "Clear Everything" to start', 'info');
+    </script>
+</body>
+</html>

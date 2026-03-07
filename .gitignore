@@ -56,7 +56,7 @@ android/app/google-services.json
 GoogleService-Info.plist
 ios/GoogleService-Info.plist
 
-# Documentation (in separate repo)
+# Documentation (local-only / externalized)
 docs/
 archive/
 artifacts/
@@ -72,14 +72,34 @@ edudashpro-dev/
 !supabase/README.md
 !PAYMENT_INTEGRATIONS_CHECKLIST.md
 !AGENTS.md
+!WARP.md
 !CONTRIBUTING.md
 !CHANGELOG.md
 !reports/prod-ready/PROD_READINESS_REPORT.md
-!docs/
-docs/*
-!docs/SECURITY_ROTATION_CHECKLIST.md
-!docs/UX_SCOPE_NEXTGEN.md
-!docs/DASH_POLICY_BY_ORGTYPE.md
+
+# Imported separate web workspace (website files only)
+!web-portal/
+web-portal/*
+!web-portal/.env.example
+!web-portal/.gitignore
+!web-portal/.watchmanconfig
+!web-portal/eslint.config.mjs
+!web-portal/next-env.d.ts
+!web-portal/next.config.ts
+!web-portal/package.json
+!web-portal/package-lock.json
+!web-portal/postcss.config.js
+!web-portal/tailwind.config.js
+!web-portal/tsconfig.json
+!web-portal/vercel.json
+!web-portal/public/
+!web-portal/public/**
+!web-portal/scripts/
+!web-portal/scripts/**
+!web-portal/src/
+!web-portal/src/**
+!web-portal/types/
+!web-portal/types/**
 
 # Build artifacts
 *.apk

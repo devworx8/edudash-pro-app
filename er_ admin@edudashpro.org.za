@@ -1,4 +1,0 @@
- user_id | email | email_confirmed_at | created_at | school | role 
----------+-------+--------------------+------------+--------+------
-(0 rows)
-

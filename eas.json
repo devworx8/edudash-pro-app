@@ -21,7 +21,8 @@
         "EXPO_PUBLIC_ENABLE_OTA_UPDATES": "false",
         "EXPO_PUBLIC_AI_STREAMING_ENABLED": "true",
         "EXPO_PUBLIC_ENABLE_AI_STREAMING": "true"
-      }
+      },
+      "environment": "development"
     },
     "preview": {
       "distribution": "internal",
@@ -81,7 +82,8 @@
         "EXPO_PUBLIC_ENABLE_TEST_TOOLS": "true",
         "EXPO_PUBLIC_ENABLE_CONSOLE": "true",
         "EXPO_PUBLIC_DEBUG_MODE": "false"
-      }
+      },
+      "environment": "preview"
     },
     "production": {
       "channel": "production",
@@ -112,7 +114,8 @@
         "EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_LEARNER_DASHBOARD": "${EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_LEARNER_DASHBOARD}",
         "EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_APP_OPEN": "${EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_APP_OPEN}",
         "EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_AI_PREVIEW": "${EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_AI_PREVIEW}"
-      }
+      },
+      "environment": "production"
     },
     "development-apk": {
       "extends": "development",
@@ -120,14 +123,18 @@
       "android": {
         "buildType": "apk",
         "image": "latest"
-      }
+      },
+      "environment": "development"
     },
     "production-apk": {
       "extends": "production",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EAS_PROJECT_ID": "playstore"
-      }
+      },
+      "environment": "production"
     },
     "playstore": {
       "extends": "production",
@@ -139,7 +146,8 @@
       "env": {
         "EAS_PROJECT_ID": "playstore",
         "SENTRY_DISABLE_AUTO_UPLOAD": "true"
-      }
+      },
+      "environment": "production"
     },
     "playstore-shared-key": {
       "extends": "production",
@@ -147,14 +155,16 @@
       "android": {
         "buildType": "app-bundle",
         "gradleCommand": ":app:bundleRelease"
-      }
+      },
+      "environment": "production"
     },
     "playstore-shared-key-apk": {
       "extends": "production",
       "credentialsSource": "local",
       "android": {
         "buildType": "apk"
-      }
+      },
+      "environment": "production"
     },
     "playstore-dash-t": {
       "extends": "production",
@@ -165,11 +175,14 @@
       },
       "env": {
         "EAS_PROJECT_ID": "dash-t"
-      }
+      },
+      "environment": "production"
     },
     "playstore-apk": {
       "extends": "production",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EAS_PROJECT_ID": "playstore",
         "EXPO_PUBLIC_SUPABASE_URL": "https://lvvvjywrmpcqrpvuptdi.supabase.co",
@@ -196,7 +209,8 @@
         "EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_LEARNER_DASHBOARD": "${EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_LEARNER_DASHBOARD}",
         "EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_APP_OPEN": "${EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_APP_OPEN}",
         "EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_AI_PREVIEW": "${EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_AI_PREVIEW}"
-      }
+      },
+      "environment": "production"
     },
     "legacy-playstore": {
       "extends": "production",
@@ -207,15 +221,19 @@
       "env": {
         "EAS_PROJECT_ID": "ab7c9230-2f47-4bfa-b4f4-4ae516a334bc",
         "EXPO_PUBLIC_ENABLE_OTA_UPDATES": "true"
-      }
+      },
+      "environment": "production"
     },
     "legacy-apk": {
       "extends": "production",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EAS_PROJECT_ID": "ab7c9230-2f47-4bfa-b4f4-4ae516a334bc",
         "EXPO_PUBLIC_ENABLE_OTA_UPDATES": "true"
-      }
+      },
+      "environment": "production"
     },
     "dash-v": {
       "extends": "production",
@@ -226,15 +244,19 @@
       "env": {
         "EAS_PROJECT_ID": "dash-v",
         "EXPO_PUBLIC_ENABLE_OTA_UPDATES": "true"
-      }
+      },
+      "environment": "production"
     },
     "dash-v-apk": {
       "extends": "production",
-      "android": { "buildType": "apk" },
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EAS_PROJECT_ID": "dash-v",
         "EXPO_PUBLIC_ENABLE_OTA_UPDATES": "true"
-      }
+      },
+      "environment": "production"
     }
   },
   "submit": {

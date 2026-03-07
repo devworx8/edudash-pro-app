@@ -215,6 +215,23 @@ A polyfill in `polyfills/promise-shim.js` runs before all app code via Metro's `
 - Auth session stored under key `edudash-auth-session`.
 - Backend is cloud-hosted Supabase (project ID: `lvvvjywrmpcqrpvuptdi`). No local database.
 
+### Secrets & Rotation Rules
+- Never commit secrets, tokens, private keys, service-role keys, or credential files to git (including docs/reports artifacts).
+- `.env`, `.env.local`, `.env.production`, `.env.eas`, and all `*.local` env files must remain gitignored.
+- Keep server-only secrets out of `EXPO_PUBLIC_*` vars. Use server-only names (example: `SERVER_SUPABASE_SERVICE_ROLE_KEY`).
+- Supabase Edge secrets must not use names starting with `SUPABASE_` for custom values (reserved prefix). Use custom prefixes like `SERVER_` or domain-specific names.
+- After JWT/API key rotation, update all runtime surfaces in one pass:
+  - Local env files used by developers.
+  - EAS envs (`development`, `preview`, `production`).
+  - Supabase secrets for functions.
+  - Hosting/runtime secret stores (if any).
+- VAPID rotation requires syncing both public and private keys everywhere and forcing/retrying web push re-subscription for existing browser subscriptions.
+- After any secret rotation:
+  - Re-run auth and push notification smoke tests.
+  - Run `npm run verify:prod`.
+  - Publish OTA only for JS/env-consumed fixes; rebuild app if native config/binaries changed.
+- If a secret was exposed publicly, treat it as compromised immediately: rotate first, then clean git history/repositories.
+
 ### Production Readiness
 - **Single session (one device):** On sign-in, the app revokes all other sessions so only the current device stays logged in. Set `EXPO_PUBLIC_SINGLE_SESSION_ENABLED=false` to allow multiple devices per account.
 - **Subscription test mode:** `EXPO_PUBLIC_SUBSCRIPTION_TEST_MODE=true` enables a 24-hour trial reset (SubscriptionContext). Disable or leave unset for production so tiers are not auto-reset.
