@@ -57,11 +57,11 @@ export function normalizeTier(tier: string): Tier {
     case 'parent_plus':
     case 'teacher_pro':
     case 'school_premium':
-    case 'school_pro':
     case 'basic':
     case 'pro':
     case 'premium':
       return 'premium'
+    case 'school_pro':
     case 'school_enterprise':
     case 'super_admin':
     case 'superadmin':
@@ -120,14 +120,14 @@ export function getAIQuotaLimits(tier: Tier | LegacyTier) {
   
   switch (normalizedTier) {
     case 'free':
-      return { monthly: 300, rpm: 5, models: ['claude-3-haiku-20240307'] }
+      return { monthly: 300, rpm: 5, models: ['claude-haiku-4-5-20251001'] }
     case 'starter': 
-      return { monthly: 1500, rpm: 15, models: ['claude-3-haiku-20240307', 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'] }
+      return { monthly: 1500, rpm: 15, models: ['claude-haiku-4-5-20251001', 'claude-3-7-sonnet-20250219'] }
     case 'premium':
-      return { monthly: 6000, rpm: 30, models: ['claude-3-haiku-20240307', 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-3-7-sonnet-20250219'] }
+      return { monthly: 6000, rpm: 30, models: ['claude-haiku-4-5-20251001', 'claude-3-7-sonnet-20250219', 'claude-sonnet-4-20250514'] }
     case 'enterprise':
-      return { monthly: -1, rpm: 60, models: ['claude-3-haiku-20240307', 'claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022', 'claude-3-7-sonnet-20250219', 'claude-sonnet-4-20250514', 'claude-sonnet-4-5-20250514'] } // -1 = unlimited
+      return { monthly: -1, rpm: 60, models: ['claude-haiku-4-5-20251001', 'claude-3-7-sonnet-20250219', 'claude-sonnet-4-20250514', 'claude-sonnet-4-5-20250514'] } // -1 = unlimited
     default:
-      return { monthly: 50, rpm: 5, models: ['claude-3-haiku-20240307'] }
+      return { monthly: 50, rpm: 5, models: ['claude-haiku-4-5-20251001'] }
   }
 }

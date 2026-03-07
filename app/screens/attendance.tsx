@@ -25,7 +25,7 @@ title: string;
   buttons: AlertButton[];
 }
 
-type AttendanceStatus = 'present' | 'absent' | 'late'
+type AttendanceStatus = 'present' | 'absent' | 'late' | 'excused'
 
 export default function AttendanceScreen() {
   const { profile, loading: authLoading, profileLoading } = useAuth()
@@ -76,7 +76,6 @@ export default function AttendanceScreen() {
     if (!authLoading && !profileLoading && profile) {
       if (!canAccessAttendance) {
         hasRedirectedRef.current = true
-        console.warn('[Attendance] Access denied for role:', profile.role)
         track('edudash.attendance.access_denied', {
           user_id: profile.id,
           role: profile.role,
@@ -98,7 +97,7 @@ export default function AttendanceScreen() {
   const [attendanceDate, setAttendanceDate] = useState<string>('')
   const [dateValue, setDateValue] = useState<Date>(new Date())
   const [showDatePicker, setShowDatePicker] = useState(false)
-  // Status map: 'present' | 'absent' | 'late'
+  // Status map: 'present' | 'absent' | 'late' | 'excused'
   const [statusMap, setStatusMap] = useState<Record<string, AttendanceStatus>>({})
   const [submitting, setSubmitting] = useState(false)
 
@@ -116,8 +115,8 @@ export default function AttendanceScreen() {
       if (classId) {
         await studentsQuery.refetch()
       }
-    } catch (error) {
-      console.error('Error refreshing attendance data:', error)
+    } catch {
+      // silently ignore refresh errors
     }
   }
 
@@ -202,13 +201,14 @@ export default function AttendanceScreen() {
   const cycleStatus = (sid: string) => {
     setStatusMap(prev => {
       const current = prev[sid] || 'present'
-      // Cycle: present -> late -> absent -> present
-      const nextStatus = current === 'present' ? 'late' : current === 'late' ? 'absent' : 'present'
-      return { ...prev, [sid]: nextStatus }
+      // Cycle: present -> late -> absent -> excused -> present
+      const order: AttendanceStatus[] = ['present', 'late', 'absent', 'excused']
+      const nextIdx = (order.indexOf(current) + 1) % order.length
+      return { ...prev, [sid]: order[nextIdx] }
     })
   }
 
-  const markAll = (value: 'present' | 'absent' | 'late') => {
+  const markAll = (value: 'present' | 'absent' | 'late' | 'excused') => {
     setStatusMap(prev => {
       const next: Record<string, AttendanceStatus> = {}
       Object.keys(prev).forEach(k => { next[k] = value })
@@ -248,7 +248,6 @@ export default function AttendanceScreen() {
           .or(`organization_id.eq.${schoolId},organization_id.is.null`)
         
         if (deleteError) {
-          console.error('[Attendance] Delete error:', deleteError)
           throw deleteError
         }
       }
@@ -272,7 +271,6 @@ export default function AttendanceScreen() {
         .insert(attendanceRows)
       
       if (insertError) {
-        console.error('[Attendance] Insert error:', insertError)
         throw insertError
       }
       
@@ -306,9 +304,8 @@ export default function AttendanceScreen() {
             await Promise.all(notifyPromises)
           }
         }
-      } catch (notifyError) {
+      } catch {
         // Don't fail attendance submission if notification fails
-        console.warn('[Attendance] Failed to send notifications:', notifyError)
       }
 
       track('edudash.attendance.submit', { classId, presentCount, lateCount, absentCount, total: entries.length, date: attendanceDate })

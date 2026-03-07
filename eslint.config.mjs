@@ -223,7 +223,6 @@ export default [
       'scripts/',
       'docs/',
       'archive/',
-      'web-portal/',
       '**/*.old.tsx',
       '**/*.old.ts',
       '**/*.old.js',

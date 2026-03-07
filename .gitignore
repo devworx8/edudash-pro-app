@@ -80,29 +80,8 @@ edudashpro-dev/
 !mark-1/CLAUDE.md
 !reports/prod-ready/PROD_READINESS_REPORT.md
 
-# Imported separate web workspace (website files only)
-!web-portal/
-web-portal/*
-!web-portal/.env.example
-!web-portal/.gitignore
-!web-portal/.watchmanconfig
-!web-portal/eslint.config.mjs
-!web-portal/next-env.d.ts
-!web-portal/next.config.ts
-!web-portal/package.json
-!web-portal/package-lock.json
-!web-portal/postcss.config.js
-!web-portal/tailwind.config.js
-!web-portal/tsconfig.json
-!web-portal/vercel.json
-!web-portal/public/
-!web-portal/public/**
-!web-portal/scripts/
-!web-portal/scripts/**
-!web-portal/src/
-!web-portal/src/**
-!web-portal/types/
-!web-portal/types/**
+# Retired embedded web workspace. Use ../web as the standalone web repo.
+web-portal/
 
 # Build artifacts
 *.apk

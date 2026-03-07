@@ -80,11 +80,23 @@ export default function ClassDetailsScreen() {
         </View>
 
         <View style={[styles.card, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}>
-          <Text style={[styles.cardTitle, { color: theme.text }]}>Under Development</Text>
-          <Text style={[styles.cardText, { color: theme.textSecondary }]}>
-            This class details screen is currently being developed. More features like student roster, 
-            gradebook, and class analytics will be available soon.
-          </Text>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>Reports</Text>
+          <View style={styles.actionsGrid}>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: theme.surfaceVariant || theme.surface }]}
+              onPress={() => router.push({ pathname: '/screens/gradebook', params: { classId, className } })}
+            >
+              <Ionicons name="bar-chart" size={20} color={theme.primary} />
+              <Text style={[styles.actionText, { color: theme.primary }]}>Gradebook</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, { backgroundColor: theme.surfaceVariant || theme.surface }]}
+              onPress={() => router.push({ pathname: '/screens/attendance-history', params: { classId } })}
+            >
+              <Ionicons name="calendar" size={20} color={theme.primary} />
+              <Text style={[styles.actionText, { color: theme.primary }]}>Attendance History</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
