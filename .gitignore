@@ -75,6 +75,9 @@ edudashpro-dev/
 !WARP.md
 !CONTRIBUTING.md
 !CHANGELOG.md
+!.github/copilot-instructions.md
+!.github/instructions/*.md
+!mark-1/CLAUDE.md
 !reports/prod-ready/PROD_READINESS_REPORT.md
 
 # Imported separate web workspace (website files only)
@@ -125,3 +128,7 @@ credentials.json
 .env.eas.*
 env.local
 web/.next.bak*
+
+# Security backup artifacts (never commit)
+*.INSECURE_BACKUP
+*.deno-backup
