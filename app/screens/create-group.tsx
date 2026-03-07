@@ -9,7 +9,7 @@
  * Parents can also create parent-to-parent DMs from here.
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,6 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  Platform,
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';

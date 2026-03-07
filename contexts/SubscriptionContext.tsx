@@ -2,23 +2,17 @@
 
 /**
  * SubscriptionContext - SIMPLIFIED
- * 
+ *
  * Single Source of Truth: profiles.subscription_tier
- * 
+ *
  * The database has a trigger (trigger_sync_subscription_tier) that automatically
  * syncs profiles.subscription_tier to user_ai_tiers and user_ai_usage tables.
- * 
- * This context now ONLY reads from profiles.subscription_tier for simplicity.
- * Teachers can inherit from their organization if they don't have a personal tier.
- * 
- * TESTING MODE: 24-hour trial reset for internal testing
- * When EXPO_PUBLIC_SUBSCRIPTION_TEST_MODE=true and tier is not 'free',
- * the subscription will auto-reset to 'free' 24 hours after first upgrade.
- * Remove this when Google Play Store approves for production.
+ *
+ * Trial state is DB-driven via profiles.is_trial + profiles.trial_ends_at.
+ * A DB trigger (_activate_new_user_trial) sets these on every new profile insert.
  */
 
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/lib/logger';
@@ -26,11 +20,6 @@ import { normalizeTierName, type CapabilityTier } from '@/lib/tiers';
 import { resolveCapabilityTier } from '@/lib/tiers/resolveEffectiveTier';
 
 const TAG = 'SubscriptionContext';
-
-// Test mode configuration - set to true during Google Play internal testing
-const SUBSCRIPTION_TEST_MODE = process.env.EXPO_PUBLIC_SUBSCRIPTION_TEST_MODE === 'true';
-const TRIAL_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
-const TRIAL_START_KEY = 'subscription_trial_start';
 
 // All valid tiers from tier_name_aligned enum
 type Tier = 
@@ -62,12 +51,11 @@ type Ctx = {
   seats: Seats;
   tierSource: TierSource;
   tierSourceDetail?: string;
-  trialHoursRemaining?: number;
-  isTestMode: boolean;
+  /** Days remaining in the 14-day free trial. undefined = not on trial or trial expired. */
+  trialDaysRemaining?: number;
   assignSeat: (subscriptionId: string, userId: string) => Promise<boolean>;
   revokeSeat: (subscriptionId: string, userId: string) => Promise<boolean>;
   refresh: () => void;
-  resetTrial: () => Promise<void>;
 };
 
 export const SubscriptionContext = createContext<Ctx>({
@@ -77,12 +65,10 @@ export const SubscriptionContext = createContext<Ctx>({
   seats: null,
   tierSource: 'unknown',
   tierSourceDetail: undefined,
-  trialHoursRemaining: undefined,
-  isTestMode: SUBSCRIPTION_TEST_MODE,
+  trialDaysRemaining: undefined,
   assignSeat: async () => false,
   revokeSeat: async () => false,
   refresh: () => {},
-  resetTrial: async () => {},
 });
 
 export function SubscriptionProvider({ children }: { children: React.ReactNode }) {
@@ -93,40 +79,25 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
   const [seats, setSeats] = useState<Seats>(null);
   const [tierSource, setTierSource] = useState<TierSource>('unknown');
   const [tierSourceDetail, setTierSourceDetail] = useState<string | undefined>(undefined);
-  const [trialHoursRemaining, setTrialHoursRemaining] = useState<number | undefined>(undefined);
+  const [trialDaysRemaining, setTrialDaysRemaining] = useState<number | undefined>(undefined);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const lastUserIdRef = useRef<string | null>(null);
 
-  // Function to manually refresh subscription data
   const refresh = () => {
     logger.debug(TAG, 'Manual refresh triggered');
     setRefreshTrigger(prev => prev + 1);
   };
 
-  // Function to reset trial timer (for testing)
-  const resetTrial = async () => {
-    if (SUBSCRIPTION_TEST_MODE) {
-      logger.debug(TAG, 'TEST MODE: Manually resetting trial');
-      await AsyncStorage.removeItem(TRIAL_START_KEY);
-      refresh();
-    }
-  };
-
   useEffect(() => {
     const nextUserId = user?.id ?? null;
-    const prevUserId = lastUserIdRef.current;
-    if (prevUserId !== nextUserId) {
-      // Reset state when switching accounts to avoid cross-user bleed.
+    if (lastUserIdRef.current !== nextUserId) {
       setReady(false);
       setTier('free');
       setCapabilityTier('free');
       setSeats(null);
       setTierSource('unknown');
       setTierSourceDetail(undefined);
-      setTrialHoursRemaining(undefined);
-      if (SUBSCRIPTION_TEST_MODE) {
-        AsyncStorage.removeItem(TRIAL_START_KEY).catch(() => {});
-      }
+      setTrialDaysRemaining(undefined);
     }
     lastUserIdRef.current = nextUserId;
   }, [user?.id]);
@@ -162,10 +133,10 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         
         if (!mounted) return;
         
-        // SINGLE SOURCE OF TRUTH: Read from profiles.subscription_tier
+        // SINGLE SOURCE OF TRUTH: Read from profiles.subscription_tier + trial fields
         const { data: profile, error: profileError } = await assertSupabase()
           .from('profiles')
-          .select('subscription_tier, role, organization_id, preschool_id')
+          .select('subscription_tier, role, organization_id, preschool_id, is_trial, trial_ends_at')
           .eq('id', userId)
           .maybeSingle();
         
@@ -360,53 +331,27 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
         
         if (mounted) {
           logger.debug(TAG, 'FINAL tier:', finalTier, 'source:', source);
-          
-          // TESTING MODE: Check and handle 24-hour trial reset
-          if (SUBSCRIPTION_TEST_MODE && finalTier !== 'free' && source === 'profile') {
-            try {
-              const trialStart = await AsyncStorage.getItem(TRIAL_START_KEY);
-              const now = Date.now();
-              
-              if (!trialStart) {
-                // First time with paid tier - start the trial timer
-                await AsyncStorage.setItem(TRIAL_START_KEY, now.toString());
-                logger.debug(TAG, 'TEST MODE: Started 24h trial timer');
-                setTrialHoursRemaining(24);
-              } else {
-                const elapsed = now - parseInt(trialStart, 10);
-                const hoursLeft = Math.max(0, (TRIAL_DURATION_MS - elapsed) / (60 * 60 * 1000));
-                setTrialHoursRemaining(hoursLeft);
-                
-                if (elapsed >= TRIAL_DURATION_MS) {
-                  // Trial expired - reset to free tier
-                  logger.debug(TAG, 'TEST MODE: 24h trial expired, resetting to free');
-                  
-                  const supabase = assertSupabase();
-                  await supabase
-                    .from('profiles')
-                    .update({ subscription_tier: 'free' })
-                    .eq('id', userId);
-                  
-                  // Clear trial timer for next test cycle
-                  await AsyncStorage.removeItem(TRIAL_START_KEY);
-                  setTrialHoursRemaining(undefined);
-                  
-                  finalTier = 'free';
-                  source = 'profile';
-                } else {
-                  logger.debug(TAG, `TEST MODE: Trial active, ${hoursLeft.toFixed(1)}h remaining`);
-                }
-              }
-            } catch (trialErr) {
-              console.warn('[SubscriptionContext] Trial check error:', trialErr);
+
+          // DB-driven trial: check is_trial + trial_ends_at from profiles
+          let daysLeft: number | undefined;
+          if (profile?.is_trial && profile?.trial_ends_at) {
+            const msLeft = new Date(profile.trial_ends_at).getTime() - Date.now();
+            if (msLeft > 0) {
+              daysLeft = Math.ceil(msLeft / (1000 * 60 * 60 * 24));
+            } else {
+              // Trial has expired — enforce free tier and clear the flag
+              await assertSupabase()
+                .from('profiles')
+                .update({ is_trial: false, subscription_tier: 'free' })
+                .eq('id', userId);
+              finalTier = 'free';
+              source = 'profile';
             }
-          } else {
-            setTrialHoursRemaining(undefined);
           }
-          
+          setTrialDaysRemaining(daysLeft);
+
           const capTier = resolveCapabilityTier(String(finalTier));
           setCapabilityTier(capTier);
-
           setTier(finalTier);
           setTierSource(source);
           setTierSourceDetail(sourceDetail ?? source);
@@ -468,20 +413,18 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
     }
   };
 
-  const value = useMemo<Ctx>(() => ({ 
-    ready, 
-    tier, 
+  const value = useMemo<Ctx>(() => ({
+    ready,
+    tier,
     capabilityTier,
-    seats, 
-    tierSource, 
-    tierSourceDetail, 
-    trialHoursRemaining,
-    isTestMode: SUBSCRIPTION_TEST_MODE,
-    assignSeat, 
-    revokeSeat, 
+    seats,
+    tierSource,
+    tierSourceDetail,
+    trialDaysRemaining,
+    assignSeat,
+    revokeSeat,
     refresh,
-    resetTrial,
-  }), [ready, tier, seats, tierSource, tierSourceDetail, trialHoursRemaining]);
+  }), [ready, tier, capabilityTier, seats, tierSource, tierSourceDetail, trialDaysRemaining]);
 
   return <SubscriptionContext.Provider value={value}>{children}</SubscriptionContext.Provider>;
 }

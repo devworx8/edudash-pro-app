@@ -200,7 +200,7 @@ export default function GradebookScreen() {
                   return (
                     <TouchableOpacity
                       key={g.subject}
-                      style={[s.gradeCell, isEditing && { backgroundColor: theme.primaryContainer }]}
+                      style={[s.gradeCell, isEditing && { backgroundColor: theme.colors.primaryContainer }]}
                       onPress={() => handleCellPress(student.id, g.subject, g.score)}
                     >
                       {isEditing ? (
