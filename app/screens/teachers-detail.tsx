@@ -73,7 +73,7 @@ export default function TeachersDetailScreen() {
       onCall={() => handleCallTeacher(item.phone)}
       onEmail={() => handleEmailTeacher(item.email)}
       onToggleStatus={() => toggleTeacherStatus(item.id, item.employmentStatus)}
-      onDelete={() => handleDeleteTeacher(item.id)}
+      onDelete={() => handleDeleteTeacher(item)}
     />
   );
 

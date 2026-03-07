@@ -1,11 +1,25 @@
 import { PARENT_ROLES, STUDENT_ROLES } from './scopeResolver.ts';
 
 export const DEFAULT_ANTHROPIC_EXAM_MODEL = 'claude-sonnet-4-20250514';
-export const STARTER_HAIKU_MODEL = 'claude-3-5-haiku-20241022';
+export const ENTERPRISE_EXAM_MODEL = 'claude-sonnet-4-5-20250514';
+export const STARTER_HAIKU_MODEL = 'claude-3-7-sonnet-20250219';
+export const FREE_HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 export const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
   'claude-3-5-sonnet-20241022': DEFAULT_ANTHROPIC_EXAM_MODEL,
   'claude-3-5-sonnet-latest': DEFAULT_ANTHROPIC_EXAM_MODEL,
-  'claude-3-5-haiku-latest': STARTER_HAIKU_MODEL,
+  'claude-3-5-haiku-latest': FREE_HAIKU_MODEL,
+  'claude-3-5-haiku-20241022': FREE_HAIKU_MODEL,
+  'claude-haiku-4x': FREE_HAIKU_MODEL,
+  'haiku-4x': FREE_HAIKU_MODEL,
+  'claude-haiku-4': FREE_HAIKU_MODEL,
+  'claude-haiku-4-latest': FREE_HAIKU_MODEL,
+  'claude-haiku-4.5': FREE_HAIKU_MODEL,
+  'claude-haiku-4-5': FREE_HAIKU_MODEL,
+  'claude-sonnet-3.7': STARTER_HAIKU_MODEL,
+  'claude-sonnet-3-7': STARTER_HAIKU_MODEL,
+  'claude-3-7-sonnet-latest': STARTER_HAIKU_MODEL,
+  'claude-sonnet-4.5': ENTERPRISE_EXAM_MODEL,
+  'claude-sonnet-4-5': ENTERPRISE_EXAM_MODEL,
 };
 
 export function normalizeAnthropicModel(model: string | null | undefined): string {
@@ -17,13 +31,13 @@ export function normalizeAnthropicModel(model: string | null | undefined): strin
 export function getDefaultModelForTier(tier: string | null | undefined): string {
   const t = String(tier ?? 'free').toLowerCase();
   if (t.includes('enterprise') || t === 'superadmin' || t === 'super_admin') {
+    return ENTERPRISE_EXAM_MODEL;
+  }
+  if (t.includes('premium') || t.includes('pro') || t.includes('plus') || t.includes('trial') || t === 'trial') {
     return DEFAULT_ANTHROPIC_EXAM_MODEL;
   }
-  if (t.includes('premium') || t.includes('pro') || t.includes('plus') || t.includes('basic')) {
-    return DEFAULT_ANTHROPIC_EXAM_MODEL;
-  }
-  if (t.includes('starter') || t === 'trial') return STARTER_HAIKU_MODEL;
-  return STARTER_HAIKU_MODEL;
+  if (t.includes('basic') || t.includes('starter')) return STARTER_HAIKU_MODEL;
+  return FREE_HAIKU_MODEL;
 }
 
 export function normalizeTierForExamRole(
@@ -63,9 +77,10 @@ export function buildModelFallbackChain(
   const ordered = [
     preferredModel,
     ...configuredFallbacks,
+    ENTERPRISE_EXAM_MODEL,
     DEFAULT_ANTHROPIC_EXAM_MODEL,
     STARTER_HAIKU_MODEL,
-    'claude-3-haiku-20240307',
+    FREE_HAIKU_MODEL,
   ];
   return [...new Set(ordered.map((model) => normalizeAnthropicModel(model)).filter(Boolean))];
 }

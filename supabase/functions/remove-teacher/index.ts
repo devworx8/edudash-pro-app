@@ -1,6 +1,6 @@
 // Supabase Edge Function: remove-teacher
-// Removes a teacher from a school using service role to bypass RLS
-// Only callable by principals of the same organization
+// Archives a teacher from a school (no hard delete), using service role to bypass RLS.
+// Callable by school leadership roles in the same organization.
 
 declare const Deno: {
   env: { get(key: string): string | undefined };
@@ -18,9 +18,10 @@ const corsHeaders = {
 };
 
 interface RemoveTeacherRequest {
-  teacher_user_id: string;
+  teacher_record_id: string;
   organization_id: string;
-  teacher_record_id?: string | null;
+  teacher_user_id?: string | null;
+  reason?: string | null;
 }
 
 serve(async (req) => {
@@ -58,16 +59,23 @@ serve(async (req) => {
     }
 
     const body: RemoveTeacherRequest = await req.json();
-    const { teacher_user_id, organization_id, teacher_record_id } = body;
+    const { teacher_record_id, organization_id, teacher_user_id, reason } = body;
 
-    if (!teacher_user_id || !organization_id) {
+    if (!teacher_record_id || !organization_id) {
       return new Response(
-        JSON.stringify({ error: 'Missing teacher_user_id or organization_id' }),
+        JSON.stringify({ error: 'Missing teacher_record_id or organization_id' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    console.log('[remove-teacher] Caller:', caller.id, 'removing teacher:', teacher_user_id, 'from org:', organization_id);
+    console.log(
+      '[remove-teacher] Caller:',
+      caller.id,
+      'archiving teacher record:',
+      teacher_record_id,
+      'from org:',
+      organization_id,
+    );
 
     // Use service role client for admin operations
     const adminClient = createClient(supabaseUrl, serviceKey, {
@@ -83,120 +91,200 @@ serve(async (req) => {
 
     const isCallerAuthorized =
       callerProfile &&
-      ['principal', 'super_admin'].includes(callerProfile.role || '') &&
+      ['principal', 'principal_admin', 'admin', 'super_admin', 'superadmin'].includes(
+        (callerProfile.role || '').toLowerCase(),
+      ) &&
       (callerProfile.organization_id === organization_id ||
         callerProfile.preschool_id === organization_id);
 
     if (!isCallerAuthorized) {
       console.error('[remove-teacher] Caller not authorized:', callerProfile?.role, callerProfile?.organization_id);
       return new Response(
-        JSON.stringify({ error: 'You must be a principal of this school to remove teachers' }),
+        JSON.stringify({ error: 'You must be a school leader of this school to archive teachers' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
-    // Prevent removing yourself
-    if (teacher_user_id === caller.id) {
+    const { data: teacherRow, error: teacherLookupError } = await adminClient
+      .from('teachers')
+      .select('id,preschool_id,user_id,auth_user_id,full_name,email,is_active,employment_status')
+      .eq('id', teacher_record_id)
+      .eq('preschool_id', organization_id)
+      .maybeSingle();
+
+    if (teacherLookupError) {
+      console.error('[remove-teacher] teacher lookup error:', teacherLookupError);
       return new Response(
-        JSON.stringify({ error: 'You cannot remove yourself' }),
+        JSON.stringify({ error: teacherLookupError.message || 'Failed to load teacher record' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    if (!teacherRow) {
+      return new Response(
+        JSON.stringify({ error: 'Teacher record not found for this school' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+      );
+    }
+
+    const candidateIds = Array.from(
+      new Set(
+        [teacher_user_id, teacherRow.user_id, teacherRow.auth_user_id]
+          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+      ),
+    );
+
+    let resolvedProfileId: string | null = null;
+    let resolvedAuthUserId: string | null = null;
+
+    if (candidateIds.length > 0) {
+      const { data: profileCandidates, error: profileLookupError } = await adminClient
+        .from('profiles')
+        .select('id,auth_user_id')
+        .or(
+          candidateIds
+            .map((id) => `id.eq.${id}`)
+            .concat(candidateIds.map((id) => `auth_user_id.eq.${id}`))
+            .join(','),
+        );
+
+      if (profileLookupError) {
+        console.warn('[remove-teacher] profile lookup warning:', profileLookupError.message);
+      } else if (Array.isArray(profileCandidates) && profileCandidates.length > 0) {
+        const bestMatch =
+          profileCandidates.find((profile) => profile.id === teacher_user_id || profile.auth_user_id === teacher_user_id) ||
+          profileCandidates[0];
+        resolvedProfileId = bestMatch?.id || null;
+        resolvedAuthUserId = bestMatch?.auth_user_id || null;
+      }
+    }
+
+    // Prevent archiving yourself
+    if (
+      caller.id === teacher_record_id ||
+      (resolvedProfileId && caller.id === resolvedProfileId) ||
+      (resolvedAuthUserId && caller.id === resolvedAuthUserId)
+    ) {
+      return new Response(
+        JSON.stringify({ error: 'You cannot archive yourself' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
 
     const errors: string[] = [];
 
-    // Step 1: Unassign from classes
-    const { error: classError } = await adminClient
-      .from('classes')
-      .update({ teacher_id: null })
-      .eq('teacher_id', teacher_user_id)
-      .eq('preschool_id', organization_id);
-    if (classError) {
-      console.error('[remove-teacher] Class unassign error:', classError);
-      errors.push(`Classes: ${classError.message}`);
-    } else {
-      console.log('[remove-teacher] ✅ Classes unassigned');
-    }
+    // Step 1: Unassign class ownership for all known teacher identifiers.
+    const classTeacherRefs = Array.from(
+      new Set(
+        [teacher_record_id, teacher_user_id, teacherRow.user_id, teacherRow.auth_user_id, resolvedProfileId, resolvedAuthUserId]
+          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+      ),
+    );
 
-    // Step 2: DELETE teacher record (fully remove, not just deactivate)
-    if (teacher_record_id) {
-      const { error: teacherError } = await adminClient
-        .from('teachers')
-        .delete()
-        .eq('preschool_id', organization_id)
-        .or(`user_id.eq.${teacher_user_id},id.eq.${teacher_record_id}`);
-      if (teacherError) {
-        console.error('[remove-teacher] Teacher delete error:', teacherError);
-        errors.push(`Teacher record: ${teacherError.message}`);
-      } else {
-        console.log('[remove-teacher] ✅ Teacher record deleted');
-      }
-    } else {
-      const { error: teacherError } = await adminClient
-        .from('teachers')
-        .delete()
-        .eq('user_id', teacher_user_id)
+    if (classTeacherRefs.length > 0) {
+      const { error: classError } = await adminClient
+        .from('classes')
+        .update({ teacher_id: null })
+        .in('teacher_id', classTeacherRefs)
         .eq('preschool_id', organization_id);
-      if (teacherError) {
-        console.error('[remove-teacher] Teacher delete error:', teacherError);
-        errors.push(`Teacher record: ${teacherError.message}`);
+      if (classError) {
+        console.error('[remove-teacher] Class unassign error:', classError);
+        errors.push(`Classes: ${classError.message}`);
       } else {
-        console.log('[remove-teacher] ✅ Teacher record deleted');
+        console.log('[remove-teacher] ✅ Classes unassigned');
       }
     }
 
-    // Step 3: Remove organization membership (this was silently blocked by RLS before)
-    const { error: memberError, count: memberCount } = await adminClient
-      .from('organization_members')
-      .delete()
-      .eq('user_id', teacher_user_id)
-      .eq('organization_id', organization_id);
-    if (memberError) {
-      console.error('[remove-teacher] Membership delete error:', memberError);
-      errors.push(`Membership: ${memberError.message}`);
-    } else {
-      console.log('[remove-teacher] ✅ Organization membership removed, count:', memberCount);
-    }
-
-    // Step 4: Clear profile org linkage (this was silently blocked by RLS before)
-    const { error: profileError } = await adminClient
-      .from('profiles')
+    // Step 2: Archive teacher record.
+    const { error: teacherArchiveError } = await adminClient
+      .from('teachers')
       .update({
-        organization_id: null,
-        preschool_id: null,
-        seat_status: 'inactive',
-        role: 'parent',
+        is_active: false,
+        employment_status: 'archived',
+        archived_at: new Date().toISOString(),
+        archived_by: caller.id,
+        archive_reason: (reason || '').trim() || 'Archived by principal',
       })
-      .eq('id', teacher_user_id);
-    if (profileError) {
-      console.error('[remove-teacher] Profile update error:', profileError);
-      errors.push(`Profile: ${profileError.message}`);
+      .eq('id', teacher_record_id)
+      .eq('preschool_id', organization_id);
+
+    if (teacherArchiveError) {
+      console.error('[remove-teacher] Teacher archive error:', teacherArchiveError);
+      errors.push(`Teacher archive: ${teacherArchiveError.message}`);
     } else {
-      console.log('[remove-teacher] ✅ Profile cleared');
+      console.log('[remove-teacher] ✅ Teacher archived');
     }
 
-    // Step 5: Revoke subscription seat (full delete via RPC)
-    const { error: seatError } = await adminClient
-      .rpc('rpc_revoke_teacher_seat', { target_user_id: teacher_user_id });
-    if (seatError) {
-      // Non-fatal — teacher might not have a seat
-      console.warn('[remove-teacher] Seat revoke (non-fatal):', seatError.message);
-    } else {
-      console.log('[remove-teacher] ✅ Subscription seat revoked');
+    // Step 3: Deactivate organization membership (archive-safe; no hard delete).
+    if (resolvedProfileId) {
+      const { error: memberError } = await adminClient
+        .from('organization_members')
+        .update({
+          membership_status: 'inactive',
+          seat_status: 'inactive',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', resolvedProfileId)
+        .eq('organization_id', organization_id);
+      if (memberError) {
+        console.error('[remove-teacher] Membership update error:', memberError);
+        errors.push(`Membership: ${memberError.message}`);
+      } else {
+        console.log('[remove-teacher] ✅ Organization membership archived');
+      }
     }
 
-    // Step 6: Also remove any pending invites for this teacher's email
-    const { data: teacherProfile } = await adminClient
-      .from('profiles')
-      .select('email')
-      .eq('id', teacher_user_id)
-      .single();
+    // Step 4: Deactivate payroll recipient for archived teacher.
+    const { error: recipientDeactivateError } = await adminClient
+      .from('payroll_recipients')
+      .update({
+        active: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('organization_id', organization_id)
+      .eq('teacher_id', teacher_record_id);
+    if (recipientDeactivateError) {
+      console.warn('[remove-teacher] Payroll recipient deactivate warning:', recipientDeactivateError.message);
+    }
 
-    if (teacherProfile?.email) {
+    // Step 5: Clear profile org linkage + seat status when profile exists.
+    if (resolvedProfileId) {
+      const { error: profileError } = await adminClient
+        .from('profiles')
+        .update({
+          organization_id: null,
+          preschool_id: null,
+          seat_status: 'inactive',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', resolvedProfileId);
+      if (profileError) {
+        console.error('[remove-teacher] Profile update error:', profileError);
+        errors.push(`Profile: ${profileError.message}`);
+      } else {
+        console.log('[remove-teacher] ✅ Profile cleared');
+      }
+    }
+
+    // Step 6: Revoke subscription seat.
+    if (resolvedProfileId) {
+      const { error: seatError } = await adminClient
+        .rpc('rpc_revoke_teacher_seat', { target_user_id: resolvedProfileId });
+      if (seatError) {
+        // Non-fatal — teacher might not have a seat.
+        console.warn('[remove-teacher] Seat revoke (non-fatal):', seatError.message);
+      } else {
+        console.log('[remove-teacher] ✅ Subscription seat revoked');
+      }
+    }
+
+    // Step 7: Cleanup pending invites for matching email.
+    const teacherEmail = teacherRow.email || null;
+    if (teacherEmail) {
       const { error: inviteError } = await adminClient
         .from('teacher_invites')
         .delete()
-        .eq('email', teacherProfile.email)
+        .eq('email', teacherEmail)
         .eq('preschool_id', organization_id);
       if (inviteError) {
         console.warn('[remove-teacher] Invite cleanup error (non-fatal):', inviteError);
@@ -213,9 +301,14 @@ serve(async (req) => {
       );
     }
 
-    console.log('[remove-teacher] ✅ Teacher fully removed');
+    console.log('[remove-teacher] ✅ Teacher archived');
     return new Response(
-      JSON.stringify({ success: true }),
+      JSON.stringify({
+        success: true,
+        action: 'archived',
+        teacher_record_id,
+        resolved_profile_id: resolvedProfileId,
+      }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   } catch (err: any) {

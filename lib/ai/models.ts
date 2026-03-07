@@ -1,5 +1,6 @@
 export type AIModelId =
   | 'claude-3-haiku-20240307'
+  | 'claude-haiku-4-5-20251001'
   | 'claude-3-5-haiku-20241022'
   | 'claude-3-5-sonnet-20241022'
   | 'claude-3-7-sonnet-20250219'
@@ -21,6 +22,7 @@ export type AIModelInfo = {
 // Central place to tune model weights for UI hints and rough cost estimates
 export const MODEL_WEIGHTS: Record<AIModelId, number> = {
   'claude-3-haiku-20240307': 1,
+  'claude-haiku-4-5-20251001': 2,
   'claude-3-5-haiku-20241022': 2,
   'claude-3-5-sonnet-20241022': 5,
   'claude-3-7-sonnet-20250219': 6,
@@ -57,9 +59,19 @@ export function getDefaultModels(): AIModelInfo[] {
       notes: 'Available on all plans'
     },
     {
+      id: 'claude-haiku-4-5-20251001',
+      name: 'Claude Haiku 4.5',
+      displayName: 'Dash Swift',
+      provider: 'claude',
+      relativeCost: MODEL_WEIGHTS['claude-haiku-4-5-20251001'],
+      minTier: 'free',
+      description: 'Fast, modern baseline model for daily tutoring and routine generation',
+      notes: 'Default for Free tier'
+    },
+    {
       id: 'claude-3-5-haiku-20241022',
       name: 'Claude 3.5 Haiku',
-      displayName: 'Dash Swift',
+      displayName: 'Dash Swift (Legacy)',
       provider: 'claude',
       relativeCost: MODEL_WEIGHTS['claude-3-5-haiku-20241022'],
       minTier: 'starter',
@@ -82,9 +94,9 @@ export function getDefaultModels(): AIModelInfo[] {
       displayName: 'Dash Advanced',
       provider: 'claude',
       relativeCost: MODEL_WEIGHTS['claude-3-7-sonnet-20250219'],
-      minTier: 'premium',
-      description: 'Higher accuracy for complex tutoring and advanced reasoning',
-      notes: 'Premium and Enterprise only'
+      minTier: 'starter',
+      description: 'Higher accuracy for lesson and routine planning with strong instruction-following',
+      notes: 'Default for Starter tier'
     },
     {
       id: 'claude-sonnet-4-20250514',
@@ -92,9 +104,9 @@ export function getDefaultModels(): AIModelInfo[] {
       displayName: 'Dash Pro',
       provider: 'claude',
       relativeCost: MODEL_WEIGHTS['claude-sonnet-4-20250514'],
-      minTier: 'enterprise',
-      description: 'Top-tier reasoning for complex work and multi-step workflows',
-      notes: 'Enterprise only'
+      minTier: 'premium',
+      description: 'Top-tier reasoning for premium tutoring and generation workflows',
+      notes: 'Default for Premium/Plus/Trial tiers'
     },
     {
       id: 'claude-sonnet-4-5-20250514',
@@ -131,12 +143,10 @@ export function getModelsForTier(tier: SubscriptionTier): AIModelInfo[] {
  */
 export function getDefaultModelForTier(tier: SubscriptionTier): AIModelId {
   const costSafeDefaults: Record<SubscriptionTier, AIModelId> = {
-    // Even on the free tier we prefer a more capable model
-    // so Dash feels closer to a \"full\" assistant experience.
-    free: 'claude-3-5-haiku-20241022',
-    starter: 'claude-3-5-haiku-20241022',
-    premium: 'claude-3-5-haiku-20241022',
-    enterprise: 'claude-3-7-sonnet-20250219',
+    free: 'claude-haiku-4-5-20251001',
+    starter: 'claude-3-7-sonnet-20250219',
+    premium: 'claude-sonnet-4-20250514',
+    enterprise: 'claude-sonnet-4-5-20250514',
   }
   const preferred = costSafeDefaults[tier] || 'claude-3-haiku-20240307'
   if (canAccessModel(tier, preferred)) return preferred

@@ -428,6 +428,14 @@ const blockText = (block: DailyProgramBlock): string =>
     .map((value) => String(value || '').toLowerCase())
     .join(' ');
 
+const blockHeaderText = (block: DailyProgramBlock): string =>
+  [
+    block.block_type,
+    block.title,
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .join(' ');
+
 const blockTitleOnly = (block: DailyProgramBlock): string =>
   String(block.title || '').trim().toLowerCase();
 
@@ -437,6 +445,53 @@ const hasKeyword = (source: string, keywords: string[]): boolean =>
 /** True if block title contains any of the given keywords (used to avoid assigning wrong anchor to a block). */
 const blockTitleMatchesKeywords = (block: DailyProgramBlock, keywords: string[]): boolean =>
   hasKeyword(blockTitleOnly(block), keywords);
+
+const blockHeaderMatchesKeywords = (block: DailyProgramBlock, keywords: string[]): boolean =>
+  hasKeyword(blockHeaderText(block), keywords);
+
+const blockTypeMatchesAnchor = (block: DailyProgramBlock, anchor: AnchorRule): boolean =>
+  String(block.block_type || '').toLowerCase() === String(anchor.blockType || '').toLowerCase();
+
+const findBestAnchorCandidateIndex = (
+  dayBlocks: DailyProgramBlock[],
+  claimedBlockIndexes: Set<number>,
+  anchor: AnchorRule,
+  otherAnchors: AnchorRule[],
+): number => {
+  const anchorStart = parseTimeToMinutes(anchor.startTime);
+  let bestIndex = -1;
+  let bestScore = -Infinity;
+
+  dayBlocks.forEach((block, index) => {
+    if (claimedBlockIndexes.has(index)) return;
+    if (isToiletRoutineBlock(block)) return;
+
+    const titleHit = blockTitleMatchesKeywords(block, anchor.keywords);
+    const headerHit = blockHeaderMatchesKeywords(block, anchor.keywords);
+    const typeHit = blockTypeMatchesAnchor(block, anchor);
+    if (!titleHit && !headerHit && !typeHit) return;
+
+    const titleMatchesOther = otherAnchors.some((item) => blockTitleMatchesKeywords(block, item.keywords));
+    if (titleMatchesOther) return;
+
+    let score = 0;
+    if (titleHit) score += 1000;
+    if (headerHit) score += 800;
+    if (typeHit) score += 350;
+
+    const start = parseTimeToMinutes(block.start_time);
+    if (start != null && anchorStart != null) {
+      score += Math.max(0, 240 - Math.abs(start - anchorStart));
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIndex = index;
+    }
+  });
+
+  return bestScore >= 300 ? bestIndex : -1;
+};
 
 const parseToiletMaxDurationMinutes = (source: string): number | null => {
   const patterns = [
@@ -497,6 +552,14 @@ const parsePreflightAnchorPolicy = (
       startTime,
     });
   }
+  anchors.sort((a, b) => {
+    const aMinutes = parseFlexibleTimeToMinutes(a.startTime);
+    const bMinutes = parseFlexibleTimeToMinutes(b.startTime);
+    if (aMinutes == null && bMinutes == null) return 0;
+    if (aMinutes == null) return 1;
+    if (bMinutes == null) return -1;
+    return aMinutes - bMinutes;
+  });
   const toiletMax = parseToiletMaxDurationMinutes(source);
   return {
     anchors,
@@ -620,27 +683,18 @@ const enforcePreflightAnchorPolicy = (
 
     for (const anchor of policy.anchors) {
       const otherAnchors = policy.anchors.filter((a) => a.key !== anchor.key);
-      const titleMatchIdx = dayBlocks.findIndex(
-        (block, index) =>
-          !claimedBlockIndexes.has(index) &&
-          !isToiletRoutineBlock(block) &&
-          blockTitleMatchesKeywords(block, anchor.keywords),
+      const idx = findBestAnchorCandidateIndex(
+        dayBlocks,
+        claimedBlockIndexes,
+        anchor,
+        otherAnchors,
       );
-      const keywordMatchIdx =
-        titleMatchIdx >= 0
-          ? -1
-          : dayBlocks.findIndex((block, index) => {
-              if (claimedBlockIndexes.has(index) || isToiletRoutineBlock(block)) return false;
-              if (!hasKeyword(blockText(block), anchor.keywords)) return false;
-              const titleMatchesOther = otherAnchors.some((a) => blockTitleMatchesKeywords(block, a.keywords));
-              return !titleMatchesOther;
-            });
-      if (titleMatchIdx < 0 && keywordMatchIdx < 0) {
+      if (idx < 0) {
         const skippedToilet = dayBlocks.some(
           (block, index) =>
             !claimedBlockIndexes.has(index) &&
             isToiletRoutineBlock(block) &&
-            hasKeyword(blockText(block), anchor.keywords),
+            blockHeaderMatchesKeywords(block, anchor.keywords),
         );
         if (skippedToilet) {
           anchorDiagnostics.skippedConflicts.push(
@@ -648,7 +702,6 @@ const enforcePreflightAnchorPolicy = (
           );
         }
       }
-      const idx = titleMatchIdx >= 0 ? titleMatchIdx : keywordMatchIdx;
       if (idx >= 0) {
         dayBlocks[idx] = applyAnchorTimingToBlock(dayBlocks[idx], anchor);
         claimedBlockIndexes.add(idx);
@@ -763,7 +816,7 @@ const isToiletRoutineBlock = (block: DailyProgramBlock): boolean =>
   hasKeyword(blockText(block), TOILET_KEYWORDS);
 
 const isAnchorBlock = (block: DailyProgramBlock, keywords: string[]): boolean =>
-  hasKeyword(blockText(block), keywords);
+  hasKeyword(blockHeaderText(block), keywords);
 
 const createToiletRoutineBlock = (
   day: number,

@@ -161,6 +161,62 @@ describe('applyTimeRulesToBlocks', () => {
     expect(countRoutineDayOverlaps(monday)).toBe(0);
   });
 
+  it('treats auto-added preflight anchor notes as hard locks during web time reflow', () => {
+    const blocks: DailyProgramBlock[] = [
+      makeBlock({ day_of_week: 1, block_order: 1, title: 'Arrival', block_type: 'transition', start_time: '06:00', end_time: '07:00' }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 2,
+        title: 'Circle Time',
+        block_type: 'circle_time',
+        start_time: '06:51',
+        end_time: '07:42',
+        notes: 'Auto-added from preflight non-negotiable anchor (Circle Time 08:10).',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 3,
+        title: 'Breakfast',
+        block_type: 'meal',
+        start_time: '07:42',
+        end_time: '08:00',
+        notes: 'Auto-added from preflight non-negotiable anchor (Breakfast 08:30).',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 4,
+        title: 'Nap / Quiet Time',
+        block_type: 'nap',
+        start_time: '10:39',
+        end_time: '11:46',
+        notes: 'Auto-added from preflight non-negotiable anchor (Nap / Quiet Time 11:30).',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 5,
+        title: 'Lunch',
+        block_type: 'meal',
+        start_time: '11:46',
+        end_time: '12:53',
+        notes: 'Auto-added from preflight non-negotiable anchor (Lunch 12:30).',
+      }),
+      makeBlock({ day_of_week: 1, block_order: 6, title: 'Dismissal', block_type: 'transition', start_time: '13:30', end_time: '14:00' }),
+    ];
+
+    const normalized = applyTimeRulesToBlocks(blocks, rules, 480, '4-6');
+    const monday = normalized.filter((block) => block.day_of_week === 1);
+    const circle = monday.find((block) => /circle/i.test(String(block.title || '')));
+    const breakfast = monday.find((block) => /breakfast/i.test(String(block.title || '')));
+    const nap = monday.find((block) => /nap|quiet/i.test(String(block.title || '')));
+    const lunch = monday.find((block) => /lunch/i.test(String(block.title || '')));
+
+    expect(circle?.start_time).toBe('08:10');
+    expect(breakfast?.start_time).toBe('08:30');
+    expect(nap?.start_time).toBe('11:30');
+    expect(lunch?.start_time).toBe('12:30');
+    expect(countRoutineDayOverlaps(monday)).toBe(0);
+  });
+
   it('is deterministic across repeated runs', () => {
     const blocks: DailyProgramBlock[] = [
       makeBlock({ day_of_week: 1, block_order: 1, title: 'Arrival', block_type: 'transition', start_time: '06:00', end_time: '08:00' }),

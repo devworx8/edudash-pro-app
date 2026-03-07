@@ -46,6 +46,9 @@ interface MessageBubbleProps {
   translatedText?: string;
   onToggleTranslation?: () => void;
   showTranslation?: boolean;
+  transcriptionText?: string;
+  isTranscribing?: boolean;
+  onTranscribe?: () => void;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ 
@@ -71,6 +74,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
   translatedText,
   onToggleTranslation,
   showTranslation = false,
+  transcriptionText,
+  isTranscribing,
+  onTranscribe,
 }) => {
   const [fullScreenImageUrl, setFullScreenImageUrl] = useState<string | null>(null);
   const name = getSenderName(msg.sender);
@@ -154,6 +160,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
               messageId={msg.id}
               onReactionPress={onReactionPress}
               onReactionLongPress={onReactionLongPress ? (emoji, ids) => onReactionLongPress(msg.id, emoji, ids) : undefined}
+              transcriptionText={transcriptionText}
+              isTranscribing={isTranscribing}
+              onTranscribe={onTranscribe}
             />
           </View>
         </View>
@@ -470,7 +479,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({
          prevProps.msg._pending === nextProps.msg._pending &&
          JSON.stringify(prevProps.msg.reactions) === JSON.stringify(nextProps.msg.reactions) &&
          prevProps.translatedText === nextProps.translatedText &&
-         prevProps.showTranslation === nextProps.showTranslation;
+         prevProps.showTranslation === nextProps.showTranslation &&
+         prevProps.transcriptionText === nextProps.transcriptionText &&
+         prevProps.isTranscribing === nextProps.isTranscribing;
 });
 
 const styles = StyleSheet.create({

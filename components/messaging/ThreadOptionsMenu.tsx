@@ -52,6 +52,8 @@ interface ThreadOptionsMenuProps {
   isPinned?: boolean;
   onSetNotificationMode?: (mode: 'all' | 'mentions' | 'muted') => void;
   notificationMode?: 'all' | 'mentions' | 'muted';
+  onToggleAutoTranslate?: () => void;
+  isAutoTranslateEnabled?: boolean;
 }
 
 interface OptionItemProps {
@@ -140,6 +142,8 @@ export const ThreadOptionsMenu: React.FC<ThreadOptionsMenuProps> = ({
   isPinned = false,
   onSetNotificationMode,
   notificationMode = 'all',
+  onToggleAutoTranslate,
+  isAutoTranslateEnabled = false,
 }) => {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -322,6 +326,15 @@ export const ThreadOptionsMenu: React.FC<ThreadOptionsMenuProps> = ({
                   />
                 )}
                 
+                {onToggleAutoTranslate && (
+                  <OptionItem
+                    icon={isAutoTranslateEnabled ? 'language' : 'language-outline'}
+                    label={isAutoTranslateEnabled ? 'Auto-Translate: ON' : 'Auto-Translate Messages'}
+                    onPress={() => handleOptionPress(onToggleAutoTranslate)}
+                    theme={theme}
+                  />
+                )}
+
                 {onDisappearingMessages && (
                   <OptionItem
                     icon="timer-outline"

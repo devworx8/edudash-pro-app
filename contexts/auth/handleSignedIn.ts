@@ -22,6 +22,7 @@ import {
 } from '@/lib/rbac';
 import { isPasswordRecoveryInProgress } from '@/lib/sessionManager';
 import { securityAuditor } from '@/lib/security-audit';
+import { isEmailVerified } from '@/lib/auth/emailVerification';
 import * as Sentry from '@sentry/react-native';
 import type { Session, User } from '@supabase/supabase-js';
 import {
@@ -78,6 +79,19 @@ export async function handleSignedIn(
   }
 
   authDebug('auth.signed_in', { userId });
+
+  if (!isEmailVerified(s.user)) {
+    deps.setProfileLoading(false);
+    void routeAfterLogin(s.user, null)
+      .catch((error) => {
+        logger.error('handleSignedIn', 'Email verification routing failed:', error);
+      })
+      .finally(() => {
+        deps.hideLoadingOverlay?.();
+      });
+    return;
+  }
+
   deps.setProfileLoading(true);
 
   // ── Profile resolution chain ──────────────

@@ -258,12 +258,14 @@ export default function AttendanceScreen() {
         attendance_date: string;
         recorded_by: string | null;
         organization_id?: string;
+        class_id?: string;
       }[] = entries.map(e => ({
         student_id: e.student_id,
         status: e.status,
         attendance_date: attendanceDate,
         recorded_by: authUserId,
         organization_id: schoolId || undefined,
+        class_id: classId || undefined,
       }))
       
       const { error: insertError } = await assertSupabase()

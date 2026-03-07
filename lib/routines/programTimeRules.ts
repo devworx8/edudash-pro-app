@@ -7,8 +7,11 @@ const MIN_DAY_END_MINUTES = 13 * 60 + 30; // 13:30
 const DEFAULT_DAY_CLOSE_MINUTES = 14 * 60; // 14:00
 const MAX_ALLOWED_GAP_MINUTES = 10;
 
-const ANCHOR_LOCK_NOTE_REGEX = /anchor locked from preflight/i;
-const ANCHOR_LOCK_TIME_REGEX = /anchor locked from preflight:[\s\S]*?\bat\s*(\d{1,2}:\d{2})/i;
+const ANCHOR_LOCK_NOTE_REGEX = /anchor locked from preflight|auto-added from preflight non-negotiable anchor/i;
+const ANCHOR_LOCK_TIME_PATTERNS = [
+  /anchor locked from preflight:[\s\S]*?\bat\s*(\d{1,2}:\d{2})/i,
+  /auto-added from preflight non-negotiable anchor\s*\([^)]*?(\d{1,2}:\d{2})/i,
+];
 const TOILET_BLOCK_REGEX = /\b(toilet|bathroom|potty|washroom|restroom)\b/i;
 
 type TimedRange = { start: number; end: number };
@@ -62,9 +65,12 @@ function getAnchorLockedStartMinutes(block: DailyProgramBlock): number | null {
   ]
     .map((value) => String(value || '').trim())
     .join('\n');
-  const match = haystack.match(ANCHOR_LOCK_TIME_REGEX);
-  if (!match?.[1]) return null;
-  return toMinutes(match[1]);
+  for (const pattern of ANCHOR_LOCK_TIME_PATTERNS) {
+    const match = haystack.match(pattern);
+    if (!match?.[1]) continue;
+    return toMinutes(match[1]);
+  }
+  return null;
 }
 
 function isToiletTimingBlock(block: DailyProgramBlock): boolean {

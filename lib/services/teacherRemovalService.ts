@@ -1,24 +1,19 @@
 import { assertSupabase } from '@/lib/supabase';
 
 /**
- * Remove a teacher from a school via Edge Function.
+ * Archive a teacher from a school via Edge Function.
  *
  * Uses the server-side `remove-teacher` Edge Function which runs
- * with service_role privileges to bypass RLS policies that block
- * principals from deleting organization_members or updating other
- * users' profiles.
- *
- * For teachers without an auth account (directly-added), use
- * `removeTeacherDirect()` instead which deactivates the teacher
- * record without requiring an Edge Function call.
+ * with service-role privileges and performs archive-safe cleanup.
  */
 export async function removeTeacherFromSchool(params: {
-  teacherUserId: string;
+  teacherRecordId: string;
   organizationId: string;
-  teacherRecordId?: string | null;
+  teacherUserId?: string | null;
+  reason?: string | null;
 }): Promise<void> {
-  const { teacherUserId, organizationId, teacherRecordId } = params;
-  if (!teacherUserId || !organizationId) {
+  const { teacherRecordId, organizationId, teacherUserId, reason } = params;
+  if (!teacherRecordId || !organizationId) {
     throw new Error('Missing teacher or organization');
   }
 
@@ -37,9 +32,10 @@ export async function removeTeacherFromSchool(params: {
       'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
     },
     body: JSON.stringify({
-      teacher_user_id: teacherUserId,
+      teacher_record_id: teacherRecordId,
       organization_id: organizationId,
-      teacher_record_id: teacherRecordId || null,
+      teacher_user_id: teacherUserId || null,
+      reason: reason || null,
     }),
   });
 
@@ -51,15 +47,15 @@ export async function removeTeacherFromSchool(params: {
 }
 
 /**
- * Remove a directly-added teacher who has no auth account.
- * Since there's no user profile or org membership to clean up,
- * we delete the teacher record entirely.
+ * Archive a directly-added teacher who has no auth account.
  */
 export async function removeTeacherDirect(params: {
   teacherRecordId: string;
   organizationId: string;
+  reason?: string;
+  archivedBy?: string | null;
 }): Promise<void> {
-  const { teacherRecordId, organizationId } = params;
+  const { teacherRecordId, organizationId, reason, archivedBy } = params;
   if (!teacherRecordId || !organizationId) {
     throw new Error('Missing teacher record or organization');
   }
@@ -67,7 +63,13 @@ export async function removeTeacherDirect(params: {
   const supabase = assertSupabase();
   const { error } = await supabase
     .from('teachers')
-    .delete()
+    .update({
+      is_active: false,
+      employment_status: 'archived',
+      archived_at: new Date().toISOString(),
+      archived_by: archivedBy || null,
+      archive_reason: reason?.trim() || 'Archived by principal',
+    })
     .eq('id', teacherRecordId)
     .eq('preschool_id', organizationId);
 

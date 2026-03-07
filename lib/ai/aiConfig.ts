@@ -23,16 +23,16 @@ export function isAIEnabled(): boolean {
  *
  * | Tier   | Model                          | Use Case                      | Cost (input/MTok) |
  * |--------|--------------------------------|-------------------------------|--------------------|
- * | fast   | claude-3-haiku-20240307        | Summaries, suggestions, chat  | low                |
- * | balanced | claude-3-5-haiku-20241022    | Most classroom workflows      | low-medium         |
- * | premium | claude-3-5-sonnet-20241022    | Higher-accuracy generation    | medium             |
+ * | fast   | claude-haiku-4-5-20251001      | Summaries, suggestions, chat  | low                |
+ * | balanced | claude-3-7-sonnet-20250219   | Most classroom workflows      | medium             |
+ * | premium | claude-sonnet-4-20250514      | Higher-accuracy generation    | medium-high        |
  *
  * @see https://docs.anthropic.com/en/docs/about-claude/models
  */
 export const AI_MODELS = {
-  fast: 'claude-3-haiku-20240307',
-  balanced: 'claude-3-5-haiku-20241022',
-  premium: 'claude-3-5-sonnet-20241022',
+  fast: 'claude-haiku-4-5-20251001',
+  balanced: 'claude-3-7-sonnet-20250219',
+  premium: 'claude-sonnet-4-20250514',
 } as const;
 
 export type AIModelTier = keyof typeof AI_MODELS;

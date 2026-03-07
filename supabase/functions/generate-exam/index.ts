@@ -16,6 +16,8 @@ import {
 } from './examUtils.ts';
 import { buildUserPrompt } from './promptBuilder.ts';
 import { resolveTeacherContext } from './teacherContext.ts';
+import { runGenerationEngine } from './generationEngine.ts';
+import { persistExamResult } from './persistResult.ts';
 import {
   canFallbackForReason,
   mapUnhandledError,

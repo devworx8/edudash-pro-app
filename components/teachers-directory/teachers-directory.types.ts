@@ -5,6 +5,8 @@
 export interface Teacher {
   id: string;
   teacherId: string;
+  teacherRecordId?: string | null;
+  teacherUserId?: string | null;
   firstName: string;
   lastName: string;
   email: string;

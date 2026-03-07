@@ -10,6 +10,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ParsedExam, ExamQuestion, gradeAnswer } from '@/lib/examParser';
 import { assertSupabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import {
+  type AdaptiveState,
+  createAdaptiveState,
+  recordCorrect,
+  recordWrong,
+} from '@/lib/activities/adaptiveDifficulty';
 
 export interface StudentAnswer {
   questionId: string;
@@ -94,6 +100,7 @@ export function useExamSession(options: UseExamSessionOptions) {
   const { examId, exam, userId, studentId, classId, schoolId, autoSave = true } = options;
   const [session, setSession] = useState<ExamSessionState | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adaptiveState, setAdaptiveState] = useState<AdaptiveState>(createAdaptiveState());
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Storage key
@@ -269,6 +276,11 @@ export function useExamSession(options: UseExamSessionOptions) {
           marks: gradeResult.marks,
           gradingMode: 'deterministic',
         };
+
+        // Update adaptive difficulty based on answer correctness
+        setAdaptiveState((prev) =>
+          gradeResult.isCorrect ? recordCorrect(prev) : recordWrong(prev)
+        );
       }
 
       // Update session
@@ -458,5 +470,6 @@ export function useExamSession(options: UseExamSessionOptions) {
     resetExam,
     getProgress,
     saveSession,
+    adaptiveState,
   };
 }

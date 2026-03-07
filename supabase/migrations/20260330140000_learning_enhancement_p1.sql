@@ -181,15 +181,23 @@ CREATE POLICY "Teachers manage class posts"
   FOR ALL
   USING (teacher_id = auth.uid());
 
--- Parents: read posts for their child's class
+-- Parents: read posts for their child's class (or org if class_id is NULL)
 CREATE POLICY "Parents read class posts"
   ON public.class_posts
   FOR SELECT
   USING (
     EXISTS (
       SELECT 1 FROM public.students s
+      JOIN public.profiles p ON p.id = s.parent_id
       WHERE s.parent_id = auth.uid()
-        AND s.class_id = class_posts.class_id
+        AND (
+          (class_posts.class_id IS NOT NULL AND s.class_id = class_posts.class_id)
+          OR
+          (class_posts.class_id IS NULL AND (
+            p.organization_id = class_posts.organization_id
+            OR p.preschool_id = class_posts.organization_id
+          ))
+        )
     )
   );
 

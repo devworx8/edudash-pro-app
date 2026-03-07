@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth status)",
+      "Bash(gh repo list devworx8 --limit 20)",
+      "Bash(git add WARP.md .cursorrules .gitignore .github/copilot-instructions.md .github/instructions/)",
+      "Bash(git commit:*)",
+      "Bash(git push origin development)",
+      "Bash(git -C /home/edp/Desktop/dashpro push origin development)",
+      "Read(//home/edp/Desktop/SECURE/**)",
+      "Bash(supabase db push --include-all)",
+      "Bash(supabase functions deploy payfast-webhook ai-proxy generate-exam remove-teacher sync-campaign-to-edusite)",
+      "Bash(git add supabase/migrations/20260307120000_harden_campaign_sync_and_compliance_template_rls.sql supabase/migrations/20260307130000_security_sprint1_password_hashing_invite_expiry.sql supabase/migrations/20260330130000_payroll_teacher_archive_attendance.sql supabase/migrations/20260330140000_learning_enhancement_p1.sql)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run lint)",
+      "Bash(grep -v \"^$\")",
+      "Bash(supabase db query \"SELECT proname FROM pg_proc WHERE proname IN \\(''create_class_group'',''create_parent_group'',''create_announcement_channel''\\) ORDER BY proname\")"
+    ]
+  }
+}

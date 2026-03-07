@@ -10,6 +10,7 @@
 
 import { assertSupabase } from '@/lib/supabase';
 import { router } from 'expo-router';
+import { Platform } from 'react-native';
 import { track } from '@/lib/analytics';
 import { reportError } from '@/lib/monitoring';
 import { fetchEnhancedUserProfile, type EnhancedUserProfile } from '@/lib/rbac';
@@ -17,6 +18,7 @@ import type { User } from '@supabase/supabase-js';
 import { getPendingTeacherInvite, clearPendingTeacherInvite } from '@/lib/utils/teacherInvitePending';
 import { resolveSchoolTypeFromProfile } from '@/lib/schoolTypeResolver';
 import { trackDashboardRouteResolution } from '@/lib/dashboard/dashboardRoutingTelemetry';
+import { isEmailVerified } from '@/lib/auth/emailVerification';
 
 // Extracted modules
 import {
@@ -27,7 +29,7 @@ import {
   getNavigationLockTime,
   NAVIGATION_LOCK_TIMEOUT,
 } from '@/lib/auth/navigationLocks';
-import { resolveTeacherApprovalRoute } from '@/lib/auth/roleResolution';
+import { normalizeRole, resolveTeacherApprovalRoute } from '@/lib/auth/roleResolution';
 import { determineUserRoute } from '@/lib/auth/determineRoute';
 
 // ── Re-exports (backward-compat for 11+ consumers) ──────────
@@ -84,6 +86,18 @@ export async function routeAfterLogin(
   if (!userId) {
     console.error('No user ID provided for post-login routing');
     router.replace('/(auth)/sign-in');
+    return;
+  }
+
+  if (!isEmailVerified(user)) {
+    track('edudash.auth.email_verification_required', {
+      user_id: userId,
+      email: user?.email || null,
+    });
+    const verifyRoute = user?.email
+      ? `/screens/verify-your-email?email=${encodeURIComponent(user.email)}`
+      : '/screens/verify-your-email';
+    router.replace(verifyRoute as any);
     return;
   }
 
@@ -201,9 +215,15 @@ export async function routeAfterLogin(
     } catch { /* best-effort */ }
 
     // ── Determine destination ────────────────
+    const normalizedRole = normalizeRole(enhancedProfile.role);
     let route = determineUserRoute(enhancedProfile);
     const teacherApprovalRoute = await resolveTeacherApprovalRoute(enhancedProfile);
     if (teacherApprovalRoute) route = teacherApprovalRoute;
+
+    // Until the dedicated learner web dashboard is ready, send web learners to exam prep.
+    if (Platform.OS === 'web' && normalizedRole === 'student') {
+      route = { path: '/screens/exam-prep' };
+    }
 
     const resolvedSchoolType = resolveSchoolTypeFromProfile(enhancedProfile);
 

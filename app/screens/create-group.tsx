@@ -9,7 +9,7 @@
  * Parents can also create parent-to-parent DMs from here.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -45,12 +45,13 @@ export default function CreateGroupScreen() {
   const insets = useSafeAreaInsets();
   const { showAlert, alertProps } = useAlertModal();
   const userRole = (profile as any)?.role || 'parent';
+  const params = useLocalSearchParams<{ preselectedClassId?: string; groupType?: GroupType }>();
 
   // State
-  const [groupType, setGroupType] = useState<GroupType | null>(null);
+  const [groupType, setGroupType] = useState<GroupType | null>(params.groupType ?? null);
   const [groupName, setGroupName] = useState('');
   const [description, setDescription] = useState('');
-  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(params.preselectedClassId ?? null);
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [audience, setAudience] = useState<'all_parents' | 'all_teachers' | 'all_staff' | 'everyone'>('all_parents');
@@ -137,10 +138,19 @@ export default function CreateGroupScreen() {
       }
 
       if (threadId) {
-        // Navigate to the thread
+        const isGroupThread = groupType !== 'parent_dm';
+        const threadTypeParam =
+          groupType === 'class_group' ? 'class_group' :
+          groupType === 'parent_group' ? 'parent_group' :
+          groupType === 'announcement' ? 'announcement' : '';
         router.replace({
           pathname: '/screens/parent-message-thread',
-          params: { threadId },
+          params: {
+            threadId,
+            isGroup: isGroupThread ? '1' : '0',
+            threadType: threadTypeParam,
+            title: groupName.trim() || undefined,
+          },
         });
       }
     } catch (error: any) {
@@ -229,23 +239,25 @@ export default function CreateGroupScreen() {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity
-            style={[styles.typeCard, { backgroundColor: cardBg, borderColor }]}
-            onPress={() => setGroupType('parent_dm')}
-          >
-            <View style={[styles.typeIcon, { backgroundColor: '#ede9fe' }]}>
-              <Ionicons name="chatbubble" size={24} color="#8b5cf6" />
-            </View>
-            <View style={styles.typeInfo}>
-              <Text style={[styles.typeTitle, { color: textColor }]}>
-                Message a Parent
-              </Text>
-              <Text style={[styles.typeDesc, { color: subtextColor }]}>
-                Direct message another parent at your school
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={subtextColor} />
-          </TouchableOpacity>
+          {!isStaff && (
+            <TouchableOpacity
+              style={[styles.typeCard, { backgroundColor: cardBg, borderColor }]}
+              onPress={() => setGroupType('parent_dm')}
+            >
+              <View style={[styles.typeIcon, { backgroundColor: '#ede9fe' }]}>
+                <Ionicons name="chatbubble" size={24} color="#8b5cf6" />
+              </View>
+              <View style={styles.typeInfo}>
+                <Text style={[styles.typeTitle, { color: textColor }]}>
+                  Message a Parent
+                </Text>
+                <Text style={[styles.typeDesc, { color: subtextColor }]}>
+                  Direct message another parent at your school
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={subtextColor} />
+            </TouchableOpacity>
+          )}
         </ScrollView>
         <AlertModal {...alertProps} />
       </View>
@@ -414,13 +426,24 @@ export default function CreateGroupScreen() {
       ? filteredMembers.filter(m => roleFilter.includes(m.role))
       : filteredMembers;
 
+    const allSelected = displayMembers.length > 0 && displayMembers.every(m => selectedMembers.includes(m.id));
+
     return (
       <>
-        <Text style={[styles.sectionTitle, { color: subtextColor }]}>
-          {singleSelect ? 'Select a Parent' : `Select Members (${selectedMembers.length} selected)`}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          <Text style={[styles.sectionTitle, { color: subtextColor, marginBottom: 0 }]}>
+            {singleSelect ? 'Select a Parent' : `Select Members (${selectedMembers.length} selected)`}
+          </Text>
+          {!singleSelect && displayMembers.length > 0 && (
+            <TouchableOpacity onPress={() => setSelectedMembers(allSelected ? [] : displayMembers.map(m => m.id))}>
+              <Text style={{ color: accentColor, fontSize: 13, fontWeight: '600' }}>
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <TextInput
-          style={[styles.searchInput, { backgroundColor: cardBg, color: textColor, borderColor }]}
+          style={[styles.searchInput, { backgroundColor: cardBg, color: textColor, borderColor, marginTop: 10 }]}
           placeholder="Search by name..."
           placeholderTextColor={subtextColor}
           value={searchQuery}

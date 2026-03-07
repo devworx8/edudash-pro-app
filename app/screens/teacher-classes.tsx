@@ -28,6 +28,8 @@ interface TeacherInfo {
   id: string;
   name: string;
   email: string;
+  teacherRecordId?: string | null;
+  teacherUserId?: string | null;
 }
 
 export default function TeacherClassesScreen() {
@@ -59,10 +61,18 @@ export default function TeacherClassesScreen() {
       if (teacherError) throw teacherError;
       if (!teacherData) throw new Error('Teacher not found');
 
+      const { data: teacherRecord } = await supabase
+        .from('teachers')
+        .select('id, user_id, auth_user_id')
+        .or(`user_id.eq.${teacherId},auth_user_id.eq.${teacherId}`)
+        .maybeSingle();
+
       setTeacherInfo({
         id: teacherData.id,
         name: `${teacherData.first_name || ''} ${teacherData.last_name || ''}`.trim() || 'Unknown',
         email: teacherData.email,
+        teacherRecordId: teacherRecord?.id || null,
+        teacherUserId: teacherRecord?.auth_user_id || teacherRecord?.user_id || teacherData.auth_user_id || teacherData.id,
       });
 
       const teacherRefIds = Array.from(
@@ -147,27 +157,33 @@ export default function TeacherClassesScreen() {
       Alert.alert('Error', 'Missing teacher identifier.');
       return;
     }
+    if (!teacherInfo?.teacherRecordId) {
+      Alert.alert('Error', 'Missing teacher record.');
+      return;
+    }
 
     Alert.alert(
-      'Remove Teacher',
-      `Remove ${teacherInfo?.name || 'this teacher'} from your school? This will unassign their classes and revoke their seat.`,
+      'Archive Teacher',
+      `Archive ${teacherInfo?.name || 'this teacher'} from your school? Their class history will be kept and their seat will be revoked.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Remove',
+          text: 'Archive',
           style: 'destructive',
           onPress: async () => {
             try {
               await removeTeacherFromSchool({
-                teacherUserId: teacherId,
+                teacherRecordId: teacherInfo.teacherRecordId,
                 organizationId: orgId,
+                teacherUserId: teacherInfo.teacherUserId || teacherId,
+                reason: 'Archived via teacher classes screen',
               });
-              Alert.alert('Success', 'Teacher removed from school', [
+              Alert.alert('Success', 'Teacher archived', [
                 { text: 'OK', onPress: navigateBack },
               ]);
             } catch (error) {
               console.error('Error removing teacher:', error);
-              Alert.alert('Error', 'Failed to remove teacher');
+              Alert.alert('Error', 'Failed to archive teacher');
             }
           },
         },

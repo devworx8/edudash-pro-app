@@ -40,7 +40,7 @@ export interface UseTeachersDirectoryReturn {
   handleCallTeacher: (phone: string) => void;
   handleEmailTeacher: (email: string) => void;
   handleEditTeacher: (teacher: Teacher) => void;
-  handleDeleteTeacher: (teacherId: string) => void;
+  handleDeleteTeacher: (teacher: Teacher) => void;
   toggleTeacherStatus: (teacherId: string, currentStatus: string) => void;
   setShowTeacherModal: (show: boolean) => void;
 
@@ -130,17 +130,33 @@ export function useTeachersDirectory(): UseTeachersDirectoryReturn {
       // Also fetch class assignments for these teachers
       const teacherUserIds = (members || []).map((m: any) => m.user_id).filter(Boolean);
       let classAssignmentsMap = new Map<string, string[]>();
+      let teacherRecordIdByUserId = new Map<string, string>();
+      let teacherRecordIdByAuthUserId = new Map<string, string>();
+      let teacherRecordIdByEmail = new Map<string, string>();
 
       if (teacherUserIds.length > 0) {
-        const { data: classData } = await client
-          .from('classes')
-          .select('id, name, teacher_id')
-          .in('teacher_id', teacherUserIds);
+        const [{ data: classData }, { data: teacherRecords }] = await Promise.all([
+          client
+            .from('classes')
+            .select('id, name, teacher_id')
+            .in('teacher_id', teacherUserIds),
+          client
+            .from('teachers')
+            .select('id, user_id, auth_user_id, email, is_active')
+            .eq('preschool_id', schoolId)
+            .eq('is_active', true),
+        ]);
 
         (classData || []).forEach((cls: any) => {
           const existing = classAssignmentsMap.get(cls.teacher_id) || [];
           existing.push(cls.name || cls.id);
           classAssignmentsMap.set(cls.teacher_id, existing);
+        });
+
+        (teacherRecords || []).forEach((record: any) => {
+          if (record.user_id) teacherRecordIdByUserId.set(record.user_id, record.id);
+          if (record.auth_user_id) teacherRecordIdByAuthUserId.set(record.auth_user_id, record.id);
+          if (record.email) teacherRecordIdByEmail.set(String(record.email).toLowerCase(), record.id);
         });
       }
 
@@ -158,6 +174,12 @@ export function useTeachersDirectory(): UseTeachersDirectoryReturn {
           return {
             id: m.user_id,
             teacherId: m.id, // organization_members PK
+            teacherRecordId:
+              teacherRecordIdByUserId.get(m.user_id) ||
+              teacherRecordIdByAuthUserId.get(m.user_id) ||
+              teacherRecordIdByEmail.get(String(p.email || '').toLowerCase()) ||
+              null,
+            teacherUserId: m.user_id,
             firstName: p.first_name || '',
             lastName: p.last_name || '',
             email: p.email || '',
@@ -300,9 +322,9 @@ export function useTeachersDirectory(): UseTeachersDirectoryReturn {
     setShowTeacherModal(true);
   }, [canManageTeacher]);
 
-  const handleDeleteTeacher = useCallback((teacherId: string) => {
+  const handleDeleteTeacher = useCallback((teacher: Teacher) => {
     if (!canManageTeacher()) {
-      Alert.alert('Access Denied', 'Only principals can delete teachers.');
+      Alert.alert('Access Denied', 'Only principals can archive teachers.');
       return;
     }
 
@@ -311,26 +333,32 @@ export function useTeachersDirectory(): UseTeachersDirectoryReturn {
       Alert.alert('Error', 'No school found for this account.');
       return;
     }
+    if (!teacher.teacherRecordId) {
+      Alert.alert('Error', 'Missing teacher record.');
+      return;
+    }
 
     Alert.alert(
-      'Delete Teacher',
-      'Are you sure you want to delete this teacher? This will unassign their classes and revoke their seat.',
+      'Archive Teacher',
+      'Archive this teacher? They will be removed from active rosters and lose access, but historical data will stay intact.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: 'Archive',
           style: 'destructive',
           onPress: async () => {
             try {
               await removeTeacherFromSchool({
-                teacherUserId: teacherId,
+                teacherRecordId: teacher.teacherRecordId,
                 organizationId,
+                teacherUserId: teacher.teacherUserId || teacher.id,
+                reason: 'Archived via teachers directory',
               });
-              setTeachers(prev => prev.filter(t => t.id !== teacherId));
+              setTeachers(prev => prev.filter(t => t.id !== teacher.id));
               loadTeachers(true);
             } catch (error) {
-              if (__DEV__) console.error('Failed to delete teacher:', error);
-              Alert.alert('Error', 'Failed to delete teacher');
+              if (__DEV__) console.error('Failed to archive teacher:', error);
+              Alert.alert('Error', 'Failed to archive teacher');
             }
           },
         }
