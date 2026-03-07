@@ -31,7 +31,8 @@ CREATE TRIGGER hash_join_request_temp_password
 -- Backfill: clear any existing plaintext (cannot recover hash from old data)
 UPDATE join_requests SET temp_password = NULL WHERE temp_password IS NOT NULL;
 
--- ── region_invite_codes: same treatment ──────────────────────────────────────
+-- ── region_invite_codes: same treatment (table may not exist) ────────────────
+-- Add column conditionally
 DO $$
 BEGIN
   IF EXISTS (
@@ -44,18 +45,28 @@ BEGIN
     ) THEN
       ALTER TABLE region_invite_codes ADD COLUMN temp_password_hash TEXT;
     END IF;
+  END IF;
+END $$;
 
-    CREATE OR REPLACE FUNCTION _hash_region_invite_temp_password()
-    RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
-    BEGIN
-      IF NEW.temp_password IS NOT NULL AND NEW.temp_password <> '' THEN
-        NEW.temp_password_hash := crypt(NEW.temp_password, gen_salt('bf', 10));
-        NEW.temp_password := NULL;
-      END IF;
-      RETURN NEW;
-    END;
-    $$;
+-- Create function at top level (safe even if table doesn't exist — trigger won't fire)
+CREATE OR REPLACE FUNCTION _hash_region_invite_temp_password()
+RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  IF NEW.temp_password IS NOT NULL AND NEW.temp_password <> '' THEN
+    NEW.temp_password_hash := crypt(NEW.temp_password, gen_salt('bf', 10));
+    NEW.temp_password := NULL;
+  END IF;
+  RETURN NEW;
+END;
+$$;
 
+-- Attach trigger only if table exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'region_invite_codes'
+  ) THEN
     DROP TRIGGER IF EXISTS hash_region_invite_temp_password ON region_invite_codes;
     CREATE TRIGGER hash_region_invite_temp_password
       BEFORE INSERT OR UPDATE OF temp_password ON region_invite_codes
