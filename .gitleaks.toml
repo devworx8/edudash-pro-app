@@ -6,7 +6,11 @@ description = "Allow documentation/example placeholders and generated reports"
 paths = [
   '''^reports/prod-ready/''',
   '''^docs/SECURITY_ROTATION_CHECKLIST\.md$''',
-  '''^\.env\.example$'''
+  '''^\.env\.example$''',
+  '''^app\.json$''',
+  '''^eas\.json$''',
+  '''^tools/populate_profiles\.js$''',
+  '''^\.env$'''
 ]
 
 [[rules]]
