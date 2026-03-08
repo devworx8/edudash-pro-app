@@ -28,15 +28,14 @@ function isValidAdUnitId(value?: string): value is string {
  */
 export function getAdUnitId(placementKey: string): string {
   const placement = getPlacement(placementKey);
+  const useTestIds = areTestIdsOnly() || __DEV__;
   
   if (!placement) {
     console.warn(`[AdConfig] Unknown placement: ${placementKey}`);
-    return TEST_AD_UNIT_IDS.BANNER; // Fallback to test banner
+    return useTestIds ? TEST_AD_UNIT_IDS.BANNER : '';
   }
 
   // Always use test IDs if flag is set or in development
-  const useTestIds = areTestIdsOnly() || __DEV__;
-  
   if (useTestIds) {
     // Map placement types to test ad unit IDs
     const testIdMap = {
@@ -69,14 +68,11 @@ export function getAdUnitId(placementKey: string): string {
       }
     }
 
-    console.warn(`[AdConfig] Missing production ad unit ID for ${placementKey}. Using test ID.`);
-    const testIdMap = {
-      banner: TEST_AD_UNIT_IDS.BANNER,
-      interstitial: TEST_AD_UNIT_IDS.INTERSTITIAL,
-      rewarded: TEST_AD_UNIT_IDS.REWARDED,
-      native: TEST_AD_UNIT_IDS.NATIVE,
-    };
-    return testIdMap[placement.type];
+    console.warn(
+      `[AdConfig] Missing production ad unit ID for ${placementKey}. ` +
+      'Ad will be disabled for this placement in production.'
+    );
+    return '';
   }
 
   return productionAdUnitId;
@@ -101,10 +97,8 @@ export function getAppId(): string {
     : process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID;
 
   if (!productionAppId) {
-    console.warn(`[AdConfig] Missing production app ID for ${Platform.OS}. Using test ID.`);
-    return Platform.OS === 'android'
-      ? 'ca-app-pub-3940256099942544~3347511713'
-      : 'ca-app-pub-3940256099942544~1458002511';
+    console.warn(`[AdConfig] Missing production app ID for ${Platform.OS}.`);
+    return '';
   }
 
   return productionAppId;

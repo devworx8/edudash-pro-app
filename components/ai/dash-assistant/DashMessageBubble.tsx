@@ -6,30 +6,46 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, Platform, Linking, Alert, ScrollView, Image, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, Platform, Linking, Alert, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { messageStyles as styles } from './styles/message.styles';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { DashMessage } from '@/services/dash-ai/types';
-import { createSignedUrl, getFileIconName, formatFileSize } from '@/services/AttachmentService';
+import { getFileIconName, formatFileSize } from '@/services/AttachmentService';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MathRenderer } from './MathRenderer';
 import { MermaidRenderer } from './MermaidRenderer';
-import InlineQuizCard, { parseQuizPayload, type QuizQuestionPayload } from './InlineQuizCard';
-import InlineColumnMethodCard, {
-  parseColumnMethodPayload,
-  type ColumnMethodPayload,
-} from './InlineColumnMethodCard';
-import InlineSpellingPracticeCard, {
-  parseSpellingPayload,
-  type SpellingPracticePayload,
-} from './InlineSpellingPracticeCard';
+import InlineQuizCard from './InlineQuizCard';
+import InlineColumnMethodCard from './InlineColumnMethodCard';
+import InlineSpellingPracticeCard from './InlineSpellingPracticeCard';
+import { AttachmentImagePreview } from './AttachmentImagePreview';
+import { ExpandedVisualModal } from './ExpandedVisualModal';
+import {
+  parseRichSegments,
+  safeParseQuizJson,
+  safeParseColumnJson,
+  safeParseSpellingJson,
+} from './DashMessageBubble.rich';
 import {
   resolvePdfPreviewTarget,
   sanitizeGeneratedPdfUrl,
 } from './pdfPreviewUtils';
 import { isValidFollowUp } from '@/hooks/dash-assistant/assistantHelpers';
+import {
+  buildMarkdownStyles,
+  buildToolChartPreview,
+  firstText,
+  isLikelyPdfUrl,
+  normalizeInteractiveJsonFences,
+  normalizeToolErrorMessage,
+  PDF_TOOL_NAMES,
+  prettifyToolName,
+  replaceVisualPlaceholders,
+  stripRawInteractiveJsonFromProse,
+  type ExpandedVisualState,
+  type ToolChartPreview,
+} from './DashMessageBubble.utils';
 
 const isWeb = Platform.OS === 'web';
 let Markdown: React.ComponentType<any> | null = null;
@@ -40,361 +56,6 @@ if (!isWeb) {
     console.warn('[DashMessageBubble] Markdown not available:', e);
   }
 }
-
-const buildMarkdownStyles = (theme: ReturnType<typeof useTheme>['theme'], isUser: boolean) => ({
-  body: {
-    color: isUser ? theme.onPrimary : theme.text,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  paragraph: {
-    color: isUser ? theme.onPrimary : theme.text,
-    marginBottom: 6,
-  },
-  heading1: {
-    color: isUser ? theme.onPrimary : theme.text,
-    fontSize: 18,
-    fontWeight: '700' as const,
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  heading2: {
-    color: isUser ? theme.onPrimary : theme.text,
-    fontSize: 16,
-    fontWeight: '700' as const,
-    marginTop: 10,
-    marginBottom: 6,
-  },
-  heading3: {
-    color: isUser ? theme.onPrimary : theme.text,
-    fontSize: 15,
-    fontWeight: '600' as const,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  strong: {
-    fontWeight: '700' as const,
-    color: isUser ? theme.onPrimary : theme.text,
-  },
-  em: {
-    fontStyle: 'italic' as const,
-    color: isUser ? theme.onPrimary : theme.textSecondary,
-  },
-  bullet_list: {
-    marginVertical: 4,
-  },
-  ordered_list: {
-    marginVertical: 4,
-  },
-  list_item: {
-    marginBottom: 2,
-  },
-  bullet_list_icon: {
-    color: isUser ? theme.onPrimary : theme.primary,
-    marginRight: 8,
-  },
-  code_inline: {
-    backgroundColor: isUser ? 'rgba(255,255,255,0.18)' : theme.surfaceVariant,
-    color: isUser ? theme.onPrimary : theme.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    fontFamily: 'monospace',
-    fontSize: 12,
-  },
-  code_block: {
-    backgroundColor: isUser ? 'rgba(0,0,0,0.25)' : '#101420',
-    padding: 12,
-    borderRadius: 10,
-    marginVertical: 8,
-  },
-  fence: {
-    backgroundColor: isUser ? 'rgba(0,0,0,0.25)' : '#101420',
-    padding: 12,
-    borderRadius: 10,
-    marginVertical: 8,
-  },
-  blockquote: {
-    backgroundColor: (isUser ? theme.onPrimary : theme.primary) + '12',
-    borderLeftWidth: 3,
-    borderLeftColor: isUser ? theme.onPrimary : theme.primary,
-    paddingLeft: 12,
-    paddingVertical: 8,
-    marginVertical: 8,
-    borderRadius: 6,
-  },
-  link: {
-    color: isUser ? theme.onPrimary : theme.primary,
-    textDecorationLine: 'underline' as const,
-  },
-});
-
-const toTitleCase = (value: string) =>
-  value
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-
-const prettifyToolName = (toolName?: string) => {
-  const normalized = String(toolName || '')
-    .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ');
-  if (!normalized) return 'Operation';
-  return toTitleCase(
-    normalized
-      .replace(/\b(get|fetch|run|execute|create|generate|build)\b/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim() || normalized,
-  );
-};
-
-const firstText = (...values: unknown[]) => {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  }
-  return null;
-};
-
-const normalizeToolErrorMessage = (toolName: string, rawError: string | null): string | null => {
-  const message = String(rawError || '').trim();
-  if (!message) return null;
-  const lower = message.toLowerCase();
-
-  if (toolName === 'get_assignments') {
-    if (lower.includes('column') && lower.includes('does not exist')) {
-      return 'Assignments are temporarily unavailable. Please try again shortly.';
-    }
-    if (lower.includes('relation') && lower.includes('does not exist')) {
-      return 'Assignments data is not ready yet for this account.';
-    }
-  }
-
-  if (lower.includes('permission denied') || lower.includes('insufficient permission')) {
-    return 'You do not have access to run this action.';
-  }
-
-  if (lower.includes('network') || lower.includes('timeout') || lower.includes('fetch failed')) {
-    return 'Network issue while running this action. Please try again.';
-  }
-
-  if (
-    lower.includes('column') && lower.includes('does not exist')
-    || lower.includes('relation') && lower.includes('does not exist')
-    || lower.includes('schema')
-    || lower.includes('sql')
-  ) {
-    return 'This action is temporarily unavailable due to a data issue.';
-  }
-
-  if (message.length > 180) {
-    return 'This action failed. Please try again in a moment.';
-  }
-
-  return message;
-};
-
-type ToolChartKind = 'bar' | 'line' | 'pie';
-type ToolChartPoint = {
-  label: string;
-  value: number;
-  color: string;
-};
-type ToolChartPreview = {
-  title: string;
-  type: ToolChartKind;
-  points: ToolChartPoint[];
-};
-
-type ExpandedVisualState =
-  | { type: 'mermaid'; title: string; definition: string }
-  | { type: 'chart'; title: string; chart: ToolChartPreview }
-  | { type: 'image'; title: string; uri: string };
-
-const TOOL_CHART_COLORS = ['#3b82f6', '#14b8a6', '#f59e0b', '#f97316', '#6366f1', '#10b981', '#ef4444', '#8b5cf6'];
-const PDF_TOOL_NAMES = new Set(['export_pdf', 'generate_worksheet', 'generate_chart', 'generate_pdf_from_prompt']);
-
-const isLikelyPdfUrl = (value?: string | null): boolean => {
-  const text = String(value || '').trim();
-  if (!text) return false;
-  if (/\.pdf(\?|$)/i.test(text)) return true;
-  return /generated[-_/]?pdf|\/pdfs?\//i.test(text);
-};
-
-const toFiniteNumber = (value: unknown): number => {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
-};
-
-const buildToolChartPreview = (
-  toolName: string,
-  toolArgs?: Record<string, any> | null
-): ToolChartPreview | null => {
-  if (String(toolName || '').toLowerCase() !== 'generate_chart') return null;
-  if (!toolArgs || typeof toolArgs !== 'object') return null;
-
-  const labels = Array.isArray(toolArgs.labels) ? toolArgs.labels : [];
-  const values = Array.isArray(toolArgs.values) ? toolArgs.values : [];
-  if (labels.length === 0 || values.length === 0) return null;
-
-  const typeRaw = String(toolArgs.chart_type || 'bar').toLowerCase();
-  const type: ToolChartKind = typeRaw === 'pie' ? 'pie' : (typeRaw === 'line' ? 'line' : 'bar');
-  const colors = Array.isArray(toolArgs.colors) ? toolArgs.colors : [];
-  const points: ToolChartPoint[] = labels
-    .map((label: unknown, idx: number) => {
-      const text = String(label || '').trim();
-      if (!text) return null;
-      return {
-        label: text,
-        value: toFiniteNumber(values[idx]),
-        color: String(colors[idx] || TOOL_CHART_COLORS[idx % TOOL_CHART_COLORS.length]),
-      };
-    })
-    .filter((point: ToolChartPoint | null): point is ToolChartPoint => !!point)
-    .slice(0, 8);
-
-  if (points.length === 0) return null;
-  return {
-    title: firstText(toolArgs.title) || 'Chart Preview',
-    type,
-    points,
-  };
-};
-
-const VISUAL_PLACEHOLDER_REGEX = /\[(diagram|chart|graph)\]/gi;
-
-/** Repairs common AI JSON errors (e.g. "en", instead of "language":"en") to avoid raw display. */
-const repairInteractiveJson = (raw: string): string => {
-  let s = raw;
-  // Fix standalone language codes: "en", or "af", -> "language":"en",
-  s = s.replace(/"([a-z]{2})",\s*(?=\s*["\}\]])/g, '"language":"$1",');
-  // Fix "language": "en", with stray commas
-  s = s.replace(/"language"\s*:\s*"([^"]+)"\s*,?\s*,/g, '"language":"$1",');
-  return s;
-};
-
-const normalizeInteractiveJsonFences = (content: string): string => {
-  const source = String(content || '');
-  if (!source.includes('```json')) return source;
-  return source.replace(/```json\s*([\s\S]*?)```/gi, (full, jsonBlock) => {
-    let raw = String(jsonBlock || '').trim();
-    if (!raw) return full;
-    let parsed: Record<string, unknown> | null = null;
-    try {
-      parsed = JSON.parse(raw) as Record<string, unknown>;
-    } catch {
-      raw = repairInteractiveJson(raw);
-      try {
-        parsed = JSON.parse(raw) as Record<string, unknown>;
-      } catch {
-        return ''; // Strip unparseable blocks so raw JSON is never shown
-      }
-    }
-    const type = String(parsed?.type || '').trim().toLowerCase();
-    if (type === 'spelling_practice') return `\`\`\`spelling\n${raw}\n\`\`\``;
-    if (type === 'column_addition') return `\`\`\`column\n${raw}\n\`\`\``;
-    if (type === 'quiz_question') return `\`\`\`quiz\n${raw}\n\`\`\``;
-    return full;
-  });
-};
-
-/** Strips raw interactive JSON blocks from prose so they are not shown as text. */
-const stripRawInteractiveJsonFromProse = (content: string): string => {
-  let source = String(content || '');
-  source = source.replace(/\{\s*"type"\s*:\s*"(spelling_practice|column_addition|quiz_question)"[\s\S]*?\}\s*/g, '');
-  // Strip worksheet/activity metadata JSON that AI sometimes outputs (title, type, age_group, content)
-  source = source.replace(/\{\s*"title"\s*:\s*"[^"]*"\s*,\s*"type"\s*:\s*"(?:activity|worksheet|math|reading|general)"[\s\S]*?"content"\s*:\s*"[^"]*"\s*\}\s*/g, '');
-  source = source.replace(/(?:^|\n)\s*"title"\s*:\s*"[^"]*"\s*,\s*"type"\s*:\s*"[^"]*"\s*,\s*"age_group"\s*:\s*"[^"]*"\s*,\s*"content"\s*:\s*"[^"]*"\s*/gm, '');
-  return source;
-};
-
-const parseNumberToken = (token: string): number => {
-  const parsed = Number(String(token || '').replace(/,/g, '').trim());
-  return Number.isFinite(parsed) ? parsed : NaN;
-};
-
-const buildAdditionMermaidFallback = (content: string): string | null => {
-  const text = String(content || '');
-  if (!/(more|plus|add|added|bought|altogether|total|sum)/i.test(text)) return null;
-  const numberTokens = [...text.matchAll(/\b\d{1,3}(?:,\d{3})*\b/g)].map((match) => match[0]);
-  if (numberTokens.length < 2) return null;
-
-  const first = parseNumberToken(numberTokens[0]);
-  const second = parseNumberToken(numberTokens[1]);
-  if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
-
-  const total = first + second;
-  const unitMatch = text.match(/\b\d{1,3}(?:,\d{3})*\s+([A-Za-z]{3,20})/);
-  const unit = unitMatch?.[1] ? ` ${unitMatch[1].toLowerCase()}` : '';
-
-  return [
-    'flowchart LR',
-    `  A["Start: ${first.toLocaleString()}${unit}"]`,
-    `  B["+ ${second.toLocaleString()}${unit}"]`,
-    `  C["Total: ${total.toLocaleString()}${unit}"]`,
-    '  A --> B --> C',
-  ].join('\n');
-};
-
-const replaceVisualPlaceholders = (content: string): string => {
-  const input = String(content || '');
-  if (!VISUAL_PLACEHOLDER_REGEX.test(input)) return input;
-  VISUAL_PLACEHOLDER_REGEX.lastIndex = 0;
-
-  const autoMermaid = buildAdditionMermaidFallback(input);
-  if (autoMermaid) {
-    return input.replace(
-      VISUAL_PLACEHOLDER_REGEX,
-      `\n\`\`\`mermaid\n${autoMermaid}\n\`\`\`\n`
-    );
-  }
-
-  return input.replace(
-    VISUAL_PLACEHOLDER_REGEX,
-    '\n```text\nVisual guide:\n- Draw a quick labeled sketch for each quantity.\n- Show the operation before solving.\n```\n'
-  );
-};
-
-const AttachmentImagePreview: React.FC<{
-  attachment: DashMessage['attachments'][number];
-  isUser: boolean;
-}> = ({ attachment, isUser }) => {
-  const { theme } = useTheme();
-  const [imageUrl, setImageUrl] = React.useState<string | null>(attachment.previewUri || null);
-  const [hasError, setHasError] = React.useState(false);
-
-  React.useEffect(() => {
-    let mounted = true;
-    if (imageUrl || !attachment.bucket || !attachment.storagePath) return () => { mounted = false; };
-
-    (async () => {
-      try {
-        const signed = await createSignedUrl(attachment.bucket, attachment.storagePath, 3600);
-        if (mounted) setImageUrl(signed);
-      } catch {
-        if (mounted) setHasError(true);
-      }
-    })();
-
-    return () => {
-      mounted = false;
-    };
-  }, [attachment.bucket, attachment.storagePath, imageUrl]);
-
-  if (hasError || !imageUrl) return null;
-
-  return (
-    <View
-      style={[
-        styles.imagePreviewCard,
-        { borderColor: isUser ? 'rgba(255,255,255,0.2)' : theme.border },
-      ]}
-    >
-      <Image source={{ uri: imageUrl }} style={styles.imagePreview} />
-    </View>
-  );
-};
 
 interface DashMessageBubbleProps {
   message: DashMessage;
@@ -769,186 +430,6 @@ export const DashMessageBubble: React.FC<DashMessageBubbleProps> = ({
     [],
   );
   const markdownStyles = React.useMemo(() => buildMarkdownStyles(theme, isUser), [theme, isUser]);
-
-  type RichSegment =
-    | { type: 'markdown'; content: string }
-    | { type: 'math'; content: string }
-    | { type: 'inlineMath'; content: string }
-    | { type: 'mermaid'; content: string }
-    | { type: 'column'; content: string }
-    | { type: 'spelling'; content: string }
-    | { type: 'quiz'; content: string };
-
-  const normalizeMathDelimiters = (raw: string): string => {
-    return String(raw || '')
-      .replace(/\\\\(\[|\]|\(|\)|\$)/g, '\\$1')
-      .replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`)
-      .replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`)
-      .replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
-  };
-
-  const parseRichSegments = (content: string): RichSegment[] => {
-    const splitByPattern = (
-      input: RichSegment[],
-      regex: RegExp,
-      mapper: (value: string) => RichSegment,
-    ): RichSegment[] => {
-      const next: RichSegment[] = [];
-      for (const segment of input) {
-        if (segment.type !== 'markdown') {
-          next.push(segment);
-          continue;
-        }
-        const text = segment.content || '';
-        let cursor = 0;
-        regex.lastIndex = 0;
-        let match: RegExpExecArray | null = null;
-        while ((match = regex.exec(text)) !== null) {
-          const [raw, captured] = match;
-          const start = match.index;
-          const end = start + raw.length;
-          if (start > cursor) {
-            next.push({ type: 'markdown', content: text.slice(cursor, start) });
-          }
-          next.push(mapper(String(captured || '').trim()));
-          cursor = end;
-        }
-        if (cursor < text.length) {
-          next.push({ type: 'markdown', content: text.slice(cursor) });
-        }
-      }
-      return next;
-    };
-
-    const base: RichSegment[] = [{ type: 'markdown', content: normalizeMathDelimiters(content) }];
-    // Quiz blocks: ```quiz ... ```
-    const withQuiz = splitByPattern(base, /```quiz\s*([\s\S]*?)```/gi, (value) => ({
-      type: 'quiz' as const,
-      content: value,
-    }));
-    const withColumn = splitByPattern(withQuiz, /```column(?:[_-]?method)?\s*([\s\S]*?)```/gi, (value) => ({
-      type: 'column' as const,
-      content: value,
-    }));
-    const withSpelling = splitByPattern(withColumn, /```spelling\s*([\s\S]*?)```/gi, (value) => ({
-      type: 'spelling' as const,
-      content: value,
-    }));
-    const withMermaid = splitByPattern(withSpelling, /```mermaid\s*([\s\S]*?)```/gi, (value) => ({
-      type: 'mermaid',
-      content: value,
-    }));
-    const withMath = splitByPattern(withMermaid, /\$\$([\s\S]*?)\$\$/g, (value) => ({
-      type: 'math',
-      content: value,
-    }));
-    // Inline math: $...$ (single dollar, not preceded/followed by space+dollar)
-    const withInlineMath = splitByPattern(withMath, /(?<!\$)\$(?!\$)([^\$\n]+?)(?<!\$)\$(?!\$)/g, (value) => ({
-      type: 'inlineMath',
-      content: value,
-    }));
-
-    return withInlineMath.filter((segment) => {
-      if (segment.type === 'markdown') return segment.content.trim().length > 0;
-      return segment.content.length > 0;
-    });
-  };
-
-  const safeParseQuizJson = (raw: string): QuizQuestionPayload | null => {
-    const cleaned = String(raw || '').trim();
-    if (!cleaned) return null;
-
-    // First try the InlineQuizCard parser contract.
-    const wrapped = `\`\`\`quiz\n${cleaned}\n\`\`\``;
-    const parsed = parseQuizPayload(wrapped);
-    if (parsed) return parsed;
-
-    try {
-      const direct = JSON.parse(cleaned);
-      if (
-        direct &&
-        typeof direct === 'object' &&
-        (direct as any).type === 'quiz_question' &&
-        typeof (direct as any).question === 'string' &&
-        typeof (direct as any).correct === 'string'
-      ) {
-        return direct as QuizQuestionPayload;
-      }
-    } catch {
-      // Keep null fallback to fenced markdown render below.
-    }
-
-    return null;
-  };
-
-  const safeParseColumnJson = (raw: string): ColumnMethodPayload | null => {
-    const cleaned = String(raw || '').trim();
-    if (!cleaned) return null;
-
-    const wrapped = `\`\`\`column\n${cleaned}\n\`\`\``;
-    const parsed = parseColumnMethodPayload(wrapped);
-    if (parsed) return parsed;
-
-    try {
-      const direct = JSON.parse(cleaned);
-      const addends = Array.isArray((direct as any)?.addends)
-        ? (direct as any).addends
-            .map((entry: unknown) => Number(String(entry).replace(/,/g, '').trim()))
-            .filter((entry: number) => Number.isFinite(entry))
-            .map((entry: number) => Math.abs(Math.trunc(entry)))
-        : [];
-      if (
-        direct &&
-        typeof direct === 'object' &&
-        addends.length >= 2
-      ) {
-        return {
-          type: 'column_addition',
-          addends,
-          question: typeof (direct as any).question === 'string' ? (direct as any).question : undefined,
-          expression: typeof (direct as any).expression === 'string' ? (direct as any).expression : undefined,
-          result: Number.isFinite(Number((direct as any).result))
-            ? Math.abs(Math.trunc(Number((direct as any).result)))
-            : undefined,
-          show_carry: (direct as any).show_carry !== false,
-        };
-      }
-    } catch {
-      // Keep null fallback to fenced markdown render below.
-    }
-
-    return null;
-  };
-
-  const safeParseSpellingJson = (raw: string): SpellingPracticePayload | null => {
-    let cleaned = String(raw || '').trim();
-    if (!cleaned) return null;
-
-    const wrapped = `\`\`\`spelling\n${cleaned}\n\`\`\``;
-    let parsed = parseSpellingPayload(wrapped);
-    if (parsed) return parsed;
-
-    let direct: unknown = null;
-    try {
-      direct = JSON.parse(cleaned);
-    } catch {
-      cleaned = repairInteractiveJson(cleaned);
-      try {
-        direct = JSON.parse(cleaned);
-      } catch {
-        return null;
-      }
-    }
-    if (
-      direct &&
-      typeof direct === 'object' &&
-      (direct as any).type === 'spelling_practice' &&
-      typeof (direct as any).word === 'string'
-    ) {
-      return direct as SpellingPracticePayload;
-    }
-    return null;
-  };
 
   const BubbleSurface: React.ElementType = isUser ? LinearGradient : View;
   const bubbleSurfaceProps = isUser
@@ -1868,106 +1349,10 @@ export const DashMessageBubble: React.FC<DashMessageBubbleProps> = ({
           </Text>
         </View>
       </BubbleSurface>
-
-      <Modal
-        visible={!!expandedVisual}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setExpandedVisual(null)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: 'rgba(2,6,23,0.84)',
-            justifyContent: 'center',
-            paddingHorizontal: 16,
-            paddingVertical: 24,
-          }}
-        >
-          <View
-            style={{
-              borderRadius: 16,
-              borderWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: theme.background,
-              padding: 12,
-              maxHeight: '92%',
-              gap: 10,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <Text style={{ color: theme.text, fontSize: 15, fontWeight: '700', flex: 1 }} numberOfLines={1}>
-                {expandedVisual?.title || 'Expanded view'}
-              </Text>
-              <TouchableOpacity
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 17,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: theme.surfaceVariant,
-                  borderWidth: 1,
-                  borderColor: theme.border,
-                }}
-                onPress={() => setExpandedVisual(null)}
-                accessibilityLabel="Close expanded visual"
-              >
-                <Ionicons name="close" size={18} color={theme.text} />
-              </TouchableOpacity>
-            </View>
-
-            {expandedVisual?.type === 'image' && (
-              <Image
-                source={{ uri: expandedVisual.uri }}
-                style={{ width: '100%', minHeight: 260, maxHeight: 540, borderRadius: 12 }}
-                resizeMode="contain"
-              />
-            )}
-
-            {expandedVisual?.type === 'mermaid' && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <MermaidRenderer definition={expandedVisual.definition} height={420} />
-                <Text style={{ color: theme.textSecondary, fontSize: 12, marginTop: 8 }}>
-                  Pinch zoom is supported in the system image viewer if you need larger detail.
-                </Text>
-              </ScrollView>
-            )}
-
-            {expandedVisual?.type === 'chart' && (
-              <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ gap: 10 }}>
-                <View
-                  style={{
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    backgroundColor: theme.surface,
-                    padding: 10,
-                    gap: 8,
-                  }}
-                >
-                  {expandedVisual.chart.points.map((point, idx) => (
-                    <View
-                      key={`expanded-chart-${idx}`}
-                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: point.color }} />
-                        <Text style={{ color: theme.text, fontSize: 14, fontWeight: '600', flexShrink: 1 }}>
-                          {point.label}
-                        </Text>
-                      </View>
-                      <Text style={{ color: theme.textSecondary, fontSize: 14, fontWeight: '700' }}>
-                        {point.value}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <ExpandedVisualModal
+        expandedVisual={expandedVisual}
+        onClose={() => setExpandedVisual(null)}
+      />
     </View>
   );
 };

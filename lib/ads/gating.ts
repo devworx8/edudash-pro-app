@@ -71,7 +71,7 @@ export function isLearnerRole(userProfile: any): boolean {
 }
 
 /**
- * Check if user is a membership/organization user (Soil of Africa, etc.)
+ * Check if user is a membership/organization user (EduPro, etc.)
  */
 export function isMembershipUser(userProfile: any): boolean {
   if (!userProfile) return false;

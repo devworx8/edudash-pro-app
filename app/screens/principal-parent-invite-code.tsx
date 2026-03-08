@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { InviteCodeService, SchoolInvitationCode } from '@/lib/services/inviteCodeService';
 import { Picker } from '@react-native-picker/picker';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 let Clipboard: any = null;
 try { Clipboard = require('expo-clipboard'); } catch (e) { /* optional */ }
@@ -94,7 +95,7 @@ export default function PrincipalParentInviteCodeScreen() {
 
   const buildShareMessage = (code: string) => {
     const path = inviteType === 'parent' ? 'parent' : 'student';
-    const shareUrl = `https://www.edudashpro.org.za/invite/${path}?code=${encodeURIComponent(code)}`;
+    const shareUrl = buildEduDashWebUrl(`/invite/${path}?code=${encodeURIComponent(code)}`);
     const who = inviteType === 'parent' ? 'our school' : 'our organization';
     return `Join ${who} on EduDash Pro\n\nUse this code: ${code}\n\nTap the link to open the app: ${shareUrl}`;
   };
@@ -175,7 +176,9 @@ export default function PrincipalParentInviteCodeScreen() {
                 {(() => {
                   const latest = codes[0];
                   const path = inviteType === 'parent' ? 'parent' : 'student';
-                  const link = latest ? `https://www.edudashpro.org.za/invite/${path}?code=${encodeURIComponent(latest.code)}` : '';
+                  const link = latest
+                    ? buildEduDashWebUrl(`/invite/${path}?code=${encodeURIComponent(latest.code)}`)
+                    : '';
 
                   const copyLink = async () => {
                     if (!latest) return showAlert({ title: 'No code', message: 'Generate an invite first.' });

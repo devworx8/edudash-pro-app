@@ -65,8 +65,8 @@ jest.mock('@/lib/security-audit', () => ({
   },
 }));
 
-jest.mock('sentry-expo', () => ({
-  Native: { setUser: jest.fn() },
+jest.mock('@sentry/react-native', () => ({
+  setUser: jest.fn(),
 }));
 
 jest.mock('@/contexts/auth/profileUtils', () => ({
@@ -217,6 +217,23 @@ describe('handleSignedIn', () => {
       session.user,
       expect.objectContaining({ id: session.user.id }),
     );
+  });
+
+  it('routes unverified sessions to email verification before fetching a profile', async () => {
+    const session = createMockSession({
+      user: {
+        email: 'pending@edudashpro.org.za',
+        email_confirmed_at: null,
+        confirmed_at: null,
+      },
+    });
+    const deps = createDeps();
+
+    await handleSignedIn(session, deps);
+
+    expect(mockFetchEnhancedUserProfile).not.toHaveBeenCalled();
+    expect(mockRouteAfterLogin).toHaveBeenCalledWith(session.user, null);
+    expect(deps.setProfileLoading).toHaveBeenCalledWith(false);
   });
 
   // ── Deduplication ─────────────────────────────────

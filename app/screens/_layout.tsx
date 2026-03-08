@@ -10,7 +10,6 @@ import ThemedStatusBar from '../../components/ui/ThemedStatusBar';
 const NEXT_GEN_PARENT_SHARED_ROUTES = new Set([
   '/screens/homework',
   '/screens/homework-detail',
-  '/screens/homework-details',
   '/screens/exam-prep',
   '/screens/exam-generation',
   '/screens/dash-assistant',

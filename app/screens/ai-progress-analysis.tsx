@@ -9,10 +9,10 @@ import { assertSupabase } from '@/lib/supabase';
 import { track } from '@/lib/analytics';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
-import { router } from 'expo-router';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { logger } from '@/lib/logger';
 import { EducationalPDFService } from '@/lib/services/EducationalPDFService'
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 const TAG = 'AIProgressAnalysis';
 
@@ -72,7 +72,7 @@ export default function AIProgressAnalysisScreen() {
           `You have used ${status.used} of ${status.limit} progress analyses this month.`,
           [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'See plans', onPress: () => router.push('/pricing') },
+            { text: 'See plans', onPress: () => navigateToUpgrade({ source: 'ai_progress_quota', reason: 'limit_reached' }) },
           ]
         );
         return;
@@ -432,7 +432,7 @@ export default function AIProgressAnalysisScreen() {
           </Text>
           <TouchableOpacity
             style={{ marginTop: 12, backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 }}
-            onPress={() => router.push('/screens/subscription-upgrade-post?reason=ai_progress')}
+            onPress={() => navigateToUpgrade({ source: 'ai_progress_analysis', reason: 'feature_needed' })}
           >
             <Text style={{ color: '#fff', fontWeight: '700' }}>Upgrade</Text>
           </TouchableOpacity>

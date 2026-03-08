@@ -3,12 +3,11 @@
  * the Supabase Realtime connection is degraded or lost.
  *
  * States:
- *  - connected → hidden (no bar)
- *  - connecting / reconnecting → yellow bar "Connecting..."
- *  - disconnected → red bar "No connection. Messages will be sent when you're back online."
+ *  - connected / connecting → hidden (no bar)
+ *  - reconnecting / disconnected (sustained for 2.5s) → red bar with offline message
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRealtimeConnectionState, type ConnectionState } from '@/hooks/messaging/useRealtimeConnectionState';
@@ -19,13 +18,44 @@ interface ConnectionStatusBarProps {
 }
 
 const BAR_HEIGHT = 28;
+const DEGRADED_STATE_DELAY_MS = 2500;
 
 export const ConnectionStatusBar: React.FC<ConnectionStatusBarProps> = React.memo(({ overrideState }) => {
   const { state: hookState } = useRealtimeConnectionState();
   const state = overrideState ?? hookState;
   const heightAnim = useRef(new Animated.Value(0)).current;
+  const delayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [showDegradedState, setShowDegradedState] = useState(false);
 
-  const visible = state !== 'connected';
+  const isDegraded = state === 'disconnected' || state === 'reconnecting';
+  const visible = showDegradedState && isDegraded;
+
+  useEffect(() => {
+    if (delayTimerRef.current) {
+      clearTimeout(delayTimerRef.current);
+      delayTimerRef.current = null;
+    }
+
+    if (!isDegraded) {
+      setShowDegradedState(false);
+      return;
+    }
+
+    if (showDegradedState) {
+      return;
+    }
+
+    delayTimerRef.current = setTimeout(() => {
+      setShowDegradedState(true);
+    }, DEGRADED_STATE_DELAY_MS);
+
+    return () => {
+      if (delayTimerRef.current) {
+        clearTimeout(delayTimerRef.current);
+        delayTimerRef.current = null;
+      }
+    };
+  }, [isDegraded, showDegradedState]);
 
   useEffect(() => {
     Animated.timing(heightAnim, {
@@ -35,16 +65,13 @@ export const ConnectionStatusBar: React.FC<ConnectionStatusBarProps> = React.mem
     }).start();
   }, [visible, heightAnim]);
 
-  if (state === 'connected') {
+  if (!visible) {
     return <Animated.View style={{ height: heightAnim }} />;
   }
 
-  const isDisconnected = state === 'disconnected';
-  const bgColor = isDisconnected ? '#dc2626' : '#d97706';
-  const icon = isDisconnected ? 'cloud-offline-outline' : 'sync-outline';
-  const label = isDisconnected
-    ? 'No connection. Messages will be sent when you\u2019re back online.'
-    : 'Connecting\u2026';
+  const bgColor = '#dc2626';
+  const icon = 'cloud-offline-outline';
+  const label = 'No connection. Messages will be sent when you\u2019re back online.';
 
   return (
     <Animated.View style={[styles.bar, { height: heightAnim, backgroundColor: bgColor }]}>

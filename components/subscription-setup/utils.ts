@@ -55,10 +55,20 @@ export function getPlanColor(tier: string): string {
     case 'free':
       return '#6b7280';
     case 'starter':
+    case 'school_starter':
+    case 'parent_starter':
+    case 'teacher_starter':
       return '#3b82f6';
     case 'premium':
+    case 'school_premium':
+    case 'parent_plus':
+    case 'teacher_pro':
       return '#8b5cf6';
+    case 'pro':
+    case 'school_pro':
+      return '#f59e0b';
     case 'enterprise':
+    case 'school_enterprise':
       return '#f59e0b';
     default:
       return '#00f5ff';

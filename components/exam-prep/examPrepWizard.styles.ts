@@ -1,7 +1,8 @@
 import { Dimensions, Platform, StyleSheet } from 'react-native';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SUBJECT_CARD_WIDTH = Math.max(140, Math.floor((SCREEN_WIDTH - 16 * 2 - 12) / 2));
+const PREVIEW_IMAGE_HEIGHT = Math.max(260, Math.min(520, Math.floor(SCREEN_HEIGHT * 0.62)));
 
 export const examPrepWizardStyles = StyleSheet.create({
   container: {
@@ -555,6 +556,22 @@ export const examPrepWizardStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  materialThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginRight: 10,
+  },
+  materialThumbPlaceholder: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   materialMeta: {
     flex: 1,
     marginRight: 8,
@@ -593,5 +610,49 @@ export const examPrepWizardStyles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 13,
     lineHeight: 18,
+  },
+  materialPreviewOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  materialPreviewBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2, 6, 23, 0.82)',
+  },
+  materialPreviewCard: {
+    width: '100%',
+    maxWidth: 520,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+    gap: 12,
+  },
+  materialPreviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  materialPreviewTitle: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  materialPreviewImage: {
+    width: '100%',
+    height: PREVIEW_IMAGE_HEIGHT,
+    borderRadius: 12,
+  },
+  materialPreviewMissingState: {
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  materialPreviewMissingText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

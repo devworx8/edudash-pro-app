@@ -20,6 +20,7 @@ export type ExamRouteParams = {
   examType: string;
   language: SouthAfricanLanguage;
   useTeacherContext: '0' | '1';
+  allowOverQuota?: '0' | '1';
   fallbackPolicy?: ExamFallbackPolicy;
   qualityMode?: ExamQualityMode;
   draftId?: string;
@@ -100,6 +101,7 @@ export function buildExamRouteParams(input: {
   examType: string;
   language: SouthAfricanLanguage;
   useTeacherContext: boolean;
+  allowOverQuota?: boolean;
   fallbackPolicy?: ExamFallbackPolicy;
   qualityMode?: ExamQualityMode;
   draftId?: string;
@@ -113,6 +115,7 @@ export function buildExamRouteParams(input: {
     useTeacherContext: input.useTeacherContext ? '1' : '0',
   };
 
+  if (input.allowOverQuota) params.allowOverQuota = '1';
   if (input.draftId) params.draftId = input.draftId;
   if (input.fallbackPolicy) params.fallbackPolicy = input.fallbackPolicy;
   if (input.qualityMode) params.qualityMode = input.qualityMode;

@@ -5,10 +5,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import {
   GRADES,
   SUBJECTS_BY_PHASE,
@@ -34,6 +33,8 @@ import { ExamPrepWizardHeader } from '@/components/exam-prep/ExamPrepWizardHeade
 import { ExamPrepQuickLaunchCard } from '@/components/exam-prep/ExamPrepQuickLaunchCard';
 import { ExamPrepWizardStepContent } from '@/components/exam-prep/ExamPrepWizardStepContent';
 import { ExamPrepLockedView } from '@/components/exam-prep/ExamPrepLockedView';
+import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import {
   buildCustomPrompt as buildCustomPromptBlock,
   buildGenerationHref,
@@ -45,6 +46,7 @@ import {
 
 export function ExamPrepWizard(): React.ReactElement {
   const { theme, isDark } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { tier } = useSubscription();
   const params = useLocalSearchParams<{
     grade?: string;
@@ -53,24 +55,19 @@ export function ExamPrepWizard(): React.ReactElement {
     classId?: string;
     schoolId?: string;
   }>();
-
   const gradeParam = toSafeParam(params.grade);
   const childName = toSafeParam(params.childName);
   const studentId = toSafeParam(params.studentId);
   const classId = toSafeParam(params.classId);
   const schoolId = toSafeParam(params.schoolId);
-
   const hasPrefilledGrade = !!(gradeParam && GRADES.some((grade) => grade.value === gradeParam));
-
   const [selectedGrade, setSelectedGrade] = useState<string>(hasPrefilledGrade ? gradeParam! : 'grade_4');
   const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedExamType, setSelectedExamType] = useState<string>('practice_test');
   const [selectedLanguage, setSelectedLanguage] = useState<SouthAfricanLanguage>('en-ZA');
   const [step, setStep] = useState<WizardStep>(hasPrefilledGrade ? 'subject' : 'grade');
-
   const [subjectSearch, setSubjectSearch] = useState('');
   const [subjectCategory, setSubjectCategory] = useState<SubjectCategory>('all');
-
   const [useTeacherContext, setUseTeacherContext] = useState(true);
   const [contextPreview, setContextPreview] = useState<ExamContextSummary | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
@@ -140,12 +137,10 @@ export function ExamPrepWizard(): React.ReactElement {
             : selectedExamType;
     return examType;
   }, [selectedExamType]);
-
   const quickLaunchLabel = `${gradeInfo?.label || 'Selected Grade'} • ${selectedSubject || 'Afrikaans First Additional Language'}`;
 
   const filteredSubjects = useMemo(() => {
     const search = subjectSearch.trim().toLowerCase();
-
     return subjects.filter((subject) => {
       const category = getSubjectCategory(subject);
       const categoryMatches = subjectCategory === 'all' || category === subjectCategory;
@@ -199,14 +194,12 @@ export function ExamPrepWizard(): React.ReactElement {
 
   useEffect(() => {
     if (step !== 'review') return;
-
     if (!useTeacherContext) {
       setContextPreview(null);
       setContextError(null);
       setContextLoading(false);
       return;
     }
-
     loadContextPreview();
   }, [step, useTeacherContext, loadContextPreview]);
 
@@ -221,75 +214,84 @@ export function ExamPrepWizard(): React.ReactElement {
     setSubjectCategory('all');
   }, []);
 
-  const handleStartGeneration = useCallback(
-    (withTeacherContext: boolean) => {
-      if (!selectedGrade || !selectedSubject || !selectedExamType) return;
-      if (isMaterialPipelineBusy) {
-        Alert.alert(
-          'Please wait',
-          'We are still extracting content from your uploaded study material.',
-        );
-        return;
-      }
-      if (hasBlockingMaterialErrors) {
-        Alert.alert(
-          'Study material not ready',
-          'One or more uploaded files failed analysis. Retry failed files or remove them before generating.',
-        );
-        return;
-      }
-      if (examQuotaLimit > 0 && examQuotaRemaining <= 0) {
-        Alert.alert(
-          'AI quota warning',
-          'Your monthly exam quota appears exhausted. Generation may fail until usage is reset or your plan is upgraded.',
-        );
-      }
-
-      const customPrompt = buildCustomPromptBlock({
-        customPromptText,
-        readyMaterialSummaries,
-        selectedLanguage,
-      });
-      const draftId = customPrompt
-        ? stashExamGenerationDraft({
-            customPrompt,
-          })
-        : undefined;
-
-      const href = buildGenerationHref({
-        grade: selectedGrade,
-        subject: selectedSubject,
-        examType: selectedExamType,
-        language: selectedLanguage,
-        useTeacherContext: withTeacherContext,
-        draftId,
-        childName,
-        studentId,
-        classId,
-        schoolId,
-        readyMaterialCount: readyMaterialSummaries.length,
-      });
-
-      router.push(href);
-    },
-    [
-      selectedGrade,
-      selectedSubject,
-      selectedExamType,
-      selectedLanguage,
-      isMaterialPipelineBusy,
-      readyMaterialSummaries.length,
-      readyMaterialSummaries,
+  const proceedToGeneration = useCallback((withTeacherContext: boolean, allowOverQuota = false) => {
+    const customPrompt = buildCustomPromptBlock({
       customPromptText,
-      examQuotaLimit,
-      examQuotaRemaining,
+      readyMaterialSummaries,
+      selectedLanguage,
+    });
+    const draftId = customPrompt ? stashExamGenerationDraft({ customPrompt }) : undefined;
+    const href = buildGenerationHref({
+      grade: selectedGrade,
+      subject: selectedSubject,
+      examType: selectedExamType,
+      language: selectedLanguage,
+      useTeacherContext: withTeacherContext,
+      allowOverQuota,
+      draftId,
       childName,
       studentId,
       classId,
       schoolId,
-      hasBlockingMaterialErrors,
-    ]
-  );
+      readyMaterialCount: readyMaterialSummaries.length,
+    });
+    router.push(href);
+  }, [
+    selectedGrade,
+    selectedSubject,
+    selectedExamType,
+    selectedLanguage,
+    readyMaterialSummaries,
+    customPromptText,
+    childName,
+    studentId,
+    classId,
+    schoolId,
+  ]);
+
+  const handleStartGeneration = useCallback((withTeacherContext: boolean) => {
+    if (!selectedGrade || !selectedSubject || !selectedExamType) return;
+    if (isMaterialPipelineBusy) {
+      showAlert({
+        title: 'Please wait',
+        message: 'We are still extracting content from your uploaded study material.',
+        type: 'info',
+      });
+      return;
+    }
+    if (hasBlockingMaterialErrors) {
+      showAlert({
+        title: 'Study material not ready',
+        message: 'One or more uploaded files failed analysis. Retry failed files or remove them before generating.',
+        type: 'warning',
+      });
+      return;
+    }
+    if (examQuotaLimit > 0 && examQuotaRemaining <= 0) {
+      showAlert({
+        title: 'Monthly exam quota reached',
+        message: 'You have used your monthly exam quota. Upgrade now, or continue anyway (generation may fail).',
+        type: 'warning',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => navigateToUpgrade({ source: 'exam_prep', reason: 'limit_reached' }) },
+          { text: 'Continue', onPress: () => proceedToGeneration(withTeacherContext, true) },
+        ],
+      });
+      return;
+    }
+    proceedToGeneration(withTeacherContext, false);
+  }, [
+    selectedGrade,
+    selectedSubject,
+    selectedExamType,
+    isMaterialPipelineBusy,
+    hasBlockingMaterialErrors,
+    examQuotaLimit,
+    examQuotaRemaining,
+    proceedToGeneration,
+    showAlert,
+  ]);
 
   const handleQuickStartAfrikaansLive = useCallback(() => {
     const quickGrade = selectedGrade || gradeParam || 'grade_6';
@@ -302,7 +304,6 @@ export function ExamPrepWizard(): React.ReactElement {
       classId,
       schoolId,
     });
-
     router.push(href);
   }, [selectedGrade, gradeParam, selectedSubject, selectedLanguage, childName, studentId, classId, schoolId]);
 
@@ -329,9 +330,7 @@ export function ExamPrepWizard(): React.ReactElement {
           ),
         }}
       />
-
       <ExamPrepWizardHeader currentStep={currentStep} isDark={isDark} theme={theme} />
-
       <ScrollView style={styles.content} contentContainerStyle={styles.contentInner} showsVerticalScrollIndicator={false}>
         <ExamPrepQuickLaunchCard
           quickLaunchLabel={quickLaunchLabel}
@@ -388,6 +387,7 @@ export function ExamPrepWizard(): React.ReactElement {
           onSetUseTeacherContext={setUseTeacherContext}
         />
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

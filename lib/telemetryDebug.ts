@@ -1,11 +1,11 @@
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import { getPostHog } from '@/lib/posthogClient';
 
 export function testSentry() {
   try {
-    Sentry.Native.captureMessage('Test event from device', { level: 'info' as any });
+    Sentry.captureMessage('Test event from device', { level: 'info' as any });
     // Also capture an example exception
-    Sentry.Native.captureException(new Error('Sentry test exception'));
+    Sentry.captureException(new Error('Sentry test exception'));
   } catch {
     // no-op
   }

@@ -388,6 +388,51 @@ export function useMessageActions({
 
   // ─── Star / unstar ──────────────────────────────────────────────────
 
+  const handlePinMessage = useCallback(
+    async () => {
+      if (!selectedMessage?.id || !user?.id) return;
+
+      try {
+        const client = assertSupabase();
+        const isCurrentlyPinned = !!(selectedMessage as any).is_pinned;
+
+        const { error } = await client
+          .from('messages')
+          .update({
+            is_pinned: !isCurrentlyPinned,
+            pinned_at: isCurrentlyPinned ? null : new Date().toISOString(),
+            pinned_by: isCurrentlyPinned ? null : user.id,
+          })
+          .eq('id', selectedMessage.id);
+
+        if (error) throw error;
+
+        setOptimisticMsgs((prev) =>
+          prev.map((m) =>
+            m.id === selectedMessage.id
+              ? {
+                  ...m,
+                  is_pinned: !isCurrentlyPinned,
+                  pinned_at: isCurrentlyPinned ? null : new Date().toISOString(),
+                  pinned_by: isCurrentlyPinned ? null : user.id,
+                }
+              : m
+          )
+        );
+
+        refetch();
+        toast.success(isCurrentlyPinned ? 'Message unpinned' : 'Message pinned');
+      } catch (err) {
+        logger.error('MessageActions', 'Pin toggle failed:', err);
+        toast.error('Failed to update pin');
+      }
+
+      setShowMessageActions(false);
+      setSelectedMessage(null);
+    },
+    [selectedMessage, user?.id, refetch, setOptimisticMsgs, setShowMessageActions, setSelectedMessage]
+  );
+
   const handleToggleStar = useCallback(
     async () => {
       if (!selectedMessage?.id || !user?.id) return;
@@ -434,6 +479,7 @@ export function useMessageActions({
     handleEdit,
     // New actions
     handleToggleStar,
+    handlePinMessage,
     // Edit state & controls
     editingMessage,
     confirmEdit,

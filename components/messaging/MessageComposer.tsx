@@ -55,6 +55,10 @@ interface MessageComposerProps {
   failedMessageCount?: number;
   /** Called when send fails so the caller can enqueue into the retry system */
   onSendError?: (content: string, error: string) => void;
+  /** Called when user taps the schedule button — passes the current text */
+  onSchedule?: (text: string) => void;
+  /** Called when user taps the template button to open template picker */
+  onOpenTemplates?: () => void;
 }
 
 const COMPOSER_IMAGE_ASPECT: [number, number] = [4, 3];
@@ -118,6 +122,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
   showAlert,
   failedMessageCount = 0,
   onSendError,
+  onSchedule,
+  onOpenTemplates,
 }) => {
   const [text, setText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -467,6 +473,18 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
               </TouchableOpacity>
             )}
 
+            {/* Schedule Button - when there's text and onSchedule is provided */}
+            {text.trim() && onSchedule && (
+              <TouchableOpacity
+                style={styles.scheduleButton}
+                onPress={() => onSchedule(text.trim())}
+                activeOpacity={0.7}
+                accessibilityLabel="Schedule message"
+              >
+                <Ionicons name="time-outline" size={20} color="rgba(255,255,255,0.5)" />
+              </TouchableOpacity>
+            )}
+
             {/* Send Button - only when there's text */}
             {text.trim() && (
               <TouchableOpacity
@@ -500,6 +518,18 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
               onRecordingStateChange={setIsRecording}
             />
           </View>
+        )}
+
+        {/* Templates button (when no text, not recording) */}
+        {!text.trim() && !isRecording && onOpenTemplates && (
+          <TouchableOpacity
+            style={styles.scheduleButton}
+            onPress={onOpenTemplates}
+            activeOpacity={0.7}
+            accessibilityLabel="Message templates"
+          >
+            <Ionicons name="document-text-outline" size={20} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
         )}
         
         {/* Fallback mic button if VoiceRecorder not available */}
@@ -660,6 +690,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   sparkleButton: {
+    width: 36,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scheduleButton: {
     width: 36,
     height: 48,
     alignItems: 'center',

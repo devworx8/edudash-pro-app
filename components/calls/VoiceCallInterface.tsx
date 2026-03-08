@@ -59,6 +59,7 @@ interface VoiceCallInterfaceProps {
   callId?: string;
   meetingUrl?: string;
   threadId?: string;
+  isSwitchingMode?: boolean;
   onCallStateChange?: (state: CallState) => void;
   /** Optional callback to switch from voice to video call */
   onSwitchToVideo?: () => void;
@@ -74,6 +75,7 @@ export function VoiceCallInterface({
   callId,
   meetingUrl,
   threadId,
+  isSwitchingMode = false,
   onCallStateChange,
   onSwitchToVideo,
 }: VoiceCallInterfaceProps) {
@@ -104,6 +106,7 @@ export function VoiceCallInterface({
     calleeId,
     initialCallId: callId,
     threadId,
+    isSwitchingMode,
     isSpeakerEnabled: state.isSpeakerEnabled,
     dailyRef: state.dailyRef,
     callIdRef: state.callIdRef,

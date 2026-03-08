@@ -42,7 +42,10 @@ const MAX_BLOCKS_PER_DAY = 10;
 const MIN_DAY_END_MINUTES = 13 * 60 + 30;
 
 const ANCHOR_LOCK_NOTE_REGEX = /anchor locked from preflight|auto-added from preflight non-negotiable anchor/i;
-const ANCHOR_LOCK_TIME_REGEX = /anchor locked from preflight:[\s\S]*?\bat\s*(\d{1,2}:\d{2})/i;
+const ANCHOR_LOCK_TIME_PATTERNS = [
+  /anchor locked from preflight:[\s\S]*?\bat\s*(\d{1,2}:\d{2})/i,
+  /auto-added from preflight non-negotiable anchor\s*\([^)]*?(\d{1,2}:\d{2})/i,
+];
 const AUTO_ADDED_NOTE_REGEX = /auto-(added|filled|enforced|staggered)|auto added|auto filled|auto enforced/i;
 
 const TOILET_KEYWORDS = ['toilet', 'bathroom', 'potty', 'washroom', 'restroom', 'hygiene', 'hand wash', 'handwash'];
@@ -136,36 +139,86 @@ function hasKeyword(source: string, keywords: string[]): boolean {
   return keywords.some((keyword) => source.includes(keyword));
 }
 
+function inferHeaderIntent(source: string): RoutineBlockIntent | null {
+  if (!source) return null;
+
+  if (hasTokenKeyword(source, PRAYER_KEYWORDS)) return 'morning_prayer';
+  if (hasTokenKeyword(source, CIRCLE_KEYWORDS)) return 'circle';
+  if (hasTokenKeyword(source, STORY_KEYWORDS)) return 'story';
+  if (hasTokenKeyword(source, DISMISSAL_KEYWORDS)) return 'dismissal';
+  if (hasTokenKeyword(source, TOILET_KEYWORDS)) return 'toilet';
+  if (hasTokenKeyword(source, BREAKFAST_KEYWORDS)) return 'breakfast';
+  if (hasTokenKeyword(source, LUNCH_KEYWORDS)) return 'lunch';
+  if (hasTokenKeyword(source, NAP_KEYWORDS)) return 'nap';
+  if (hasTokenKeyword(source, ARRIVAL_KEYWORDS)) return 'arrival';
+
+  return null;
+}
+
+function inferAnchorHintIntent(source: string): RoutineBlockIntent | null {
+  const text = String(source || '').toLowerCase();
+  if (!text) return null;
+
+  const anchorLockMatch =
+    text.match(/anchor locked from preflight:\s*([^\n\.]+)/i)
+    || text.match(/auto-added from preflight non-negotiable anchor\s*\(([^)]+)/i);
+  const anchorScope = String(anchorLockMatch?.[1] || '').trim();
+  if (!anchorScope) return null;
+
+  if (hasTokenKeyword(anchorScope, BREAKFAST_KEYWORDS)) return 'breakfast';
+  if (hasTokenKeyword(anchorScope, LUNCH_KEYWORDS)) return 'lunch';
+  if (hasTokenKeyword(anchorScope, NAP_KEYWORDS)) return 'nap';
+  if (hasTokenKeyword(anchorScope, TOILET_KEYWORDS)) return 'toilet';
+  if (hasTokenKeyword(anchorScope, PRAYER_KEYWORDS)) return 'morning_prayer';
+  if (hasTokenKeyword(anchorScope, CIRCLE_KEYWORDS)) return 'circle';
+  if (hasTokenKeyword(anchorScope, STORY_KEYWORDS)) return 'story';
+  if (hasTokenKeyword(anchorScope, DISMISSAL_KEYWORDS)) return 'dismissal';
+
+  return null;
+}
+
 function extractAnchorLockedStartMinutes(source: string): number | null {
-  const match = source.match(ANCHOR_LOCK_TIME_REGEX);
-  if (!match?.[1]) return null;
-  return toMinutes(match[1]);
+  for (const pattern of ANCHOR_LOCK_TIME_PATTERNS) {
+    const match = source.match(pattern);
+    if (!match?.[1]) continue;
+    return toMinutes(match[1]);
+  }
+  return null;
 }
 
 export function classifyRoutineBlockIntent(block: DailyProgramBlock): RoutineBlockIntent {
   const headerSource = blockHeaderText(block);
   const source = blockText(block);
   const type = String(block.block_type || '').toLowerCase();
+  const headerIntent = inferHeaderIntent(headerSource);
+  const anchorHint = inferAnchorHintIntent(source);
 
   if (type === 'nap') return 'nap';
   if (type === 'meal') {
-    if (hasTokenKeyword(headerSource, BREAKFAST_KEYWORDS)) return 'breakfast';
-    if (hasTokenKeyword(headerSource, LUNCH_KEYWORDS)) return 'lunch';
+    if (anchorHint === 'breakfast' || anchorHint === 'lunch' || anchorHint === 'nap') return anchorHint;
+    if (headerIntent === 'breakfast' || headerIntent === 'lunch' || headerIntent === 'nap') return headerIntent;
+    if (headerIntent === 'toilet') return 'toilet';
+    if (headerIntent === 'circle' || headerIntent === 'morning_prayer' || headerIntent === 'story') return headerIntent;
     if (hasTokenKeyword(source, BREAKFAST_KEYWORDS)) return 'breakfast';
     if (hasTokenKeyword(source, LUNCH_KEYWORDS)) return 'lunch';
+    if (hasTokenKeyword(source, NAP_KEYWORDS)) return 'nap';
     return 'meal';
   }
   if (type === 'transition') {
-    if (hasTokenKeyword(headerSource, TOILET_KEYWORDS)) return 'toilet';
-    if (hasTokenKeyword(headerSource, DISMISSAL_KEYWORDS)) return 'dismissal';
-    if (hasTokenKeyword(source, TOILET_KEYWORDS)) return 'toilet';
-    if (hasTokenKeyword(source, DISMISSAL_KEYWORDS)) return 'dismissal';
+    if (headerIntent === 'toilet') return 'toilet';
+    if (headerIntent === 'dismissal') return 'dismissal';
+    if (headerIntent === 'arrival') return 'arrival';
+    if (anchorHint === 'toilet') return 'toilet';
+    if (anchorHint === 'dismissal') return 'dismissal';
     return 'transition';
   }
   if (type === 'circle_time') {
-    if (hasTokenKeyword(headerSource, PRAYER_KEYWORDS)) return 'morning_prayer';
-    if (hasTokenKeyword(headerSource, CIRCLE_KEYWORDS)) return 'circle';
-    if (hasTokenKeyword(headerSource, STORY_KEYWORDS)) return 'story';
+    if (anchorHint === 'morning_prayer') return 'morning_prayer';
+    if (anchorHint === 'circle') return 'circle';
+    if (anchorHint === 'story') return 'story';
+    if (headerIntent === 'morning_prayer') return 'morning_prayer';
+    if (headerIntent === 'circle') return 'circle';
+    if (headerIntent === 'story') return 'story';
     return 'circle';
   }
   if (type === 'learning') return 'learning';
@@ -173,15 +226,8 @@ export function classifyRoutineBlockIntent(block: DailyProgramBlock): RoutineBlo
   if (type === 'outdoor') return 'outdoor';
   if (type === 'assessment') return 'assessment';
 
-  if (hasTokenKeyword(headerSource, TOILET_KEYWORDS)) return 'toilet';
-  if (hasTokenKeyword(headerSource, BREAKFAST_KEYWORDS)) return 'breakfast';
-  if (hasTokenKeyword(headerSource, LUNCH_KEYWORDS)) return 'lunch';
-  if (hasTokenKeyword(headerSource, NAP_KEYWORDS)) return 'nap';
-  if (hasTokenKeyword(headerSource, ARRIVAL_KEYWORDS)) return 'arrival';
-  if (hasTokenKeyword(headerSource, PRAYER_KEYWORDS)) return 'morning_prayer';
-  if (hasTokenKeyword(headerSource, CIRCLE_KEYWORDS)) return 'circle';
-  if (hasTokenKeyword(headerSource, STORY_KEYWORDS)) return 'story';
-  if (hasTokenKeyword(headerSource, DISMISSAL_KEYWORDS)) return 'dismissal';
+  if (headerIntent) return headerIntent;
+  if (anchorHint) return anchorHint;
 
   if (hasTokenKeyword(source, TOILET_KEYWORDS)) return 'toilet';
   if (hasTokenKeyword(source, BREAKFAST_KEYWORDS)) return 'breakfast';
@@ -685,6 +731,9 @@ function stabilizeDayBlocks(
     if (withGapTransitions.length >= MAX_BLOCKS_PER_DAY) {
       if (!current.__locked) {
         current.end_time = toHHMM(nextStart);
+        gapsFilled += 1;
+      } else if (!next.__locked) {
+        next.start_time = toHHMM(currentEnd);
         gapsFilled += 1;
       }
       continue;

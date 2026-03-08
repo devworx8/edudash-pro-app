@@ -57,6 +57,10 @@ interface MessageActionsMenuProps {
   onEdit?: () => void;
   onTranslate?: (language: 'en' | 'af' | 'zu') => void;
   isTranslating?: boolean;
+  /** Pin/unpin callback */
+  onPin?: () => void;
+  /** Whether the message is currently pinned */
+  isPinned?: boolean;
   /** When true, show "Add to weekly program" (principal adding teacher's theme to curriculum) */
   showAddToWeeklyProgram?: boolean;
   onAddToWeeklyProgram?: () => void;
@@ -79,6 +83,8 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
   onEdit,
   onTranslate,
   isTranslating = false,
+  onPin,
+  isPinned = false,
   showAddToWeeklyProgram = false,
   onAddToWeeklyProgram,
   showConvertToRoutineRequest = false,
@@ -173,6 +179,7 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
     ...(showConvertToRoutineRequest && onConvertToRoutineRequest ? [{ id: 'convert_to_routine_request', label: 'Convert to routine request', icon: 'clipboard-outline' as keyof typeof Ionicons.glyphMap, color: theme.primary }] : []),
     ...(isOwnMessage && onEdit ? [{ id: 'edit', label: 'Edit', icon: 'pencil-outline' as keyof typeof Ionicons.glyphMap }] : []),
     ...(onTranslate ? [{ id: 'translate', label: 'Translate', icon: 'language-outline' as keyof typeof Ionicons.glyphMap }] : []),
+    ...(onPin ? [{ id: 'pin', label: isPinned ? 'Unpin' : 'Pin', icon: (isPinned ? 'pin-outline' : 'pin') as keyof typeof Ionicons.glyphMap }] : []),
     { id: 'delete', label: 'Delete', icon: 'trash-outline', destructive: true, color: '#ef4444' },
   ];
   
@@ -477,6 +484,9 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
                         break;
                       case 'convert_to_routine_request':
                         if (onConvertToRoutineRequest) handleAction(onConvertToRoutineRequest);
+                        break;
+                      case 'pin':
+                        if (onPin) handleAction(onPin);
                         break;
                       case 'delete':
                         handleAction(onDelete);

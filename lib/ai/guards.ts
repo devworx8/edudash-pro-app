@@ -9,6 +9,7 @@
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { track } from '@/lib/analytics';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { getQuotaStatus, extractAPIError } from './api';
 import type { AIQuotaFeature } from './limits';
 
@@ -204,8 +205,7 @@ export function showQuotaExceededAlert(
           if (onUpgradePressed) {
             onUpgradePressed();
           } else {
-            // Default upgrade action - navigate to pricing
-            router.push('/pricing');
+            navigateToUpgrade({ source: 'quota_exceeded_alert' });
           }
         },
       },

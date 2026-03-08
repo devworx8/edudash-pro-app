@@ -19,7 +19,7 @@ export function CompleteStep({ memberNumber, theme }: CompleteStepProps) {
         <Ionicons name="checkmark-circle" size={80} color="#10B981" />
       </View>
       
-      <Text style={[styles.completeTitle, { color: theme.text }]}>Welcome to Soil of Africa!</Text>
+      <Text style={[styles.completeTitle, { color: theme.text }]}>Welcome to EduPro!</Text>
       <Text style={[styles.completeSubtitle, { color: theme.textSecondary }]}>
         Your registration is complete
       </Text>

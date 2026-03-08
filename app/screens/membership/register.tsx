@@ -1,6 +1,6 @@
 /**
  * Public Member Registration Screen
- * Multi-step registration flow for new members joining Soil of Africa
+ * Multi-step registration flow for new members joining EduPro
  * 
  * Refactored to use modular step components following WARP.md standards
  */
@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
+import { buildSoaWebUrl } from '@/lib/config/urls';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import {
   OrganizationStep,
@@ -30,6 +31,7 @@ import {
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { logger } from '@/lib/logger';
+import { clampPercent } from '@/lib/progress/clampPercent';
 // Default organization ID (Soil Of Africa) - used as fallback if no org selected
 const DEFAULT_ORG_ID = '63b6139a-e21f-447c-b322-376fb0828992';
 
@@ -161,6 +163,7 @@ export default function MemberRegistrationScreen() {
 
   const currentStepIndex = REGISTRATION_STEPS.findIndex(s => s.key === currentStep);
   const progress = ((currentStepIndex + 1) / REGISTRATION_STEPS.length) * 100;
+  const safeProgress = clampPercent(progress, { source: 'membership/register.progress' });
 
   const updateField = (field: keyof RegistrationData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -272,8 +275,8 @@ export default function MemberRegistrationScreen() {
               last_name: formData.last_name,
               phone: formData.phone,
             },
-            // Redirect to Soil of Africa website after email confirmation
-            emailRedirectTo: 'https://www.soilofafrica.org/auth/callback?flow=email-confirm',
+            // Redirect to EduPro website after email confirmation
+            emailRedirectTo: buildSoaWebUrl('/auth/callback?flow=email-confirm'),
           },
         });
         
@@ -303,7 +306,7 @@ export default function MemberRegistrationScreen() {
               logger.error('[Register] Sign in failed:', signInError);
               showAlert({
                 title: 'Account Exists',
-                message: 'An account with this email already exists but the password doesn\'t match. Please sign in with your existing password to add your Soil of Africa membership.',
+                message: 'An account with this email already exists but the password doesn\'t match. Please sign in with your existing password to add your EduPro membership.',
                 buttons: [
                   { text: 'Cancel', style: 'cancel' },
                   { 
@@ -686,10 +689,10 @@ export default function MemberRegistrationScreen() {
       {currentStep !== 'complete' && (
         <>
           {/* Progress Bar */}
-          <View style={styles.progressContainer}>
-            <View style={[styles.progressBg, { backgroundColor: theme.border }]}>
-              <View style={[styles.progressFill, { backgroundColor: theme.primary, width: `${progress}%` }]} />
-            </View>
+            <View style={styles.progressContainer}>
+              <View style={[styles.progressBg, { backgroundColor: theme.border }]}>
+              <View style={[styles.progressFill, { backgroundColor: theme.primary, width: `${safeProgress}%` }]} />
+              </View>
             <Text style={[styles.progressText, { color: theme.textSecondary }]}>
               Step {currentStepIndex + 1} of {REGISTRATION_STEPS.length}
             </Text>

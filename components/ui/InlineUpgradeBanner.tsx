@@ -1,12 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { track } from '@/lib/analytics';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 interface InlineUpgradeBannerProps {
   /**
@@ -113,14 +113,9 @@ export default function InlineUpgradeBanner({
       variant,
     });
 
-    router.push({
-      pathname: '/screens/subscription-upgrade-post',
-      params: {
-        currentTier: tier,
-        reason: 'premium_feature',
-        feature,
-        from: screen,
-      },
+    navigateToUpgrade({
+      source: 'inline_upgrade_banner',
+      reason: 'feature_needed',
     });
   };
 

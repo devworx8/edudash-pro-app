@@ -18,12 +18,14 @@ export const useSendMessage = () => {
       voiceUrl,
       voiceDuration,
       replyToId,
+      scheduledAt,
     }: {
       threadId: string;
       content: string;
       voiceUrl?: string;
       voiceDuration?: number;
       replyToId?: string;
+      scheduledAt?: Date;
     }) => {
       const client = assertSupabase();
       const isVoice = !!voiceUrl;
@@ -38,6 +40,7 @@ export const useSendMessage = () => {
           voice_url: voiceUrl || null,
           voice_duration: voiceDuration || null,
           reply_to_id: replyToId || null,
+          ...(scheduledAt ? { scheduled_at: scheduledAt.toISOString(), is_scheduled: true } : {}),
         })
         .select()
         .single();
@@ -46,8 +49,10 @@ export const useSendMessage = () => {
       return data;
     },
     // Optimistic update — show bubble instantly before server responds
+    // Skip for scheduled messages (they don't appear in the thread yet)
     onMutate: async (variables) => {
-      const { threadId, content, voiceUrl, voiceDuration, replyToId } = variables;
+      const { threadId, content, voiceUrl, voiceDuration, replyToId, scheduledAt } = variables;
+      if (scheduledAt) return { previousMessages: undefined, threadId };
 
       // Cancel outgoing refetches so they don't overwrite optimistic update
       await queryClient.cancelQueries({ queryKey: ['messages', threadId] });
@@ -92,7 +97,13 @@ export const useSendMessage = () => {
         );
       }
     },
-    onSuccess: async (data, { threadId }) => {
+    onSuccess: async (data, { threadId, scheduledAt }) => {
+      if (scheduledAt) {
+        // Scheduled message — just invalidate thread list, no optimistic swap needed
+        queryClient.invalidateQueries({ queryKey: ['parent', 'threads'] });
+        return;
+      }
+
       // Replace optimistic message with real server data
       queryClient.setQueryData<Message[]>(
         ['messages', threadId],

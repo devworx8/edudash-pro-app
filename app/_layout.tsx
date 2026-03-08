@@ -94,7 +94,9 @@ const STACK_SCREEN_OPTIONS = {
   animationTypeForReplace: 'push' as const,
   contentStyle: { backgroundColor: 'transparent' },
 };
-const WEB_BOTTOM_NAV_SCROLL_CLEARANCE = 120;
+// Web uses a fixed bottom tab bar; keep enough clearance for the bar without
+// leaving a large dead strip above it on shorter dashboards.
+const WEB_BOTTOM_NAV_SCROLL_CLEARANCE = 48;
 
 const shouldHideBottomNavForPath = (pathname?: string | null): boolean => {
   if (!pathname) return true;

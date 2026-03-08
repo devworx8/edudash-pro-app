@@ -113,8 +113,8 @@ function normalizeTier(tier: string): string {
   if (t === 'superadmin' || t === 'super_admin') return 'enterprise';
   if (t === 'group_10') return 'premium';
 
-  if (t === 'parent_starter' || t === 'teacher_starter' || t === 'school_starter') return 'starter';
-  if (t === 'parent_plus' || t === 'teacher_pro' || t === 'school_premium' || t === 'school_pro') return 'premium';
+  if (t === 'parent_starter' || t === 'teacher_starter' || t === 'learner_starter' || t === 'school_starter') return 'starter';
+  if (t === 'parent_plus' || t === 'teacher_pro' || t === 'learner_pro' || t === 'school_premium' || t === 'school_pro') return 'premium';
   if (t === 'school_enterprise') return 'enterprise';
 
   if (t.startsWith('parent_')) {

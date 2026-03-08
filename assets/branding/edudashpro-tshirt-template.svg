@@ -1,0 +1,240 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480mm" height="320mm" viewBox="0 0 4800 3200">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#180735"/>
+      <stop offset="55%" stop-color="#1c0a46"/>
+      <stop offset="100%" stop-color="#0e0524"/>
+    </linearGradient>
+    <radialGradient id="orbGrad" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#d56eff"/>
+      <stop offset="22%" stop-color="#7b36d9"/>
+      <stop offset="55%" stop-color="#26104e"/>
+      <stop offset="100%" stop-color="#0f0527"/>
+    </radialGradient>
+    <radialGradient id="dashOrbCore" cx="42%" cy="38%" r="62%">
+      <stop offset="0%" stop-color="#a97cff"/>
+      <stop offset="68%" stop-color="#645fff"/>
+      <stop offset="100%" stop-color="#5245de"/>
+    </radialGradient>
+    <radialGradient id="shieldOuterDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#33407d"/>
+      <stop offset="42%" stop-color="#1a1f49"/>
+      <stop offset="100%" stop-color="#060a1b"/>
+    </radialGradient>
+    <radialGradient id="shieldMidDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#7c59ff"/>
+      <stop offset="44%" stop-color="#4f31b8"/>
+      <stop offset="100%" stop-color="#241145"/>
+    </radialGradient>
+    <radialGradient id="shieldInnerDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#9f7eff"/>
+      <stop offset="52%" stop-color="#6555f2"/>
+      <stop offset="100%" stop-color="#332274"/>
+    </radialGradient>
+    <radialGradient id="shieldCoreDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#d6cbff"/>
+      <stop offset="34%" stop-color="#b8a8ff"/>
+      <stop offset="100%" stop-color="#8b74ff"/>
+    </radialGradient>
+    <linearGradient id="shieldRimStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c8beff"/>
+      <stop offset="38%" stop-color="#8d6fff"/>
+      <stop offset="100%" stop-color="#1a1139"/>
+    </linearGradient>
+    <linearGradient id="shieldMidStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ede6ff"/>
+      <stop offset="46%" stop-color="#8fce76"/>
+      <stop offset="100%" stop-color="#2c1758"/>
+    </linearGradient>
+    <linearGradient id="shieldInnerStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#efe8ff"/>
+      <stop offset="44%" stop-color="#9f86ff"/>
+      <stop offset="100%" stop-color="#33235c"/>
+    </linearGradient>
+    <linearGradient id="flareGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f8df80" stop-opacity="0"/>
+      <stop offset="45%" stop-color="#f8df80" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#9b5cff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .panel-cut { fill: url(#bgGrad); stroke: #b996ff; stroke-width: 8; }
+      .panel-safe { fill: none; stroke: #e7d7ff; stroke-width: 4; stroke-dasharray: 18 16; opacity: 0.9; }
+      .guide-label { fill: #201046; font-family: Arial, Helvetica, sans-serif; font-size: 44px; font-weight: 700; }
+      .guide-copy { fill: #413260; font-family: Arial, Helvetica, sans-serif; font-size: 28px; }
+      .guide-small { fill: #5b4d76; font-family: Arial, Helvetica, sans-serif; font-size: 24px; }
+      .panel-title { fill: #ffffff; font-family: Arial, Helvetica, sans-serif; font-size: 46px; font-weight: 700; letter-spacing: 4px; }
+      .panel-note { fill: #efe7ff; font-family: Arial, Helvetica, sans-serif; font-size: 24px; }
+      .name-text { fill: #ffffff; stroke: #f2c54e; stroke-width: 18; paint-order: stroke fill; font-family: Impact, Arial Black, sans-serif; font-size: 210px; font-weight: 900; letter-spacing: 1px; }
+      .name-shadow { fill: none; stroke: #7e43d6; stroke-width: 42; opacity: 0.95; }
+      .contact-white { fill: #ffffff; font-family: Arial, Helvetica, sans-serif; font-size: 64px; font-weight: 700; }
+      .contact-yellow { fill: #f3c94b; font-family: Arial, Helvetica, sans-serif; font-size: 64px; font-weight: 700; }
+      .front-brand { fill: #fbf7ff; font-family: "Trebuchet MS", Arial, Helvetica, sans-serif; font-size: 96px; }
+      .front-tagline { fill: #b8a7d8; font-family: "Trebuchet MS", Arial, Helvetica, sans-serif; font-size: 42px; letter-spacing: 5px; }
+      .palette-label { fill: #2a184c; font-family: Arial, Helvetica, sans-serif; font-size: 26px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="4800" height="3200" fill="#f4f1fb"/>
+  <rect x="70" y="70" width="4660" height="3060" rx="28" fill="#ffffff" stroke="#d6c8f1" stroke-width="6"/>
+
+  <text x="140" y="185" class="guide-label">EduDash Pro T-Shirt Layout Template</text>
+  <text x="140" y="232" class="guide-copy">SVG handoff for CorelDRAW. Replace these panel cut lines with the printer's exact garment pattern before final production.</text>
+  <text x="140" y="272" class="guide-small">Dashed line = safe text zone. Keep live text, email, phone number, and logo inside the safe zone. Add bleed outside the cut line if your printer requires it.</text>
+
+  <g id="palette" transform="translate(3890 2280)">
+    <text x="0" y="0" class="guide-label">Palette</text>
+    <g transform="translate(0 30)">
+      <rect x="0" y="0" width="90" height="90" rx="12" fill="#180735"/>
+      <text x="112" y="56" class="palette-label">Base Indigo - #180735</text>
+      <rect x="0" y="110" width="90" height="90" rx="12" fill="#7b36d9"/>
+      <text x="112" y="166" class="palette-label">Primary Purple - #7B36D9</text>
+      <rect x="0" y="220" width="90" height="90" rx="12" fill="#d56eff"/>
+      <text x="112" y="276" class="palette-label">Glow Violet - #D56EFF</text>
+      <rect x="0" y="330" width="90" height="90" rx="12" fill="#f3c94b"/>
+      <text x="112" y="386" class="palette-label">Gold Accent - #F3C94B</text>
+      <rect x="0" y="440" width="90" height="90" rx="12" fill="#fbf7ff" stroke="#bda8e8" stroke-width="3"/>
+      <text x="112" y="496" class="palette-label">Warm White - #FBF7FF</text>
+      <rect x="0" y="550" width="90" height="90" rx="12" fill="#b8a7d8"/>
+      <text x="112" y="606" class="palette-label">Soft Lavender - #B8A7D8</text>
+    </g>
+  </g>
+
+  <g id="sleeves-left" transform="translate(180 520)">
+    <text x="40" y="-55" class="guide-label">Left Sleeve</text>
+    <path class="panel-cut" d="M80,140 C100,36 230,12 420,20 L620,82 L564,360 L210,390 C116,394 58,320 58,250 C58,220 66,184 80,140 Z"/>
+    <path class="panel-safe" d="M118,146 C136,66 246,52 396,58 L570,110 L528,332 L224,354 C154,358 106,302 106,246 C106,220 110,188 118,146 Z"/>
+    <g transform="translate(258 112)">
+      <circle cx="120" cy="118" r="112" fill="url(#orbGrad)" opacity="0.95"/>
+      <circle cx="120" cy="118" r="92" fill="none" stroke="#7b36d9" stroke-width="8" opacity="0.78"/>
+      <circle cx="120" cy="118" r="66" fill="none" stroke="#b56dff" stroke-width="6" opacity="0.6"/>
+      <circle cx="120" cy="118" r="26" fill="#d56eff" filter="url(#softGlow)"/>
+      <circle cx="34" cy="232" r="24" fill="#8d47ff"/>
+      <circle cx="454" cy="206" r="20" fill="#f3c94b"/>
+      <circle cx="476" cy="118" r="14" fill="#7b36d9"/>
+      <circle cx="86" cy="278" r="12" fill="#f3c94b"/>
+    </g>
+    <text x="88" y="438" class="panel-note">Keep motif centered around sleeve crown.</text>
+  </g>
+
+  <g id="sleeves-right" transform="translate(180 1220)">
+    <text x="40" y="-55" class="guide-label">Right Sleeve</text>
+    <path class="panel-cut" d="M80,140 C100,36 230,12 420,20 L620,82 L564,360 L210,390 C116,394 58,320 58,250 C58,220 66,184 80,140 Z"/>
+    <path class="panel-safe" d="M118,146 C136,66 246,52 396,58 L570,110 L528,332 L224,354 C154,358 106,302 106,246 C106,220 110,188 118,146 Z"/>
+    <g transform="translate(256 112)">
+      <circle cx="120" cy="118" r="112" fill="url(#orbGrad)" opacity="0.95"/>
+      <circle cx="120" cy="118" r="92" fill="none" stroke="#7b36d9" stroke-width="8" opacity="0.78"/>
+      <circle cx="120" cy="118" r="66" fill="none" stroke="#b56dff" stroke-width="6" opacity="0.6"/>
+      <circle cx="120" cy="118" r="26" fill="#d56eff" filter="url(#softGlow)"/>
+      <circle cx="490" cy="196" r="18" fill="#8d47ff"/>
+      <circle cx="442" cy="126" r="22" fill="#f3c94b"/>
+      <circle cx="92" cy="260" r="14" fill="#7b36d9"/>
+      <circle cx="58" cy="212" r="12" fill="#f3c94b"/>
+    </g>
+    <text x="88" y="438" class="panel-note">Mirror or vary dot placement if preferred.</text>
+  </g>
+
+  <g id="back-panel" transform="translate(1080 420)">
+    <text x="270" y="-70" class="guide-label">Back Panel</text>
+    <path class="panel-cut" d="M140,80 L400,20 L1180,20 L1440,80 L1342,1970 L238,1970 Z"/>
+    <path class="panel-safe" d="M214,108 L438,68 L1142,68 L1366,108 L1288,1900 L292,1900 Z"/>
+    <path d="M532,20 C566,96 742,124 790,20" fill="none" stroke="#b996ff" stroke-width="8"/>
+
+    <g opacity="0.72">
+      <circle cx="272" cy="244" r="166" fill="url(#orbGrad)"/>
+      <circle cx="272" cy="244" r="206" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="272" cy="244" r="292" fill="none" stroke="#8244e0" stroke-width="5" opacity="0.7"/>
+      <circle cx="1140" cy="244" r="166" fill="url(#orbGrad)"/>
+      <circle cx="1140" cy="244" r="206" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="1140" cy="244" r="292" fill="none" stroke="#8244e0" stroke-width="5" opacity="0.7"/>
+      <circle cx="292" cy="1510" r="166" fill="url(#orbGrad)"/>
+      <circle cx="292" cy="1510" r="206" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="292" cy="1510" r="292" fill="none" stroke="#8244e0" stroke-width="5" opacity="0.7"/>
+      <circle cx="1194" cy="1472" r="166" fill="url(#orbGrad)"/>
+      <circle cx="1194" cy="1472" r="206" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="1194" cy="1472" r="292" fill="none" stroke="#8244e0" stroke-width="5" opacity="0.7"/>
+      <polygon points="224,474 242,436 262,474 300,492 262,510 242,548 224,510 186,492" fill="#f3c94b"/>
+    </g>
+
+    <text x="704" y="520" text-anchor="middle" class="name-shadow">King</text>
+    <text x="704" y="520" text-anchor="middle" class="name-text">King</text>
+    <line x1="400" y1="596" x2="1008" y2="596" stroke="#9d6dff" stroke-width="8" opacity="0.85"/>
+
+    <text x="704" y="760" text-anchor="middle" class="contact-white">www.edudashpro.org.za</text>
+    <text x="704" y="860" text-anchor="middle" class="contact-yellow">info@edudashpro.org.za</text>
+    <text x="704" y="960" text-anchor="middle" class="contact-white">0674770975</text>
+
+    <text x="704" y="1806" text-anchor="middle" class="panel-note">Large name top-center, contact block centered below.</text>
+  </g>
+
+  <g id="front-panel" transform="translate(2500 420)">
+    <text x="270" y="-70" class="guide-label">Front Panel</text>
+    <path class="panel-cut" d="M140,80 L400,20 L1180,20 L1440,80 L1342,1970 L238,1970 Z"/>
+    <path class="panel-safe" d="M214,108 L438,68 L1142,68 L1366,108 L1288,1900 L292,1900 Z"/>
+    <path d="M502,20 C548,124 784,124 828,20" fill="none" stroke="#b996ff" stroke-width="8"/>
+
+    <g id="front-burst" transform="translate(112 132)">
+      <rect x="300" y="296" width="922" height="18" rx="9" transform="rotate(-36 761 305)" fill="url(#flareGrad)" opacity="0.72"/>
+      <rect x="346" y="620" width="760" height="14" rx="7" transform="rotate(-36 726 627)" fill="url(#flareGrad)" opacity="0.62"/>
+      <rect x="958" y="146" width="266" height="14" rx="7" transform="rotate(-36 1091 153)" fill="#f3c94b" opacity="0.74"/>
+      <rect x="1042" y="268" width="160" height="12" rx="6" transform="rotate(-36 1122 274)" fill="#b985ff" opacity="0.88"/>
+      <circle cx="708" cy="478" r="404" fill="#050916" opacity="0.34" filter="url(#softGlow)"/>
+      <circle cx="586" cy="356" r="216" fill="#1594c4" opacity="0.16" filter="url(#softGlow)"/>
+      <circle cx="864" cy="648" r="194" fill="#c58a18" opacity="0.14" filter="url(#softGlow)"/>
+      <circle cx="708" cy="478" r="286" fill="url(#shieldOuterDisc)"/>
+      <circle cx="708" cy="478" r="286" fill="none" stroke="url(#shieldRimStroke)" stroke-width="20"/>
+      <circle cx="708" cy="478" r="220" fill="url(#shieldMidDisc)"/>
+      <circle cx="708" cy="478" r="220" fill="none" stroke="url(#shieldMidStroke)" stroke-width="16"/>
+      <circle cx="708" cy="478" r="162" fill="url(#shieldInnerDisc)"/>
+      <circle cx="708" cy="478" r="162" fill="none" stroke="url(#shieldInnerStroke)" stroke-width="14"/>
+      <circle cx="708" cy="478" r="104" fill="url(#shieldCoreDisc)"/>
+      <circle cx="708" cy="478" r="40" fill="#cbc0ff" opacity="0.86"/>
+      <circle cx="708" cy="478" r="12" fill="#f4efff"/>
+      <ellipse cx="636" cy="402" rx="78" ry="44" fill="#ffffff" opacity="0.16" transform="rotate(-18 636 402)"/>
+      <path d="M480 322 A 282 282 0 0 1 894 260" fill="none" stroke="#ffffff" stroke-width="12" opacity="0.18" stroke-linecap="round"/>
+      <path d="M888 708 A 232 232 0 0 1 592 744" fill="none" stroke="#0b0717" stroke-width="16" opacity="0.34" stroke-linecap="round"/>
+      <circle cx="708" cy="478" r="248" fill="none" stroke="#8f63ff" stroke-width="4" opacity="0.84"/>
+      <circle cx="708" cy="478" r="192" fill="none" stroke="#8ecf76" stroke-width="4" opacity="0.58"/>
+      <circle cx="382" cy="238" r="8" fill="#f3c94b"/>
+      <circle cx="470" cy="150" r="5" fill="#b993ff"/>
+      <circle cx="548" cy="540" r="4" fill="#f0e7ff"/>
+      <circle cx="910" cy="246" r="5" fill="#5ad0ff"/>
+      <circle cx="1046" cy="318" r="5" fill="#f3c94b"/>
+      <circle cx="1086" cy="694" r="6" fill="#f3c94b"/>
+      <circle cx="932" cy="712" r="4" fill="#f0e7ff"/>
+      <circle cx="462" cy="760" r="4" fill="#a987ff"/>
+      <circle cx="354" cy="678" r="4" fill="#f3c94b"/>
+      <circle cx="1162" cy="436" r="4" fill="#a987ff"/>
+    </g>
+
+    <text x="704" y="1552" text-anchor="middle" class="front-brand">EduDash Pro</text>
+    <text x="704" y="1638" text-anchor="middle" class="front-tagline">Empowering Education</text>
+    <text x="704" y="1806" text-anchor="middle" class="panel-note">Main orb centered on upper chest. Brand lockup centered low.</text>
+  </g>
+
+  <g id="back-hem-band" transform="translate(1366 2518)">
+    <text x="0" y="-30" class="guide-small">Back hem strip / optional trim</text>
+    <rect x="0" y="0" width="868" height="122" fill="#180735" stroke="#b996ff" stroke-width="6"/>
+    <rect x="0" y="46" width="868" height="28" fill="#8d47ff"/>
+  </g>
+
+  <g id="front-hem-band" transform="translate(2786 2518)">
+    <text x="0" y="-30" class="guide-small">Front hem strip / optional trim</text>
+    <rect x="0" y="0" width="868" height="122" fill="#180735" stroke="#b996ff" stroke-width="6"/>
+    <rect x="0" y="46" width="868" height="28" fill="#8d47ff"/>
+  </g>
+
+  <g id="production-notes" transform="translate(140 2780)">
+    <text x="0" y="0" class="guide-label">Designer Notes</text>
+    <text x="0" y="44" class="guide-copy">1. Open this SVG in CorelDRAW and keep each group on its own layer: front panel, back panel, sleeves, hem strips, notes.</text>
+    <text x="0" y="86" class="guide-copy">2. If your printer has exact cut patterns, replace these cut lines first and then scale the art to those patterns.</text>
+    <text x="0" y="128" class="guide-copy">3. Convert final text to curves before export. Keep website, email, and phone centered and inside the dashed safe zone.</text>
+    <text x="0" y="170" class="guide-copy">4. Suggested back name treatment: white fill, gold outline, purple shadow. Suggested front title: rounded soft white wordmark.</text>
+  </g>
+</svg>

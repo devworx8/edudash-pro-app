@@ -101,8 +101,8 @@ export default function AssignHomeworkScreen() {
       })
       if (res.success) {
         Alert.alert(
-          'Submitted for approval',
-          'Homework saved and queued for principal approval. Parents will see it once approved.',
+          'Homework assigned',
+          'Homework has been sent to students.',
           [{ text: 'OK', onPress: () => router.back() }]
         )
       } else {
@@ -133,9 +133,9 @@ export default function AssignHomeworkScreen() {
         )}
         {canAssign && (
           <View style={[styles.noticeCard, { backgroundColor: palette.surface, borderColor: palette.outline }]}>
-            <Text style={[styles.noticeTitle, { color: palette.text }]}>Principal approval required</Text>
+            <Text style={[styles.noticeTitle, { color: palette.text }]}>Assign homework</Text>
             <Text style={[styles.noticeText, { color: palette.textSecondary }]}>
-              This homework will be queued for principal approval before parents can view it.
+              This homework will be sent directly to students. If your school requires principal approval, it will be queued for review first.
             </Text>
           </View>
         )}

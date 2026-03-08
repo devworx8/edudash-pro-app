@@ -28,6 +28,12 @@ interface CreateRoomRequest {
 // Tier-based time limits (in minutes)
 const TIER_MAX_DURATION: Record<string, number> = {
   free: 15,
+  parent_starter: 30,
+  parent_plus: 60,
+  teacher_starter: 30,
+  teacher_pro: 60,
+  learner_starter: 30,
+  learner_pro: 60,
   school_starter: 30,
   school_premium: 60,
   school_pro: 60,

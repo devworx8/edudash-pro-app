@@ -9,6 +9,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createHash } from 'node:crypto';
+import { WEB_BASE_URL } from '../_shared/urls.ts';
 
 // CORS headers for browser requests
 const corsHeaders = {
@@ -232,7 +233,7 @@ Deno.serve(async (req) => {
     const passphrase = passphraseRaw && passphraseRaw.trim() !== '' ? passphraseRaw.trim() : undefined;
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const webBaseUrl = Deno.env.get('WEB_BASE_URL') || 'https://www.edudashpro.org.za';
+    const webBaseUrl = WEB_BASE_URL;
     
     if (!merchantId || !merchantKey) {
       throw new Error('PayFast credentials not configured');

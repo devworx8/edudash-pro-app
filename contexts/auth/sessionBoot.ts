@@ -19,7 +19,7 @@ import {
 } from '@/lib/rbac';
 import { initializeSession, syncSessionFromSupabase } from '@/lib/sessionManager';
 import { initializeVisibilityHandler } from '@/lib/visibilityHandler';
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import type { Session, User } from '@supabase/supabase-js';
 import {
   toEnhancedProfile,
@@ -154,7 +154,7 @@ function identifyUser(user: User, profile: EnhancedUserProfile | null): void {
     });
   } catch { /* noop */ }
   try {
-    Sentry.Native.setUser({ id: user.id, email: user.email || undefined } as any);
+    Sentry.setUser({ id: user.id, email: user.email || undefined } as any);
   } catch { /* noop */ }
 }
 

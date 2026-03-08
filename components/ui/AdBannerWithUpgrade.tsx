@@ -1,9 +1,9 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { router } from 'expo-router';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { track } from '@/lib/analytics';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import AdBanner from './AdBanner';
 import SubscriptionAdGate from './SubscriptionAdGate';
 
@@ -60,12 +60,9 @@ export default function AdBannerWithUpgrade({
       from: 'banner_upgrade_cta',
     });
 
-    router.push({
-      pathname: '/screens/subscription-upgrade-post',
-      params: {
-        currentTier: tier,
-        reason: 'remove_ads',
-      },
+    navigateToUpgrade({
+      source: 'ad_banner_upgrade',
+      reason: 'feature_needed',
     });
   };
 

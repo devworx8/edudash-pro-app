@@ -1,7 +1,7 @@
 // Export service for financial data: CSV, PDF, Excel
-// Uses react-native-fs for file operations and xlsx for Excel generation
+// Uses react-native-fs for file operations; ExcelJS is lazy-loaded to avoid
+// promise recursion with Supabase auth during Metro/server lifecycle.
 
-import ExcelJS from 'exceljs';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
@@ -59,13 +59,14 @@ class ExportServiceImpl {
     }
   }
 
-  // Excel Export
+  // Excel Export (ExcelJS loaded only when this runs to avoid promise recursion with Supabase)
   async exportToExcel(
-    transactions: TransactionRecord[], 
+    transactions: TransactionRecord[],
     summary: { revenue: number; expenses: number; cashFlow: number },
     filename: string
   ): Promise<void> {
     try {
+      const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'EduDash Pro';
       workbook.lastModifiedBy = 'EduDash Pro';
@@ -86,7 +87,7 @@ class ExportServiceImpl {
       // Transactions sheet
       const transactionSheet = workbook.addWorksheet('Transactions');
       transactionSheet.addRow(['Date', 'Type', 'Category', 'Amount', 'Description', 'Status']);
-      
+
       transactions.forEach(t => {
         transactionSheet.addRow([
           this.formatDate(t.date),
@@ -99,8 +100,11 @@ class ExportServiceImpl {
       });
 
       const filePath = `${FileSystem.documentDirectory}${filename}.xlsx`;
-      const buffer = await workbook.xlsx.writeBuffer();
-      const base64 = Buffer.from(buffer as any).toString('base64');
+      const excelBuffer = await Promise.resolve(workbook.xlsx.writeBuffer());
+      const bytes = excelBuffer instanceof ArrayBuffer
+        ? new Uint8Array(excelBuffer)
+        : excelBuffer;
+      const base64 = Buffer.from(bytes).toString('base64');
       
       await FileSystem.writeAsStringAsync(filePath, base64, {
         encoding: 'base64',

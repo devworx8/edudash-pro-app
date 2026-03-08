@@ -6,6 +6,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import EnhancedRegistrationForm from '@/components/auth/EnhancedRegistrationForm';
 import { EnhancedRegistration } from '@/types/auth-enhanced';
 import { assertSupabase } from '@/lib/supabase';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 export default function TeacherRegistrationScreen() {
   const { theme } = useTheme();
@@ -17,7 +18,7 @@ export default function TeacherRegistrationScreen() {
         email: registration.email,
         password: registration.password,
         options: {
-          emailRedirectTo: 'https://www.edudashpro.org.za/landing?flow=email-confirm',
+          emailRedirectTo: buildEduDashWebUrl('/landing?flow=email-confirm'),
           data: {
             first_name: registration.firstName,
             last_name: registration.lastName,

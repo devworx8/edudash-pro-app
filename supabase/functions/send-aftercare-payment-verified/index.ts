@@ -5,6 +5,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { renderEduDashProEmail } from '../_shared/edudashproEmail.ts';
+import { buildWebUrl } from '../_shared/urls.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -51,7 +52,7 @@ function generatePaymentVerifiedEmailHTML(data: PaymentVerifiedEmailRequest): st
     preheader: `Payment verified for ${data.child_name}`,
     bodyHtml,
     cta: { label: 'Join WhatsApp Group', url: WHATSAPP_GROUP_LINK },
-    secondaryCta: { label: 'Open EduDash Pro', url: 'https://www.edudashpro.org.za/sign-in' },
+    secondaryCta: { label: 'Open EduDash Pro', url: buildWebUrl('/sign-in') },
     supportEmail: SUPPORT_EMAIL,
   });
 }

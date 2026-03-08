@@ -18,6 +18,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { assertSupabase } from '@/lib/supabase';
 import { listActivePlans } from '@/lib/subscriptions/rpc-subscriptions';
 import { track } from '@/lib/analytics';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { 
   TIER_PRICING, 
   TIER_QUOTAS, 
@@ -312,12 +313,10 @@ export default function PlanManagementScreen() {
     
     // Upgrade flow
     track('plan_upgrade_started', { from_tier: currentTier, to_tier: plan.tier });
-    router.push({
-      pathname: '/screens/subscription-setup',
-      params: { 
-        planId: plan.tier,
-        billing: annual ? 'annual' : 'monthly',
-      }
+    navigateToUpgrade({
+      source: 'plan_management',
+      planId: plan.tier,
+      billing: annual ? 'annual' : 'monthly',
     });
   };
 

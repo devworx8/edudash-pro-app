@@ -11,14 +11,14 @@ import { GlassCard } from '@/components/marketing/GlassCard';
 import { GradientButton } from '@/components/marketing/GradientButton';
 import { supabase } from '@/lib/supabase';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 // Get proper redirect URL based on platform
 const getRedirectUrl = (path: string) => {
   if (Platform.OS === 'web') {
     return `${window.location.origin}/${path}`;
   }
-  // For native apps, use the configured deep link domain
-  return `https://edudashpro.org.za/${path}`;
+  return buildEduDashWebUrl(path);
 };
 
 export default function MagicLinkScreen() {
@@ -83,10 +83,13 @@ export default function MagicLinkScreen() {
       } else {
         setEmailSent(true);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error
+        ? error.message
+        : t('common.unexpected_error', { defaultValue: 'An unexpected error occurred' });
       showAlert({
         title: t('common.error', { defaultValue: 'Error' }),
-        message: error?.message || t('common.unexpected_error', { defaultValue: 'An unexpected error occurred' }),
+        message: errorMessage,
         type: 'error',
         buttons: [{ text: 'OK', style: 'default' }],
       });

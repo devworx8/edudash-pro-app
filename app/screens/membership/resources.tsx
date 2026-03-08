@@ -67,7 +67,7 @@ const RESOURCES: Resource[] = [
     id: 'r1',
     category_id: '1',
     title: 'Facilitator Onboarding Guide 2024',
-    description: 'Complete guide for new facilitators joining Soil of Africa',
+    description: 'Complete guide for new facilitators joining EduPro',
     file_type: 'pdf',
     file_url: '#',
     file_size: 2500000,
@@ -95,7 +95,7 @@ const RESOURCES: Resource[] = [
   {
     id: 'r3',
     category_id: '4',
-    title: 'Introduction to Soil of Africa',
+    title: 'Introduction to EduPro',
     description: 'Welcome video for new members explaining our mission and vision',
     file_type: 'video',
     file_url: '#',

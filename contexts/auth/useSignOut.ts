@@ -7,7 +7,7 @@
 
 import { useCallback } from 'react';
 import { Platform } from 'react-native';
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import { router } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { signOut } from '@/lib/sessionManager';
@@ -89,7 +89,7 @@ export function useSignOut(
       }
       
       try {
-        Sentry.Native.setUser(null as any);
+        Sentry.setUser(null as any);
         logger.debug(TAG, 'Sentry user cleared');
       } catch (e) {
         console.warn('[AuthContext] Sentry clear user failed:', e);

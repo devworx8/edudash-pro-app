@@ -103,6 +103,7 @@ jest.mock('@/lib/logger', () => ({
 import { routeAfterLogin } from '@/lib/routeAfterLogin';
 import { isNavigationLocked, setNavigationLock, clearNavigationLock } from '@/lib/auth/navigationLocks';
 import { fetchEnhancedUserProfile } from '@/lib/rbac';
+import { determineUserRoute } from '@/lib/auth/determineRoute';
 import { getPendingTeacherInvite, clearPendingTeacherInvite } from '@/lib/utils/teacherInvitePending';
 import { assertSupabase } from '@/lib/supabase';
 import { createMockUser, createMockEnhancedProfile } from '../../helpers/authTestUtils';
@@ -129,6 +130,41 @@ describe('routeAfterLogin', () => {
   it('navigates to sign-in when user has no ID', async () => {
     await routeAfterLogin({ id: '' } as any, null);
     expect(mockRouter.replace).toHaveBeenCalledWith('/(auth)/sign-in');
+  });
+
+  it('routes unverified users to verify-your-email before dashboard resolution', async () => {
+    const user = createMockUser({
+      email: 'pending@edudashpro.org.za',
+      email_confirmed_at: null,
+      confirmed_at: null,
+    });
+
+    await routeAfterLogin(user, createMockEnhancedProfile() as any);
+
+    expect(mockRouter.replace).toHaveBeenCalledWith(
+      '/screens/verify-your-email?email=pending%40edudashpro.org.za',
+    );
+    expect(setNavigationLock).not.toHaveBeenCalled();
+  });
+
+  it('routes web learners to exam-prep until the learner dashboard ships', async () => {
+    const { Platform } = require('react-native');
+    const previousOs = Platform.OS;
+    Platform.OS = 'web';
+    (determineUserRoute as jest.Mock).mockReturnValue({ path: '/screens/learner-dashboard' });
+
+    try {
+      const user = createMockUser();
+      const profile = createMockEnhancedProfile({ role: 'student' });
+
+      const routePromise = routeAfterLogin(user, profile as any);
+      jest.advanceTimersByTime(500);
+      await routePromise;
+
+      expect(mockRouter.replace).toHaveBeenCalledWith('/screens/exam-prep');
+    } finally {
+      Platform.OS = previousOs;
+    }
   });
 
   // ── Navigation lock (concurrency guard) ────────────

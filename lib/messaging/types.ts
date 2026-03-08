@@ -93,6 +93,11 @@ export interface Message {
   reply_to_id?: string | null;
   forwarded_from_id?: string | null;
   is_starred?: boolean;
+  is_pinned?: boolean;
+  pinned_at?: string | null;
+  pinned_by?: string | null;
+  scheduled_at?: string | null;
+  is_scheduled?: boolean;
   /** Pending message queued offline — not yet persisted to DB */
   _pending?: boolean;
   /** Local ID for offline-queued or failed messages */

@@ -12,6 +12,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
+import { buildSoaWebUrl } from '@/lib/config/urls';
 import { MemberType, MEMBER_TYPE_LABELS } from '@/components/membership/types';
 import { getDashboardRoute } from '@/lib/memberRegistrationUtils';
 import { useEffect } from 'react';
@@ -185,7 +186,7 @@ export default function JoinByCodeScreen() {
 
         const orgInfo: OrganizationInfo = {
           id: joinRequestData.organization_id,
-          name: org?.name || 'Soil of Africa',
+          name: org?.name || 'EduPro',
           region: orgRegionData?.name || 'Main Region',
           region_id: orgRegionData?.id || '',
           region_code: orgRegionData?.province_code || orgRegionData?.code || 'ZA',
@@ -415,7 +416,7 @@ export default function JoinByCodeScreen() {
               last_name: formData.last_name.trim(),
               phone: formData.phone.trim(),
             },
-            emailRedirectTo: 'https://www.soilofafrica.org/auth/callback?flow=email-confirm',
+            emailRedirectTo: buildSoaWebUrl('/auth/callback?flow=email-confirm'),
           },
         });
         
@@ -894,7 +895,7 @@ export default function JoinByCodeScreen() {
               {/* Terms */}
               <View style={[styles.termsBox, { backgroundColor: theme.surface }]}>
                 <Text style={[styles.termsText, { color: theme.textSecondary }]}>
-                  By joining, you agree to Soil of Africa's Terms of Service and Privacy Policy.
+                  By joining, you agree to EduPro's Terms of Service and Privacy Policy.
                   Your membership will be reviewed by the regional manager.
                 </Text>
               </View>

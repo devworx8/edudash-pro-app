@@ -7,6 +7,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAds } from '@/contexts/AdsContext';
 import { track } from '@/lib/analytics';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface PremiumFeatureBannerProps {
@@ -113,14 +114,9 @@ export default function PremiumFeatureBanner({
       variant,
     });
 
-    router.push({
-      pathname: '/screens/subscription-upgrade-post',
-      params: {
-        currentTier: tier,
-        reason: 'premium_feature',
-        feature: featureName,
-        from: screen,
-      },
+    navigateToUpgrade({
+      source: 'premium_banner',
+      reason: 'feature_needed',
     });
   };
 

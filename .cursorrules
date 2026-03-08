@@ -10,6 +10,7 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
 4. **Cross-platform Compatibility**: Code must work on both mobile and web when shared
 5. **Performance**: Optimize for mobile devices and slow connections
 6. **Fix All Errors**: When encountering any linter, TypeScript, or runtime errors - whether from your changes or pre-existing - fix them immediately. Don't leave broken code behind.
+7. **WARP Compliance**: All rules in `WARP.md` are non-negotiable. Run `npm run check:file-sizes` and `npm run check:console` before committing.
 
 ## Tech Stack
 - **Mobile**: React Native 0.81.1, Expo 54
@@ -43,11 +44,20 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
   }
   ```
 
+### File Size Limits (WARP.md — NON-NEGOTIABLE)
+- Components: ≤400 lines (excluding StyleSheet)
+- Screens: ≤500 lines (excluding StyleSheet)
+- Hooks: ≤200 lines — split into subfolder with barrel `index.ts` when exceeded
+- Services/Utilities: ≤500 lines
+- Type definitions: ≤300 lines (except auto-generated `database.types.ts`)
+- StyleSheet: extract to `.styles.ts` if >200 lines
+
 ### React/React Native
 - **Functional components only** with hooks
 - Use `React.memo()` for expensive components
 - Prefer named exports over default exports
-- Avoid `Alert.alert` for popups and confirmations; use `AlertModal`/`useAlertModal` instead
+- **NEVER use `Alert.alert`** — use `AlertModal`/`useAlertModal` hook instead
+- **NEVER use `FlatList` for 1000+ items** — use `@shopify/flash-list` (FlashList)
 - Component file structure:
   ```typescript
   // 1. Imports
@@ -88,13 +98,15 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
 
 ### RBAC (Role-Based Access Control)
 - **Always check permissions** before rendering UI or executing operations
-- Roles: `super_admin`, `admin`, `teacher`, `parent`, `student`
-- Use `usePermissions()` hook or `checkPermission()` utility
+- Roles: `super_admin`, `principal`, `teacher`, `parent`, `student`
+- Use `roleHasPermission` from `@/lib/rbac/types` — **never hardcode role string checks**
+- Permissions matrix: `lib/rbac/roles-permissions.json`
+- Run `npx tsx lib/rbac/validate.ts` after any RBAC change
 - Example:
   ```typescript
-  const { hasPermission } = usePermissions();
-  
-  if (!hasPermission('manage_users')) {
+  import { roleHasPermission } from '@/lib/rbac/types';
+
+  if (!roleHasPermission(user.role, 'manage_users')) {
     return <AccessDenied />;
   }
   ```
@@ -208,6 +220,32 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
 
 ## Database & Supabase
 
+### Database-First Rule (NON-NEGOTIABLE)
+If code needs a DB column that doesn't exist, **add it via migration** — do not code workarounds with fallback chains like `message.sender_id || message.user_id || message.created_by`. Every such chain is a future bug.
+
+### Storage Paths Rule (NON-NEGOTIABLE)
+Always store Supabase Storage **paths**, never signed URLs. Signed URLs expire (~1 hour) and cause 400 errors on playback. Generate signed URLs on-demand at display time only:
+```typescript
+// ✅ Correct — store the path
+await sendMessage({ voiceUrl: result.storagePath }); // e.g. "user-id/voice_123.m4a"
+// ❌ Wrong — signed URL expires
+await sendMessage({ voiceUrl: result.publicUrl });
+```
+
+### Shared Utilities (avoid reinventing)
+- `lib/utils/feeUtils.ts` — fee structure helpers, `isUniformLabel()`
+- `lib/utils/payment-utils.ts` — `formatCurrencyCompact()` (1000→"R1k", 1M→"R1.0M")
+- `lib/utils/phoneUtils.ts` — SA phone format (strip non-digits, replace leading `0` with `27`), WhatsApp URL generation
+- `lib/utils/dateUtils.ts` — date formatting
+- `lib/utils/nameUtils.ts` — name display helpers
+- `lib/logger.ts` — structured logging (use this, never `console.log`)
+
+### Supabase Client Usage
+- **Mobile**: `assertSupabase()` from `@/lib/supabase` (throws if unavailable)
+- **Web**: `createClient()` from `@/lib/supabase/client` (browser) or `@/lib/supabase/server` (SSR)
+- **Edge Functions**: New client per request with `SUPABASE_SERVICE_ROLE_KEY`
+- **Auto-generated types**: `lib/database.types.ts` (~35k lines) — never edit manually
+
 ### Queries
 - Use TypeScript types from Supabase schema
 - Always handle errors from Supabase
@@ -248,18 +286,13 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
 
 ## AI Integration
 
-### AI Services
-- Abstract AI providers behind service interfaces
-- Support multiple providers (OpenAI, Claude, Gemini)
-- Implement streaming for better UX
-- Handle rate limits and errors gracefully
-- Example:
-  ```typescript
-  interface AIService {
-    generateResponse(prompt: string): Promise<string>;
-    streamResponse(prompt: string): AsyncIterable<string>;
-  }
-  ```
+### AI Integration (NON-NEGOTIABLE)
+- **NEVER call AI APIs directly from the client** (Anthropic, OpenAI, Gemini)
+- All AI calls must go through `supabase/functions/ai-proxy/` Edge Function
+- Mobile: use `services/dash-ai/DashAIClient.ts` → `callAIService(params)`
+- Web: use the equivalent web AI client
+- Quota-controlled: check `lib/ai/capabilities.ts` for tier/capability matrix
+- Always call `checkAIQuota()` from `@/lib/ai/guards` before sending
 
 ### Prompt Engineering
 - Store prompts in separate files (`lib/ai/prompts/`)
@@ -314,11 +347,12 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
 - Sanitize data before display
 - Use parameterized queries (Supabase handles this)
 
-### API Keys
+### API Keys & Secrets
 - Never commit API keys to git
-- Use environment variables
-- Rotate keys regularly
-- Use different keys for dev/staging/prod
+- Use environment variables — keep `.env`, `.env.local`, `.env.production`, `.env.eas` untracked
+- Do not place server-only credentials in `EXPO_PUBLIC_*` variables
+- For Supabase function secrets, avoid names starting with `SUPABASE_` — use `SERVER_SUPABASE_SERVICE_ROLE_KEY`
+- Rotate keys regularly; use different keys for dev/staging/prod
 
 ## Testing
 
@@ -351,7 +385,7 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
 ### Optimization Strategies
 - Use `React.memo()` for expensive renders
 - Implement pagination for large lists
-- Use `@shopify/flash-list` instead of FlatList
+- Use `@shopify/flash-list` (FlashList) instead of FlatList — mandatory for 1000+ items
 - Lazy load screens and heavy components
 - Optimize images (compress, use appropriate formats)
 - Cache API responses with React Query
@@ -366,7 +400,7 @@ Multi-tenant educational platform built with React Native/Expo (mobile), Next.js
 
 ### Translation Files
 - Located in `locales/`
-- Support English (`en`) and Afrikaans (`af`)
+- Support 9 languages: `en`, `af`, `zu`, `st`, `nso`, `fr`, `pt`, `es`, `de`
 - Use `react-i18next` for translations
 - Example:
   ```typescript
@@ -481,10 +515,11 @@ if (!data?.length) {
 - Chrome DevTools for web
 - Reactotron (optional)
 
-### Logging
-- Use `console.log` in development only
-- Remove before committing (check with `npm run check:console`)
-- Use proper logging service in production (Sentry)
+### Logging (NON-NEGOTIABLE)
+- **Never use `console.log`, `console.warn`, or `console.error` in production code**
+- Use `lib/logger.ts` (structured logger) for all logging
+- Run `npm run check:console` before committing — violations are a hard stop
+- `console.*` is only acceptable inside blocks guarded by `__DEV__` or `process.env.NODE_ENV === 'development'`
 
 ### Common Issues
 - **Metro bundler cache**: Run `npm run start:clear`

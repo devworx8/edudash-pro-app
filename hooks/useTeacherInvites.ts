@@ -128,23 +128,31 @@ export function useTeacherInvites(opts: UseTeacherInvitesOptions) {
     });
   }, [getPreschoolId, loadInvites, showAlert]);
 
-  const handleDeleteTeacher = useCallback(async (teacherId: string, teacherName: string) => {
+  const handleDeleteTeacher = useCallback(async (
+    teacherRecordId: string,
+    teacherName: string,
+    teacherUserId?: string | null,
+  ) => {
     showAlert({
-      title: 'Remove Teacher', message: `Remove ${teacherName} from your school? This cannot be undone.`, type: 'warning',
+      title: 'Archive Teacher',
+      message: `Archive ${teacherName} from your school? They will be hidden from active lists but retained in history.`,
+      type: 'warning',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: async () => {
+        { text: 'Archive', style: 'destructive', onPress: async () => {
           try {
             const schoolId = getPreschoolId();
             if (!schoolId) return;
             await removeTeacherFromSchool({
-              teacherUserId: teacherId,
+              teacherRecordId,
               organizationId: schoolId,
+              teacherUserId: teacherUserId || null,
+              reason: 'Archived via teacher management',
             });
-            showAlert({ title: 'Removed', message: `${teacherName} has been removed.`, type: 'success' });
+            showAlert({ title: 'Archived', message: `${teacherName} has been archived.`, type: 'success' });
             await fetchTeachers();
           } catch (err: unknown) {
-            showAlert({ title: 'Error', message: err instanceof Error ? err.message : 'Failed to remove teacher', type: 'error' });
+            showAlert({ title: 'Error', message: err instanceof Error ? err.message : 'Failed to archive teacher', type: 'error' });
           }
         }},
       ],

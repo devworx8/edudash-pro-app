@@ -19,7 +19,6 @@ import { GradientButton } from '@/components/marketing/GradientButton';
 import { marketingTokens } from '@/components/marketing/tokens';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { logger } from '@/lib/logger';
-import { useLocalSearchParams } from 'expo-router';
 
 const TAG = 'ResetPassword';
 
@@ -27,11 +26,6 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function ResetPasswordScreen() {
   const { theme } = useTheme();
   const { showAlert, alertProps } = useAlertModal();
-  const searchParams = useLocalSearchParams<{
-    access_token?: string;
-    refresh_token?: string;
-    type?: string;
-  }>();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -41,48 +35,13 @@ export default function ResetPasswordScreen() {
   const [userEmail, setUserEmail] = useState<string | null>(null);
 
   // Check if user has a valid recovery session
-  // Also handle tokens passed directly from the landing page
   useEffect(() => {
     const checkSession = async () => {
       try {
         const supabase = assertSupabase();
-        
-        // First, check if we have tokens passed from the landing page
-        const accessToken = searchParams.access_token;
-        const refreshToken = searchParams.refresh_token;
-        
-        if (accessToken && refreshToken) {
-          logger.info(TAG, 'Received tokens from URL, setting session...');
-          
-          // Set the global flag BEFORE calling setSession to prevent AuthContext
-          // from routing away when it receives the SIGNED_IN event
-          setPasswordRecoveryInProgress(true);
-          logger.debug(TAG, 'Set password recovery flag to true');
-          
-          const { data, error: setError } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          
-          if (setError) {
-            console.error('[ResetPassword] Error setting session from tokens:', setError);
-            setPasswordRecoveryInProgress(false); // Clear flag on error
-            setValidSession(false);
-            return;
-          }
-          
-          if (data.session && data.user) {
-            logger.info(TAG, 'Session set successfully for:', data.user.email);
-            setValidSession(true);
-            setUserEmail(data.user.email || null);
-            return;
-          }
-        }
-        
-        // Otherwise, check existing session (set by auth-callback)
-        // Also set flag if we already have a session (might be from a previous navigation)
+
+        // Check existing recovery session (set by auth-callback/reset route handler).
         setPasswordRecoveryInProgress(true);
-        
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
@@ -114,7 +73,7 @@ export default function ResetPasswordScreen() {
       logger.debug(TAG, 'Component unmounting, clearing recovery flag');
       setPasswordRecoveryInProgress(false);
     };
-  }, [searchParams.access_token, searchParams.refresh_token]);
+  }, []);
 
   const handleResetPassword = async () => {
     // Validate passwords
@@ -190,11 +149,12 @@ export default function ResetPasswordScreen() {
           },
         ],
       });
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('[ResetPassword] Error:', e);
+      const errorMessage = e instanceof Error ? e.message : 'Failed to update password. Please try again.';
       showAlert({
         title: 'Error',
-        message: e?.message || 'Failed to update password. Please try again.',
+        message: errorMessage,
         type: 'error',
         buttons: [{ text: 'OK', style: 'default' }],
       });

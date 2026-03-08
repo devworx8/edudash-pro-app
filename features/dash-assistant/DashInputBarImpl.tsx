@@ -5,7 +5,7 @@
  * Extracted from DashAssistant for better maintainability.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, ScrollView, Text, Platform, Dimensions, Image, Animated, Easing, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -53,6 +53,16 @@ interface DashInputBarProps {
 }
 
 const WAVE_BARS = 7;
+const FULL_CHAT_COMPACT_HEIGHT = 42;
+const FULL_CHAT_GROW_THRESHOLD = 56;
+const FULL_CHAT_MAX_HEIGHT = 120;
+const FULL_CHAT_LINE_HEIGHT = 21;
+
+const estimateWrappedLineCount = (text: string, charsPerLine: number): number =>
+  String(text || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .reduce((total, line) => total + Math.max(1, Math.ceil(Math.max(line.length, 1) / charsPerLine)), 0);
 
 const RecordingWaveform: React.FC<{ active: boolean; color: string; mutedColor: string }> = ({
   active,
@@ -149,8 +159,29 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
   const { theme } = useTheme();
   const { width: screenWidth } = Dimensions.get('window');
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
+  const [isFocused, setIsFocused] = useState(false);
+  const [inputHeight, setInputHeight] = useState(FULL_CHAT_COMPACT_HEIGHT);
   const orbSize = screenWidth < 360 ? 42 : screenWidth < 400 ? 46 : 48;
   const orbRingSize = orbSize + 14;
+  const webCharsPerLine = Math.max(22, Math.floor((screenWidth - 172) / 8));
+  const handleComposerTextChange = useCallback((text: string) => {
+    setInputText(text);
+    if (!text.trim()) {
+      setInputHeight(FULL_CHAT_COMPACT_HEIGHT);
+      return;
+    }
+    if (Platform.OS === 'web') {
+      const lineCount = estimateWrappedLineCount(text, webCharsPerLine);
+      const nextHeight = lineCount <= 1
+        ? FULL_CHAT_COMPACT_HEIGHT
+        : Math.min(FULL_CHAT_COMPACT_HEIGHT + (lineCount - 1) * FULL_CHAT_LINE_HEIGHT, FULL_CHAT_MAX_HEIGHT);
+      setInputHeight(nextHeight);
+    }
+  }, [setInputText, webCharsPerLine]);
+  const handleSubmit = useCallback(() => {
+    onSend();
+    setInputHeight(FULL_CHAT_COMPACT_HEIGHT);
+  }, [onSend]);
 
   const renderAttachmentStrip = () => (
     selectedAttachments.length === 0 ? null : (
@@ -470,11 +501,24 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       
       <View style={styles.inputRow}>
         {/* Input wrapper */}
-        <View style={[styles.inputWrapper, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder }]}>
+        <View
+          style={[
+            styles.inputWrapper,
+            {
+              backgroundColor: theme.inputBackground,
+              borderColor: isFocused ? theme.primary + '66' : theme.inputBorder,
+              shadowColor: '#020617',
+              shadowOpacity: isFocused ? 0.2 : 0.1,
+              shadowRadius: isFocused ? 18 : 12,
+              shadowOffset: { width: 0, height: 8 },
+              elevation: isFocused ? 10 : 6,
+            },
+          ]}
+        >
           <View style={styles.inputAccessoryLeft}>
             {/* Attach files button */}
             <TouchableOpacity
-              style={styles.inputIconButton}
+              style={[styles.inputIconButton, { backgroundColor: theme.surface + 'AA' }]}
                 onPress={async () => {
                   try {
                     await Haptics.selectionAsync();
@@ -504,7 +548,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             {/* Camera button (hide while typing) */}
             {inputText.trim().length === 0 && !isRecording && (
               <TouchableOpacity
-                style={styles.inputIconButton}
+                style={[styles.inputIconButton, { backgroundColor: theme.surface + 'AA' }]}
                 onPress={async () => {
                   try {
                     await Haptics.selectionAsync();
@@ -532,6 +576,8 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
               styles.textInput,
               {
                 color: theme.inputText,
+                height: inputHeight,
+                textAlignVertical: inputHeight > FULL_CHAT_COMPACT_HEIGHT ? 'top' : 'center',
               }
             ]}
             placeholder={
@@ -541,8 +587,21 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             }
             placeholderTextColor={isRecording ? theme.primary : theme.inputPlaceholder}
             value={inputText}
-            onChangeText={setInputText}
-            onFocus={onInputFocus}
+            onChangeText={handleComposerTextChange}
+            onContentSizeChange={
+              Platform.OS === 'web'
+                ? undefined
+                : (e) =>
+                    setInputHeight((prev) => {
+                      const measuredHeight = e.nativeEvent.contentSize.height + 16;
+                      const nextHeight = measuredHeight <= FULL_CHAT_GROW_THRESHOLD
+                        ? FULL_CHAT_COMPACT_HEIGHT
+                        : Math.min(measuredHeight, FULL_CHAT_MAX_HEIGHT);
+                      return prev === nextHeight ? prev : nextHeight;
+                    })
+            }
+            onFocus={() => { setIsFocused(true); onInputFocus?.(); }}
+            onBlur={() => setIsFocused(false)}
             {...(Platform.OS === 'web' && onPasteImage
               ? ({
                   onPaste: (e: { nativeEvent?: { clipboardData?: DataTransfer } }) => {
@@ -562,15 +621,17 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
               const shiftKey = nativeEvent.shiftKey;
               if (key === 'Enter' && !shiftKey) {
                 (e as any).preventDefault?.();
-                onSend();
+                handleSubmit();
               }
             }}
             multiline={true}
+            numberOfLines={1}
             maxLength={500}
             editable={!isLoading && !isUploading && !isRecording}
             onSubmitEditing={undefined}
             returnKeyType={enterToSend ? 'send' : 'default'}
             blurOnSubmit={false}
+            scrollEnabled={inputHeight >= FULL_CHAT_MAX_HEIGHT}
           />
         </View>
         
@@ -578,7 +639,13 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
         <TouchableOpacity
           style={[
             styles.orbButton,
-            { opacity: (isLoading || isSpeaking || isRecording) ? 0.9 : 1, width: orbSize + 4, height: orbSize + 4 }
+            {
+              opacity: (isLoading || isSpeaking || isRecording) ? 0.9 : 1,
+              width: orbSize + 6,
+              height: orbSize + 6,
+              backgroundColor: theme.surface + 'D9',
+              borderColor: theme.border + '88',
+            }
           ]}
           onPress={() => {
             if ((isLoading || isSpeaking) && onInterrupt) {
@@ -607,7 +674,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
         {/* Stop generation button — shown when AI is generating a response */}
         {isLoading && onCancel && !hasContent && (
           <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: theme.error }]}
+            style={[styles.sendButton, { backgroundColor: theme.error, borderColor: theme.error }]}
             onPress={async () => {
               try {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -627,14 +694,21 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
         {/* Send button */}
         {hasContent && (
           <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: theme.primary, opacity: (isLoading || isUploading) ? 0.5 : 1 }]}
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: theme.primary,
+                borderColor: theme.primary + '66',
+                opacity: (isLoading || isUploading) ? 0.5 : 1,
+              },
+            ]}
             onPress={async () => {
               try {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               } catch {
                 // No-op: haptics are optional.
               }
-              onSend();
+              handleSubmit();
             }}
             disabled={isLoading || isUploading}
             accessibilityLabel="Send message"

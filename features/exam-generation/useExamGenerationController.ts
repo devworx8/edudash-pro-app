@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { consumeExamGenerationDraft } from '@/lib/exam-prep/generationDraftStore';
 import type { ParsedExam } from '@/lib/examParser';
 import type {
@@ -24,6 +24,7 @@ export function useExamGenerationController(params: UseExamGenerationControllerP
   const {
     grade,
     subject,
+    allowOverQuota,
     draftId,
     loadSaved,
     savedExamId,
@@ -69,15 +70,12 @@ export function useExamGenerationController(params: UseExamGenerationControllerP
   const [pdfExporting, setPdfExporting] = useState(false);
   const [pdfExportNotice, setPdfExportNotice] = useState<string | null>(null);
   const [showAudit, setShowAudit] = useState(false);
+  const hasTriggeredGenerationRef = useRef(false);
 
   const { examQuotaLimit, examQuotaUsed, examQuotaWarning } = useExamQuotaStatus();
 
-  const { generateExam, handleExportPdf, loadSavedExam } = useExamGenerationOperations({
-    artifactType,
-    customPrompt,
-    exam,
-    params,
-    setters: {
+  const operationSetters = useMemo(
+    () => ({
       setArtifact,
       setArtifactType,
       setBlueprintAudit,
@@ -97,7 +95,16 @@ export function useExamGenerationController(params: UseExamGenerationControllerP
       setState,
       setStudyCoachPack,
       setTeacherAlignment,
-    },
+    }),
+    [],
+  );
+
+  const { generateExam, handleExportPdf, loadSavedExam } = useExamGenerationOperations({
+    artifactType,
+    customPrompt,
+    exam,
+    params,
+    setters: operationSetters,
   });
 
   const isPracticeArtifact = artifactType === 'practice_test';
@@ -115,14 +122,25 @@ export function useExamGenerationController(params: UseExamGenerationControllerP
     if (!grade || !subject) return 'Preparing generation request...';
     return `Generating ${grade.replace('grade_', 'Grade ')} ${subject}`;
   }, [grade, subject]);
+  const isQuotaExhausted = examQuotaLimit > 0 && examQuotaUsed >= examQuotaLimit;
 
   useEffect(() => {
+    if (hasTriggeredGenerationRef.current) return;
+
     if (loadSaved && savedExamId) {
+      hasTriggeredGenerationRef.current = true;
       loadSavedExam();
       return;
     }
+    if (isQuotaExhausted && !allowOverQuota) {
+      hasTriggeredGenerationRef.current = true;
+      setState('error');
+      setError('Monthly exam quota exhausted. Upgrade your plan, or continue anyway from Exam Prep.');
+      return;
+    }
+    hasTriggeredGenerationRef.current = true;
     generateExam();
-  }, [generateExam, loadSaved, loadSavedExam, savedExamId]);
+  }, [allowOverQuota, generateExam, isQuotaExhausted, loadSaved, loadSavedExam, savedExamId]);
 
   const handleComplete = useCallback(
     (results: { percentage: number; earnedMarks: number; totalMarks: number }) => {
@@ -153,6 +171,7 @@ export function useExamGenerationController(params: UseExamGenerationControllerP
     handleComplete,
     handleExportPdf,
     hasGenerationWarning,
+    isQuotaExhausted,
     isPracticeArtifact,
     loadSavedExam,
     modelProfile,
@@ -174,4 +193,3 @@ export function useExamGenerationController(params: UseExamGenerationControllerP
     usesUploadedMaterial,
   };
 }
-

@@ -56,7 +56,7 @@
     "plugins": [
       "expo-router",
       "expo-updates",
-      "sentry-expo",
+      "@sentry/react-native/expo",
       "expo-audio",
       "expo-speech-recognition",
       [

@@ -69,7 +69,7 @@ const EVENTS: OrganizationEvent[] = [
   {
     id: '2',
     title: 'Facilitator Training Workshop',
-    description: 'Essential skills training for new facilitators joining Soil of Africa.',
+    description: 'Essential skills training for new facilitators joining EduPro.',
     event_type: 'training',
     location: 'Online',
     is_virtual: true,
@@ -123,7 +123,7 @@ const EVENTS: OrganizationEvent[] = [
   {
     id: '5',
     title: 'Digital Marketing Webinar',
-    description: 'Learn how to promote Soil of Africa effectively on social media.',
+    description: 'Learn how to promote EduPro effectively on social media.',
     event_type: 'webinar',
     location: 'Online',
     is_virtual: true,

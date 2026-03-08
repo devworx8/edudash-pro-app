@@ -46,6 +46,7 @@ export interface ClassInfo {
   name: string;
   teacher_id: string;
   student_count?: number;
+  parent_count?: number;
 }
 
 // ─── Fetch org members (same school) ──────────────────────────────
@@ -98,7 +99,7 @@ export const useOrgClasses = () => {
 
       let query = client
         .from('classes')
-        .select('id, name, teacher_id')
+        .select('id, name, teacher_id, students(count)')
         .or('active.eq.true,active.is.null')
         .order('name');
 
@@ -116,7 +117,13 @@ export const useOrgClasses = () => {
         logger.warn('useOrgClasses', 'Error:', error.message);
         return [];
       }
-      return (data || []) as ClassInfo[];
+      return (data || []).map((cls: any) => ({
+        id: cls.id,
+        name: cls.name,
+        teacher_id: cls.teacher_id,
+        student_count: cls.students?.[0]?.count ?? 0,
+        parent_count: cls.students?.[0]?.count ?? 0, // ~1 parent per student
+      })) as ClassInfo[];
     },
     enabled: !!orgId,
     staleTime: 1000 * 60 * 5,

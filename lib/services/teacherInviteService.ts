@@ -97,13 +97,14 @@ export class TeacherInviteService {
   static async accept(params: { token: string; authUserId: string; email: string }): Promise<TeacherInviteAcceptResult> {
     const supabase = assertSupabase();
 
-    // Verify invite
+    // Verify invite (must be pending AND not yet expired)
     const { data: invite, error: invErr } = await supabase
       .from('teacher_invites')
       .select('*')
       .eq('token', params.token)
       .eq('email', params.email)
       .eq('status', 'pending')
+      .gt('expires_at', new Date().toISOString())
       .maybeSingle();
     if (invErr || !invite) throw new Error('Invalid or expired invite');
 

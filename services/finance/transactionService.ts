@@ -36,6 +36,8 @@ export async function getRecentTransactions(
 
     if (!paymentsError && payments) {
       (payments || []).forEach((payment: any) => {
+        const metadata = payment?.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
+        if (metadata?.exclude_from_finance_metrics === true) return;
         const studentData = Array.isArray(payment.students)
           ? payment.students[0]
           : payment.students;
@@ -203,6 +205,8 @@ export async function getTransactions(
       };
 
       payments.forEach((payment: any) => {
+        const metadata = payment.metadata || {};
+        if (metadata?.exclude_from_finance_metrics === true) return;
         const studentData = Array.isArray(payment.students)
           ? payment.students[0]
           : payment.students;
@@ -216,7 +220,6 @@ export async function getTransactions(
         const fallbackLabels = paymentFeeIds.filter(
           (id: string) => typeof id === 'string' && !isUuid(id),
         );
-        const metadata = payment.metadata || {};
         const feeStructureId = metadata?.fee_structure_id || metadata?.fee_id;
         if (
           typeof feeStructureId === 'string' &&

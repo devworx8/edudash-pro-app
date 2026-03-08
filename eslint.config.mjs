@@ -196,6 +196,22 @@ export default [
     },
   },
   {
+    // Incremental hardening for auth/payment/upgrade hotspots.
+    files: [
+      'app/(auth)/magic-link.tsx',
+      'app/(auth)/reset-password.tsx',
+      'app/reset-password.tsx',
+      'lib/auth/authRedirectUrls.ts',
+      'lib/payments/urls.ts',
+      'lib/upgrade/upgradeRoutes.ts',
+    ],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'warn',
+      'react-hooks/exhaustive-deps': 'warn',
+      'no-empty': ['warn', { allowEmptyCatch: false }],
+    },
+  },
+  {
     ignores: [
       'node_modules/',
       'dist/',

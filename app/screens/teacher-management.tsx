@@ -117,8 +117,10 @@ export default function TeacherManagementScreen() {
         onCopyInviteLink={() => void handleCopyInviteLink()}
         onDeleteInvite={(inviteId) => void handleDeleteInvite(inviteId)}
         onDeleteTeacher={(teacher) => void handleDeleteTeacher(
-          teacher.teacherUserId || teacher.id,
+          teacher.id,
           `${teacher.firstName} ${teacher.lastName}`.trim() || teacher.email
+          ,
+          teacher.teacherUserId || null,
         )}
         inviteStatus={invite?.status}
         inviteToken={invite?.token}
@@ -425,17 +427,29 @@ export default function TeacherManagementScreen() {
               isRevoking={isRevoking}
               theme={theme}
               onBack={() => setCurrentView('overview')}
-              onMessage={() => showAlert({
-                title: 'Messaging',
-                message: 'Teacher communications coming soon',
-                type: 'info',
-              })}
+              onMessage={() => {
+                if (selectedTeacher.teacherUserId) {
+                  router.push({
+                    pathname: '/screens/teacher-message-thread',
+                    params: {
+                      threadId: '',
+                      title: `${selectedTeacher.firstName} ${selectedTeacher.lastName}`.trim() || selectedTeacher.email,
+                      parentId: selectedTeacher.teacherUserId,
+                      parentName: `${selectedTeacher.firstName} ${selectedTeacher.lastName}`.trim() || selectedTeacher.email,
+                      isGroup: '0',
+                      threadType: 'direct',
+                    },
+                  });
+                } else {
+                  showAlert({ title: 'Messaging', message: 'Teacher account not yet linked to a user profile.', type: 'info' });
+                }
+              }}
               onAssignSeat={handleAssignSeat}
               onRevokeSeat={handleRevokeSeat}
               onAttachDocument={() => showAttachDocActionSheet(selectedTeacher.id)}
               onDeleteTeacher={(teacher) => {
                 const fullName = `${teacher.firstName} ${teacher.lastName}`.trim() || teacher.email;
-                void handleDeleteTeacher(teacher.teacherUserId || teacher.id, fullName);
+                void handleDeleteTeacher(teacher.id, fullName, teacher.teacherUserId || null);
               }}
             />
           )}

@@ -35,6 +35,7 @@ interface TeacherMembershipRow {
 }
 
 interface TeacherRow {
+  id: string;
   user_id: string | null;
   auth_user_id: string | null;
   email: string | null;
@@ -58,6 +59,7 @@ interface TeacherProfileRow {
 
 interface TeacherCandidateMeta {
   profile?: TeacherProfileRow;
+  teacherRecordId?: string | null;
   roleHint?: string | null;
   createdAt?: string | null;
   emailHint?: string | null;
@@ -131,7 +133,7 @@ export function useClassTeacherManagement({
           .eq('organization_id', schoolId),
         supabase
           .from('teachers')
-          .select('user_id,auth_user_id,email,first_name,last_name,role,created_at,is_active')
+          .select('id,user_id,auth_user_id,email,first_name,last_name,role,created_at,is_active')
           .eq('preschool_id', schoolId)
           .eq('is_active', true),
       ]);
@@ -317,6 +319,7 @@ export function useClassTeacherManagement({
 
       teacherRows.forEach((row) => {
         addCandidate(row.user_id, {
+          teacherRecordId: row.id,
           roleHint: row.role,
           createdAt: row.created_at,
           emailHint: row.email,
@@ -325,6 +328,7 @@ export function useClassTeacherManagement({
           userIdHint: row.auth_user_id || row.user_id,
         });
         addCandidate(row.auth_user_id, {
+          teacherRecordId: row.id,
           roleHint: row.role,
           createdAt: row.created_at,
           emailHint: row.email,
@@ -385,6 +389,7 @@ export function useClassTeacherManagement({
 
           return {
             id: profileId,
+            teacher_record_id: candidate.teacherRecordId || undefined,
             user_id: candidate.profile?.auth_user_id || candidate.userIdHint || profileId,
             full_name: fullName,
             email: candidate.profile?.email || candidate.emailHint || 'No email',
@@ -436,8 +441,9 @@ export function useClassTeacherManagement({
 
     try {
       const schoolId = orgId;
+      const client = assertSupabase();
 
-      const { error } = await assertSupabase()
+      const { data: newClass, error } = await client
         .from('classes')
         .insert({
           name: classForm.name.trim(),
@@ -447,11 +453,38 @@ export function useClassTeacherManagement({
           teacher_id: classForm.teacher_id || null,
           preschool_id: schoolId,
           active: true,
-        });
+        })
+        .select('id')
+        .single();
 
       if (error) {
         showAlert({ title: 'Error', message: error.message || 'Failed to create class', type: 'error' });
         return;
+      }
+
+      // Auto-create class messaging group if org setting is enabled
+      if (newClass?.id) {
+        try {
+          const { data: preschool } = await client
+            .from('preschools')
+            .select('auto_create_class_groups')
+            .eq('id', schoolId)
+            .single();
+
+          if (preschool?.auto_create_class_groups !== false) {
+            const { data: { user } } = await client.auth.getUser();
+            if (user) {
+              await client.rpc('create_class_group', {
+                p_class_id: newClass.id,
+                p_preschool_id: schoolId,
+                p_created_by: user.id,
+                p_group_name: null,
+              });
+            }
+          }
+        } catch {
+          // Non-blocking — class was created successfully
+        }
       }
 
       showAlert({ title: 'Success', message: 'Class created successfully', type: 'success' });
@@ -537,31 +570,33 @@ export function useClassTeacherManagement({
         showAlert({ title: 'Error', message: 'No school found for this account.', type: 'error' });
         return;
       }
-      if (!teacher.id) {
-        showAlert({ title: 'Error', message: 'Missing teacher identifier.', type: 'error' });
+      if (!teacher.teacher_record_id) {
+        showAlert({ title: 'Error', message: 'Missing teacher record.', type: 'error' });
         return;
       }
 
       showAlert({
-        title: 'Remove Teacher',
-        message: `Remove ${teacher.full_name} from your school? This will unassign their classes, deactivate the teacher record, and revoke their seat.`,
+        title: 'Archive Teacher',
+        message: `Archive ${teacher.full_name} from your school? This will keep history intact, revoke their seat, and hide them from active teacher lists.`,
         type: 'warning',
         buttons: [
           { text: 'Cancel', style: 'cancel' },
           {
-            text: 'Remove',
+            text: 'Archive',
             style: 'destructive',
             onPress: async () => {
               try {
                 await removeTeacherFromSchool({
+                  teacherRecordId: teacher.teacher_record_id,
                   teacherUserId: teacher.user_id || teacher.id,
                   organizationId: orgId,
+                  reason: 'Archived via class teacher management',
                 });
-                showAlert({ title: 'Success', message: 'Teacher removed from school', type: 'success' });
+                showAlert({ title: 'Success', message: 'Teacher archived', type: 'success' });
                 loadData();
               } catch (error) {
                 console.error('Error removing teacher:', error);
-                showAlert({ title: 'Error', message: 'Failed to remove teacher', type: 'error' });
+                showAlert({ title: 'Error', message: 'Failed to archive teacher', type: 'error' });
               }
             },
           },

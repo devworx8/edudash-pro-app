@@ -66,6 +66,10 @@ export function useRegistrationDetail(id: string | undefined) {
   // --- Approve --- //
   const handleApprove = useCallback(() => {
     if (!registration) return;
+    if (registration.status !== 'pending') {
+      showAlert('Already Processed', 'This registration has already been approved or rejected.', 'warning');
+      return;
+    }
     const requiresPayment = (registration.registration_fee_amount || 0) > 0;
     if (requiresPayment && !registration.payment_verified) {
       showAlert('Payment Required', 'Please verify payment before approving this registration.', 'warning');

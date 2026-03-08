@@ -11,6 +11,7 @@ import { TierBadge } from '@/components/ui/TierBadge';
 import { SubscriptionStatusCard } from '@/components/ui/SubscriptionStatusCard';
 import { Card } from '@/components/ui/Card';
 import { cancelSubscription } from '@/lib/payments';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 export default function ManageSubscriptionScreen() {
   const { theme } = useTheme();
@@ -97,7 +98,7 @@ export default function ManageSubscriptionScreen() {
           {isFreeTier ? (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.primary }]}
-              onPress={() => router.push('/screens/plan-management')}
+              onPress={() => navigateToUpgrade({ source: 'manage_subscription' })}
             >
               <Ionicons name="arrow-up-circle" size={24} color="#fff" />
               <View style={styles.actionContent}>

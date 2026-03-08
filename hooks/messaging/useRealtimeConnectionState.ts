@@ -85,8 +85,12 @@ export function useRealtimeConnectionState(): RealtimeConnectionInfo {
 
     const handleAppState = (nextState: AppStateStatus) => {
       if (nextState === 'active' && supabase) {
-        supabase.removeChannel(channel);
-        channel.subscribe();
+        setState((prev) => (prev === 'connected' ? prev : 'connecting'));
+        try {
+          supabase.realtime.connect();
+        } catch (err) {
+          logger.warn('RealtimeConnection', 'Realtime connect on foreground failed:', err);
+        }
       }
     };
 

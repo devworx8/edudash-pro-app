@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { assertSupabase } from '@/lib/supabase';
 import { useTheme } from '@/contexts/ThemeContext';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function VerifyYourEmailScreen() {
@@ -24,7 +25,7 @@ export default function VerifyYourEmailScreen() {
         email: String(email),
         options: {
           // Keep this consistent with what we pass on signUp
-          emailRedirectTo: 'https://www.edudashpro.org.za/landing?flow=email-confirm',
+          emailRedirectTo: buildEduDashWebUrl('/landing?flow=email-confirm'),
         },
       } as any);
       if (error) throw error;

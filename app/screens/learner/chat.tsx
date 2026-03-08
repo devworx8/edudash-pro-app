@@ -7,6 +7,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '@/lib/supabase';
+import { getMessageDisplayText } from '@/lib/utils/messageContent';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCallSafe } from '@/components/calls/CallProvider';
 
@@ -202,13 +203,13 @@ export default function LearnerChatScreen() {
 
   const handleVoiceCall = () => {
     if (callContext && otherUserId) {
-      callContext.startVoiceCall(otherUserId, otherUserName);
+      callContext.startVoiceCall(otherUserId, otherUserName, thread?.id ? { threadId: thread.id } : undefined);
     }
   };
 
   const handleVideoCall = () => {
     if (callContext && otherUserId) {
-      callContext.startVideoCall(otherUserId, otherUserName);
+      callContext.startVideoCall(otherUserId, otherUserName, thread?.id ? { threadId: thread.id } : undefined);
     }
   };
 
@@ -280,7 +281,7 @@ export default function LearnerChatScreen() {
                     ]}
                   >
                     <Text style={[styles.messageText, { color: isMe ? '#fff' : theme.text }]}>
-                      {message.content}
+                      {getMessageDisplayText(message.content)}
                     </Text>
                     <Text style={[styles.messageTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textSecondary }]}>
                       {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

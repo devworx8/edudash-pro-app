@@ -5,9 +5,8 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
-import { router } from 'expo-router';
-
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { isAIEnabled } from '@/lib/ai/aiConfig';
 import { track } from '@/lib/analytics';
 import { getCombinedUsage, incrementUsage, logUsageEvent } from '@/lib/ai/usage';
@@ -194,7 +193,7 @@ export function useAILessonGeneration(): UseAILessonGenerationReturn {
         const status = await getQuotaStatus('lesson_generation');
         Alert.alert('Monthly limit reached', `You have used ${status.used} of ${status.limit} generations.`, [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'See plans', onPress: () => router.push('/pricing') },
+          { text: 'See plans', onPress: () => navigateToUpgrade({ source: 'lesson_generation_alert' }) },
         ]);
         return;
       }

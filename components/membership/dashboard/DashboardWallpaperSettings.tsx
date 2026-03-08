@@ -425,7 +425,7 @@ export function DashboardWallpaperSettings({
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: theme.surface, color: theme.text, borderColor: theme.border }]}
-                placeholder="e.g., Welcome to Soil of Africa!"
+                placeholder="e.g., Welcome to EduPro!"
                 placeholderTextColor={theme.textSecondary}
                 value={customGreeting}
                 onChangeText={setCustomGreeting}

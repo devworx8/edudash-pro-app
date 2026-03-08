@@ -62,6 +62,7 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [showScrollFab, setShowScrollFab] = useState(false);
   const [showScheduler, setShowScheduler] = useState(false);
+  const [pendingScheduleText, setPendingScheduleText] = useState<string | null>(null);
   const [threadParticipantCount, setThreadParticipantCount] = useState<number | null>(null);
   const [threadParticipants, setThreadParticipants] = useState<ThreadParticipant[]>([]);
   // Keyboard
@@ -205,6 +206,20 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     try { await sendMessage({ threadId, content, replyToId }); setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60); } catch (err) { logger.error('ParentMessageThread', 'Send failed:', err); toast.error('Failed to send message. Please try again.'); } finally { setSending(false); }
   }, [threadId, sending, sendMessage, clearTyping, replyingTo]);
 
+  const handleScheduledSend = useCallback(async (scheduledAt: Date) => {
+    if (!pendingScheduleText || !threadId) return;
+    const content = pendingScheduleText;
+    setPendingScheduleText(null);
+    setShowScheduler(false);
+    try {
+      await sendMessage({ threadId, content, scheduledAt });
+      toast.success(`Message scheduled for ${scheduledAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+    } catch (err) {
+      logger.error('ParentMessageThread', 'Schedule failed:', err);
+      toast.error('Failed to schedule message.');
+    }
+  }, [threadId, pendingScheduleText, sendMessage]);
+
   const handleVoiceRecording = useCallback(async (uri: string, duration: number) => {
     if (!threadId) return;
     Vibration.vibrate([0, 30, 50, 30]);
@@ -276,6 +291,7 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     showOptionsMenu, setShowOptionsMenu, selectedMessage, setSelectedMessage,
     showMessageActions, setShowMessageActions, currentlyPlayingVoiceId, setCurrentlyPlayingVoiceId,
     replyingTo, setReplyingTo, showScrollFab, showScheduler, setShowScheduler,
+    pendingScheduleText, setPendingScheduleText, handleScheduledSend,
     threadParticipantCount, threadParticipants,
     messages, loading, error, refetch, allMessages, voiceMessageIdsAsc, rowsAsc,
     getWallpaperGradient, otherParticipant, showSenderNames,

@@ -36,6 +36,7 @@ export default function EditTeacherScreen() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<TeacherData | null>(null);
   const [assignedClasses, setAssignedClasses] = useState<string[]>([]);
+  const [teacherRecordId, setTeacherRecordId] = useState<string | null>(null);
 
   const styles = createStyles(theme);
   const orgId = profile?.organization_id || (profile as any)?.preschool_id;
@@ -59,9 +60,11 @@ export default function EditTeacherScreen() {
       // Get teacher record from teachers table if exists
       const { data: teacherRecord } = await supabase
         .from('teachers')
-        .select('is_active, specialization')
-        .eq('user_id', teacherId)
+        .select('id, user_id, auth_user_id, is_active, subject_specialization')
+        .or(`user_id.eq.${teacherId},auth_user_id.eq.${teacherId}`)
         .maybeSingle();
+
+      setTeacherRecordId(teacherRecord?.id || null);
 
       setFormData({
         id: teacherData.id,
@@ -69,7 +72,7 @@ export default function EditTeacherScreen() {
         last_name: teacherData.last_name || '',
         email: teacherData.email || '',
         phone: teacherData.phone,
-        specialization: teacherRecord?.specialization || null,
+        specialization: teacherRecord?.subject_specialization || null,
         is_active: teacherRecord?.is_active ?? true,
       });
 
@@ -133,13 +136,18 @@ export default function EditTeacherScreen() {
       if (profileError) throw profileError;
 
       // Update teachers table if it exists
-      const { error: teacherError } = await supabase
-        .from('teachers')
-        .update({
-          full_name: `${formData.first_name.trim()} ${formData.last_name.trim()}`,
-          is_active: formData.is_active,
-        })
-        .eq('user_id', teacherId);
+      let teacherError: Error | null = null;
+      if (teacherRecordId) {
+        const { error } = await supabase
+          .from('teachers')
+          .update({
+            full_name: `${formData.first_name.trim()} ${formData.last_name.trim()}`,
+            is_active: formData.is_active,
+            subject_specialization: formData.specialization?.trim() || null,
+          })
+          .eq('id', teacherRecordId);
+        teacherError = error;
+      }
 
       // Don't throw on teacher error - row might not exist
       if (teacherError) {
@@ -166,27 +174,33 @@ export default function EditTeacherScreen() {
       Alert.alert('Error', 'Missing teacher identifier.');
       return;
     }
+    if (!teacherRecordId) {
+      Alert.alert('Error', 'Missing teacher record.');
+      return;
+    }
     Alert.alert(
-      'Remove Teacher',
-      'Are you sure you want to remove this teacher from your school? They will lose access to all classes and data.',
+      'Archive Teacher',
+      'Archive this teacher from your school? They will be hidden from active lists and lose access, but history will be kept.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Remove',
+          text: 'Archive',
           style: 'destructive',
           onPress: async () => {
             try {
               await removeTeacherFromSchool({
-                teacherUserId: teacherId,
+                teacherRecordId,
                 organizationId: orgId,
+                teacherUserId: teacherId,
+                reason: 'Archived via edit teacher screen',
               });
 
-              Alert.alert('Success', 'Teacher removed from school', [
+              Alert.alert('Success', 'Teacher archived', [
                 { text: 'OK', onPress: navigateBack },
               ]);
             } catch (error: any) {
               console.error('Error removing teacher:', error);
-              Alert.alert('Error', 'Failed to remove teacher');
+              Alert.alert('Error', 'Failed to archive teacher');
             }
           },
         },

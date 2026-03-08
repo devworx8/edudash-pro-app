@@ -1,6 +1,6 @@
 /**
  * SOA Messages Screen
- * Thread list for Soil of Africa messaging
+ * Thread list for EduPro messaging
  */
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl } from 'react-native';

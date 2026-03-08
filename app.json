@@ -3,7 +3,7 @@
     "name": "EduDashPro",
     "slug": "comedudashproapp",
     "owner": "dash-ts-organization",
-    "version": "1.0.30",
+    "version": "1.0.33",
     "runtimeVersion": "1.0.23",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -89,7 +89,7 @@
       "blockedPermissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED"
       ],
-      "versionCode": 44,
+      "versionCode": 47,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -157,7 +157,7 @@
       "expo-router",
       "expo-updates",
       "expo-web-browser",
-      "sentry-expo",
+      "@sentry/react-native/expo",
       [
         "expo-image-picker",
         {
@@ -264,7 +264,7 @@
         "projectId": "ae5db83e-e6fb-4a32-9973-e3ed5f8047ce"
       },
       "EXPO_PUBLIC_SUPABASE_URL": "https://lvvvjywrmpcqrpvuptdi.supabase.co",
-      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2dnZqeXdybXBjcXJwdnVwdGRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTMwMzc4MzgsImV4cCI6MjA2ODYxMzgzOH0.mjXejyRHPzEJfMlhW46TlYI0qw9mtoSRJZhGsCkuvd8",
+      "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx2dnZqeXdybXBjcXJwdnVwdGRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MjA3NjYsImV4cCI6MjA4ODE4MDc2Nn0.wmoA2YsOHjYxdMggkVhWn8P7qw0YILG4WgKQXGVASfg",
       "EXPO_PUBLIC_API_BASE": "https://lvvvjywrmpcqrpvuptdi.supabase.co/functions/v1"
     },
     "updates": {
