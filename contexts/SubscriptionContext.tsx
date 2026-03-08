@@ -122,7 +122,7 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
             setTierSource('unknown');
             setTierSourceDetail(undefined);
             setSeats(null);
-            setTrialHoursRemaining(undefined);
+            setTrialDaysRemaining(undefined);
             setReady(true);
           }
           return;
@@ -204,6 +204,32 @@ export function SubscriptionProvider({ children }: { children: React.ReactNode }
           }
         }
         
+        // Students never inherit school/org tier. Their tier is their own profile only.
+        // School subscriptions are purchased by the school for staff (teachers/principals).
+        // Parents subscribe independently. Students always resolve from their own profile.
+        // "student" / "k12_student" = children (under 18) managed by a parent account.
+        // They do NOT subscribe themselves. Parents subscribe on their behalf.
+        // "learner" = adult (18+) who subscribes independently → NOT capped here.
+        const isStudent = ['student', 'k12_student'].includes(roleLower);
+        if (isStudent) {
+          // Hard-cap: child students are always free regardless of profile.subscription_tier value
+          // (prevents accidental premium access if a profile field is mis-set)
+          finalTier = 'free';
+          source = 'profile';
+          sourceDetail = 'student_always_free';
+          if (mounted) {
+            const capTier = resolveCapabilityTier('free');
+            setCapabilityTier(capTier);
+            setTier('free');
+            setTierSource('profile');
+            setTierSourceDetail('student_always_free');
+            setSeats(null);
+            setTrialDaysRemaining(undefined);
+            setReady(true);
+          }
+          return;
+        }
+
         const isStaff = ['teacher', 'principal', 'principal_admin', 'admin', 'staff'].includes(roleLower);
         const schoolIdCandidates = Array.from(
           new Set(

@@ -6,6 +6,14 @@
 CREATE OR REPLACE FUNCTION public._activate_new_user_trial()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
+  -- Students do not subscribe — they use the app via their school or parent account.
+  -- Only activate trials for parents, teachers, principals, and school admins.
+  -- 'student' / 'k12_student' = children managed by parents. No subscription, no trial.
+  -- 'learner' (18+) subscribes independently and DOES get a trial.
+  IF COALESCE(NEW.role, '') IN ('student', 'k12_student') THEN
+    RETURN NEW;
+  END IF;
+
   -- Only activate trial for users with no paid tier (free or null)
   IF COALESCE(NEW.subscription_tier, 'free') = 'free' THEN
     NEW.is_trial := true;

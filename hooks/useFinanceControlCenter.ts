@@ -15,11 +15,13 @@ import { assertSupabase } from '@/lib/supabase';
 import { inferFeeCategoryCode } from '@/lib/utils/feeUtils';
 import { getMonthStartISO } from '@/lib/utils/dateUtils';
 import { normalizePaymentMethodCode } from '@/lib/utils/paymentMethod';
+import { finalizePaidFlow } from '@/services/finance/paidFlowService';
 import { FinancialDataService } from '@/services/FinancialDataService';
 import { PayrollService } from '@/services/PayrollService';
 import { ExportService } from '@/lib/services/finance/ExportService';
 import { useFinanceAccessGuard } from '@/hooks/useFinanceAccessGuard';
 import { useFinanceCutoff } from '@/hooks/useFinanceCutoff';
+import { useFinanceRealtimeRefresh } from '@/hooks/useFinanceRealtimeRefresh';
 import type {
   FeeCategoryCode,
   FinanceControlCenterBundle,
@@ -155,6 +157,10 @@ export function useFinanceControlCenter() {
   const orgId = derivePreschoolId(profile);
   const financeCutoffDay = useFinanceCutoff(orgId);
   const financeAccess = useFinanceAccessGuard();
+  const issuerName =
+    (profile as any)?.full_name ||
+    `${(profile as any)?.first_name || ''} ${(profile as any)?.last_name || ''}`.trim() ||
+    'School Administrator';
   const [activeTab, setActiveTab] = React.useState<CenterTab>(() => getTabFromParam(params.tab));
   const [loading, setLoading] = React.useState(true);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -317,6 +323,12 @@ export function useFinanceControlCenter() {
     loadData();
   }, [loadData]);
 
+  useFinanceRealtimeRefresh({
+    organizationId: orgId,
+    enabled: Boolean(orgId) && !financeAccess.needsPassword,
+    onRefresh: () => loadData(true),
+  });
+
   const onRefresh = React.useCallback(() => {
     loadData(true);
   }, [loadData]);
@@ -477,12 +489,51 @@ export function useFinanceControlCenter() {
         studentId: upload.student_id,
         billingMonth,
       });
-      await FinancialDataService.approvePOPWithAllocations({
+      const approvalResult = await FinancialDataService.approvePOPWithAllocations({
         uploadId: upload.id,
         billingMonth,
         categoryCode,
         notes: `Approved from Finance Control Center. ${categoryCorrectionNote}.`,
       });
+      try {
+        if (!profile?.id) {
+          throw new Error('Approver profile is missing.');
+        }
+        await finalizePaidFlow({
+          context: 'pop',
+          organizationId: orgId,
+          amount: Number(upload.payment_amount || 0),
+          paidDate: upload.payment_date || new Date().toISOString().split('T')[0],
+          dueDate: billingMonth,
+          billingMonth,
+          description: upload.description || upload.title || 'School payment',
+          paymentReference: upload.payment_reference || `POP-${upload.id.slice(0, 8).toUpperCase()}`,
+          paymentMethod: 'bank_transfer',
+          categoryCode,
+          paymentId: approvalResult.paymentId || null,
+          feeIds: approvalResult.feeIds,
+          student: {
+            id: upload.student_id,
+            firstName: upload.student?.first_name || '',
+            lastName: upload.student?.last_name || '',
+          },
+          issuer: {
+            id: profile.id,
+            name: issuerName,
+          },
+          metadata: {
+            pop_upload_id: upload.id,
+            approved_from: 'finance_control_center',
+          },
+          sendNotification: true,
+        });
+      } catch (receiptError: any) {
+        showAlert({
+          title: 'Receipt Warning',
+          message: receiptError?.message || 'Payment was approved, but receipt generation failed.',
+          type: 'warning',
+        });
+      }
       setQueueCategoryOverrides((prev) => {
         const next = { ...prev };
         delete next[upload.id];
@@ -503,7 +554,7 @@ export function useFinanceControlCenter() {
     } finally {
       setProcessingPopId(null);
     }
-  }, [loadData, orgId, queueMonthSelections, resolveQueueCategory, showAlert]);
+  }, [issuerName, loadData, orgId, profile?.id, queueMonthSelections, resolveQueueCategory, showAlert]);
 
   const rejectPaymentProof = React.useCallback(async (upload: FinancePendingPOPRow, reason: string) => {
     setProcessingPopId(upload.id);

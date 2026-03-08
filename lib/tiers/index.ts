@@ -20,13 +20,15 @@
  * Database tier_name_aligned enum - The canonical tier identifiers
  * These are stored in: user_ai_tiers.tier, ai_tier_quotas.tier_name, etc.
  */
-export type TierNameAligned = 
+export type TierNameAligned =
   | 'free'
   | 'trial'
   | 'parent_starter'
   | 'parent_plus'
   | 'teacher_starter'
   | 'teacher_pro'
+  | 'learner_starter'   // Adult learner (18+) — self-service
+  | 'learner_pro'       // Adult learner (18+) — self-service, full AI
   | 'school_starter'
   | 'school_premium'
   | 'school_pro'
@@ -53,6 +55,8 @@ export const TIER_DISPLAY_NAMES: Record<TierNameAligned, string> = {
   parent_plus: 'Pro',
   teacher_starter: 'Starter',
   teacher_pro: 'Pro',
+  learner_starter: 'Learner Starter',
+  learner_pro: 'Learner Pro',
   school_starter: 'Starter',
   school_premium: 'Premium',
   school_pro: 'Pro',
@@ -81,6 +85,8 @@ export const TIER_TO_CAPABILITY: Record<TierNameAligned, CapabilityTier> = {
   parent_plus: 'premium',
   teacher_starter: 'starter',
   teacher_pro: 'premium',
+  learner_starter: 'starter',
+  learner_pro: 'premium',
   school_starter: 'starter',
   school_premium: 'premium',
   school_pro: 'premium', // Pro maps to premium capabilities
@@ -120,6 +126,11 @@ export const REVENUECAT_PRODUCT_TO_TIER: Record<string, TierNameAligned> = {
   // Teacher plans (for future)
   'edudash_teacher_starter_monthly': 'teacher_starter',
   'edudash_teacher_pro_monthly': 'teacher_pro',
+  // Learner plans (adult 18+)
+  'edudash_learner_starter_monthly': 'learner_starter',
+  'edudash_learner_pro_monthly': 'learner_pro',
+  'edudash_learner_starter_annual': 'learner_starter',
+  'edudash_learner_pro_annual': 'learner_pro',
 };
 
 /**
@@ -168,6 +179,8 @@ export const PAYFAST_PLAN_TO_TIER: Record<string, TierNameAligned> = {
   'school-enterprise': 'school_enterprise',
   'teacher-starter': 'teacher_starter',
   'teacher-pro': 'teacher_pro',
+  'learner-starter': 'learner_starter',
+  'learner-pro': 'learner_pro',
 };
 
 // =============================================================================
@@ -273,7 +286,9 @@ export const TIER_PRICING: Record<TierNameAligned, TierPricing | null> = {
   parent_plus: { monthly: 199, annual: 1910, currency: 'ZAR' },
   teacher_starter: { monthly: 99, annual: 950, currency: 'ZAR' },
   teacher_pro: { monthly: 199, annual: 1910, currency: 'ZAR' },
-  school_starter: { monthly: 299, annual: 2990, currency: 'ZAR' },
+  learner_starter: { monthly: 99, annual: 950, currency: 'ZAR' },
+  learner_pro: { monthly: 199, annual: 1910, currency: 'ZAR' },
+  school_starter: { monthly: 399, annual: 3990, currency: 'ZAR' },
   school_premium: { monthly: 599, annual: 5990, currency: 'ZAR' },
   school_pro: { monthly: 999, annual: 9990, currency: 'ZAR' },
   school_enterprise: null, // Contact sales
@@ -287,7 +302,8 @@ export const TIER_PRICING: Record<TierNameAligned, TierPricing | null> = {
 export const EARLY_BIRD_DISCOUNT = {
   enabled: true,
   discountPercent: 50,
-  parentTiersOnly: true, // Only applies to parent_starter and parent_plus
+  parentTiersOnly: false, // Applies to parent and learner tiers
+  applicableTiers: ['parent_starter', 'parent_plus', 'learner_starter', 'learner_pro'] as TierNameAligned[],
   endDate: new Date('2026-03-31T23:59:59.999Z'),
 };
 
@@ -296,7 +312,7 @@ export const EARLY_BIRD_DISCOUNT = {
  */
 export function getEarlyBirdPrice(tier: TierNameAligned): TierPricing | null {
   if (!EARLY_BIRD_DISCOUNT.enabled) return TIER_PRICING[tier];
-  if (EARLY_BIRD_DISCOUNT.parentTiersOnly && !tier.startsWith('parent_')) {
+  if (!EARLY_BIRD_DISCOUNT.applicableTiers.includes(tier)) {
     return TIER_PRICING[tier];
   }
   
@@ -325,6 +341,9 @@ export function getAvailableTiersForRole(role: string): TierNameAligned[] {
     case 'teacher':
     case 'private_teacher':
       return ['free', 'teacher_starter', 'teacher_pro'];
+    case 'learner':
+      // Adult learner (18+) subscribes independently for self-study access
+      return ['free', 'learner_starter', 'learner_pro'];
     case 'principal':
     case 'admin':
       return ['free', 'school_starter', 'school_premium', 'school_pro', 'school_enterprise'];
@@ -370,9 +389,11 @@ export function isTierHigher(tierA: TierNameAligned, tierB: TierNameAligned): bo
   const hierarchy: TierNameAligned[] = [
     'free',
     'trial',
+    'learner_starter',
     'parent_starter',
     'teacher_starter',
     'school_starter',
+    'learner_pro',
     'parent_plus',
     'teacher_pro',
     'school_premium',
@@ -394,6 +415,7 @@ export function normalizeTierName(tier: string): TierNameAligned {
     'free', 'trial',
     'parent_starter', 'parent_plus',
     'teacher_starter', 'teacher_pro',
+    'learner_starter', 'learner_pro',
     'school_starter', 'school_premium', 'school_pro', 'school_enterprise',
   ];
   if (validTiers.includes(normalized as TierNameAligned)) {
@@ -413,6 +435,8 @@ export function normalizeTierName(tier: string): TierNameAligned {
     'parent-plus': 'parent_plus',
     'teacher-starter': 'teacher_starter',
     'teacher-pro': 'teacher_pro',
+    'learner-starter': 'learner_starter',
+    'learner-pro': 'learner_pro',
     'school-starter': 'school_starter',
     'school-premium': 'school_premium',
     'school-pro': 'school_pro',
@@ -427,10 +451,10 @@ export function normalizeTierName(tier: string): TierNameAligned {
 // =============================================================================
 
 /**
- * Minimum monthly price for organization/school tiers (R299)
- * Organizations cannot use parent-level pricing (R99)
+ * Minimum monthly price for organization/school tiers (R399)
+ * Organizations cannot use parent-level pricing (R99/R199)
  */
-export const ORGANIZATION_MIN_MONTHLY_PRICE = 299;
+export const ORGANIZATION_MIN_MONTHLY_PRICE = 399;
 
 /**
  * Valid tiers for organizations (preschools, schools, etc.)
@@ -462,7 +486,7 @@ export function isValidOrganizationTier(tier: string): boolean {
  */
 export function validateTierAssignment(
   tier: string,
-  entityType: 'organization' | 'parent' | 'teacher'
+  entityType: 'organization' | 'parent' | 'teacher' | 'learner'
 ): { valid: boolean; error?: string; suggestedTier?: TierNameAligned } {
   const normalized = normalizeTierName(tier);
   
@@ -509,7 +533,19 @@ export function validateTierAssignment(
       };
     }
   }
-  
+
+  if (entityType === 'learner') {
+    // Adult learners (18+) subscribe independently
+    const validLearnerTiers: TierNameAligned[] = ['free', 'learner_starter', 'learner_pro'];
+    if (!validLearnerTiers.includes(normalized)) {
+      return {
+        valid: false,
+        error: `Invalid learner tier: ${tier}. Valid tiers are: ${validLearnerTiers.join(', ')}`,
+        suggestedTier: 'learner_starter',
+      };
+    }
+  }
+
   return { valid: true };
 }
 

@@ -74,6 +74,45 @@ const fallbackPlans = [
     sortOrder: 2,
   },
   
+  // Learner Plans (adult 18+, self-service)
+  {
+    name: 'Learner Starter',
+    price: 'R99',
+    period: 'per month',
+    description: 'For adult learners wanting AI-assisted self-study',
+    features: [
+      { name: 'AI study assistant', included: true },
+      { name: 'Progress tracking', included: true },
+      { name: 'Subject quizzes & games', included: true },
+      { name: 'Exam prep tools', included: true },
+      { name: 'Mobile app access', included: true },
+    ],
+    cta: 'Start Free Trial',
+    featured: false,
+    badge: null,
+    tier: 'learner_starter',
+    sortOrder: 8,
+  },
+  {
+    name: 'Learner Pro',
+    price: 'R199',
+    period: 'per month',
+    description: 'Full AI power for serious adult learners',
+    features: [
+      { name: 'Everything in Learner Starter', included: true },
+      { name: 'Unlimited AI interactions', included: true },
+      { name: 'Advanced analytics', included: true },
+      { name: 'Custom study plan', included: true },
+      { name: 'Download study packs', included: true },
+      { name: 'Priority support', included: true },
+    ],
+    cta: 'Start Free Trial',
+    featured: false,
+    badge: null,
+    tier: 'learner_pro',
+    sortOrder: 9,
+  },
+
   // School/Organization Plans
   {
     name: 'Free',
@@ -94,9 +133,9 @@ const fallbackPlans = [
   },
   {
     name: 'School Starter',
-    price: 'R299',
+    price: 'R399',
     period: 'per month',
-    description: 'Most popular choice for growing preschools',
+    description: 'Most popular choice for growing schools',
     features: [
       { name: 'Up to 5 teachers', included: true },
       { name: 'Up to 150 students', included: true },
@@ -292,7 +331,7 @@ export default function PricingPage() {
             <Text style={styles.overline}>PRICING</Text>
             <Text style={styles.title}>Choose Your Plan</Text>
             <Text style={styles.subtitle}>
-              Transparent pricing that scales with your preschool.{'\n'}
+              Transparent pricing for parents, teachers, and schools.{'\n'}
               All plans include a 14-day free trial.
             </Text>
           </View>

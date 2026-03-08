@@ -63,13 +63,14 @@ export async function getPaymentsForBankReconciliation(
   }> = [];
 
   for (const p of payments) {
+    const metadata = p?.metadata && typeof p.metadata === 'object' ? p.metadata : {};
+    if (metadata?.exclude_from_finance_metrics === true) continue;
     const accountingMonth = resolvePaymentAccountingMonth(p);
     if (accountingMonth !== month) continue;
 
     const amount = Number(p?.amount ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) continue;
 
-    const metadata = p?.metadata && typeof p.metadata === 'object' ? p.metadata : {};
     const categoryCode = inferFeeCategoryCode(
       p?.category_code ||
         metadata?.category_code ||

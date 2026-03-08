@@ -14,7 +14,23 @@
       "Bash(npm run typecheck)",
       "Bash(npm run lint)",
       "Bash(grep -v \"^$\")",
-      "Bash(supabase db query \"SELECT proname FROM pg_proc WHERE proname IN \\(''create_class_group'',''create_parent_group'',''create_announcement_channel''\\) ORDER BY proname\")"
+      "Bash(supabase db query \"SELECT proname FROM pg_proc WHERE proname IN \\(''create_class_group'',''create_parent_group'',''create_announcement_channel''\\) ORDER BY proname\")",
+      "Bash(npx jest --passWithNoTests --no-coverage)",
+      "Read(//home/edp/Videos/**)",
+      "Bash(pip install python-docx -q)",
+      "Bash(pip install python-docx -q --break-system-packages)",
+      "Bash(ls -lh ~/Videos/EduDashPro*.docx)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); deps={**d.get\\(''dependencies'',{}\\),**d.get\\(''devDependencies'',{}\\)}; [print\\(k,v\\) for k,v in deps.items\\(\\) if any\\(x in k.lower\\(\\) for x in [''blur'',''glass'',''linear'',''gradient'',''reanimated'',''skia'',''svg'',''masked'']\\)]\")",
+      "Bash(npx tsc --noEmit --skipLibCheck)",
+      "Bash(git add components/ui/GlassCaptionCard.tsx components/ai/DashTutorWhiteboard.tsx \"app/screens/dash-voice.tsx\" \"app/screens/dash-voice.styles.ts\" \"app/\\(auth\\)/role-selection.tsx\" \"app/screens/learner-dashboard.tsx\" \"app/screens/membership/branch-manager-invite-code.tsx\" \"app/screens/membership/chat.tsx\" \"app/screens/membership/events.tsx\" \"app/screens/membership/id-card.tsx\" \"app/screens/membership/index.tsx\" \"app/screens/membership/join.tsx\" \"app/screens/membership/membership-pending.tsx\" \"app/screens/membership/messages.tsx\" \"app/screens/membership/regional-invite-code.tsx\" \"app/screens/membership/register.tsx\" \"app/screens/membership/resources.tsx\" \"components/membership/MemberIDCard.tsx\" \"components/membership/dashboard/DashboardWallpaperSettings.tsx\" \"components/membership/id-card/CardPDFGenerator.ts\" \"components/membership/registration/CompleteStep.tsx\" \"components/membership/registration/PaymentStep.tsx\" \"components/navigation/BottomTabBar.tsx\" \"hooks/membership/useOrganizationRegions.ts\" \"lib/ads/gating.ts\" \"lib/ads/placements.ts\" \"supabase/migrations/20260323191000_soa_messaging_schema.sql\")",
+      "Bash(gh pr view 1 --repo devworx8/edudash-pro-app)",
+      "Bash(gh pr diff 1 --repo devworx8/edudash-pro-app)",
+      "Bash(gh pr view 1 --repo devworx8/edudash-pro-app --comments)",
+      "Bash(gh pr checks 1 --repo devworx8/edudash-pro-app)",
+      "Bash(gh api repos/devworx8/edudash-pro-app/actions/runs/22823799543/jobs --jq '.jobs[] | {name: .name, conclusion: .conclusion, steps: [.steps[] | select\\(.conclusion == \"\"failure\"\"\\) | {name: .name}]}')",
+      "Bash(gh api repos/devworx8/edudash-pro-app/actions/runs/22823799543/jobs --jq '.jobs[0].steps[] | select\\(.name | contains\\(\"\"gitleaks\"\"\\)\\) | .')",
+      "Bash(git add -A)"
     ]
   }
 }

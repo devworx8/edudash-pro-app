@@ -51,11 +51,13 @@ export function normalizeTier(tier: string): Tier {
   switch (normalized) {
     case 'parent_starter':
     case 'teacher_starter':
+    case 'learner_starter':
     case 'school_starter':
     case 'starter':
       return 'starter'
     case 'parent_plus':
     case 'teacher_pro':
+    case 'learner_pro':
     case 'school_premium':
     case 'basic':
     case 'pro':

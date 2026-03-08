@@ -40,7 +40,7 @@ const fallbackPlans: UIPlan[] = [
   },
   {
     name: 'School Starter',
-    price: 'R299',
+    price: 'R399',
     period: 'per month',
     features: ['Up to 150 students', '5 teachers', 'AI-powered insights', 'Parent portal', 'WhatsApp notifications'],
     cta: 'Start Free Trial',

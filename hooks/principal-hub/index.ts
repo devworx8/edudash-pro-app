@@ -6,6 +6,7 @@ import { usePettyCashDashboard } from '@/hooks/usePettyCashDashboard';
 import { useTranslation } from 'react-i18next';
 import { logger } from '@/lib/logger';
 import { formatCurrencyCompact } from '@/lib/utils/payment-utils';
+import { useFinanceRealtimeRefresh } from '@/hooks/useFinanceRealtimeRefresh';
 
 // Domain sub-modules
 import type { PrincipalHubData } from './types';
@@ -193,6 +194,12 @@ export const usePrincipalHub = () => {
   }, [userId, preschoolId]);
 
   const refresh = useCallback(() => fetchData(true), [fetchData]);
+
+  useFinanceRealtimeRefresh({
+    organizationId: preschoolId,
+    enabled: Boolean(preschoolId),
+    onRefresh: refresh,
+  });
 
   // ── Convenience helpers ─────────────────────────────────
   const getMetrics = useCallback(

@@ -14,7 +14,11 @@
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
-import { useFinancePrivacyMode } from '@/hooks/useFinancePrivacyMode';
+import {
+  buildRegistrationPaymentReference,
+  fetchReceiptUrlByPaymentReference,
+  finalizePaidFlow,
+} from '@/services/finance/paidFlowService';
 import type { Student, StudentFee, ClassOption, ModalType } from './types';
 import { getSupabaseErrorMessage, resolvePendingLikeStatus, type ShowAlert } from './feeActionUtils';
 import { markFeePaid, markFeeUnpaid, handleReceiptAction as receiptAction } from './feeStatusActions';
@@ -24,6 +28,7 @@ import { setRegistrationPaidStatus } from './registrationActions';
 import { updateEnrollmentDate, deactivateStudent } from './studentLifecycleActions';
 import { prefillRegistrationFeeForClass as prefillFee } from './classFeeSync';
 import { writeFeeCorrectionAudit } from './feeCorrectionAudit';
+import { openReceiptUrl } from './feeHelpers';
 
 export interface StudentFeeActionsParams {
   student: Student | null;
@@ -33,6 +38,7 @@ export interface StudentFeeActionsParams {
   organizationId: string | undefined;
   loadFees: (s?: Student | null) => Promise<void>;
   loadStudent: () => Promise<Student | null>;
+  loadCorrectionTimeline?: () => Promise<void>;
   showAlert: ShowAlert;
   router: any;
 }
@@ -46,6 +52,7 @@ export interface StudentFeeActionsReturn {
   deactivatingStudent: boolean;
   syncingTuitionFees: boolean;
   updatingRegistrationStatus: boolean;
+  processingRegistrationReceipt: boolean;
   processingFeeId: string | null;
   processingFeeAction: 'mark_paid' | 'mark_unpaid' | 'delete' | 'update_due_date' | null;
   modalType: ModalType;
@@ -82,6 +89,7 @@ export interface StudentFeeActionsReturn {
   handleDeleteFee: (fee: StudentFee) => Promise<void>;
   handleUpdateFeeDueDate: (fee: StudentFee, dueDate: Date) => Promise<void>;
   handleReceiptAction: (fee: StudentFee) => Promise<void>;
+  handleRegistrationReceiptAction: () => Promise<void>;
   handleRecomputeLearnerBalances: () => Promise<void>;
   handleSyncTuitionFeesToClass: () => Promise<void>;
   handleSetRegistrationPaidStatus: (isPaid: boolean) => Promise<void>;
@@ -89,17 +97,16 @@ export interface StudentFeeActionsReturn {
 }
 
 export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFeeActionsReturn {
-  const { student, setStudent, studentRef, classes, organizationId, loadFees, loadStudent, showAlert, router } = params;
+  const { student, setStudent, studentRef, classes, organizationId, loadFees, loadStudent, loadCorrectionTimeline, showAlert, router } = params;
   const { profile } = useAuth();
-  const financePrivacy = useFinancePrivacyMode();
 
   // ── State ─────────────────────────────────────────────────
   const role = String(profile?.role || '').toLowerCase();
   const isPrincipalTier = ['principal', 'principal_admin', 'super_admin', 'superadmin'].includes(role);
   const isAdmin = role === 'admin';
-  const canManageFees = isPrincipalTier || (isAdmin && financePrivacy.adminCanManageFees);
-  const canManageStudentProfile = isPrincipalTier || (isAdmin && financePrivacy.adminCanManageStudentProfile);
-  const canDeleteFees = isPrincipalTier || (isAdmin && financePrivacy.adminCanDeleteFees);
+  const canManageFees = isPrincipalTier || isAdmin;
+  const canManageStudentProfile = isPrincipalTier || isAdmin;
+  const canDeleteFees = isPrincipalTier || isAdmin;
 
   const deny = useCallback((message: string) => {
     showAlert('Access Limited', message, 'warning');
@@ -110,6 +117,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
   const [deactivatingStudent, setDeactivatingStudent] = useState(false);
   const [syncingTuitionFees, setSyncingTuitionFees] = useState(false);
   const [updatingRegistrationStatus, setUpdatingRegistrationStatus] = useState(false);
+  const [processingRegistrationReceipt, setProcessingRegistrationReceipt] = useState(false);
   const [processingFeeId, setProcessingFeeId] = useState<string | null>(null);
   const [processingFeeAction, setProcessingFeeAction] = useState<'mark_paid' | 'mark_unpaid' | 'delete' | 'update_due_date' | null>(null);
   const [modalType, setModalType] = useState<ModalType>(null);
@@ -127,6 +135,32 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
   const [classRegistrationFee, setClassRegistrationFee] = useState('');
   const [classFeeHint, setClassFeeHint] = useState('');
   const [loadingSuggestedFee, setLoadingSuggestedFee] = useState(false);
+
+  const issuerName =
+    (profile as any)?.full_name ||
+    `${(profile as any)?.first_name || ''} ${(profile as any)?.last_name || ''}`.trim() ||
+    'School Administrator';
+
+  const refreshMutationState = useCallback(async (targetStudent?: Student | null) => {
+    let resolved: Student | null = targetStudent || studentRef.current || student;
+    try {
+      resolved = await loadStudent();
+    } catch {
+      resolved = targetStudent || studentRef.current || student;
+    }
+    try {
+      await loadFees(resolved || targetStudent || studentRef.current || student);
+    } catch {
+      // Best effort; local mutation already completed.
+    }
+    if (loadCorrectionTimeline) {
+      try {
+        await loadCorrectionTimeline();
+      } catch {
+        // Best effort; timeline can be reloaded manually.
+      }
+    }
+  }, [loadCorrectionTimeline, loadFees, loadStudent, student, studentRef]);
 
   // ── Handlers ──────────────────────────────────────────────
 
@@ -153,6 +187,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
           sourceScreen: 'principal-student-fees',
         },
       );
+      await refreshMutationState(student);
       setModalType(null); setSelectedFee(null); setWaiveAmount(''); setWaiveReason(''); setWaiveType('full');
     } catch (error: any) {
       console.error('[StudentFees] handleWaiveFee failed', { feeId: selectedFee.id, error });
@@ -183,6 +218,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
           sourceScreen: 'principal-student-fees',
         },
       );
+      await refreshMutationState(student);
       setModalType(null); setSelectedFee(null); setAdjustAmount(''); setAdjustReason('');
     } catch (error: any) {
       console.error('[StudentFees] handleAdjustFee failed', { feeId: selectedFee.id, error });
@@ -202,6 +238,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
         student, studentRef, newClassId, classRegistrationFee, classes,
         organizationId, profile.id, profile.role || null, showAlert, loadStudent, loadFees,
       );
+      await refreshMutationState(studentRef.current || student);
       setModalType(null); setNewClassId(''); setClassRegistrationFee(''); setClassFeeHint('');
     } catch (error: any) {
       showAlert('Error', error.message || 'Failed to change class.', 'error');
@@ -222,10 +259,11 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
         currentStudent, studentRef, classes, organizationId,
         profile.id, profile.role || null, showAlert, loadStudent, loadFees,
       );
+      await refreshMutationState(currentStudent);
     } catch (error: any) {
       showAlert('Error', getSupabaseErrorMessage(error, 'Failed to sync tuition fees.'), 'error');
     } finally { setSyncingTuitionFees(false); setSaving(false); }
-  }, [canManageStudentProfile, classes, deny, loadFees, loadStudent, organizationId, profile?.id, profile?.role, saving, showAlert, student, studentRef, syncingTuitionFees]);
+  }, [canManageStudentProfile, classes, deny, loadFees, loadStudent, organizationId, profile?.id, profile?.role, refreshMutationState, saving, showAlert, student, studentRef, syncingTuitionFees]);
 
   const handleRecomputeLearnerBalances = useCallback(async () => {
     if (!canManageFees) {
@@ -256,15 +294,14 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
           : 'No fee rows needed recompute for this learner.',
         'success',
       );
-      await loadStudent();
-      await loadFees(currentStudent);
+      await refreshMutationState(currentStudent);
     } catch (error: any) {
       showAlert('Recompute Failed', getSupabaseErrorMessage(error, 'Could not recompute learner balances.'), 'error');
     } finally {
       setRecomputingBalances(false);
       setSaving(false);
     }
-  }, [canManageFees, deny, loadFees, loadStudent, profile?.id, recomputingBalances, saving, showAlert, student, studentRef]);
+  }, [canManageFees, deny, profile?.id, recomputingBalances, refreshMutationState, saving, showAlert, student, studentRef]);
 
   const handleSetRegistrationPaidStatus = useCallback(async (isPaid: boolean) => {
     if (!canManageFees) {
@@ -276,13 +313,50 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
     setUpdatingRegistrationStatus(true);
     setSaving(true);
     try {
-      await setRegistrationPaidStatus(
-        isPaid, currentStudent, studentRef, setStudent, organizationId, profile?.id, showAlert,
+      const result = await setRegistrationPaidStatus(
+        isPaid, currentStudent, studentRef, setStudent, organizationId, profile?.id, issuerName, showAlert,
       );
+      const nextStudent = studentRef.current || currentStudent;
+      const action = isPaid ? 'registration_paid' : 'registration_unpaid';
+      const auditResult = await writeFeeCorrectionAudit({
+        organizationId: organizationId || currentStudent.preschool_id || null,
+        studentId: currentStudent.id,
+        action,
+        reason: isPaid
+          ? 'Registration marked paid by school staff.'
+          : 'Registration marked unpaid by school staff.',
+        beforeSnapshot: {
+          registration_fee_amount: Number(currentStudent.registration_fee_amount || 0),
+          registration_fee_paid: Boolean(currentStudent.registration_fee_paid),
+          payment_verified: Boolean(currentStudent.payment_verified),
+          payment_date: currentStudent.payment_date || null,
+        },
+        afterSnapshot: {
+          registration_fee_amount: Number(nextStudent.registration_fee_amount || 0),
+          registration_fee_paid: Boolean(nextStudent.registration_fee_paid),
+          payment_verified: Boolean(nextStudent.payment_verified),
+          payment_date: nextStudent.payment_date || null,
+        },
+        metadata: {
+          payment_reference: result.paymentReference,
+          receipt_url: result.receiptUrl || null,
+        },
+        actorId: profile?.id || null,
+        actorRole: profile?.role || null,
+        sourceScreen: 'principal-student-fees',
+      });
+      if (!auditResult.ok) {
+        showAlert(
+          'Audit Warning',
+          'Registration status changed, but correction audit logging failed. Refresh and retry if needed.',
+          'warning',
+        );
+      }
+      await refreshMutationState(nextStudent);
     } catch (error: any) {
       showAlert('Error', getSupabaseErrorMessage(error, 'Failed to update registration payment status.'), 'error');
     } finally { setUpdatingRegistrationStatus(false); setSaving(false); }
-  }, [canManageFees, deny, organizationId, profile?.id, saving, setStudent, showAlert, student, studentRef, updatingRegistrationStatus]);
+  }, [canManageFees, deny, issuerName, organizationId, profile?.id, profile?.role, refreshMutationState, saving, setStudent, showAlert, student, studentRef, updatingRegistrationStatus]);
 
   const handleUpdateEnrollmentDate = async (date: Date) => {
     if (!canManageStudentProfile) {
@@ -316,6 +390,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
     setProcessingFeeId(fee.id); setProcessingFeeAction('mark_paid'); setSaving(true);
     try {
       await markFeePaid(fee, student, organizationId, profile.id, profile.role || null, showAlert, loadFees);
+      await refreshMutationState(student);
     } catch (error: any) {
       console.error('[StudentFees] handleMarkPaid failed', { feeId: fee.id, error });
       showAlert('Error', getSupabaseErrorMessage(error, 'Failed to update fee status.'), 'error');
@@ -331,6 +406,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
     setProcessingFeeId(fee.id); setProcessingFeeAction('mark_unpaid'); setSaving(true);
     try {
       await markFeeUnpaid(fee, student, organizationId, profile.id, profile.role || null, showAlert, loadFees);
+      await refreshMutationState(student);
     } catch (error: any) {
       console.error('[StudentFees] handleMarkUnpaid failed', { feeId: fee.id, error });
       showAlert('Error', getSupabaseErrorMessage(error, 'Failed to update fee status.'), 'error');
@@ -344,6 +420,69 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
       showAlert('Receipt Error', error?.message || 'Failed to open receipt.', 'error');
     }
   };
+
+  const handleRegistrationReceiptAction = useCallback(async () => {
+    const currentStudent = studentRef.current || student;
+    if (!currentStudent) return;
+    if (!Boolean(currentStudent.registration_fee_paid) && !Boolean(currentStudent.payment_verified)) {
+      showAlert('Receipt Unavailable', 'Only paid registration fees can generate receipts.', 'warning');
+      return;
+    }
+    if (!organizationId || !profile?.id) return;
+
+    const paymentReference = buildRegistrationPaymentReference(currentStudent.id);
+    setProcessingRegistrationReceipt(true);
+    try {
+      const existingUrl = await fetchReceiptUrlByPaymentReference(paymentReference);
+      if (existingUrl) {
+        await openReceiptUrl(existingUrl, router);
+        return;
+      }
+
+      const amount = Number(currentStudent.registration_fee_amount || 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        showAlert('Receipt Unavailable', 'Registration amount is missing or invalid.', 'warning');
+        return;
+      }
+
+      const result = await finalizePaidFlow({
+        context: 'registration',
+        organizationId,
+        amount,
+        paidDate: currentStudent.payment_date || new Date().toISOString().split('T')[0],
+        dueDate: currentStudent.payment_date || new Date().toISOString().split('T')[0],
+        description: 'Registration fee payment',
+        paymentReference,
+        paymentMethod: 'manual_principal',
+        categoryCode: 'registration',
+        student: {
+          id: currentStudent.id,
+          firstName: currentStudent.first_name,
+          lastName: currentStudent.last_name,
+          className: currentStudent.class_name || null,
+          parentId: currentStudent.parent_id || null,
+        },
+        issuer: { id: profile.id, name: issuerName },
+        metadata: {
+          source: 'registration_receipt_action',
+          registration_receipt_only: true,
+          exclude_from_finance_metrics: true,
+        },
+        sendNotification: false,
+        excludeFromFinanceMetrics: true,
+      });
+
+      if (result.receiptUrl) {
+        await openReceiptUrl(result.receiptUrl, router);
+      } else {
+        showAlert('Receipt Error', 'Receipt generated but link is unavailable.', 'warning');
+      }
+    } catch (error: any) {
+      showAlert('Receipt Error', error?.message || 'Failed to open registration receipt.', 'error');
+    } finally {
+      setProcessingRegistrationReceipt(false);
+    }
+  }, [issuerName, organizationId, profile?.id, router, showAlert, student, studentRef]);
 
   const handleUpdateFeeDueDate = useCallback(async (fee: StudentFee, dueDate: Date) => {
     if (!canManageFees) {
@@ -414,7 +553,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
         .throwOnError();
 
       showAlert('Due Date Updated', 'Fee due date updated successfully.', 'success');
-      await loadFees(student);
+      await refreshMutationState(student);
     } catch (error: any) {
       console.error('[StudentFees] handleUpdateFeeDueDate failed', { feeId: fee.id, error });
       showAlert('Update Failed', getSupabaseErrorMessage(error, 'Failed to update due date.'), 'error');
@@ -423,7 +562,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
       setProcessingFeeId(null);
       setProcessingFeeAction(null);
     }
-  }, [canManageFees, deny, loadFees, organizationId, processingFeeId, profile?.id, profile?.role, showAlert, student]);
+  }, [canManageFees, deny, organizationId, processingFeeId, profile?.id, profile?.role, refreshMutationState, showAlert, student]);
 
   const handleDeleteFee = useCallback(async (fee: StudentFee) => {
     if (!canDeleteFees) {
@@ -473,7 +612,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
         .throwOnError();
 
       showAlert('Fee Deleted', 'Fee row removed successfully.', 'success');
-      await loadFees(student);
+      await refreshMutationState(student);
     } catch (error: any) {
       console.error('[StudentFees] handleDeleteFee failed', { feeId: fee.id, error });
       showAlert('Delete Failed', getSupabaseErrorMessage(error, 'Failed to delete fee row.'), 'error');
@@ -482,7 +621,7 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
       setProcessingFeeId(null);
       setProcessingFeeAction(null);
     }
-  }, [canDeleteFees, deny, loadFees, organizationId, processingFeeId, profile?.id, profile?.role, showAlert, student]);
+  }, [canDeleteFees, deny, organizationId, processingFeeId, profile?.id, profile?.role, refreshMutationState, showAlert, student]);
 
   const prefillRegistrationFeeForClass = useCallback(async (classId: string) => {
     setLoadingSuggestedFee(true);
@@ -501,14 +640,14 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
 
   return {
     canManageFees, canManageStudentProfile, canDeleteFees,
-    saving, recomputingBalances, deactivatingStudent, syncingTuitionFees, updatingRegistrationStatus, processingFeeId, processingFeeAction, modalType, setModalType, selectedFee, setSelectedFee,
+    saving, recomputingBalances, deactivatingStudent, syncingTuitionFees, updatingRegistrationStatus, processingRegistrationReceipt, processingFeeId, processingFeeAction, modalType, setModalType, selectedFee, setSelectedFee,
     showEnrollmentPicker, setShowEnrollmentPicker,
     waiveAmount, setWaiveAmount, waiveReason, setWaiveReason, waiveType, setWaiveType,
     adjustAmount, setAdjustAmount, adjustReason, setAdjustReason,
     newClassId, setNewClassId, classRegistrationFee, setClassRegistrationFee,
     classFeeHint, setClassFeeHint, loadingSuggestedFee, canSubmitClassCorrection,
     handleWaiveFee, handleAdjustFee, handleChangeClass, handleUpdateEnrollmentDate, handleDeactivateStudent,
-    handleMarkPaid, handleMarkUnpaid, handleDeleteFee, handleUpdateFeeDueDate, handleReceiptAction, handleSyncTuitionFeesToClass, handleSetRegistrationPaidStatus, prefillRegistrationFeeForClass,
+    handleMarkPaid, handleMarkUnpaid, handleDeleteFee, handleUpdateFeeDueDate, handleReceiptAction, handleRegistrationReceiptAction, handleSyncTuitionFeesToClass, handleSetRegistrationPaidStatus, prefillRegistrationFeeForClass,
     handleRecomputeLearnerBalances,
   };
 }

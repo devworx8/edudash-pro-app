@@ -80,31 +80,6 @@ export default function StudentFeeManagementScreen() {
   const [showFullHistory, setShowFullHistory] = useState(false);
   const [selectedDueDateFee, setSelectedDueDateFee] = useState<StudentFee | null>(null);
   const [showDueDatePicker, setShowDueDatePicker] = useState(false);
-  const actions = useStudentFeeActions({
-    student: data.student,
-    setStudent: data.setStudent,
-    studentRef: data.studentRef,
-    classes: data.classes,
-    organizationId: data.organizationId,
-    loadFees: data.loadFees,
-    loadStudent: data.loadStudent,
-    showAlert,
-    router,
-  });
-
-  const styles = useMemo(() => createStyles(theme, isDark, insets), [theme, isDark, insets]);
-  const receivablesMonthLabel = useMemo(() => {
-    if (!data.activeMonthIso) return null;
-    return new Date(data.activeMonthIso).toLocaleDateString('en-ZA', {
-      month: 'long',
-      year: 'numeric',
-    });
-  }, [data.activeMonthIso]);
-  const visibleFees = data.source === 'receivables' && !showFullHistory ? data.displayFeesForMonth : data.displayFees;
-  const overdueFees = useMemo(() => visibleFees.filter(f => f.status === 'overdue'), [visibleFees]);
-  const pendingFees = useMemo(() => visibleFees.filter(f => f.status === 'pending' || f.status === 'partially_paid'), [visibleFees]);
-  const paidFees = useMemo(() => visibleFees.filter(f => f.status === 'paid' || f.status === 'waived'), [visibleFees]);
-  const isReceivablesView = data.source === 'receivables' && !showFullHistory;
   const [batchMarkingPaid, setBatchMarkingPaid] = useState(false);
   const loadCorrectionTimeline = useCallback(async () => {
     if (!studentId) {
@@ -129,6 +104,33 @@ export default function StudentFeeManagementScreen() {
       setTimelineLoading(false);
     }
   }, [studentId]);
+
+  const actions = useStudentFeeActions({
+    student: data.student,
+    setStudent: data.setStudent,
+    studentRef: data.studentRef,
+    classes: data.classes,
+    organizationId: data.organizationId,
+    loadFees: data.loadFees,
+    loadStudent: data.loadStudent,
+    loadCorrectionTimeline,
+    showAlert,
+    router,
+  });
+
+  const styles = useMemo(() => createStyles(theme, isDark, insets), [theme, isDark, insets]);
+  const receivablesMonthLabel = useMemo(() => {
+    if (!data.activeMonthIso) return null;
+    return new Date(data.activeMonthIso).toLocaleDateString('en-ZA', {
+      month: 'long',
+      year: 'numeric',
+    });
+  }, [data.activeMonthIso]);
+  const visibleFees = data.source === 'receivables' && !showFullHistory ? data.displayFeesForMonth : data.displayFees;
+  const overdueFees = useMemo(() => visibleFees.filter(f => f.status === 'overdue'), [visibleFees]);
+  const pendingFees = useMemo(() => visibleFees.filter(f => f.status === 'pending' || f.status === 'partially_paid'), [visibleFees]);
+  const paidFees = useMemo(() => visibleFees.filter(f => f.status === 'paid' || f.status === 'waived'), [visibleFees]);
+  const isReceivablesView = data.source === 'receivables' && !showFullHistory;
 
   useEffect(() => {
     if (financeAccess.needsPassword) return;
@@ -596,6 +598,24 @@ export default function StudentFeeManagementScreen() {
                 )}
                 <Text style={styles.registrationMarkUnpaidText}>Mark Unpaid</Text>
               </TouchableOpacity>
+              {registrationMarkedPaid && (
+                <TouchableOpacity
+                  style={[
+                    styles.registrationActionButton,
+                    styles.registrationReceiptButton,
+                    (!actions.canManageFees || actions.saving || actions.processingRegistrationReceipt) && { opacity: 0.6 },
+                  ]}
+                  disabled={!actions.canManageFees || actions.saving || actions.processingRegistrationReceipt}
+                  onPress={() => void actions.handleRegistrationReceiptAction()}
+                >
+                  {actions.processingRegistrationReceipt ? (
+                    <EduDashSpinner size="small" color={theme.primary} />
+                  ) : (
+                    <Ionicons name="receipt-outline" size={15} color={theme.primary} />
+                  )}
+                  <Text style={styles.registrationReceiptText}>Receipt</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 

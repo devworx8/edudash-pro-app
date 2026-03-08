@@ -3,8 +3,18 @@
  */
 
 import { assertSupabase } from '@/lib/supabase';
+import {
+  buildRegistrationPaymentReference,
+  clearCanonicalPaymentReceiptState,
+  finalizePaidFlow,
+} from '@/services/finance/paidFlowService';
 import type { Student } from './types';
-import { getSupabaseErrorMessage, type ShowAlert } from './feeActionUtils';
+import type { ShowAlert } from './feeActionUtils';
+
+export interface RegistrationPaymentStatusResult {
+  paymentReference: string;
+  receiptUrl?: string | null;
+}
 
 export async function setRegistrationPaidStatus(
   isPaid: boolean,
@@ -13,12 +23,14 @@ export async function setRegistrationPaidStatus(
   setStudent: React.Dispatch<React.SetStateAction<Student | null>>,
   organizationId: string | undefined,
   profileId: string | undefined,
+  issuerName: string | undefined,
   showAlert: ShowAlert,
-): Promise<void> {
+): Promise<RegistrationPaymentStatusResult> {
   const currentStudent = studentRef.current || student;
+  const paymentReference = buildRegistrationPaymentReference(currentStudent.id);
   if (currentStudent.registration_fee_paid === isPaid && currentStudent.payment_verified === isPaid) {
     showAlert('No Change', `Registration is already marked as ${isPaid ? 'paid' : 'not paid'}.`, 'info');
-    return;
+    return { paymentReference, receiptUrl: null };
   }
 
   const supabase = assertSupabase();
@@ -98,6 +110,57 @@ export async function setRegistrationPaidStatus(
   studentRef.current = nextStudent;
   setStudent(nextStudent);
 
+  let receiptUrl: string | null = null;
+  const registrationAmount = Number(currentStudent.registration_fee_amount || 0);
+  if (isPaid && schoolId && registrationAmount > 0 && profileId) {
+    try {
+      const result = await finalizePaidFlow({
+        context: 'registration',
+        organizationId: schoolId,
+        amount: registrationAmount,
+        paidDate: paymentDate || nowIso.split('T')[0],
+        dueDate: paymentDate || nowIso.split('T')[0],
+        description: 'Registration fee payment',
+        paymentReference,
+        paymentMethod: 'manual_principal',
+        categoryCode: 'registration',
+        student: {
+          id: currentStudent.id,
+          firstName: currentStudent.first_name,
+          lastName: currentStudent.last_name,
+          className: currentStudent.class_name || null,
+          parentId: currentStudent.parent_id || null,
+        },
+        issuer: {
+          id: profileId,
+          name: issuerName || 'School Administrator',
+        },
+        metadata: {
+          source: 'registration_status_update',
+          registration_receipt_only: true,
+          exclude_from_finance_metrics: true,
+        },
+        sendNotification: true,
+        excludeFromFinanceMetrics: true,
+      });
+      receiptUrl = result.receiptUrl;
+    } catch (receiptError) {
+      console.warn('[StudentFees] registration receipt generation failed', receiptError);
+    }
+  }
+
+  if (!isPaid && profileId) {
+    try {
+      await clearCanonicalPaymentReceiptState(
+        paymentReference,
+        profileId,
+        'Registration payment marked unpaid by school staff.',
+      );
+    } catch (receiptError) {
+      console.warn('[StudentFees] registration receipt reversal failed', receiptError);
+    }
+  }
+
   showAlert(
     'Registration Updated',
     isPaid
@@ -105,4 +168,6 @@ export async function setRegistrationPaidStatus(
       : 'Registration has been marked as not paid.',
     'success',
   );
+
+  return { paymentReference, receiptUrl };
 }
