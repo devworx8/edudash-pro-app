@@ -59,12 +59,40 @@ export const Colors = {
     gradeB: '#3B82F6',
     gradeC: '#F59E0B',
     gradeD: '#EF4444',
-    
+
+    // Progress Colors
+    progressHigh: '#10B981',
+    progressMedium: '#F59E0B',
+    progressLow: '#EF4444',
+
+    // Nav Colors (light parity)
+    navBackground: '#FFFFFF',
+    navActive: primaryPurple,
+    navInactive: '#9CA3AF',
+    gradientStart: primaryPurple,
+    gradientEnd: accentPink,
+
+    // Button Colors (light parity)
+    buttonPrimary: primaryPurple,
+    buttonPrimaryHover: primaryPurpleDark,
+    buttonSecondary: '#F3F4F6',
+    buttonDisabled: '#D1D5DB',
+
+    // Glow Effects (light parity — subtle)
+    glowPurple: 'rgba(139, 92, 246, 0.2)',
+    glowGreen: 'rgba(16, 185, 129, 0.2)',
+    glowBlue: 'rgba(59, 130, 246, 0.2)',
+
+    // UI extras (light parity)
+    borderFocus: primaryPurple,
+    divider: '#F3F4F6',
+    overlay: 'rgba(0, 0, 0, 0.4)',
+    shadow: 'rgba(0, 0, 0, 0.1)',
+
     // Legacy compatibility
-    primary: primaryPurple,
     secondary: '#6B7280',
   },
-  
+
   dark: {
     // Background Colors (Dark Navy Theme)
     background: '#0D1117',
@@ -139,9 +167,8 @@ export const Colors = {
     glowPurple: 'rgba(139, 92, 246, 0.4)',
     glowGreen: 'rgba(16, 185, 129, 0.4)',
     glowBlue: 'rgba(59, 130, 246, 0.4)',
-    
+
     // Legacy compatibility
-    primary: primaryPurple,
     secondary: '#6B7280',
   },
 };

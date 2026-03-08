@@ -6,8 +6,18 @@ description = "Allow documentation/example placeholders and generated reports"
 paths = [
   '''^reports/prod-ready/''',
   '''^docs/SECURITY_ROTATION_CHECKLIST\.md$''',
-  '''^\.env\.example$'''
+  '''^\.env\.example$''',
+  '''^app\.json$''',
+  '''^eas\.json$''',
+  '''^tools/populate_profiles\.js$''',
+  '''^\.env$'''
 ]
+
+# EXPO_PUBLIC_SUPABASE_ANON_KEY is a client-side key intentionally shipped
+# in the app bundle — it is not a secret. Allow it everywhere.
+[[allowlist.regexes]]
+description = "Supabase public anon key (EXPO_PUBLIC_* — safe for client bundles)"
+regex = '''EXPO_PUBLIC_SUPABASE_ANON_KEY'''
 
 [[rules]]
 id = "edudash-hardcoded-service-role"
