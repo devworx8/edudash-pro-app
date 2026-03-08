@@ -5,9 +5,13 @@
  *   < 768px   →  3 cols, sections stacked vertically  (mobile)
  *   768–1023px →  4 cols, sections in 2-column pairs   (tablet)
  *   ≥ 1024px  →  5 cols, sections in 2-column pairs   (desktop)
+ *
+ * Uses percentage-based cell widths + inner padding (negative-margin grid
+ * pattern) so layout is always correct regardless of ancestor padding —
+ * no pixel measurement or onLayout required.
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -38,10 +42,26 @@ interface MissionControlSectionProps {
 
 // ─── Layout helpers ───────────────────────────────────────────────────────────
 
-function getLayout(containerWidth: number): { cols: number; gap: number; isWide: boolean } {
-  if (containerWidth >= 1024) return { cols: 5, gap: 10, isWide: true };
-  if (containerWidth >= 768)  return { cols: 4, gap: 10, isWide: true };
-  return { cols: 3, gap: 8, isWide: false };
+function getLayout(windowWidth: number): {
+  cols: number;
+  innerPad: number;
+  isWide: boolean;
+} {
+  if (windowWidth >= 1024) return { cols: 5, innerPad: 5, isWide: true };
+  if (windowWidth >= 768)  return { cols: 4, innerPad: 5, isWide: true };
+  return { cols: 3, innerPad: 4, isWide: false };
+}
+
+function getCellWidth(index: number, total: number, cols: number): `${number}%` {
+  const remainder = total % cols;
+  const baseWidth = `${(100 / cols).toFixed(4)}%` as `${number}%`;
+
+  if (remainder === 0) return baseWidth;
+
+  const lastRowStart = total - remainder;
+  if (index < lastRowStart) return baseWidth;
+
+  return `${(100 / remainder).toFixed(4)}%` as `${number}%`;
 }
 
 // ─── Single section grid ──────────────────────────────────────────────────────
@@ -49,20 +69,21 @@ function getLayout(containerWidth: number): { cols: number; gap: number; isWide:
 interface SectionGridProps {
   section: ActionSection;
   actions: QuickAction[];
-  cardWidth: number;
-  gap: number;
+  cols: number;
+  innerPad: number;
   onAction: (id: string) => void;
   onUpgrade: () => void;
 }
 
 const SectionGrid: React.FC<SectionGridProps> = ({
-  section, actions, cardWidth, gap, onAction, onUpgrade,
+  section, actions, cols, innerPad, onAction, onUpgrade,
 }) => {
   const { theme } = useTheme();
   if (actions.length === 0) return null;
 
   return (
     <View style={styles.actionSection}>
+      {/* Section header */}
       <View style={styles.sectionHeader}>
         <View style={[styles.sectionIconBadge, {
           backgroundColor: theme.surfaceVariant ?? 'rgba(255,255,255,0.06)',
@@ -75,11 +96,20 @@ const SectionGrid: React.FC<SectionGridProps> = ({
         </Text>
       </View>
 
-      <View style={[styles.grid, { gap }]}>
-        {actions.map((action) => (
+      {/* Card grid — negative margin neutralises the outer cell padding */}
+      <View style={[styles.grid, { marginHorizontal: -innerPad }]}>
+        {actions.map((action, index) => (
           <View
             key={action.id}
-            style={[styles.gridCell, { width: cardWidth }, action.disabled && styles.disabled]}
+            style={[
+              styles.gridCell,
+              {
+                width: getCellWidth(index, actions.length, cols),
+                paddingHorizontal: innerPad,
+                paddingBottom: innerPad * 2,
+              },
+              action.disabled && styles.disabled,
+            ]}
           >
             <MetricCard
               title={action.disabled ? `${action.title} 🔒` : action.title}
@@ -88,7 +118,9 @@ const SectionGrid: React.FC<SectionGridProps> = ({
               icon={action.icon}
               color={action.disabled ? theme.textSecondary : action.color}
               size="small"
-              cardWidth={cardWidth}
+              // Pass a truthy sentinel so MetricCard uses width:'100%' inside its cell.
+              // The actual width is owned by gridCell above.
+              cardWidth={1}
               glow={Boolean(action.glow)}
               attentionBadge={Boolean(action.glow)}
               onPress={() => action.disabled ? onUpgrade() : onAction(action.id)}
@@ -107,22 +139,7 @@ export const MissionControlSection: React.FC<MissionControlSectionProps> = ({
 }) => {
   const { theme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
-  const [containerWidth, setContainerWidth] = useState(0);
-
-  const onLayout = useCallback((e: any) => {
-    const w = Math.floor(e.nativeEvent.layout.width);
-    if (w > 0) setContainerWidth(w);
-  }, []);
-
-  // Use measured width for accuracy; window width as initial fallback
-  const w = containerWidth > 0 ? containerWidth : windowWidth;
-  const { cols, gap, isWide } = useMemo(() => getLayout(w), [w]);
-
-  // Card width fills the row with gaps between cards
-  const cardWidth = useMemo(
-    () => Math.max(72, Math.floor((w - gap * (cols - 1)) / cols)),
-    [w, gap, cols],
-  );
+  const { cols, innerPad, isWide } = useMemo(() => getLayout(windowWidth), [windowWidth]);
 
   const activeSections = useMemo(
     () => sections.filter((s) => (groupedActions[s.id] ?? []).length > 0),
@@ -130,7 +147,7 @@ export const MissionControlSection: React.FC<MissionControlSectionProps> = ({
   );
 
   return (
-    <View onLayout={onLayout} style={styles.root}>
+    <View style={styles.root}>
       {isWide ? (
         // ── Tablet / Desktop: 2-column section pairs ─────────────────────────
         <>
@@ -138,13 +155,13 @@ export const MissionControlSection: React.FC<MissionControlSectionProps> = ({
             const left  = activeSections[rowIdx * 2];
             const right = activeSections[rowIdx * 2 + 1];
             return (
-              <View key={left.id} style={[styles.wideRow, { gap: gap * 3 }]}>
+              <View key={left.id} style={styles.wideRow}>
                 <View style={styles.wideCell}>
                   <SectionGrid
                     section={left}
                     actions={groupedActions[left.id] ?? []}
-                    cardWidth={cardWidth}
-                    gap={gap}
+                    cols={cols}
+                    innerPad={innerPad}
                     onAction={onAction}
                     onUpgrade={onUpgrade}
                   />
@@ -156,8 +173,8 @@ export const MissionControlSection: React.FC<MissionControlSectionProps> = ({
                       <SectionGrid
                         section={right}
                         actions={groupedActions[right.id] ?? []}
-                        cardWidth={cardWidth}
-                        gap={gap}
+                        cols={cols}
+                        innerPad={innerPad}
                         onAction={onAction}
                         onUpgrade={onUpgrade}
                       />
@@ -175,8 +192,8 @@ export const MissionControlSection: React.FC<MissionControlSectionProps> = ({
             key={section.id}
             section={section}
             actions={groupedActions[section.id] ?? []}
-            cardWidth={cardWidth}
-            gap={gap}
+            cols={cols}
+            innerPad={innerPad}
             onAction={onAction}
             onUpgrade={onUpgrade}
           />
@@ -216,13 +233,15 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
-  // Card grid
+  // Percentage grid
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
   },
   gridCell: {
-    // width set inline
+    // width set inline as percentage
+    flexGrow: 0,
+    flexShrink: 0,
   },
   disabled: {
     opacity: 0.5,
@@ -239,6 +258,7 @@ const styles = StyleSheet.create({
   wideDivider: {
     width: 1,
     alignSelf: 'stretch',
+    marginHorizontal: 12,
     opacity: 0.35,
   },
 });

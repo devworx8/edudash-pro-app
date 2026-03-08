@@ -58,6 +58,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   const { theme } = useTheme();
   const { isSmallScreen } = getWindowMetrics();
   const styles = createStyles(theme, customCardWidth);
+  const fillParentWidth = customCardWidth === 1;
 
   // Glow: shadow/opacity (useNativeDriver: false)
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -178,7 +179,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   return (
     <Animated.View
       style={[
-        customCardWidth
+        fillParentWidth
+          ? styles.fillParentShell
+          : customCardWidth
           ? { flexBasis: customCardWidth, flexGrow: 1, flexShrink: 0 }
           : undefined,
         glow && {
@@ -246,9 +249,11 @@ export const MetricCard: React.FC<MetricCardProps> = ({
               </View>
             )}
           </View>
-          <Text style={[styles.metricValue, valueColor && { color: valueColor }]}>
-            {value}
-          </Text>
+          {value !== '' && value !== null && value !== undefined ? (
+            <Text style={[styles.metricValue, valueColor && { color: valueColor }]}>
+              {value}
+            </Text>
+          ) : null}
           <Text style={styles.metricTitle}>{title}</Text>
           {subtitle && (
             <Text style={styles.metricSubtitle}>{subtitle}</Text>
@@ -299,6 +304,9 @@ const createStyles = (theme: any, customCardWidth?: number) => {
       elevation: isDark ? 8 : 3,
       minHeight: isSmallScreen ? 110 : 130,
       overflow: 'hidden' as const,
+    },
+    fillParentShell: {
+      width: '100%',
     },
     metricCardLarge: {
       width: isTablet ? (width - 60) / 2 : width - (cardPadding * 2),
