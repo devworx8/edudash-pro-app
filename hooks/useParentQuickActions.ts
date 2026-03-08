@@ -150,6 +150,7 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
       ai: [],
     };
     const categoryById: Record<string, keyof typeof groupMap> = {
+      // ── Missions (Learning) ──────────────────────────────
       view_homework: 'learning',
       daily_program: 'learning',
       weekly_menu: 'learning',
@@ -162,15 +163,24 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
       dash_playground: 'learning',
       family_activity: 'learning',
       upload_progress: 'learning',
+      homework_history: 'learning',
+      my_exams: 'learning',
+      // ── Comms ───────────────────────────────────────────
       messages: 'communication',
       calls: 'communication',
       events: 'communication',
+      announcements: 'communication',
+      activity_feed: 'communication',
       dev_notifications: 'communication',
+      // ── Payments ────────────────────────────────────────
       payments: 'payments',
+      upgrade: 'payments',
+      // ── Dash Intelligence ───────────────────────────────
+      ai_help: 'ai',
+      ai_homework_help: 'ai',
       dash_grade_test: 'ai',
       dash_tutor: 'ai',
       generate_image: 'ai',
-      ai_homework_help: 'ai',
       ask_dash: 'ai',
       dash_explain: 'ai',
       dash_quiz: 'ai',
