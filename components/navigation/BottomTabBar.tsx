@@ -295,7 +295,7 @@ const TAB_ITEMS: TabItem[] = [
     roles: ['principal', 'principal_admin'] 
   },
 
-  // CEO / National Admin tabs (Soil of Africa)
+  // CEO / National Admin tabs (EduPro)
   { 
     id: 'ceo-dashboard', 
     label: 'Home',

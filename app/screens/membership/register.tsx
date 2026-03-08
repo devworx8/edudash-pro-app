@@ -1,6 +1,6 @@
 /**
  * Public Member Registration Screen
- * Multi-step registration flow for new members joining Soil of Africa
+ * Multi-step registration flow for new members joining EduPro
  * 
  * Refactored to use modular step components following WARP.md standards
  */
@@ -275,7 +275,7 @@ export default function MemberRegistrationScreen() {
               last_name: formData.last_name,
               phone: formData.phone,
             },
-            // Redirect to Soil of Africa website after email confirmation
+            // Redirect to EduPro website after email confirmation
             emailRedirectTo: buildSoaWebUrl('/auth/callback?flow=email-confirm'),
           },
         });
@@ -306,7 +306,7 @@ export default function MemberRegistrationScreen() {
               logger.error('[Register] Sign in failed:', signInError);
               showAlert({
                 title: 'Account Exists',
-                message: 'An account with this email already exists but the password doesn\'t match. Please sign in with your existing password to add your Soil of Africa membership.',
+                message: 'An account with this email already exists but the password doesn\'t match. Please sign in with your existing password to add your EduPro membership.',
                 buttons: [
                   { text: 'Cancel', style: 'cancel' },
                   { 

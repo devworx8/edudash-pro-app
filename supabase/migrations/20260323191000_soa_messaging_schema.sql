@@ -1,5 +1,5 @@
 -- Migration: SOA Messaging Schema
--- Extends existing messaging infrastructure for Soil of Africa organization messaging
+-- Extends existing messaging infrastructure for EduPro organization messaging
 -- Supports regional, wing, and national communication channels
 
 -- ============================================================================

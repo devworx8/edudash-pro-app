@@ -17,7 +17,7 @@ export interface OrganizationRegion {
 
 interface UseOrganizationRegionsOptions {
   organizationId?: string;
-  /** If true, fetch Soil of Africa regions by default */
+  /** If true, fetch EduPro regions by default */
   soilOfAfrica?: boolean;
 }
 

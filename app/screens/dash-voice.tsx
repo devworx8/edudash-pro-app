@@ -68,6 +68,13 @@ import {
   getStreamingPlaceholder,
 } from '@/lib/dash-voice-utils';
 import { s } from './dash-voice.styles';
+import { GlassCaptionCard } from '@/components/ui/GlassCaptionCard';
+import {
+  DashTutorWhiteboard,
+  extractWhiteboardContent,
+  stripWhiteboardFromDisplay,
+  type WhiteboardContent,
+} from '@/components/ai/DashTutorWhiteboard';
 
 import { shouldUsePhonicsMode, detectPhonicsIntent } from '@/lib/dash-ai/phonicsDetection';
 import {
@@ -87,6 +94,11 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ORB_SIZE = Math.min(SCREEN_WIDTH * 0.78, 320);
+const VOICE_COMPOSER_COMPACT_HEIGHT = 44;
+const VOICE_COMPOSER_GROW_THRESHOLD = 60;
+const VOICE_COMPOSER_MAX_HEIGHT = 124;
+const VOICE_COMPOSER_LINE_HEIGHT = 20;
+const VOICE_COMPOSER_WEB_CHARS_PER_LINE = Math.max(22, Math.floor((SCREEN_WIDTH - 152) / 8));
 
 const PDF_INTENT_REGEX = /\b(pdf|worksheet|document)\b/i;
 const PDF_ACTION_REGEX = /\b(generate|create|make|export|regenerate|rebuild|produce|save)\b/i;
@@ -113,6 +125,21 @@ const buildPdfTitleFromPrompt = (prompt: string): string => {
   if (!compact) return 'Dash Voice Document';
   const base = compact.slice(0, 64).trim();
   return base.charAt(0).toUpperCase() + base.slice(1);
+};
+
+const estimateWrappedLineCount = (text: string, charsPerLine: number): number =>
+  String(text || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .reduce((total, line) => total + Math.max(1, Math.ceil(Math.max(line.length, 1) / charsPerLine)), 0);
+
+const getWebComposerHeight = (text: string): number => {
+  const lineCount = estimateWrappedLineCount(text, VOICE_COMPOSER_WEB_CHARS_PER_LINE);
+  if (lineCount <= 1) return VOICE_COMPOSER_COMPACT_HEIGHT;
+  return Math.min(
+    VOICE_COMPOSER_COMPACT_HEIGHT + (lineCount - 1) * VOICE_COMPOSER_LINE_HEIGHT,
+    VOICE_COMPOSER_MAX_HEIGHT
+  );
 };
 
 const isWeb = Platform.OS === 'web';
@@ -171,6 +198,7 @@ export default function DashVoiceScreen() {
   const [lastResponse, setLastResponse] = useState('');
   const [streamingText, setStreamingText] = useState('');
   const [inputText, setInputText] = useState('');
+  const [inputHeight, setInputHeight] = useState(VOICE_COMPOSER_COMPACT_HEIGHT);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -190,6 +218,7 @@ export default function DashVoiceScreen() {
   const [liveUserTranscript, setLiveUserTranscript] = useState('');
   const [lastUserTranscript, setLastUserTranscript] = useState('');
   const [latestPdfArtifact, setLatestPdfArtifact] = useState<OrbPdfArtifact | null>(null);
+  const [whiteboardContent, setWhiteboardContent] = useState<WhiteboardContent | null>(null);
 
   // Conversation history for context (prevents redundant greetings)
   const [conversationHistory, setConversationHistory] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
@@ -623,6 +652,7 @@ export default function DashVoiceScreen() {
     speechQueueRef.current = [];
     setIsProcessing(true);
     setLastResponse('');
+    setWhiteboardContent(null);
     setStreamingText(getStreamingPlaceholder(trimmed));
 
     // Add user message to history (use ref to avoid dependency on state)
@@ -812,7 +842,9 @@ export default function DashVoiceScreen() {
           ocrTask: ocrTask || 'document',
           criteriaWarning: criteriaGuard.warningCode || null,
         });
-        setLastResponse(resolvedDisplayText);
+        const wb = extractWhiteboardContent(resolvedDisplayText);
+        if (wb) setWhiteboardContent(wb);
+        setLastResponse(stripWhiteboardFromDisplay(resolvedDisplayText));
         setStreamingText('');
         setIsProcessing(false);
         if (resolvedDisplayText) {
@@ -862,7 +894,7 @@ export default function DashVoiceScreen() {
           }
           // Guard: never show raw SSE artifacts in the streaming display
           if (accumulated && !/^\s*data:\s*(\[DONE\])?\s*$/i.test(accumulated)) {
-            setStreamingText(accumulated);
+            setStreamingText(stripWhiteboardFromDisplay(accumulated));
             maybeEnqueueStreamingSpeech(accumulated);
           }
         },
@@ -895,7 +927,9 @@ export default function DashVoiceScreen() {
               artifact: isSseArtifact,
               criteriaWarning: criteriaGuard.warningCode || null,
             });
-            setLastResponse(resolvedDisplayText);
+            const wb2 = extractWhiteboardContent(resolvedDisplayText);
+            if (wb2) setWhiteboardContent(wb2);
+            setLastResponse(stripWhiteboardFromDisplay(resolvedDisplayText));
             setStreamingText('');
             setIsProcessing(false);
             // Add assistant response to history + persist
@@ -1072,8 +1106,23 @@ export default function DashVoiceScreen() {
     sendMessage(cleaned, { dictationProbe });
   }, [isProcessing, isSpeaking, logDashTrace, orgType, preferredLanguage, sendMessage]);
 
+  const handleComposerTextChange = useCallback((text: string) => {
+    setInputText(text);
+    if (!text.trim()) {
+      setInputHeight(VOICE_COMPOSER_COMPACT_HEIGHT);
+      return;
+    }
+    if (Platform.OS === 'web') {
+      setInputHeight(getWebComposerHeight(text));
+    }
+  }, []);
+
   const handleSubmit = useCallback(() => {
-    if (inputText.trim()) { sendMessage(inputText); setInputText(''); }
+    if (inputText.trim()) {
+      sendMessage(inputText);
+      setInputText('');
+      setInputHeight(VOICE_COMPOSER_COMPACT_HEIGHT);
+    }
   }, [inputText, sendMessage]);
 
   const handleInputFocus = useCallback(() => {
@@ -1301,40 +1350,45 @@ export default function DashVoiceScreen() {
                     marginBottom: 10,
                     borderRadius: 16,
                     borderWidth: 1,
-                    borderColor: theme.border,
-                    backgroundColor: theme.surface,
+                    borderColor: 'rgba(99,102,241,0.45)',
+                    backgroundColor: 'rgba(15,23,42,0.55)',
                     paddingHorizontal: 14,
                     paddingVertical: 12,
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 10,
+                    // subtle teal glow on the user bubble
+                    shadowColor: '#06b6d4',
+                    shadowOpacity: 0.35,
+                    shadowRadius: 10,
+                    shadowOffset: { width: 0, height: 0 },
+                    elevation: 6,
                   }}
                   accessibilityLabel="Edit what Dash heard"
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.textSecondary, fontSize: 11, marginBottom: 4 }}>
-                      You said (tap to correct)
+                    <Text style={{ color: 'rgba(148,163,184,0.9)', fontSize: 11, marginBottom: 4, letterSpacing: 0.4 }}>
+                      You said — tap to correct
                     </Text>
-                    <Text style={{ color: theme.text, fontSize: 15, lineHeight: 20 }}>
+                    <Text style={{
+                      color: '#e2e8f0',
+                      fontSize: 15,
+                      lineHeight: 20,
+                      textShadowColor: 'rgba(6,182,212,0.4)',
+                      textShadowOffset: { width: 0, height: 0 },
+                      textShadowRadius: 6,
+                    }}>
                       {liveUserTranscript.trim() || lastUserTranscript.trim()}
                     </Text>
                   </View>
-                  <Ionicons name="create-outline" size={18} color={theme.primary} />
+                  <Ionicons name="create-outline" size={18} color="#06b6d4" />
                 </TouchableOpacity>
               ) : null}
 
-              <View style={[
-                s.responseCard,
-                {
-                  backgroundColor: theme.surface,
-                  borderColor: theme.border,
-                  maxHeight: 520,
-                  minHeight: 260,
-                },
-              ]}>
+              <GlassCaptionCard streaming={!!streamingText}>
                 <ScrollView
                   ref={ccScrollRef}
-                  style={[s.responseScroll, { maxHeight: 480 }]}
+                  style={{ maxHeight: 480 }}
                   nestedScrollEnabled
                   showsVerticalScrollIndicator={false}
                   onContentSizeChange={() => ccScrollRef.current?.scrollToEnd({ animated: true })}
@@ -1343,18 +1397,18 @@ export default function DashVoiceScreen() {
                   <Text style={[
                     s.responseText,
                     {
-                      color: theme.text,
+                      color: '#ffffff',
                       fontSize: 22,
                       lineHeight: 32,
+                      textShadowColor: 'rgba(99,102,241,0.6)',
+                      textShadowOffset: { width: 0, height: 0 },
+                      textShadowRadius: 8,
                     },
                   ]}>
                     {displayedText || (isProcessing ? '…' : '')}
                   </Text>
                 </ScrollView>
-                {streamingText ? (
-                  <View style={s.streamingDot}><ActivityIndicator size="small" color={theme.primary} /></View>
-                ) : null}
-              </View>
+              </GlassCaptionCard>
             </View>
           ) : null}
 
@@ -1426,25 +1480,69 @@ export default function DashVoiceScreen() {
 
         {/* Input bar */}
         <View style={[s.inputBar, { paddingBottom: Math.max(insets.bottom, 10) + 6 }]}>
-          <View style={[s.composerShell, { backgroundColor: theme.surface }]}>
-            <TouchableOpacity onPress={pickMedia} onLongPress={takePhoto} style={s.mediaBtn} activeOpacity={0.7}>
+          <View
+            style={[
+              s.composerShell,
+              {
+                backgroundColor: theme.surface + 'F0',
+                borderColor: theme.border + '88',
+              },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={pickMedia}
+              onLongPress={takePhoto}
+              style={[s.mediaBtn, { backgroundColor: theme.primary + '14' }]}
+              activeOpacity={0.7}
+            >
               <Ionicons name="image-outline" size={20} color={theme.primary} />
             </TouchableOpacity>
             <TextInput
               ref={inputRef}
-              style={[s.textInput, { color: theme.text }]}
+              style={[
+                s.textInput,
+                {
+                  color: theme.text,
+                  borderWidth: 0,
+                  outlineStyle: 'none',
+                  height: inputHeight,
+                  textAlignVertical: inputHeight > VOICE_COMPOSER_COMPACT_HEIGHT ? 'top' : 'center',
+                },
+              ] as any}
               placeholder="Type a message..."
               placeholderTextColor={theme.textSecondary}
               value={inputText}
-              onChangeText={setInputText}
+              onChangeText={handleComposerTextChange}
+              onContentSizeChange={
+                Platform.OS === 'web'
+                  ? undefined
+                  : (e) =>
+                      setInputHeight((prev) => {
+                        const measuredHeight = e.nativeEvent.contentSize.height + 16;
+                        const nextHeight = measuredHeight <= VOICE_COMPOSER_GROW_THRESHOLD
+                          ? VOICE_COMPOSER_COMPACT_HEIGHT
+                          : Math.min(measuredHeight, VOICE_COMPOSER_MAX_HEIGHT);
+                        return prev === nextHeight ? prev : nextHeight;
+                      })
+              }
               onFocus={handleInputFocus}
               onSubmitEditing={handleSubmit}
               returnKeyType="send"
               editable={!isProcessing}
-              multiline={false}
+              multiline
+              numberOfLines={1}
+              blurOnSubmit={false}
+              scrollEnabled={inputHeight >= VOICE_COMPOSER_MAX_HEIGHT}
+              underlineColorAndroid="transparent"
             />
             <TouchableOpacity
-              style={[s.sendBtn, { backgroundColor: inputText.trim() ? theme.primary : 'rgba(255,255,255,0.10)' }]}
+              style={[
+                s.sendBtn,
+                {
+                  backgroundColor: inputText.trim() ? theme.primary : 'rgba(255,255,255,0.08)',
+                  borderColor: inputText.trim() ? theme.primary : theme.border + '88',
+                },
+              ]}
               onPress={handleSubmit}
               disabled={!inputText.trim() || isProcessing}
             >
@@ -1463,6 +1561,12 @@ export default function DashVoiceScreen() {
       remainingScans={remainingScans}
       userId={autoScanUserId}
     />
+    {whiteboardContent && (
+      <DashTutorWhiteboard
+        content={whiteboardContent}
+        onDismiss={() => setWhiteboardContent(null)}
+      />
+    )}
     </>
   );
 }

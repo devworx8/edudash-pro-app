@@ -281,7 +281,7 @@ export function generateCardPrintHTML(
         </div>
         <div class="terms">
           <div class="terms-text">
-            This card remains the property of ${member.organization?.name || 'Soil of Africa'}.<br>
+            This card remains the property of ${member.organization?.name || 'EduPro'}.<br>
             If found, please return to the nearest branch or mail to:<br>
             P.O. Box 12345, Johannesburg, 2000
           </div>

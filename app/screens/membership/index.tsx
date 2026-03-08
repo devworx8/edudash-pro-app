@@ -1,6 +1,6 @@
 /**
  * Membership Module - Main Navigation Hub
- * Entry point for Soil of Africa membership system
+ * Entry point for EduPro membership system
  */
 import React, { useState, useEffect } from 'react';
 import { 
@@ -134,7 +134,7 @@ export default function MembershipIndexScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
       <Stack.Screen
         options={{
-          title: 'Soil of Africa',
+          title: 'EduPro',
           headerRight: () => (
             <View style={styles.headerButtons}>
               <TouchableOpacity style={styles.headerButton}>
@@ -167,7 +167,7 @@ export default function MembershipIndexScreen() {
                 <Ionicons name="leaf" size={32} color="#fff" />
               </View>
               <View style={styles.heroText}>
-                <Text style={styles.heroTitle}>Soil of Africa</Text>
+                <Text style={styles.heroTitle}>EduPro</Text>
                 <Text style={styles.heroSubtitle}>Membership Portal</Text>
               </View>
             </View>

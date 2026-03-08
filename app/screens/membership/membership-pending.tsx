@@ -213,7 +213,7 @@ export default function MembershipPendingScreen() {
               <View style={styles.detailRow}>
                 <Text style={[styles.detailLabel, { color: theme.textSecondary }]}>Organization</Text>
                 <Text style={[styles.detailValue, { color: theme.text }]}>
-                  {membershipStatus?.organizationName || 'Soil of Africa'}
+                  {membershipStatus?.organizationName || 'EduPro'}
                 </Text>
               </View>
               

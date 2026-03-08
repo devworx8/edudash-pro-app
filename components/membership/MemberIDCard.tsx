@@ -297,7 +297,7 @@ export function MemberIDCardBack({
       {/* Terms */}
       <View style={styles.termsSection}>
         <Text style={[styles.termsText, { fontSize: 6 * scale }]}>
-          This card remains the property of {member.organization?.name || 'Soil of Africa'}.
+          This card remains the property of {member.organization?.name || 'EduPro'}.
           {'\n'}If found, please return to the nearest branch or mail to:
           {'\n'}P.O. Box 12345, Johannesburg, 2000
         </Text>

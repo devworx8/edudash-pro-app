@@ -1,6 +1,6 @@
 /**
  * SOA Chat Screen
- * Individual conversation view for Soil of Africa messaging
+ * Individual conversation view for EduPro messaging
  * Reuses existing messaging components (MessageBubble, MessageComposer)
  */
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';

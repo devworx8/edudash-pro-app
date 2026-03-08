@@ -28,9 +28,9 @@ import SubscriptionAdGate from '@/components/ui/SubscriptionAdGate';
 import AdBannerWithUpgrade from '@/components/ui/AdBannerWithUpgrade';
 import { PLACEMENT_KEYS } from '@/lib/ads/placements';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
-// Soil of Africa organization ID
+// EduPro organization ID
 const SOIL_OF_AFRICA_ORG_ID = '63b6139a-e21f-447c-b322-376fb0828992';
-// Soil of Africa logo
+// EduPro logo
 const SOA_LOGO = require('@/assets/branding/png/icon-512.png');
 export default function LearnerDashboard() {
   const { user, profile, profileLoading, loading } = useAuth();
@@ -145,7 +145,7 @@ export default function LearnerDashboard() {
           >
             <Ionicons name="menu" size={26} color={theme.text} />
           </TouchableOpacity>
-          {/* Show Soil of Africa logo if user belongs to that organization */}
+          {/* Show EduPro logo if user belongs to that organization */}
           {effectiveOrgId === SOIL_OF_AFRICA_ORG_ID && (
             <View style={styles.orgLogoContainer}>
               <Image

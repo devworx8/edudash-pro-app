@@ -217,7 +217,7 @@ export default function RegionalInviteCodeScreen() {
 
   const buildShareMessage = (code: string) => {
     const shareUrl = buildSoaWebUrl(`/invite/member?code=${encodeURIComponent(code)}`);
-    return `🌱 Join Soil of Africa - ${regionName}!\n\nUse invite code: ${code}\n\nDownload the app and enter this code to join:\n${shareUrl}`;
+    return `🌱 Join EduPro - ${regionName}!\n\nUse invite code: ${code}\n\nDownload the app and enter this code to join:\n${shareUrl}`;
   };
 
   const shareInvite = async (item: RegionInviteCode) => {

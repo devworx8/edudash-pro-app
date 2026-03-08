@@ -85,7 +85,7 @@ export function PaymentStep({ data, theme }: PaymentStepProps) {
       <View style={[styles.termsBox, { backgroundColor: theme.surface }]}>
         <Ionicons name="information-circle-outline" size={20} color={theme.textSecondary} />
         <Text style={[styles.termsText, { color: theme.textSecondary }]}>
-          By completing registration, you agree to Soil of Africa's Terms of Service and Privacy Policy.
+          By completing registration, you agree to EduPro's Terms of Service and Privacy Policy.
         </Text>
       </View>
     </View>
