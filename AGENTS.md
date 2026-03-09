@@ -237,3 +237,27 @@ A polyfill in `polyfills/promise-shim.js` runs before all app code via Metro's `
 - **Subscription test mode:** `EXPO_PUBLIC_SUBSCRIPTION_TEST_MODE=true` enables a 24-hour trial reset (SubscriptionContext). Disable or leave unset for production so tiers are not auto-reset.
 - **Payment tier sync:** After PayFast success, `app/screens/payments/return.tsx` polls `payment_transactions` and then calls `refreshProfile()` and `refreshSubscription()`. The server (PayFast webhook or checkout completion) must update `profiles.subscription_tier` or the subscriptions table so the app sees the new tier on refresh.
 - **Stubs (web):** RevenueCat, AdMob, biometrics, etc. are stubbed in `lib/stubs/` for Expo web builds. Do not rely on native-only purchase or ad behavior on web.
+
+## Cursor Cloud specific instructions
+
+### Node.js version
+The project requires Node.js 20 (per `.nvmrc` and `package.json` engines). The update script handles `nvm use 20` automatically. Always prefix shell commands with `source ~/.nvm/nvm.sh && nvm use 20 > /dev/null 2>&1 &&` if running outside the update script context.
+
+### Running the web app (primary dev target for cloud agents)
+- `npm run web:dev` starts the Expo web build on port **8082** via Metro + react-native-web.
+- First bundle takes ~30-60s. Subsequent hot-reloads are fast.
+- The landing page is a public marketing page; sign-in is at `/sign-in`.
+- Authentication requires a valid Supabase account (test credentials must be provided via secrets).
+
+### Environment variables
+- Secrets are injected as environment variables. The update script generates `.env` from `.env.example`, substituting any matching env vars.
+- The minimum required secrets for the app to start: `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+
+### Quality gates (see Essential Commands above for full list)
+- `npm run lint` first runs `validate:progress-bars` and `check:expo-filesystem` before ESLint. The progress-bar validator may fail on pre-existing issues unrelated to your changes.
+- `npm run typecheck` uses 8GB heap (`NODE_OPTIONS=--max-old-space-size=8192`). Never run bare `tsc --noEmit` without this flag.
+- `npm test` runs Jest. Some tests may fail due to env-specific URL mismatches (e.g., `EXPO_PUBLIC_APP_WEB_URL` affecting redirect URL assertions).
+
+### Known pre-existing issues
+- 2 TypeScript errors in `contexts/theme/nextGenVariant.ts` (unknown properties in theme variant).
+- Progress-bar validation warnings in `npm run lint` (pre-existing, not blocking).
