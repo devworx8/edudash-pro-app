@@ -100,31 +100,43 @@ export async function fetchParentDashboardData(
 
 async function fetchParentProfile(supabase: any, userId: string) {
   const fields = 'id, preschool_id, first_name, last_name, role, organization_id';
-  let { data, error } = await supabase.from('profiles').select(fields).eq('auth_user_id', userId).maybeSingle();
-  if (error) {
-    const msg = String((error as any)?.message || error);
-    const code = String((error as any)?.code || '');
-    // Treat transient auth races as warnings to avoid noisy Sentry spam.
-    if (code.startsWith('PGRST') || msg.toLowerCase().includes('jwt') || msg.toLowerCase().includes('session')) {
-      warn('Parent user fetch warning:', { code, message: msg });
+  const primary = await supabase.from('profiles').select(fields).eq('auth_user_id', userId).maybeSingle();
+  if (primary.data) return primary.data;
+
+  const fallback = await supabase.from('profiles').select(fields).eq('id', userId).maybeSingle();
+  if (fallback.data) return fallback.data;
+
+  const lookupErrors = [
+    formatProfileLookupError('auth_user_id', primary.error),
+    formatProfileLookupError('id', fallback.error),
+  ].filter(Boolean) as Array<{ lookup: string; code: string; message: string; transient: boolean }>;
+
+  if (lookupErrors.length > 0) {
+    const detail = lookupErrors
+      .map((entry) => `${entry.lookup}[${entry.code || 'unknown'}] ${entry.message}`)
+      .join(' | ');
+
+    if (lookupErrors.every((entry) => entry.transient)) {
+      warn('Parent user fetch warning:', detail);
     } else {
-      logError('Parent user fetch error:', { code, message: msg });
+      logError('Parent user fetch error', new Error(detail));
     }
   }
-  if (!data) {
-    const r = await supabase.from('profiles').select(fields).eq('id', userId).maybeSingle();
-    if (r.error) {
-      const msg = String((r.error as any)?.message || r.error);
-      const code = String((r.error as any)?.code || '');
-      if (code.startsWith('PGRST') || msg.toLowerCase().includes('jwt') || msg.toLowerCase().includes('session')) {
-        warn('Parent user fetch (id) warning:', { code, message: msg });
-      } else {
-        logError('Parent user fetch (id) error:', { code, message: msg });
-      }
-    }
-    data = r.data;
-  }
-  return data;
+
+  return null;
+}
+
+function formatProfileLookupError(lookup: string, error: any) {
+  if (!error) return null;
+  const message = String(error?.message || error || 'Unknown profile lookup error');
+  const code = String(error?.code || '');
+  const lower = message.toLowerCase();
+  return {
+    lookup,
+    code,
+    message,
+    transient: code.startsWith('PGRST') || lower.includes('jwt') || lower.includes('session'),
+  };
 }
 
 async function resolveSchoolName(supabase: any, schoolId: string | null) {
