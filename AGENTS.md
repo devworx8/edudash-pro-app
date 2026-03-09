@@ -258,6 +258,12 @@ The project requires Node.js 20 (per `.nvmrc` and `package.json` engines). The u
 - `npm run typecheck` uses 8GB heap (`NODE_OPTIONS=--max-old-space-size=8192`). Never run bare `tsc --noEmit` without this flag.
 - `npm test` runs Jest. Some tests may fail due to env-specific URL mismatches (e.g., `EXPO_PUBLIC_APP_WEB_URL` affecting redirect URL assertions).
 
+### Test login
+- Test credentials are available via `TEST_LOGIN_USERNAME` / `TEST_LOGIN_PASSWORD` environment variables (injected as secrets).
+- After sign-in, the app redirects to `/screens/parent-dashboard` (the test account has the Parent role, Free tier).
+- The authenticated dashboard shows a sidebar with: Dashboard, Learning Progress, Homework History, Announcements, Weekly Menu, Documents, AI Help Hub, My Exams, Register Aftercare, Upgrade Plan, Calendar, Messages, My Children, Settings.
+- Bottom tab bar: Dashboard, Messages, Dash (AI), Grades, Account.
+
 ### Known pre-existing issues
 - 2 TypeScript errors in `contexts/theme/nextGenVariant.ts` (unknown properties in theme variant).
 - Progress-bar validation warnings in `npm run lint` (pre-existing, not blocking).
