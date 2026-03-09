@@ -1,7 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  FlatList,
   Modal,
   RefreshControl,
   StyleSheet,
@@ -10,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
@@ -47,6 +47,7 @@ export default function PrincipalCurriculumThemesScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
   const organizationId = extractOrganizationId(profile);
   const createdBy = (profile as any)?.id || user?.id;
 
@@ -78,7 +79,7 @@ export default function PrincipalCurriculumThemesScreen() {
       if (error) throw error;
       setThemes((data || []) as CurriculumTheme[]);
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to load curriculum themes');
+      showAlert({ title: 'Error', message: error?.message || 'Failed to load curriculum themes', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -119,11 +120,11 @@ export default function PrincipalCurriculumThemesScreen() {
 
   const saveTheme = async () => {
     if (!organizationId || !createdBy) {
-      Alert.alert('Missing profile', 'Unable to identify your school profile.');
+      showAlert({ title: 'Missing profile', message: 'Unable to identify your school profile.', type: 'error' });
       return;
     }
     if (!form.title.trim()) {
-      Alert.alert('Validation', 'Theme title is required.');
+      showAlert({ title: 'Validation', message: 'Theme title is required.', type: 'warning' });
       return;
     }
 
@@ -157,7 +158,7 @@ export default function PrincipalCurriculumThemesScreen() {
       setForm(EMPTY_FORM);
       await fetchThemes();
     } catch (error: any) {
-      Alert.alert('Save failed', error?.message || 'Unable to save theme.');
+      showAlert({ title: 'Save failed', message: error?.message || 'Unable to save theme.', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -173,7 +174,7 @@ export default function PrincipalCurriculumThemesScreen() {
       if (error) throw error;
       await fetchThemes();
     } catch (error: any) {
-      Alert.alert('Update failed', error?.message || 'Unable to update publish state.');
+      showAlert({ title: 'Update failed', message: error?.message || 'Unable to update publish state.', type: 'error' });
     }
   };
 
@@ -225,12 +226,13 @@ export default function PrincipalCurriculumThemesScreen() {
           </TouchableOpacity>
         </View>
 
-        <FlatList
+        <FlashList
           data={themes}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          estimatedItemSize={120}
           ListEmptyComponent={
             !loading ? (
               <View style={styles.emptyState}>
@@ -307,6 +309,7 @@ export default function PrincipalCurriculumThemesScreen() {
             </View>
           </View>
         </Modal>
+        <AlertModal {...alertProps} />
       </View>
     </DesktopLayout>
   );

@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480mm" height="320mm" viewBox="0 0 4800 3200">
+  <defs>
+    <linearGradient id="pageBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f6f3fb"/>
+      <stop offset="100%" stop-color="#ece6f8"/>
+    </linearGradient>
+    <linearGradient id="shirtBase" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#17062f"/>
+      <stop offset="50%" stop-color="#140728"/>
+      <stop offset="100%" stop-color="#0d041f"/>
+    </linearGradient>
+    <linearGradient id="accentPurple" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#41b7ff"/>
+      <stop offset="12%" stop-color="#63a1ff"/>
+      <stop offset="36%" stop-color="#8d5dff"/>
+      <stop offset="66%" stop-color="#7b36d9"/>
+      <stop offset="100%" stop-color="#4b1f94"/>
+    </linearGradient>
+    <linearGradient id="goldLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#f7e39e"/>
+      <stop offset="48%" stop-color="#f3c94b"/>
+      <stop offset="100%" stop-color="#c78d18"/>
+    </linearGradient>
+    <radialGradient id="centerGlow" cx="50%" cy="45%" r="56%">
+      <stop offset="0%" stop-color="#df7bff"/>
+      <stop offset="22%" stop-color="#9747ff"/>
+      <stop offset="52%" stop-color="#37116a"/>
+      <stop offset="100%" stop-color="#140628"/>
+    </radialGradient>
+    <radialGradient id="dashOrbCore" cx="42%" cy="38%" r="62%">
+      <stop offset="0%" stop-color="#a97cff"/>
+      <stop offset="68%" stop-color="#645fff"/>
+      <stop offset="100%" stop-color="#5245de"/>
+    </radialGradient>
+    <radialGradient id="shieldOuterDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#33407d"/>
+      <stop offset="42%" stop-color="#1a1f49"/>
+      <stop offset="100%" stop-color="#060a1b"/>
+    </radialGradient>
+    <radialGradient id="shieldMidDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#7c59ff"/>
+      <stop offset="44%" stop-color="#4f31b8"/>
+      <stop offset="100%" stop-color="#241145"/>
+    </radialGradient>
+    <radialGradient id="shieldInnerDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#9f7eff"/>
+      <stop offset="52%" stop-color="#6555f2"/>
+      <stop offset="100%" stop-color="#332274"/>
+    </radialGradient>
+    <radialGradient id="shieldCoreDisc" cx="34%" cy="28%" r="78%">
+      <stop offset="0%" stop-color="#d6cbff"/>
+      <stop offset="34%" stop-color="#b8a8ff"/>
+      <stop offset="100%" stop-color="#8b74ff"/>
+    </radialGradient>
+    <linearGradient id="shieldRimStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c8beff"/>
+      <stop offset="38%" stop-color="#8d6fff"/>
+      <stop offset="100%" stop-color="#1a1139"/>
+    </linearGradient>
+    <linearGradient id="shieldMidStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ede6ff"/>
+      <stop offset="46%" stop-color="#8fce76"/>
+      <stop offset="100%" stop-color="#2c1758"/>
+    </linearGradient>
+    <linearGradient id="shieldInnerStroke" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#efe8ff"/>
+      <stop offset="44%" stop-color="#9f86ff"/>
+      <stop offset="100%" stop-color="#33235c"/>
+    </linearGradient>
+    <pattern id="meshPattern" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="13" cy="13" r="2.7" fill="#2d1e4a" opacity="0.6"/>
+    </pattern>
+    <filter id="outerGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="16" result="glow"/>
+      <feMerge>
+        <feMergeNode in="glow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .guide-title { fill: #21113f; font-family: Arial, Helvetica, sans-serif; font-size: 46px; font-weight: 700; }
+      .guide-copy { fill: #52436f; font-family: Arial, Helvetica, sans-serif; font-size: 28px; }
+      .guide-small { fill: #6a5a87; font-family: Arial, Helvetica, sans-serif; font-size: 24px; }
+      .cut-line { fill: url(#shirtBase); stroke: #b896ff; stroke-width: 8; }
+      .safe-line { fill: none; stroke: #efe4ff; stroke-width: 4; stroke-dasharray: 18 16; opacity: 0.92; }
+      .panel-label { fill: #2a184c; font-family: Arial, Helvetica, sans-serif; font-size: 42px; font-weight: 700; }
+      .panel-note { fill: #efe8ff; font-family: Arial, Helvetica, sans-serif; font-size: 24px; }
+      .brand-main { fill: #fbf8ff; font-family: Impact, Arial Black, sans-serif; font-size: 118px; font-weight: 900; letter-spacing: 6px; }
+      .brand-sub { fill: #c2b1e3; font-family: Arial, Helvetica, sans-serif; font-size: 42px; letter-spacing: 9px; font-weight: 700; }
+      .back-name { fill: #ffffff; stroke: #f3c94b; stroke-width: 16; paint-order: stroke fill; font-family: Impact, Arial Black, sans-serif; font-size: 180px; font-weight: 900; letter-spacing: 2px; }
+      .back-name-shadow { fill: none; stroke: #7d42db; stroke-width: 38; opacity: 0.95; }
+      .contact-line { fill: #fbf8ff; font-family: Arial, Helvetica, sans-serif; font-size: 58px; font-weight: 700; }
+      .contact-accent { fill: #f3c94b; font-family: Arial, Helvetica, sans-serif; font-size: 58px; font-weight: 700; }
+      .mini-label { fill: #2a184c; font-family: Arial, Helvetica, sans-serif; font-size: 26px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="4800" height="3200" fill="url(#pageBg)"/>
+  <rect x="70" y="70" width="4660" height="3060" rx="28" fill="#ffffff" stroke="#d7ccf0" stroke-width="6"/>
+
+  <text x="140" y="185" class="guide-title">EduDash Pro Sport / Esports Layout</text>
+  <text x="140" y="232" class="guide-copy">Alternative jersey-style design using the raglan collar and shoulder layout from your reference, adapted to the EduDash Pro purple visual system.</text>
+  <text x="140" y="272" class="guide-small">Open in CorelDRAW, move each group to its own layer, and replace the cut shape with the printer's exact pattern before final output.</text>
+
+  <g id="palette" transform="translate(3920 2250)">
+    <text x="0" y="0" class="guide-title">Palette</text>
+    <g transform="translate(0 32)">
+      <rect x="0" y="0" width="88" height="88" rx="12" fill="#17062f"/>
+      <text x="112" y="55" class="mini-label">Night Purple - #17062F</text>
+      <rect x="0" y="108" width="88" height="88" rx="12" fill="#7b36d9"/>
+      <text x="112" y="163" class="mini-label">Brand Purple - #7B36D9</text>
+      <rect x="0" y="216" width="88" height="88" rx="12" fill="#41b7ff"/>
+      <text x="112" y="271" class="mini-label">Electric Blue - #41B7FF</text>
+      <rect x="0" y="324" width="88" height="88" rx="12" fill="#f3c94b"/>
+      <text x="112" y="379" class="mini-label">Gold Accent - #F3C94B</text>
+      <rect x="0" y="432" width="88" height="88" rx="12" fill="#fbf8ff" stroke="#c9bae8" stroke-width="3"/>
+      <text x="112" y="487" class="mini-label">Warm White - #FBF8FF</text>
+    </g>
+  </g>
+
+  <g id="front-raglan" transform="translate(320 510)">
+    <text x="760" y="-68" text-anchor="middle" class="panel-label">Front Design</text>
+
+    <path class="cut-line" d="M348,70 L1162,70 L1450,292 L1330,1960 L180,1960 L60,292 Z"/>
+    <path class="safe-line" d="M424,128 L1086,128 L1366,332 L1266,1894 L244,1894 L144,332 Z"/>
+
+    <path d="M564,70 C604,164 916,164 956,70" fill="none" stroke="#b996ff" stroke-width="8"/>
+    <path d="M560,74 C594,126 692,194 760,194 C828,194 926,126 960,74" fill="none" stroke="url(#accentPurple)" stroke-width="82" stroke-linecap="round"/>
+
+    <path d="M128,352 C248,178 432,112 560,74" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+    <path d="M1392,352 C1272,178 1088,112 960,74" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+
+    <path d="M252,382 C356,282 450,222 520,196" fill="none" stroke="#41b7ff" stroke-width="26" stroke-linecap="round" opacity="0.95"/>
+    <path d="M1268,382 C1164,282 1070,222 1000,196" fill="none" stroke="#41b7ff" stroke-width="26" stroke-linecap="round" opacity="0.95"/>
+
+    <path d="M132,332 L364,180 L554,188 L364,468 L206,890 L84,860 Z" fill="#1c1238" opacity="0.92"/>
+    <path d="M1388,332 L1156,180 L966,188 L1156,468 L1314,890 L1436,860 Z" fill="#1c1238" opacity="0.92"/>
+
+    <path d="M356,542 C312,860 312,1210 386,1810" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+    <path d="M1164,542 C1208,860 1208,1210 1134,1810" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+    <path d="M388,586 C348,928 354,1240 424,1782" fill="none" stroke="#2c1d48" stroke-width="48" stroke-linecap="round"/>
+    <path d="M1132,586 C1172,928 1166,1240 1096,1782" fill="none" stroke="#2c1d48" stroke-width="48" stroke-linecap="round"/>
+
+    <rect x="404" y="230" width="712" height="642" rx="28" fill="url(#meshPattern)" opacity="0.58"/>
+
+    <g transform="translate(760 658)">
+      <circle cx="0" cy="-186" r="224" fill="#050916" opacity="0.32" filter="url(#outerGlow)"/>
+      <circle cx="-72" cy="-256" r="118" fill="#1594c4" opacity="0.16" filter="url(#outerGlow)"/>
+      <circle cx="92" cy="-88" r="102" fill="#c58a18" opacity="0.14" filter="url(#outerGlow)"/>
+      <circle cx="0" cy="-186" r="160" fill="url(#shieldOuterDisc)"/>
+      <circle cx="0" cy="-186" r="160" fill="none" stroke="url(#shieldRimStroke)" stroke-width="12"/>
+      <circle cx="0" cy="-186" r="124" fill="url(#shieldMidDisc)"/>
+      <circle cx="0" cy="-186" r="124" fill="none" stroke="url(#shieldMidStroke)" stroke-width="10"/>
+      <circle cx="0" cy="-186" r="92" fill="url(#shieldInnerDisc)"/>
+      <circle cx="0" cy="-186" r="92" fill="none" stroke="url(#shieldInnerStroke)" stroke-width="8"/>
+      <circle cx="0" cy="-186" r="58" fill="url(#shieldCoreDisc)"/>
+      <circle cx="0" cy="-186" r="22" fill="#cbc0ff" opacity="0.86"/>
+      <circle cx="0" cy="-186" r="6" fill="#f4efff"/>
+      <ellipse cx="-40" cy="-228" rx="44" ry="24" fill="#ffffff" opacity="0.16" transform="rotate(-18 -40 -228)"/>
+      <path d="M-132 -272 A 156 156 0 0 1 92 -310" fill="none" stroke="#ffffff" stroke-width="7" opacity="0.18" stroke-linecap="round"/>
+      <path d="M92 -58 A 132 132 0 0 1 -58 -28" fill="none" stroke="#0b0717" stroke-width="10" opacity="0.34" stroke-linecap="round"/>
+      <circle cx="0" cy="-186" r="140" fill="none" stroke="#8f63ff" stroke-width="3" opacity="0.84"/>
+      <circle cx="0" cy="-186" r="108" fill="none" stroke="#8ecf76" stroke-width="3" opacity="0.58"/>
+      <circle cx="-146" cy="-306" r="4" fill="#f3c94b"/>
+      <circle cx="-112" cy="-232" r="3" fill="#b993ff"/>
+      <circle cx="132" cy="-306" r="4" fill="#5ad0ff"/>
+      <circle cx="162" cy="-168" r="4" fill="#f3c94b"/>
+      <circle cx="-128" cy="-74" r="3" fill="#f0e7ff"/>
+    </g>
+
+    <text x="760" y="1016" text-anchor="middle" class="brand-main">EDUDASH PRO</text>
+    <line x1="468" y1="1052" x2="1052" y2="1052" stroke="url(#goldLine)" stroke-width="8"/>
+    <text x="760" y="1124" text-anchor="middle" class="brand-sub">EMPOWERING EDUCATION</text>
+
+    <rect x="434" y="1642" width="652" height="172" rx="26" fill="url(#meshPattern)" opacity="0.38"/>
+    <text x="760" y="1906" text-anchor="middle" class="panel-note">Sport-cut front with raglan shoulders, curved side panels, central EduDash orb, and bold brand lockup.</text>
+  </g>
+
+  <g id="back-raglan" transform="translate(2430 510)">
+    <text x="760" y="-68" text-anchor="middle" class="panel-label">Back Design</text>
+
+    <path class="cut-line" d="M348,70 L1162,70 L1450,292 L1330,1960 L180,1960 L60,292 Z"/>
+    <path class="safe-line" d="M424,128 L1086,128 L1366,332 L1266,1894 L244,1894 L144,332 Z"/>
+
+    <path d="M564,70 C604,164 916,164 956,70" fill="none" stroke="#b996ff" stroke-width="8"/>
+    <path d="M560,74 C594,126 692,194 760,194 C828,194 926,126 960,74" fill="none" stroke="url(#accentPurple)" stroke-width="82" stroke-linecap="round"/>
+    <path d="M128,352 C248,178 432,112 560,74" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+    <path d="M1392,352 C1272,178 1088,112 960,74" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+    <path d="M356,542 C312,860 312,1210 386,1810" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+    <path d="M1164,542 C1208,860 1208,1210 1134,1810" fill="none" stroke="url(#accentPurple)" stroke-width="90" stroke-linecap="round"/>
+
+    <g opacity="0.56">
+      <circle cx="282" cy="340" r="126" fill="url(#centerGlow)"/>
+      <circle cx="282" cy="340" r="164" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="282" cy="340" r="228" fill="none" stroke="#8244e0" stroke-width="4"/>
+      <circle cx="1232" cy="338" r="126" fill="url(#centerGlow)"/>
+      <circle cx="1232" cy="338" r="164" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="1232" cy="338" r="228" fill="none" stroke="#8244e0" stroke-width="4"/>
+      <circle cx="252" cy="1528" r="126" fill="url(#centerGlow)"/>
+      <circle cx="252" cy="1528" r="164" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="252" cy="1528" r="228" fill="none" stroke="#8244e0" stroke-width="4"/>
+      <circle cx="1264" cy="1514" r="126" fill="url(#centerGlow)"/>
+      <circle cx="1264" cy="1514" r="164" fill="none" stroke="#8244e0" stroke-width="8"/>
+      <circle cx="1264" cy="1514" r="228" fill="none" stroke="#8244e0" stroke-width="4"/>
+    </g>
+
+    <text x="760" y="592" text-anchor="middle" class="back-name-shadow">KING</text>
+    <text x="760" y="592" text-anchor="middle" class="back-name">KING</text>
+    <line x1="434" y1="652" x2="1086" y2="652" stroke="url(#goldLine)" stroke-width="8"/>
+
+    <text x="760" y="824" text-anchor="middle" class="contact-line">www.edudashpro.org.za</text>
+    <text x="760" y="920" text-anchor="middle" class="contact-accent">info@edudashpro.org.za</text>
+    <text x="760" y="1016" text-anchor="middle" class="contact-line">0674770975</text>
+
+    <rect x="402" y="1226" width="716" height="278" rx="28" fill="url(#meshPattern)" opacity="0.36"/>
+    <text x="760" y="1768" text-anchor="middle" class="panel-note">Use this back for staff, event, or esports-style promo shirts. Replace &quot;KING&quot; with role, surname, or branch name.</text>
+  </g>
+
+  <g id="designer-notes" transform="translate(140 2790)">
+    <text x="0" y="0" class="guide-title">Designer Notes</text>
+    <text x="0" y="42" class="guide-copy">1. This layout is intentionally more athletic than the first template: collar ring, raglan shoulder arcs, side contour panels, and stronger center focus.</text>
+    <text x="0" y="84" class="guide-copy">2. Open the SVG in CorelDRAW and convert live text to curves before final export.</text>
+    <text x="0" y="126" class="guide-copy">3. If you need exact sublimation panels, ask the supplier for the graded front/back sleeve pattern and replace the template cut lines.</text>
+    <text x="0" y="168" class="guide-copy">4. This version works well for expo staff shirts, esports activations, school showcase events, and branded promo wear.</text>
+  </g>
+</svg>

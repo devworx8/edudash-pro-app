@@ -7,9 +7,9 @@
 
 import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { router } from 'expo-router';
 import { TierBadge } from '@/components/ui/TierBadge';
 import { getTierInfo, getExclusiveCapabilities, type Tier, type DashCapability } from '@/lib/ai/capabilities';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 export interface UpgradePromptModalProps {
   visible: boolean;
@@ -35,7 +35,10 @@ export function UpgradePromptModal({
 
   const handleUpgrade = () => {
     onClose();
-    router.push('/screens/subscription-upgrade-post');
+    navigateToUpgrade({
+      source: 'upgrade_modal',
+      reason: 'feature_needed',
+    });
   };
 
   return (

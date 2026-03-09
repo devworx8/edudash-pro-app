@@ -10,6 +10,7 @@ import { PayrollService } from '@/services/PayrollService';
 
 import type {
   ApprovePopPaymentPayload,
+  ApprovePopPaymentResult,
   FinanceControlCenterBundle,
   FinanceMonthSnapshot,
 } from '@/types/finance';
@@ -172,6 +173,7 @@ export async function getMonthPaymentBreakdown(
 
     const metadata =
       payment?.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
+    if (metadata?.exclude_from_finance_metrics === true) continue;
     const categoryCode = inferFeeCategoryCode(
       payment?.category_code ||
         metadata?.category_code ||
@@ -305,11 +307,7 @@ export async function getMonthPaymentBreakdown(
 
 export async function approvePOPWithAllocations(
   payload: ApprovePopPaymentPayload,
-): Promise<{
-  paymentId?: string;
-  allocatedAmount: number;
-  overpaymentAmount: number;
-}> {
+): Promise<ApprovePopPaymentResult> {
   const supabase = assertSupabase();
   const { data, error } = await supabase.rpc('approve_pop_payment', {
     p_upload_id: payload.uploadId,
@@ -332,6 +330,9 @@ export async function approvePOPWithAllocations(
     paymentId: data.payment_id,
     allocatedAmount: Number(data.allocated_amount || 0),
     overpaymentAmount: Number(data.overpayment_amount || 0),
+    feeIds: Array.isArray(data.fee_ids)
+      ? data.fee_ids.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [],
   };
 }
 

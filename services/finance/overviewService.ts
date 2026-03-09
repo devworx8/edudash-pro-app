@@ -193,7 +193,11 @@ export async function getOverview(preschoolId?: string): Promise<FinanceOverview
       };
 
       (fallbackPayments || [])
-        .filter((payment) => ['completed', 'approved'].includes(String(payment?.status)))
+        .filter((payment) => {
+          if (!['completed', 'approved'].includes(String(payment?.status))) return false;
+          const metadata = payment?.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
+          return metadata?.exclude_from_finance_metrics !== true;
+        })
         .forEach((payment) => {
           const date = getAccountingDate(payment);
           if (!date) return;

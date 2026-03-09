@@ -37,6 +37,13 @@ export interface ApprovePopPaymentPayload {
   notes?: string;
 }
 
+export interface ApprovePopPaymentResult {
+  paymentId?: string;
+  allocatedAmount: number;
+  overpaymentAmount: number;
+  feeIds: string[];
+}
+
 export interface FinanceMonthCategoryRow {
   category_code: FeeCategoryCode;
   due: number;

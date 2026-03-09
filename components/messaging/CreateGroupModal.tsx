@@ -41,6 +41,31 @@ import {
 type GroupType = 'class_group' | 'parent_group' | 'announcement';
 type Step = 'type' | 'details' | 'members' | 'confirm';
 
+// ─── Emoji auto-mapping by class name keywords ───────────────────
+const CLASS_EMOJI_MAP: Record<string, string> = {
+  art: '🎨', craft: '🎨', draw: '🎨',
+  science: '🔬', stem: '🔬', lab: '🔬',
+  sport: '⚽', pe: '⚽', physical: '⚽', athletics: '⚽',
+  music: '🎵', choir: '🎵', band: '🎵', sing: '🎵',
+  math: '📐', maths: '📐', numeracy: '📐',
+  english: '📖', reading: '📖', literacy: '📖', language: '📖',
+  history: '🏛️', social: '🏛️',
+  geography: '🌍', nature: '🌿', garden: '🌿',
+  tech: '💻', computer: '💻', coding: '💻', ict: '💻',
+  drama: '🎭', theatre: '🎭',
+  nursery: '🧒', reception: '🧒', grade_r: '🧒', 'grade r': '🧒',
+  baby: '👶', toddler: '👶',
+};
+const EMOJI_OPTIONS = ['📚', '🎨', '🔬', '⚽', '🎵', '📐', '📖', '🏛️', '🌍', '💻', '🎭', '🧒', '👶', '🌿', '🌟', '💡', '📝', '🎓', '🏫', '❤️'];
+
+function autoSelectEmoji(className: string): string {
+  const lower = className.toLowerCase();
+  for (const [keyword, emoji] of Object.entries(CLASS_EMOJI_MAP)) {
+    if (lower.includes(keyword)) return emoji;
+  }
+  return '📚';
+}
+
 interface CreateGroupModalProps {
   visible: boolean;
   onClose: () => void;
@@ -105,6 +130,7 @@ export function CreateGroupModal({
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [audience, setAudience] = useState<'all_parents' | 'all_teachers' | 'all_staff' | 'everyone'>('all_parents');
+  const [groupEmoji, setGroupEmoji] = useState<string>('📚');
 
   const { data: members = [], isLoading: membersLoading } = useOrgMembers();
   const { data: classes = [], isLoading: classesLoading } = useOrgClasses();
@@ -142,6 +168,7 @@ export function CreateGroupModal({
     setSelectedMembers([]);
     setSearchQuery('');
     setAudience('all_parents');
+    setGroupEmoji('📚');
   }, []);
 
   const handleClose = useCallback(() => {
@@ -157,6 +184,12 @@ export function CreateGroupModal({
       setStep('details');
     }
   }, []);
+
+  const handleSelectClass = useCallback((classId: string) => {
+    setSelectedClassId(classId);
+    const cls = classes.find((c) => c.id === classId);
+    if (cls) setGroupEmoji(autoSelectEmoji(cls.name));
+  }, [classes]);
 
   const handleNextFromDetails = useCallback(() => {
     if (!groupName.trim()) {
@@ -211,6 +244,16 @@ export function CreateGroupModal({
           classId: selectedClassId,
           groupName: groupName.trim() || undefined,
         });
+        // Set group emoji on the newly created thread
+        if (threadId && groupEmoji) {
+          try {
+            const client = (await import('@/lib/supabase')).assertSupabase();
+            await client
+              .from('message_threads')
+              .update({ group_emoji: groupEmoji })
+              .eq('id', threadId);
+          } catch {}
+        }
       } else if (groupType === 'parent_group') {
         threadId = await createParentGroup.mutateAsync({
           groupName: groupName.trim(),
@@ -237,6 +280,7 @@ export function CreateGroupModal({
     groupType,
     selectedClassId,
     groupName,
+    groupEmoji,
     selectedMembers,
     description,
     audience,
@@ -467,7 +511,7 @@ export function CreateGroupModal({
                         borderWidth: 2,
                       },
                     ]}
-                    onPress={() => setSelectedClassId(cls.id)}
+                    onPress={() => handleSelectClass(cls.id)}
                   >
                     <Ionicons
                       name={
@@ -478,9 +522,16 @@ export function CreateGroupModal({
                       size={22}
                       color={selectedClassId === cls.id ? accentColor : subtextColor}
                     />
-                    <Text style={[styles.selectItemText, { color: textColor }]}>
-                      {cls.name}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.selectItemText, { color: textColor }]}>
+                        {cls.name}
+                      </Text>
+                      {(cls.parent_count != null || cls.teacher_id) && (
+                        <Text style={[styles.classSubtext, { color: subtextColor }]}>
+                          {cls.parent_count ?? 0} parents{cls.teacher_id ? ', 1 teacher' : ''}
+                        </Text>
+                      )}
+                    </View>
                   </TouchableOpacity>
                 ))
               )}
@@ -495,6 +546,25 @@ export function CreateGroupModal({
                 value={groupName}
                 onChangeText={setGroupName}
               />
+
+              <Text style={[styles.sectionTitle, { color: subtextColor, marginTop: 8 }]}>
+                Group Emoji
+              </Text>
+              <View style={styles.emojiGrid}>
+                {EMOJI_OPTIONS.map((emoji) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={[
+                      styles.emojiCell,
+                      { borderColor: groupEmoji === emoji ? accentColor : borderColor },
+                      groupEmoji === emoji && { borderWidth: 2, backgroundColor: accentColor + '15' },
+                    ]}
+                    onPress={() => setGroupEmoji(emoji)}
+                  >
+                    <Text style={styles.emojiCellText}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </>
           )}
 
@@ -625,7 +695,7 @@ export function CreateGroupModal({
                       Class
                     </Text>
                     <Text style={[styles.summaryValue, { color: textColor }]}>
-                      {selectedClassName}
+                      {groupEmoji} {selectedClassName}
                     </Text>
                   </>
                 )}
@@ -753,6 +823,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   selectItemText: { fontSize: 15, fontWeight: '500' },
+  classSubtext: { fontSize: 12, marginTop: 2 },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  emojiCell: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiCellText: { fontSize: 22 },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',

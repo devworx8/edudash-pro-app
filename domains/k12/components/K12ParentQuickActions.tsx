@@ -10,6 +10,7 @@
 import React, { useMemo, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { ThemeColors } from '@/contexts/ThemeContext';
 import type { K12ParentActionId } from '@/lib/navigation/k12ParentActionMap';
@@ -96,10 +97,11 @@ export function K12ParentQuickActions({
 
   const quickActions: QuickAction[] = useMemo(() => [
     { id: 'homework', actionId: 'homework', icon: 'document-text', label: t('dashboard.parent.nav.homework', { defaultValue: 'Homework' }), color: '#06B6D4' },
-    { id: 'messages', actionId: 'messages', icon: 'chatbubbles', label: t('navigation.messages', { defaultValue: 'Messages' }), color: '#3B82F6' },
-    { id: 'children', actionId: 'children', icon: 'people', label: t('dashboard.parent.nav.my_children', { defaultValue: 'My Children' }), color: '#4F46E5' },
+    { id: 'calculator', actionId: 'calculator', icon: 'calculator', label: t('dashboard.parent.nav.calculator', { defaultValue: 'Calculator' }), color: '#34D399' },
+    { id: 'messages', actionId: 'messages', icon: 'chatbubbles', label: t('navigation.messages', { defaultValue: 'Messages' }), color: '#38BDF8' },
+    { id: 'children', actionId: 'children', icon: 'people', label: t('dashboard.parent.nav.my_children', { defaultValue: 'My Children' }), color: '#7C3AED' },
     { id: 'payments', actionId: 'payments', icon: 'card', label: t('dashboard.parent.nav.payments', { defaultValue: 'Payments' }), color: '#8B5CF6' },
-    { id: 'attendance', actionId: 'attendance', icon: 'calendar-outline', label: t('dashboard.parent.nav.attendance', { defaultValue: 'Attendance' }), color: '#F59E0B' },
+    { id: 'attendance', actionId: 'attendance', icon: 'calendar-outline', label: t('dashboard.parent.nav.attendance', { defaultValue: 'Attendance' }), color: '#F8CA59' },
     { id: 'progress', actionId: 'progress', icon: 'ribbon', label: t('dashboard.progress', { defaultValue: 'Progress' }), color: '#10B981' },
   ], [t]);
 
@@ -119,15 +121,25 @@ export function K12ParentQuickActions({
         {quickActions.map((action) => {
           const needsAttention = action.id === 'payments' && paymentsNeedAttention;
           const cardColor = action.color;
+          const isMessagesCard = action.id === 'messages';
           const cardContent = (
             <TouchableOpacity
               style={[
                 styles.quickActionCard,
                 compactLayout ? styles.quickActionCardCompact : styles.quickActionCardRegular,
                 {
-                  backgroundColor: quickWinsEnabled ? 'rgba(255,255,255,0.06)' : theme.surfaceVariant,
-                  borderColor: needsAttention ? cardColor + '80' : (quickWinsEnabled ? 'rgba(255,255,255,0.08)' : theme.border),
+                  backgroundColor: isMessagesCard ? 'rgba(17, 30, 62, 0.92)' : (quickWinsEnabled ? 'rgba(255,255,255,0.06)' : theme.surfaceVariant),
+                  borderColor: needsAttention
+                    ? cardColor + '80'
+                    : isMessagesCard
+                      ? 'rgba(56, 189, 248, 0.32)'
+                      : (quickWinsEnabled ? 'rgba(255,255,255,0.08)' : theme.border),
                   borderWidth: needsAttention ? 1.5 : 1,
+                  shadowColor: isMessagesCard ? '#38BDF8' : '#000',
+                  shadowOpacity: isMessagesCard ? 0.18 : 0,
+                  shadowRadius: isMessagesCard ? 16 : 0,
+                  shadowOffset: { width: 0, height: 8 },
+                  elevation: isMessagesCard ? 6 : 0,
                 },
               ]}
               onPress={() => onActionPress(action.actionId)}
@@ -135,14 +147,24 @@ export function K12ParentQuickActions({
               accessibilityRole="button"
               accessibilityLabel={action.label}
             >
-              <View style={[styles.quickActionIcon, { backgroundColor: cardColor + '20' }]}>
+              <LinearGradient
+                colors={
+                  isMessagesCard
+                    ? ['rgba(56, 189, 248, 0.32)', 'rgba(124, 58, 237, 0.22)']
+                    : [cardColor + '28', 'rgba(255,255,255,0.04)']
+                }
+                style={[
+                  styles.quickActionIcon,
+                  { backgroundColor: 'transparent', borderWidth: 1, borderColor: isMessagesCard ? 'rgba(56, 189, 248, 0.28)' : 'rgba(255,255,255,0.05)' },
+                ]}
+              >
                 <Ionicons name={action.icon as keyof typeof Ionicons.glyphMap} size={24} color={cardColor} />
                 {needsAttention && (
                   <View style={[attentionBadgeStyles.badge, { backgroundColor: theme.warning || '#F59E0B' }]}>
                     <Ionicons name="alert-circle" size={12} color="#fff" />
                   </View>
                 )}
-              </View>
+              </LinearGradient>
               <Text style={[styles.quickActionLabel, { color: theme.text }]} numberOfLines={2}>
                 {action.label}
               </Text>

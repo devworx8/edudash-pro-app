@@ -153,6 +153,7 @@ async function sendFCMDataMessage(
       data: {
         type: 'incoming_call',
         call_id: callData.call_id,
+        callee_id: callData.callee_user_id,
         caller_id: callData.caller_id,
         caller_name: callData.caller_name,
         call_type: callData.call_type,

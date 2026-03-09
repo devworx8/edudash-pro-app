@@ -55,6 +55,7 @@ interface NotificationContext {
   reminder_kind?: string;
   pop_upload_prompt?: string;
   call_id?: string;
+  callee_id?: string;
   caller_id?: string;
   caller_name?: string;
   call_type?: string;
@@ -152,6 +153,7 @@ interface NotificationRequest {
   subscription_id?: string;
   plan_tier?: string;
   call_id?: string;
+  callee_id?: string;
   caller_id?: string;
   caller_name?: string;
   call_type?: string;
@@ -288,7 +290,7 @@ function getNotificationTemplate(eventType: string, context: NotificationContext
         assignment_id: context.assignment_id,
         submission_id: context.submission_id,
         student_id: context.student_id,
-        screen: 'homework-details'
+        screen: 'homework-detail'
       },
       sound: 'default',
       badge: 1,
@@ -557,6 +559,7 @@ function getNotificationTemplate(eventType: string, context: NotificationContext
         type: 'incoming_call',
         call_id: context.call_id,
         callId: context.call_id,
+        callee_id: context.callee_id,
         caller_id: context.caller_id,
         caller_name: context.caller_name,
         call_type: context.call_type || 'voice',
@@ -2342,6 +2345,11 @@ async function getNotificationContext(request: NotificationRequest): Promise<Not
 
       case 'incoming_call':
         context.call_id = request.call_id;
+        context.callee_id =
+          request.callee_id ||
+          (typeof request.custom_payload?.callee_id === 'string'
+            ? request.custom_payload.callee_id
+            : undefined);
         context.caller_id = request.caller_id;
         context.caller_name = request.caller_name;
         context.call_type = request.call_type || 'voice';

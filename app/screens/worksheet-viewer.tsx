@@ -5,12 +5,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Share, Dimensions } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share, Dimensions } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { EducationalPDFService } from '@/lib/services/EducationalPDFService';
 import * as Sharing from 'expo-sharing';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 const { width } = Dimensions.get('window');
@@ -48,6 +49,7 @@ interface WorksheetData {
 export default function WorksheetViewer() {
   const { theme, isDark } = useTheme();
   const params = useLocalSearchParams();
+  const { showAlert, alertProps } = useAlertModal();
   const [worksheet, setWorksheet] = useState<WorksheetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -59,7 +61,7 @@ export default function WorksheetViewer() {
   const loadWorksheetData = async () => {
     try {
       if (!params.worksheetId) {
-        Alert.alert('Error', 'No worksheet ID provided');
+        showAlert({ title: 'Error', message: 'No worksheet ID provided', type: 'error' });
         router.back();
         return;
       }
@@ -107,7 +109,7 @@ export default function WorksheetViewer() {
       }
     } catch (error) {
       console.error('Failed to load worksheet:', error);
-      Alert.alert('Error', 'Failed to load worksheet');
+      showAlert({ title: 'Error', message: 'Failed to load worksheet', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -273,20 +275,21 @@ export default function WorksheetViewer() {
       }
 
       if (pdfResult.success && pdfResult.filePath) {
-        Alert.alert(
-          'PDF Generated!',
-          'Your worksheet PDF is ready to download.',
-          [
+        showAlert({
+          title: 'PDF Generated!',
+          message: 'Your worksheet PDF is ready to download.',
+          type: 'success',
+          buttons: [
             { text: 'View', onPress: () => sharePDF(pdfResult.filePath!) },
-            { text: 'OK' }
-          ]
-        );
+            { text: 'OK' },
+          ],
+        });
       } else {
-        Alert.alert('Error', pdfResult.error || 'Failed to generate PDF');
+        showAlert({ title: 'Error', message: pdfResult.error || 'Failed to generate PDF', type: 'error' });
       }
     } catch (error) {
       console.error('PDF generation failed:', error);
-      Alert.alert('Error', 'Failed to generate PDF');
+      showAlert({ title: 'Error', message: 'Failed to generate PDF', type: 'error' });
     } finally {
       setGenerating(false);
     }
@@ -298,11 +301,11 @@ export default function WorksheetViewer() {
       if (isAvailable) {
         await Sharing.shareAsync(filePath);
       } else {
-        Alert.alert('Share Not Available', 'Sharing is not available on this device');
+        showAlert({ title: 'Share Not Available', message: 'Sharing is not available on this device', type: 'warning' });
       }
     } catch (error) {
       console.error('Failed to share PDF:', error);
-      Alert.alert('Error', 'Failed to share PDF');
+      showAlert({ title: 'Error', message: 'Failed to share PDF', type: 'error' });
     }
   };
 
@@ -532,6 +535,8 @@ export default function WorksheetViewer() {
 
         <View style={styles.bottomSpacing} />
       </ScrollView>
+
+      <AlertModal {...alertProps} />
     </View>
   );
 }

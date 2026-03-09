@@ -12,7 +12,7 @@ import { assertSupabase } from '../../../lib/supabase';
 
 // Azure Speech Services supported South African languages
 export const SUPPORTED_LANGUAGES = [
-  { code: 'en-ZA', name: 'English (South Africa)', voice: 'en-ZA-LeahNeural' },
+  { code: 'en-ZA', name: 'English (South Africa)', voice: 'en-ZA-LukeNeural' },
   { code: 'af-ZA', name: 'Afrikaans', voice: 'af-ZA-AdriNeural' },
   { code: 'zu-ZA', name: 'isiZulu', voice: 'zu-ZA-ThandoNeural' },
 ] as const;

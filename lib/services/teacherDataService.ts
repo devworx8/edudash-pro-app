@@ -48,6 +48,19 @@ export class TeacherDataService {
       const difficulty = params.difficultyLevel === 'easy' ? 1 : params.difficultyLevel === 'hard' ? 3 : 2
       const materials = Array.isArray(params.materialsNeeded) ? params.materialsNeeded.join(', ') : (params.materialsNeeded || null)
 
+      // Check if school requires principal approval for homework
+      let requiresApproval = false;
+      try {
+        const { data: schoolSettings } = await assertSupabase()
+          .from('preschools')
+          .select('teacher_can_send_homework')
+          .eq('id', tenantId)
+          .maybeSingle();
+        requiresApproval = schoolSettings?.teacher_can_send_homework === false;
+      } catch {
+        // Default to no approval required if setting doesn't exist
+      }
+
       const { data: assignment, error: aErr } = await assertSupabase()
         .from('homework_assignments')
         .insert({
@@ -64,8 +77,8 @@ export class TeacherDataService {
           difficulty_level: difficulty,
           is_required: params.isRequired ?? true,
           lesson_id: params.lessonId || null,
-          status: 'draft',
-          is_published: false,
+          status: requiresApproval ? 'draft' : 'active',
+          is_published: !requiresApproval,
           is_active: true,
         } as any)
         .select('id')

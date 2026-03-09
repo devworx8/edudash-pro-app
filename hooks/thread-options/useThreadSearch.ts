@@ -40,7 +40,7 @@ export function useThreadSearch({ threadId, setShowOptionsMenu }: UseThreadSearc
           .from('messages')
           .select(
             `id, content, content_type, created_at, sender_id,
-             sender:users!messages_sender_id_fkey(first_name, last_name, role)`
+             sender:profiles!messages_sender_id_fkey(first_name, last_name, role, avatar_url)`
           )
           .eq('thread_id', threadId)
           .is('deleted_at', null)

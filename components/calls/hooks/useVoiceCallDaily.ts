@@ -93,6 +93,7 @@ export interface VoiceCallDailyOptions {
   /** Initial call ID (for callee answering an existing call) */
   initialCallId?: string | null;
   threadId?: string;
+  isSwitchingMode?: boolean;
   isSpeakerEnabled: boolean;
   dailyRef: React.MutableRefObject<any>;
   callIdRef: React.MutableRefObject<string | null>;
@@ -121,6 +122,7 @@ export function useVoiceCallDaily({
   calleeId,
   initialCallId,
   threadId,
+  isSwitchingMode = false,
   isSpeakerEnabled,
   dailyRef,
   callIdRef,
@@ -311,6 +313,14 @@ export function useVoiceCallDaily({
         const user = sessionData.session?.user;
         if (!user) {
           throw new Error('Please sign in to make calls.');
+        }
+
+        if (isOwner && calleeId && calleeId === user.id) {
+          console.warn('[VoiceCallDaily] Blocking self-call attempt');
+          setError('You cannot call your own account.');
+          setCallState('ended');
+          setTimeout(() => onClose(), 500);
+          return;
         }
 
         if (isCleanedUp) return;
@@ -535,6 +545,10 @@ export function useVoiceCallDaily({
 
         daily.on('left-meeting', () => {
           console.log('[VoiceCallDaily] Left meeting - closing call UI');
+          if (cleanupInProgressRef.current) {
+            console.log('[VoiceCallDaily] left-meeting occurred during cleanup; skipping close callback');
+            return;
+          }
           setCallState('ended');
           stopAudio();
           // CRITICAL: Close the call interface when meeting is left
@@ -567,11 +581,45 @@ export function useVoiceCallDaily({
           const participants = daily.participants();
           const remoteParticipants = Object.values(participants).filter((p: any) => !p.local);
           
-          // End call if no remote participants remain (the other party hung up)
+          // End call if no remote participants remain (the other party hung up).
+          // Guard voice->video upgrades: remote leaves voice room briefly while
+          // both peers re-join with video; that should not end the call.
           if (remoteParticipants.length === 0) {
             console.log('[VoiceCallDaily] Last remote participant left - ending call');
             // Small delay to let any final events process
-            setTimeout(() => {
+            setTimeout(async () => {
+              if (cleanupInProgressRef.current) {
+                console.log('[VoiceCallDaily] Skip participant-left end while cleanup is in progress');
+                return;
+              }
+
+              if (isSwitchingMode) {
+                console.log('[VoiceCallDaily] Skip participant-left end during local switch-to-video');
+                return;
+              }
+
+              const activeId = callIdRef.current;
+              if (activeId) {
+                try {
+                  const { data: activeCall } = await getSupabase()
+                    .from('active_calls')
+                    .select('call_type, status, ended_at')
+                    .eq('call_id', activeId)
+                    .maybeSingle();
+
+                  if (
+                    activeCall?.call_type === 'video' &&
+                    activeCall.status !== 'ended' &&
+                    !activeCall.ended_at
+                  ) {
+                    console.log('[VoiceCallDaily] Skip participant-left end because call upgraded to video');
+                    return;
+                  }
+                } catch (statusError) {
+                  console.warn('[VoiceCallDaily] Failed to verify call status after participant-left:', statusError);
+                }
+              }
+
               // Use ref to get the latest endCall function
               if (endCallRef.current) {
                 endCallRef.current();
@@ -582,7 +630,7 @@ export function useVoiceCallDaily({
                 setCallState('ended');
                 onClose();
               }
-            }, 500);
+            }, 650);
           }
           
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
@@ -855,7 +903,7 @@ export function useVoiceCallDaily({
       isCleanedUp = true;
       cleanupCall();
     };
-  }, [isOpen, meetingUrl, userName, isOwner, calleeId, threadId]);
+  }, [isOpen, meetingUrl, userName, isOwner, calleeId, threadId, isSwitchingMode]);
 
   // Toggle microphone - use setLocalAudio for reliable mute/unmute
   const toggleAudio = useCallback(async () => {

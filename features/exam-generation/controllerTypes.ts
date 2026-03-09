@@ -25,6 +25,7 @@ export type UseExamGenerationControllerParams = {
   useTeacherContext: boolean;
   fallbackPolicy: string;
   qualityMode: string;
+  allowOverQuota: boolean;
   draftId?: string;
   savedExamId?: string;
   loadSaved: boolean;
@@ -51,4 +52,3 @@ export type ExamGenerationControllerSetters = {
   setStudyCoachPack: Dispatch<SetStateAction<ExamStudyCoachPack | null>>;
   setTeacherAlignment: Dispatch<SetStateAction<ExamTeacherAlignmentSummary | null>>;
 };
-

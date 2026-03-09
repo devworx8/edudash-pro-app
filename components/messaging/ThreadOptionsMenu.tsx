@@ -18,13 +18,12 @@ import {
   TouchableWithoutFeedback,
   StyleSheet,
   Animated,
-  Platform,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
+import { createThreadOptionsStyles } from './thread-options/styles';
 
 interface ThreadOptionsMenuProps {
   visible: boolean;
@@ -52,6 +51,8 @@ interface ThreadOptionsMenuProps {
   isPinned?: boolean;
   onSetNotificationMode?: (mode: 'all' | 'mentions' | 'muted') => void;
   notificationMode?: 'all' | 'mentions' | 'muted';
+  onToggleAutoTranslate?: () => void;
+  isAutoTranslateEnabled?: boolean;
 }
 
 interface OptionItemProps {
@@ -75,21 +76,28 @@ const OptionItem: React.FC<OptionItemProps> = ({
     optionItem: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: 14,
-      paddingHorizontal: 20,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      marginHorizontal: 14,
+      marginBottom: 8,
+      borderRadius: 18,
+      backgroundColor: 'rgba(16, 26, 52, 0.92)',
+      borderWidth: 1,
+      borderColor: 'rgba(125, 211, 252, 0.12)',
       opacity: disabled ? 0.5 : 1,
     },
     optionIcon: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+      width: 38,
+      height: 38,
+      borderRadius: 12,
       backgroundColor: destructive ? theme.error + '15' : theme.primary + '15',
       alignItems: 'center',
       justifyContent: 'center',
-      marginRight: 14,
+      marginRight: 12,
     },
     optionLabel: {
-      fontSize: 16,
+      fontSize: 15,
+      fontWeight: '600',
       color: destructive ? theme.error : theme.text,
       flex: 1,
     },
@@ -105,11 +113,16 @@ const OptionItem: React.FC<OptionItemProps> = ({
       <View style={styles.optionIcon}>
         <Ionicons 
           name={icon} 
-          size={22} 
+          size={20} 
           color={destructive ? theme.error : theme.primary} 
         />
       </View>
       <Text style={styles.optionLabel}>{label}</Text>
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={destructive ? theme.error : theme.textSecondary}
+      />
     </TouchableOpacity>
   );
 };
@@ -140,6 +153,8 @@ export const ThreadOptionsMenu: React.FC<ThreadOptionsMenuProps> = ({
   isPinned = false,
   onSetNotificationMode,
   notificationMode = 'all',
+  onToggleAutoTranslate,
+  isAutoTranslateEnabled = false,
 }) => {
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
@@ -172,74 +187,7 @@ export const ThreadOptionsMenu: React.FC<ThreadOptionsMenuProps> = ({
     setTimeout(callback, 100);
   };
 
-  const styles = StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'flex-end',
-    },
-    container: {
-      backgroundColor: theme.surface,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingBottom: insets.bottom + 16,
-      paddingTop: 8,
-      maxHeight: Dimensions.get('window').height * 0.8,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.15,
-          shadowRadius: 8,
-        },
-        android: {
-          elevation: 8,
-        },
-      }),
-    },
-    handle: {
-      width: 36,
-      height: 4,
-      backgroundColor: theme.border,
-      borderRadius: 2,
-      alignSelf: 'center',
-      marginTop: 8,
-      marginBottom: 12,
-    },
-    header: {
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      paddingTop: 12,
-    },
-    headerTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.text,
-      textAlign: 'center',
-    },
-    headerSubtitle: {
-      fontSize: 13,
-      color: theme.textSecondary,
-      textAlign: 'center',
-      marginTop: 2,
-    },
-    optionsContainer: {
-      paddingTop: 8,
-      paddingBottom: 8,
-    },
-    scrollContainer: {
-      flexGrow: 1,
-      maxHeight: Dimensions.get('window').height * 0.5,
-    },
-    divider: {
-      height: 1,
-      backgroundColor: theme.border,
-      marginVertical: 8,
-      marginHorizontal: 20,
-    },
-  });
+  const styles = createThreadOptionsStyles(theme, insets);
 
   if (!visible) return null;
 
@@ -322,6 +270,15 @@ export const ThreadOptionsMenu: React.FC<ThreadOptionsMenuProps> = ({
                   />
                 )}
                 
+                {onToggleAutoTranslate && (
+                  <OptionItem
+                    icon={isAutoTranslateEnabled ? 'language' : 'language-outline'}
+                    label={isAutoTranslateEnabled ? 'Auto-Translate: ON' : 'Auto-Translate Messages'}
+                    onPress={() => handleOptionPress(onToggleAutoTranslate)}
+                    theme={theme}
+                  />
+                )}
+
                 {onDisappearingMessages && (
                   <OptionItem
                     icon="timer-outline"

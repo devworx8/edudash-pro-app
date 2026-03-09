@@ -17,6 +17,7 @@ export interface ClassInfo {
 
 export interface Teacher {
   id: string;
+  teacher_record_id?: string;
   user_id?: string;
   full_name: string;
   email: string;

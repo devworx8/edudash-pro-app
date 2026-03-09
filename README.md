@@ -13,6 +13,12 @@ This repository contains all the functionality for Supabase CLI.
 - [x] Generating types directly from your database schema
 - [x] Making authenticated HTTP requests to [Management API](https://supabase.com/docs/reference/api/introduction)
 
+## Documentation Policy
+
+- The `docs/` folder is local-only and must not be tracked in git.
+- Codebase-critical guidance should be kept in this `README.md`.
+- Extended documentation should live in an external documentation location and be linked from this repository when needed.
+
 ## Getting started
 
 ### Install the CLI

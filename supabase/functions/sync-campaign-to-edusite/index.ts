@@ -6,8 +6,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-edudash-sync-signature, x-edudash-sync-timestamp',
 };
+
+const SIGNATURE_HEADER = 'x-edudash-sync-signature';
+const TIMESTAMP_HEADER = 'x-edudash-sync-timestamp';
+const SIGNATURE_TTL_MS = 5 * 60 * 1000;
 
 type SyncOperation = 'INSERT' | 'UPDATE' | 'DELETE' | 'FULL_SYNC';
 
@@ -59,9 +63,65 @@ function pickCampaignFields(record: Record<string, unknown>): Record<string, unk
   return filtered;
 }
 
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const payload = new TextEncoder().encode(input);
+  const digest = await crypto.subtle.digest('SHA-256', payload);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+async function verifyRequestSignature(req: Request, rawBody: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sharedSecret = (Deno.env.get('EDUSITE_SYNC_SHARED_SECRET') || '').trim();
+  if (!sharedSecret) {
+    return { ok: true };
+  }
+
+  const signedAt = req.headers.get(TIMESTAMP_HEADER) || '';
+  const signature = req.headers.get(SIGNATURE_HEADER) || '';
+
+  if (!signedAt || !signature) {
+    return { ok: false, error: 'Missing sync signature headers' };
+  }
+
+  const signedAtMs = Number.parseInt(signedAt, 10);
+  if (!Number.isFinite(signedAtMs)) {
+    return { ok: false, error: 'Invalid sync signature timestamp' };
+  }
+
+  if (Math.abs(Date.now() - signedAtMs) > SIGNATURE_TTL_MS) {
+    return { ok: false, error: 'Expired sync signature timestamp' };
+  }
+
+  const expectedSignature = await sha256Hex(`${rawBody}:${signedAt}:${sharedSecret}`);
+  if (!constantTimeEqual(signature, expectedSignature)) {
+    return { ok: false, error: 'Invalid sync signature' };
+  }
+
+  return { ok: true };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  if (req.method === 'GET') {
+    return new Response(JSON.stringify({
+      status: 'ok',
+      service: 'sync-campaign-to-edusite',
+      signature_required: Boolean((Deno.env.get('EDUSITE_SYNC_SHARED_SECRET') || '').trim()),
+    }), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   if (req.method !== 'POST') {
@@ -72,6 +132,15 @@ serve(async (req) => {
   }
 
   try {
+    const rawBody = await req.text();
+    const signatureCheck = await verifyRequestSignature(req, rawBody);
+    if (!signatureCheck.ok) {
+      return new Response(JSON.stringify({ error: signatureCheck.error }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const edusiteUrl = Deno.env.get('EDUSITE_SUPABASE_URL')
       || 'https://bppuzibjlxgfwrujzfsz.supabase.co';
     const edusiteKey = Deno.env.get('EDUSITE_SUPABASE_SERVICE_ROLE_KEY');
@@ -84,7 +153,7 @@ serve(async (req) => {
     }
 
     const edusite = createClient(edusiteUrl, edusiteKey);
-    const payload = (await req.json()) as SyncPayload;
+    const payload = ((rawBody ? JSON.parse(rawBody) : {}) as SyncPayload);
     const operation = payload.operation || 'UPDATE';
     const isFullSync = operation === 'FULL_SYNC' || payload.full_sync === true;
 

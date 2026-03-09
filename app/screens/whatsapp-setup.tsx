@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Switch } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +20,7 @@ interface WhatsAppSetupData {
 
 export default function WhatsAppSetupScreen() {
   const { profile, refreshProfile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'input' | 'verify'>('input');
   const [formData, setFormData] = useState<WhatsAppSetupData>({
@@ -52,7 +54,7 @@ export default function WhatsAppSetupScreen() {
 
   const handleSendVerification = async () => {
     if (!validatePhoneNumber(formData.whatsapp_number)) {
-      Alert.alert('Invalid Phone Number', 'Please enter a valid WhatsApp number including country code');
+      showAlert({ title: 'Invalid Phone Number', message: 'Please enter a valid WhatsApp number including country code', type: 'warning' });
       return;
     }
 
@@ -79,15 +81,15 @@ export default function WhatsAppSetupScreen() {
       }));
       setStep('verify');
       
-      Alert.alert(
-        'Verification Code Sent',
-        `We've sent a verification code to ${formattedNumber} via WhatsApp. Please enter the code below.`,
-        [{ text: 'OK' }]
-      );
+      showAlert({
+        title: 'Verification Code Sent',
+        message: `We've sent a verification code to ${formattedNumber} via WhatsApp. Please enter the code below.`,
+        type: 'success',
+      });
       
     } catch (error) {
       console.error('WhatsApp verification error:', error);
-      Alert.alert('Error', 'Failed to send verification code. Please try again.');
+      showAlert({ title: 'Error', message: 'Failed to send verification code. Please try again.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -95,7 +97,7 @@ export default function WhatsAppSetupScreen() {
 
   const handleVerifyCode = async () => {
     if (!formData.verification_code || formData.verification_code.length !== 6) {
-      Alert.alert('Invalid Code', 'Please enter the 6-digit verification code');
+      showAlert({ title: 'Invalid Code', message: 'Please enter the 6-digit verification code', type: 'warning' });
       return;
     }
 
@@ -131,16 +133,16 @@ export default function WhatsAppSetupScreen() {
       // Refresh profile to get updated data
       await refreshProfile?.();
       
-      Alert.alert(
-        'WhatsApp Setup Complete!',
-        formData.notifications_enabled 
+      showAlert({
+        title: 'WhatsApp Setup Complete!',
+        message: formData.notifications_enabled 
           ? 'You will now receive important notifications via WhatsApp.'
           : 'WhatsApp setup complete. You can enable notifications later in settings.',
-        [
+        type: 'success',
+        buttons: [
           {
             text: 'Continue',
             onPress: () => {
-              // Navigate back or to next onboarding step
               if (router.canGoBack()) {
                 router.back();
               } else {
@@ -149,21 +151,22 @@ export default function WhatsAppSetupScreen() {
             }
           }
         ]
-      );
+      });
       
     } catch (error) {
       console.error('WhatsApp verification error:', error);
-      Alert.alert('Verification Failed', 'Invalid code. Please try again.');
+      showAlert({ title: 'Verification Failed', message: 'Invalid code. Please try again.', type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
   const handleSkip = () => {
-    Alert.alert(
-      'Skip WhatsApp Setup?',
-      'You can set up WhatsApp notifications later in your profile settings.',
-      [
+    showAlert({
+      title: 'Skip WhatsApp Setup?',
+      message: 'You can set up WhatsApp notifications later in your profile settings.',
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Skip',
@@ -181,7 +184,7 @@ export default function WhatsAppSetupScreen() {
           }
         }
       ]
-    );
+    });
   };
 
   return (
@@ -391,6 +394,7 @@ export default function WhatsAppSetupScreen() {
           </View>
         </View>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

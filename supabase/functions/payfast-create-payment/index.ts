@@ -15,6 +15,7 @@ import { serve } from 'https://deno.land/std@0.214.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { createHash } from 'node:crypto';
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts';
+import { APP_URL } from '../_shared/urls.ts';
 
 // PayFast config
 const PAYFAST_MERCHANT_ID = Deno.env.get('PAYFAST_MERCHANT_ID') || '';
@@ -126,9 +127,8 @@ serve(async (req: Request) => {
     const paymentId = `EDUDASH-${tier}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Get the webhook URL (return URL after payment)
-    const appUrl = Deno.env.get('APP_URL') || 'https://app.edudashpro.org.za';
-    const returnUrl = `${appUrl}/payment/success?tier=${tier}`;
-    const cancelUrl = `${appUrl}/payment/cancel`;
+    const returnUrl = `${APP_URL}/payment/success?tier=${tier}`;
+    const cancelUrl = `${APP_URL}/payment/cancel`;
     const notifyUrl = `${SUPABASE_URL}/functions/v1/payfast-webhook`;
 
     // Build PayFast payment data

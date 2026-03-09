@@ -179,7 +179,7 @@ export const AD_PLACEMENTS: Record<string, AdPlacement> = {
     enabled: true,
   },
 
-  // Banner ad for membership dashboards (Soil of Africa, Youth President, etc.)
+  // Banner ad for membership dashboards (EduPro, Youth President, etc.)
   banner_membership_dashboard: {
     key: 'banner_membership_dashboard',
     type: 'banner',

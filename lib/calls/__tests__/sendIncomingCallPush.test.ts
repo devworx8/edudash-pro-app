@@ -143,4 +143,24 @@ describe('sendIncomingCallPush', () => {
     expect(result.fcmSuccessCount).toBe(1);
     expect(result.expoFallbackSent).toBe(true);
   });
+
+  it('blocks self-targeted incoming call push dispatch', async () => {
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await sendIncomingCallPush({
+      accessToken: 'token',
+      calleeUserId: 'same-user',
+      callId: 'call_5',
+      callerId: 'same-user',
+      callerName: 'Caller',
+      callType: 'voice',
+      source: 'TestSelfBlock',
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.fcmSuccessCount).toBe(0);
+    expect(result.expoFallbackSent).toBe(false);
+    expect(result.errorCodes).toEqual(['SELF_CALL_BLOCKED']);
+  });
 });

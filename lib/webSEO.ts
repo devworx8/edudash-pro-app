@@ -123,6 +123,6 @@ export const pricingSEO: SEOMetadata = {
     'preschool management cost'
   ],
   ogTitle: 'EduDash Pro Pricing - Start Free, Scale as You Grow',
-  ogDescription: 'Transparent pricing for AI-powered preschool management. Free tier available. Professional plans from R299/month. Enterprise solutions for large organizations.',
+  ogDescription: 'Transparent pricing for AI-powered school management. Free tier available. School plans from R399/month. Enterprise solutions for large organizations.',
   twitterCard: 'summary_large_image'
 };

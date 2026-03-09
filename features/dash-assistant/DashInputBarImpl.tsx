@@ -5,7 +5,7 @@
  * Extracted from DashAssistant for better maintainability.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, TextInput, TouchableOpacity, ScrollView, Text, Platform, Dimensions, Image, Animated, Easing, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
@@ -53,6 +53,16 @@ interface DashInputBarProps {
 }
 
 const WAVE_BARS = 7;
+const FULL_CHAT_COMPACT_HEIGHT = 42;
+const FULL_CHAT_GROW_THRESHOLD = 56;
+const FULL_CHAT_MAX_HEIGHT = 120;
+const FULL_CHAT_LINE_HEIGHT = 21;
+
+const estimateWrappedLineCount = (text: string, charsPerLine: number): number =>
+  String(text || '')
+    .replace(/\r/g, '')
+    .split('\n')
+    .reduce((total, line) => total + Math.max(1, Math.ceil(Math.max(line.length, 1) / charsPerLine)), 0);
 
 const RecordingWaveform: React.FC<{ active: boolean; color: string; mutedColor: string }> = ({
   active,
@@ -149,8 +159,29 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
   const { theme } = useTheme();
   const { width: screenWidth } = Dimensions.get('window');
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
-  const orbSize = screenWidth < 360 ? 42 : screenWidth < 400 ? 46 : 48;
+  const [isFocused, setIsFocused] = useState(false);
+  const [inputHeight, setInputHeight] = useState(FULL_CHAT_COMPACT_HEIGHT);
+  const orbSize = screenWidth < 360 ? 28 : screenWidth < 400 ? 30 : 32;
   const orbRingSize = orbSize + 14;
+  const webCharsPerLine = Math.max(22, Math.floor((screenWidth - 172) / 8));
+  const handleComposerTextChange = useCallback((text: string) => {
+    setInputText(text);
+    if (!text.trim()) {
+      setInputHeight(FULL_CHAT_COMPACT_HEIGHT);
+      return;
+    }
+    if (Platform.OS === 'web') {
+      const lineCount = estimateWrappedLineCount(text, webCharsPerLine);
+      const nextHeight = lineCount <= 1
+        ? FULL_CHAT_COMPACT_HEIGHT
+        : Math.min(FULL_CHAT_COMPACT_HEIGHT + (lineCount - 1) * FULL_CHAT_LINE_HEIGHT, FULL_CHAT_MAX_HEIGHT);
+      setInputHeight(nextHeight);
+    }
+  }, [setInputText, webCharsPerLine]);
+  const handleSubmit = useCallback(() => {
+    onSend();
+    setInputHeight(FULL_CHAT_COMPACT_HEIGHT);
+  }, [onSend]);
 
   const renderAttachmentStrip = () => (
     selectedAttachments.length === 0 ? null : (
@@ -330,7 +361,8 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
     : 0;
   // Avoid duplicate "thinking" UI: loading state is rendered by the
   // floating bottom thinking dock in DashAssistant shell.
-  const showVoiceStatus = isRecording || hasPartialTranscript || isSpeaking || showAutoSendCountdown;
+  // Speaking state is shown inline in the message bubble via SpeakingWaveIndicator.
+  const showVoiceStatus = isRecording || hasPartialTranscript || showAutoSendCountdown;
   const waveformActive = isRecording && recordingVoiceActivity;
   const statusToneColor = isRecording ? theme.error : (isLoading ? theme.primary : theme.textSecondary);
   const voiceStatusLabel = isRecording
@@ -339,9 +371,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       ? 'Auto-send armed'
     : isLoading
       ? 'Dash is thinking'
-      : isSpeaking
-        ? 'Dash is speaking'
-        : 'Transcript ready';
+      : 'Transcript ready';
   const voiceStatusHint = isRecording
     ? (hasPartialTranscript
       ? 'Keep speaking. Brief pauses are okay, Dash will keep listening.'
@@ -350,9 +380,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       ? `Auto-send in ${autoSendRemainingSeconds}s. Tap cancel if you still want to continue talking.`
     : isLoading
       ? 'Analyzing your request and preparing a response...'
-      : isSpeaking
-        ? 'Reading the latest answer aloud.'
-        : 'Tap send to submit or continue dictating.';
+      : 'Tap send to submit or continue dictating.';
   // Show conversation starters when chat is empty
   const canShowQuickChips = !hideQuickChips && !hasContent && !isRecording && !isLoading && !hasMessages;
 
@@ -470,11 +498,20 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       
       <View style={styles.inputRow}>
         {/* Input wrapper */}
-        <View style={[styles.inputWrapper, { backgroundColor: theme.inputBackground, borderColor: theme.inputBorder }]}>
+        <View
+          style={[
+            styles.inputWrapper,
+            {
+              backgroundColor: 'transparent',
+              shadowOpacity: 0,
+              elevation: 0,
+            },
+          ]}
+        >
           <View style={styles.inputAccessoryLeft}>
             {/* Attach files button */}
             <TouchableOpacity
-              style={styles.inputIconButton}
+              style={[styles.inputIconButton, { backgroundColor: theme.surface + 'AA' }]}
                 onPress={async () => {
                   try {
                     await Haptics.selectionAsync();
@@ -504,7 +541,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             {/* Camera button (hide while typing) */}
             {inputText.trim().length === 0 && !isRecording && (
               <TouchableOpacity
-                style={styles.inputIconButton}
+                style={[styles.inputIconButton, { backgroundColor: theme.surface + 'AA' }]}
                 onPress={async () => {
                   try {
                     await Haptics.selectionAsync();
@@ -532,6 +569,8 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
               styles.textInput,
               {
                 color: theme.inputText,
+                height: inputHeight,
+                textAlignVertical: inputHeight > FULL_CHAT_COMPACT_HEIGHT ? 'top' : 'center',
               }
             ]}
             placeholder={
@@ -541,8 +580,21 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             }
             placeholderTextColor={isRecording ? theme.primary : theme.inputPlaceholder}
             value={inputText}
-            onChangeText={setInputText}
-            onFocus={onInputFocus}
+            onChangeText={handleComposerTextChange}
+            onContentSizeChange={
+              Platform.OS === 'web'
+                ? undefined
+                : (e) =>
+                    setInputHeight((prev) => {
+                      const measuredHeight = e.nativeEvent.contentSize.height + 16;
+                      const nextHeight = measuredHeight <= FULL_CHAT_GROW_THRESHOLD
+                        ? FULL_CHAT_COMPACT_HEIGHT
+                        : Math.min(measuredHeight, FULL_CHAT_MAX_HEIGHT);
+                      return prev === nextHeight ? prev : nextHeight;
+                    })
+            }
+            onFocus={() => { setIsFocused(true); onInputFocus?.(); }}
+            onBlur={() => setIsFocused(false)}
             {...(Platform.OS === 'web' && onPasteImage
               ? ({
                   onPaste: (e: { nativeEvent?: { clipboardData?: DataTransfer } }) => {
@@ -562,15 +614,17 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
               const shiftKey = nativeEvent.shiftKey;
               if (key === 'Enter' && !shiftKey) {
                 (e as any).preventDefault?.();
-                onSend();
+                handleSubmit();
               }
             }}
             multiline={true}
+            numberOfLines={1}
             maxLength={500}
             editable={!isLoading && !isUploading && !isRecording}
             onSubmitEditing={undefined}
             returnKeyType={enterToSend ? 'send' : 'default'}
             blurOnSubmit={false}
+            scrollEnabled={inputHeight >= FULL_CHAT_MAX_HEIGHT}
           />
         </View>
         
@@ -578,7 +632,13 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
         <TouchableOpacity
           style={[
             styles.orbButton,
-            { opacity: (isLoading || isSpeaking || isRecording) ? 0.9 : 1, width: orbSize + 4, height: orbSize + 4 }
+            {
+              opacity: (isLoading || isSpeaking || isRecording) ? 0.9 : 1,
+              width: orbSize + 6,
+              height: orbSize + 6,
+              backgroundColor: theme.surface + 'D9',
+              borderColor: theme.border + '88',
+            }
           ]}
           onPress={() => {
             if ((isLoading || isSpeaking) && onInterrupt) {
@@ -607,7 +667,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
         {/* Stop generation button — shown when AI is generating a response */}
         {isLoading && onCancel && !hasContent && (
           <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: theme.error }]}
+            style={[styles.sendButton, { backgroundColor: theme.error, borderColor: theme.error }]}
             onPress={async () => {
               try {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -620,21 +680,28 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             accessibilityRole="button"
             activeOpacity={0.7}
           >
-            <Ionicons name="stop" size={20} color={theme.onPrimary || '#fff'} />
+            <Ionicons name="stop" size={16} color={theme.onPrimary || '#fff'} />
           </TouchableOpacity>
         )}
 
         {/* Send button */}
         {hasContent && (
           <TouchableOpacity
-            style={[styles.sendButton, { backgroundColor: theme.primary, opacity: (isLoading || isUploading) ? 0.5 : 1 }]}
+            style={[
+              styles.sendButton,
+              {
+                backgroundColor: theme.primary,
+                borderColor: theme.primary + '66',
+                opacity: (isLoading || isUploading) ? 0.5 : 1,
+              },
+            ]}
             onPress={async () => {
               try {
                 await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               } catch {
                 // No-op: haptics are optional.
               }
-              onSend();
+              handleSubmit();
             }}
             disabled={isLoading || isUploading}
             accessibilityLabel="Send message"
@@ -644,7 +711,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             {(isLoading || isUploading) ? (
               <EduDashSpinner size="small" color={theme.onPrimary} />
             ) : (
-              <Ionicons name="send" size={20} color={theme.onPrimary} />
+              <Ionicons name="send" size={16} color={theme.onPrimary} />
             )}
           </TouchableOpacity>
         )}

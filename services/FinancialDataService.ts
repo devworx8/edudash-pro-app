@@ -13,6 +13,7 @@
 
 import type {
   ApprovePopPaymentPayload,
+  ApprovePopPaymentResult,
   FinanceControlCenterBundle,
   FinanceMonthExpenseBreakdown,
   FinanceQueueStage,
@@ -109,7 +110,7 @@ export class FinancialDataService {
 
   static approvePOPWithAllocations(
     payload: ApprovePopPaymentPayload,
-  ): Promise<{ paymentId?: string; allocatedAmount: number; overpaymentAmount: number }> {
+  ): Promise<ApprovePopPaymentResult> {
     return approvePOPWithAllocations(payload);
   }
 

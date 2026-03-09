@@ -14,6 +14,7 @@ export { SwipeableMessageRow } from './SwipeableMessageRow';
 export { LinkedText } from './LinkedText';
 export { TypingIndicator } from './TypingIndicator';
 export { ChatHeader } from './ChatHeader';
+export { ChatParticipantSheet } from './ChatParticipantSheet';
 export { MessageComposer } from './MessageComposer';
 
 // New components for messaging overhaul

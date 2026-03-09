@@ -1,12 +1,4 @@
-/**
- * Parent Message Thread Screen
- * Full-featured WhatsApp-style chat interface with wallpaper, voice, actions, etc.
- *
- * State/handlers extracted → hooks/useParentMessageThread.ts
- * Styles extracted → parent-message-thread.styles.ts
- * Hooks: useMessageActions, useThreadOptions (pre-existing)
- */
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Platform, KeyboardAvoidingView, ImageBackground, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,18 +16,21 @@ import { AlertModal, useAlertModal, type AlertButton } from '@/components/ui/Ale
 import {
   Message, DateSeparator, MessageBubble, ChatHeader, MessageComposer,
   ForwardMessagePicker, ChatSearchOverlay, MediaGalleryView, StarredMessagesView,
+  ChatParticipantSheet,
 } from '@/components/messaging';
 import { SwipeableMessageRow } from '@/components/messaging/SwipeableMessageRow';
 import { MessageScheduler } from '@/components/messaging/MessageScheduler';
+import { TemplatePickerSheet } from '@/components/messaging/TemplatePickerSheet';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { useThreadParticipantInteractions } from '@/hooks/messaging/useThreadParticipantInteractions';
 import { useParentMessageThread, type ChatRow } from '@/hooks/useParentMessageThread';
+import { useAutoTranslateTranscribe } from '@/hooks/messaging/useAutoTranslateTranscribe';
 import { parseThemeFromMessage } from '@/lib/messaging/parseThemeFromMessage';
 import {
   messageThreadStyles as styles, defaultTheme,
   COMPOSER_FLOAT_GAP, COMPOSER_OVERLAY_HEIGHT,
 } from '@/lib/screen-styles/parent-message-thread.styles';
 
-// Safe component imports
 let ChatWallpaperPicker: React.FC<any> | null = null;
 let MessageActionsMenu: React.FC<any> | null = null;
 let ThreadOptionsMenu: React.FC<any> | null = null;
@@ -78,13 +73,17 @@ export default function ParentMessageThreadScreen() {
     showAlert({ title, message, buttons, type: 'warning' });
   }, [showAlert]);
   const h = useParentMessageThread(threadId, user?.id, user?.email);
+  const att = useAutoTranslateTranscribe({
+    threadId, userId: user?.id,
+    preferredLanguage: (profile?.language as any) || 'en',
+    messages: h.allMessages,
+  });
 
   const displayName = useMemo(() => {
     try { return contactName ? decodeURIComponent(contactName) : t('parent.teacher', { defaultValue: 'Contact' }); }
     catch { return contactName || 'Contact'; }
   }, [contactName, t]);
 
-  // Message actions hook
   const actions = useMessageActions({
     selectedMessage: h.selectedMessage, user, refetch: h.refetch,
     setSelectedMessage: h.setSelectedMessage, setShowMessageActions: h.setShowMessageActions,
@@ -92,7 +91,12 @@ export default function ParentMessageThreadScreen() {
     showAlert: ({ title, message, buttons }) => showThreadAlert(title, message, buttons),
   });
 
-  // Thread options hook
+  const pinnedMessages = useMemo(() =>
+    h.allMessages.filter((m: any) => m.is_pinned),
+  [h.allMessages]);
+
+  const [showTemplatePicker, setShowTemplatePicker] = useState(false);
+
   const routeRecipientId =
     params.recipientId ||
     params.recipientid ||
@@ -116,6 +120,10 @@ export default function ParentMessageThreadScreen() {
   const recipientRole =
     h.otherParticipant?.sender?.role ||
     participantRecipient?.user_profile?.role ||
+    null;
+  const recipientAvatarUrl =
+    h.otherParticipant?.sender?.avatar_url ||
+    participantRecipient?.user_profile?.avatar_url ||
     null;
   const isPrincipal =
     profile?.role === 'principal' || profile?.role === 'principal_admin';
@@ -202,63 +210,6 @@ export default function ParentMessageThreadScreen() {
     ].filter(Boolean).join(' • ')
     : (recipientId && callContext ? callContext.getLastSeenText(recipientId) : 'Offline');
 
-  const handleOpenGroupInfo = useCallback(() => {
-    if (!isGroup) return;
-    const rows = groupParticipants.map((participant, index) => {
-      const first = participant.user_profile?.first_name || '';
-      const last = participant.user_profile?.last_name || '';
-      const fullName = `${first} ${last}`.trim() || `Member ${index + 1}`;
-      const role = participant.user_profile?.role || participant.role || 'member';
-      const onlineLabel = callContext?.isUserOnline(participant.user_id) ? 'online' : 'offline';
-      return `• ${fullName} (${role}) — ${onlineLabel}`;
-    });
-    const body = rows.length > 0
-      ? rows.join('\n')
-      : 'No participant details available yet.';
-    showThreadAlert(
-      'Group info',
-      `${displayName}\n${groupOnlineCount} online • ${groupMemberCount} members\n\n${body}`,
-      [{ text: 'OK' }]
-    );
-  }, [callContext, displayName, groupMemberCount, groupOnlineCount, groupParticipants, isGroup, showThreadAlert]);
-
-  const handleReactionLongPress = useCallback(async (_messageId: string, emoji: string, reactedByUserIds: string[]) => {
-    if (reactedByUserIds.length === 0) return;
-    try {
-      const { assertSupabase } = require('@/lib/supabase');
-      const client = assertSupabase?.();
-      if (!client) return;
-      const uniqueUserIds = Array.from(new Set(reactedByUserIds));
-      const participantNameMap = new Map<string, string>();
-      groupParticipants.forEach((participant) => {
-        const first = participant.user_profile?.first_name || '';
-        const last = participant.user_profile?.last_name || '';
-        const fullName = `${first} ${last}`.trim();
-        if (participant.user_id && fullName) {
-          participantNameMap.set(participant.user_id, fullName);
-        }
-      });
-      const missingUserIds = uniqueUserIds.filter((id) => !participantNameMap.has(id));
-      if (missingUserIds.length > 0) {
-        const { data: profiles } = await client
-          .from('profiles')
-          .select('id, first_name, last_name')
-          .in('id', missingUserIds);
-        (profiles || []).forEach((p: { id: string; first_name?: string; last_name?: string }) => {
-          const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
-          if (fullName) {
-            participantNameMap.set(p.id, fullName);
-          }
-        });
-      }
-      const names = uniqueUserIds.map((id) => participantNameMap.get(id) || 'Someone');
-      const message = names.length > 0 ? `${names.join(', ')} reacted with ${emoji}` : `${emoji}`;
-      showThreadAlert(t('messaging.whoReacted', { defaultValue: 'Who reacted' }), message, [{ text: 'OK' }]);
-    } catch {
-      showThreadAlert(t('messaging.whoReacted', { defaultValue: 'Who reacted' }), `${emoji}`, [{ text: 'OK' }]);
-    }
-  }, [groupParticipants, showThreadAlert, t]);
-
   const handleVoiceCall = useCallback(() => {
     if (!callContext) { toast.warn('Voice calling is not available.', 'Voice Call'); return; }
     if (isGroup) { toast.info('Voice calling is currently available for one-to-one chats only.', 'Voice Call'); return; }
@@ -291,7 +242,41 @@ export default function ParentMessageThreadScreen() {
     callContext.startVoiceCall(event.callerId, event.callerName || 'Contact', { threadId });
   }, [callContext, threadId]);
 
-  // Scroll to a quoted message when tapped
+  const {
+    showParticipantSheet,
+    setShowParticipantSheet,
+    participantSheetLoading,
+    participantSheetDetails,
+    participantSheetMembers,
+    participantQuickActions,
+    openParticipantSheet,
+    handleReactionDetails,
+  } = useThreadParticipantInteractions({
+    isGroup,
+    recipientId,
+    recipientRole,
+    recipientAvatarUrl,
+    currentUserId: user?.id,
+    groupParticipants,
+    isUserOnline: (participantUserId) => !!callContext?.isUserOnline(participantUserId),
+    showThreadAlert,
+    onVoiceCall: handleVoiceCall,
+    onVideoCall: handleVideoCall,
+    onOpenSearch: () => {
+      setShowParticipantSheet(false);
+      opts.handleSearchInChat();
+    },
+    onOpenMedia: () => {
+      setShowParticipantSheet(false);
+      opts.handleMediaLinksAndDocs();
+    },
+    onOpenMoreOptions: () => {
+      setShowParticipantSheet(false);
+      h.setShowOptionsMenu(true);
+    },
+  });
+  const headerAvatarUrl = participantSheetDetails?.avatar_url || recipientAvatarUrl;
+
   const handleScrollToMessage = useCallback((messageId: string) => {
     const idx = h.rowsAsc.findIndex((r: ChatRow) => r.type === 'message' && r.msg?.id === messageId);
     if (idx >= 0 && h.listRef?.current) {
@@ -299,7 +284,6 @@ export default function ParentMessageThreadScreen() {
     }
   }, [h.rowsAsc, h.listRef]);
 
-  // Render row
   const renderRow = useCallback(({ item }: { item: ChatRow }) => {
     if (item.type === 'date') return <DateSeparator label={item.label} />;
     const msg = item.msg;
@@ -319,20 +303,42 @@ export default function ParentMessageThreadScreen() {
           hasNextVoice={hasNextVoice} hasPreviousVoice={hasPreviousVoice}
           autoPlayVoice={!!msg.voice_url && h.currentlyPlayingVoiceId === msg.id}
           onReactionPress={actions.handleReactionPress}
-          onReactionLongPress={handleReactionLongPress}
+          onReactionLongPress={(_messageId, emoji, reactedByUserIds) => handleReactionDetails(emoji, reactedByUserIds)}
+          showReactionDetailsOnPress={isGroup || groupMemberCount > 2}
           onReplyPress={handleScrollToMessage}
           onCallEventPress={handleCallEventPress}
           isFirstInGroup={item.isFirstInGroup}
           isLastInGroup={item.isLastInGroup}
+          translatedText={att.getTranslation(msg.id)}
+          showTranslation={att.isShowingTranslation(msg.id)}
+          onToggleTranslation={() => att.toggleShowTranslation(msg.id)}
+          transcriptionText={att.getTranscription(msg.id)}
+          isTranscribing={att.isTranscribing(msg.id)}
+          onTranscribe={msg.voice_url ? () => att.manualTranscribe(msg.voice_url!, msg.id) : undefined}
         />
       </SwipeableMessageRow>
     );
-  }, [h.currentlyPlayingVoiceId, h.handleMessageLongPress, h.voiceMessageIdsAsc, h.setReplyingTo, actions.handleReactionPress, handleReactionLongPress, handleScrollToMessage, handleCallEventPress, user?.id]);
+  }, [h.currentlyPlayingVoiceId, h.handleMessageLongPress, h.voiceMessageIdsAsc, h.setReplyingTo, actions.handleReactionPress, handleReactionDetails, handleScrollToMessage, handleCallEventPress, user?.id, att]);
+
+  // Announcement channels: only admins/principals can post
+  const userRole = (profile as any)?.role || '';
+  const isAdmin = ['principal', 'admin', 'principal_admin', 'super_admin', 'superadmin'].includes(userRole);
+  const isAnnouncementReadOnly = threadType === 'announcement' && !isAdmin;
+  const announcementBannerStyle = {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    height: 52,
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+  };
 
   // Layout calculations
   const composerBottomInset = Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 2);
   const keyboardUp = h.keyboardHeight > 0;
-  const safeComposerHeight = Math.max(h.composerHeight, COMPOSER_OVERLAY_HEIGHT);
+  const safeComposerHeight = isAnnouncementReadOnly
+    ? 52
+    : Math.max(h.composerHeight, COMPOSER_OVERLAY_HEIGHT);
   // When keyboard is up: move safe-area from padding → bottom offset (clears nav bar).
   // safeComposerHeight (from onLayout) already includes paddingBottom, so don't add composerBottomInset again.
   const composerExtraBottom = keyboardUp ? composerBottomInset : 0;
@@ -358,10 +364,11 @@ export default function ParentMessageThreadScreen() {
         displayName={displayName} isOnline={isOnline} lastSeenText={lastSeenText}
         isLoading={h.loading} isTyping={h.isOtherTyping} typingText={h.typingText}
         recipientRole={isGroup ? null : recipientRole}
+        avatarUrl={headerAvatarUrl}
         isGroup={isGroup}
         participantCount={isGroup ? groupMemberCount : undefined}
         onlineCount={isGroup ? groupOnlineCount : undefined}
-        onHeaderPress={isGroup ? handleOpenGroupInfo : undefined}
+        onHeaderPress={openParticipantSheet}
         onVoiceCall={handleVoiceCall} onVideoCall={handleVideoCall}
         onOptionsPress={() => h.setShowOptionsMenu(true)}
       />
@@ -394,7 +401,25 @@ export default function ParentMessageThreadScreen() {
               <Text style={styles.emptySub}>Send your first message to {displayName}</Text>
             </View>
           ) : (
-            <FlashList ref={h.listRef} data={h.rowsAsc} renderItem={renderRow} keyExtractor={item => item.key}
+            <>
+              {pinnedMessages.length > 0 && (
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(59,130,246,0.12)', paddingHorizontal: 12, paddingVertical: 8, gap: 8 }}
+                  onPress={() => handleScrollToMessage(pinnedMessages[pinnedMessages.length - 1].id)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="pin" size={16} color={theme.primary} />
+                  <Text style={{ color: theme.text, fontSize: 13, flex: 1 }} numberOfLines={1}>
+                    {pinnedMessages[pinnedMessages.length - 1].content}
+                  </Text>
+                  {pinnedMessages.length > 1 && (
+                    <Text style={{ color: theme.textSecondary, fontSize: 11 }}>
+                      +{pinnedMessages.length - 1}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              <FlashList ref={h.listRef} data={h.rowsAsc} renderItem={renderRow} keyExtractor={item => item.key}
               getItemType={item => item.type} onScroll={h.handleScroll} scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
               removeClippedSubviews={false}
@@ -404,6 +429,7 @@ export default function ParentMessageThreadScreen() {
                 keyboardHeight: h.keyboardHeight,
               }}
               contentContainerStyle={[styles.messagesContent, { paddingBottom: 2 }]} />
+            </>
           )}
         </View>
 
@@ -423,15 +449,26 @@ export default function ParentMessageThreadScreen() {
           </View>
         )}
 
-        {/* Composer */}
-        <View style={[styles.composerArea, { bottom: h.keyboardHeight + COMPOSER_FLOAT_GAP + composerExtraBottom, paddingBottom: keyboardUp ? 0 : composerBottomInset }]} onLayout={h.handleComposerLayout}>
-          <MessageComposer
-            onSend={actions.editingMessage ? actions.confirmEdit : h.handleSend}
-            onVoiceRecording={h.handleVoiceRecording} onImageAttach={h.handleImageAttach}
-            sending={h.sending} replyingTo={h.replyingTo} onCancelReply={() => h.setReplyingTo(null)}
-            onTyping={h.setTyping} editingMessage={actions.editingMessage} onCancelEdit={actions.cancelEdit}
-            showAlert={(config) => showThreadAlert(config.title, config.message, config.buttons)}
-          />
+        {/* Composer — hidden for announcement channel subscribers */}
+        <View style={[styles.composerArea, { bottom: h.keyboardHeight + COMPOSER_FLOAT_GAP + composerExtraBottom, paddingBottom: keyboardUp ? 0 : composerBottomInset }]} onLayout={isAnnouncementReadOnly ? undefined : h.handleComposerLayout}>
+          {isAnnouncementReadOnly ? (
+            <View style={[announcementBannerStyle, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <Ionicons name="megaphone-outline" size={16} color={theme.textSecondary} />
+              <Text style={{ color: theme.textSecondary, fontSize: 13, marginLeft: 8 }}>
+                Only admins can post in this channel
+              </Text>
+            </View>
+          ) : (
+            <MessageComposer
+              onSend={actions.editingMessage ? actions.confirmEdit : h.handleSend}
+              onVoiceRecording={h.handleVoiceRecording} onImageAttach={h.handleImageAttach}
+              sending={h.sending} replyingTo={h.replyingTo} onCancelReply={() => h.setReplyingTo(null)}
+              onTyping={h.setTyping} editingMessage={actions.editingMessage} onCancelEdit={actions.cancelEdit}
+              showAlert={(config) => showThreadAlert(config.title, config.message, config.buttons)}
+              onSchedule={(text) => { h.setPendingScheduleText(text); h.setShowScheduler(true); }}
+              onOpenTemplates={() => setShowTemplatePicker(true)}
+            />
+          )}
         </View>
       </View>
 
@@ -443,10 +480,16 @@ export default function ParentMessageThreadScreen() {
           onClearChat={opts.handleClearChat} onExportChat={opts.handleExportChat}
           onMediaLinksAndDocs={opts.handleMediaLinksAndDocs} onStarredMessages={opts.handleStarredMessages}
           onDisappearingMessages={opts.handleDisappearingMessages} onAddShortcut={opts.handleAddShortcut}
-          onReport={opts.handleReport} onBlockUser={opts.handleBlockUser} onViewContact={opts.handleViewContact}
+          onReport={opts.handleReport} onBlockUser={opts.handleBlockUser}
+          onViewContact={() => {
+            h.setShowOptionsMenu(false);
+            void openParticipantSheet();
+          }}
           isMuted={opts.isMuted} isBlocked={opts.isUserBlocked} disappearingLabel={opts.disappearingStatusLabel}
           contactName={displayName} isGroup={isGroup} participantCount={groupMemberCount || undefined}
-          onGroupInfo={isGroup ? handleOpenGroupInfo : undefined} />
+          onGroupInfo={isGroup ? () => void openParticipantSheet() : undefined}
+          onToggleAutoTranslate={att.toggleAutoTranslate}
+          isAutoTranslateEnabled={att.autoTranslateEnabled} />
       )}
       {ChatWallpaperPicker && (
         <ChatWallpaperPicker isOpen={h.showWallpaperPicker} onClose={() => h.setShowWallpaperPicker(false)}
@@ -464,15 +507,37 @@ export default function ParentMessageThreadScreen() {
           showAddToWeeklyProgram={showAddToWeeklyProgram}
           onAddToWeeklyProgram={showAddToWeeklyProgram ? handleAddToWeeklyProgram : undefined}
           showConvertToRoutineRequest={showConvertToRoutineRequest}
-          onConvertToRoutineRequest={showConvertToRoutineRequest ? handleConvertToRoutineRequest : undefined} />
+          onConvertToRoutineRequest={showConvertToRoutineRequest ? handleConvertToRoutineRequest : undefined}
+          onPin={actions.handlePinMessage}
+          isPinned={!!(h.selectedMessage as any)?.is_pinned} />
       )}
       <ForwardMessagePicker visible={actions.showForwardPicker} onSelect={actions.confirmForward} onCancel={actions.cancelForward} />
       <ChatSearchOverlay visible={opts.showSearchOverlay} query={opts.searchQuery} results={opts.searchResults as any[]}
-        isSearching={opts.isSearching} onSearch={opts.performSearch} onClose={opts.closeSearch} />
+        isSearching={opts.isSearching} onSearch={opts.performSearch} onClose={opts.closeSearch}
+        onScrollToMessage={handleScrollToMessage} />
       <MediaGalleryView visible={opts.showMediaGallery} threadId={threadId} onClose={opts.closeMediaGallery} />
       <StarredMessagesView visible={opts.showStarredMessages} threadId={threadId} onClose={opts.closeStarredMessages} />
-      <MessageScheduler visible={h.showScheduler} onClose={() => h.setShowScheduler(false)}
-        onSchedule={(scheduledAt) => { toast.success(`Message scheduled for ${scheduledAt.toLocaleString()}`); h.setShowScheduler(false); }} />
+      <MessageScheduler visible={h.showScheduler} onClose={() => { h.setShowScheduler(false); h.setPendingScheduleText(null); }}
+        onSchedule={(scheduledAt) => { h.handleScheduledSend(scheduledAt); }} />
+      <TemplatePickerSheet visible={showTemplatePicker} onClose={() => setShowTemplatePicker(false)}
+        onSelect={(tpl) => { h.handleSend(tpl.body); setShowTemplatePicker(false); }} />
+      <ChatParticipantSheet
+        visible={showParticipantSheet}
+        onClose={() => setShowParticipantSheet(false)}
+        title={displayName}
+        subtitle={isGroup ? groupTypeLabel || 'Group chat' : (isOnline ? 'Online now' : lastSeenText)}
+        role={isGroup ? null : (participantSheetDetails?.role || recipientRole)}
+        email={participantSheetDetails?.email}
+        phone={participantSheetDetails?.phone}
+        avatarUrl={headerAvatarUrl}
+        avatarLabel={displayName.charAt(0).toUpperCase()}
+        isGroup={isGroup}
+        isLoading={participantSheetLoading}
+        participantCount={groupMemberCount}
+        onlineCount={groupOnlineCount}
+        participants={participantSheetMembers}
+        quickActions={participantQuickActions}
+      />
       <AlertModal {...alertProps} />
     </KeyboardAvoidingView>
   );

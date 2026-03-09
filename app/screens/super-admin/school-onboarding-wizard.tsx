@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Switch, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Switch, Platform, KeyboardAvoidingView } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -61,6 +62,7 @@ const GRADE_LEVELS = {
 
 export default function SuperAdminSchoolOnboardingWizard() {
   const { user, profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const bottomInset = useBottomInset();
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -99,11 +101,12 @@ export default function SuperAdminSchoolOnboardingWizard() {
   // Check if current user is superadmin
   useEffect(() => {
     if (profile && !isSuperAdmin(profile.role)) {
-      Alert.alert(
-        'Access Denied',
-        'This screen is only accessible to superadmins.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+      showAlert({
+        title: 'Access Denied',
+        message: 'This screen is only accessible to superadmins.',
+        type: 'error',
+        buttons: [{ text: 'OK', onPress: () => router.back() }],
+      });
     }
   }, [profile]);
 
@@ -261,10 +264,11 @@ export default function SuperAdminSchoolOnboardingWizard() {
         school_id: data.school_id
       });
 
-      Alert.alert(
-        'School Created Successfully!',
-        `${schoolData.name} has been created and configured. ${subscriptionData.planId ? 'The subscription is active.' : ''} You can now send the principal invitation or manage the school settings.`,
-        [
+      showAlert({
+        title: 'School Created Successfully!',
+        message: `${schoolData.name} has been created and configured. ${subscriptionData.planId ? 'The subscription is active.' : ''} You can now send the principal invitation or manage the school settings.`,
+        type: 'success',
+        buttons: [
           {
             text: 'View School',
             onPress: () => {
@@ -292,17 +296,17 @@ export default function SuperAdminSchoolOnboardingWizard() {
               setCurrentStep(1);
             }
           }
-        ]
-      );
+        ],
+      });
 
     } catch (error: any) {
       console.error('School creation failed:', error);
       
-      Alert.alert(
-        'School Creation Failed',
-        error.message || 'Failed to create school. Please try again.',
-        [{ text: 'OK' }]
-      );
+      showAlert({
+        title: 'School Creation Failed',
+        message: error.message || 'Failed to create school. Please try again.',
+        type: 'error',
+      });
       
       track('superadmin_school_creation_failed', {
         error: error.message,
@@ -716,6 +720,7 @@ export default function SuperAdminSchoolOnboardingWizard() {
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

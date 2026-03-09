@@ -1,4 +1,4 @@
-import * as Sentry from 'sentry-expo';
+import * as Sentry from '@sentry/react-native';
 import { Platform } from 'react-native';
 import { getPostHog } from '@/lib/posthogClient';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
@@ -216,25 +216,14 @@ export function track<T extends keyof AnalyticsEvent>(
       }
     }
     
-    // Add to Sentry breadcrumbs for error context (with platform check)
+    // Add to Sentry breadcrumbs for error context
     try {
-      // Only use Sentry.Native on native platforms
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        Sentry.Native?.addBreadcrumb({
-          category: 'analytics',
-          message: String(event),
-          data: scrubbedProperties,
-          level: 'info',
-        });
-      } else if (Sentry.Browser) {
-        // Use Browser SDK on web
-        Sentry.Browser.addBreadcrumb({
-          category: 'analytics',
-          message: String(event),
-          data: scrubbedProperties,
-          level: 'info',
-        });
-      }
+      Sentry.addBreadcrumb({
+        category: 'analytics',
+        message: String(event),
+        data: scrubbedProperties,
+        level: 'info',
+      });
     } catch (sentryError) {
       // Silently ignore Sentry errors - analytics/monitoring failures shouldn't break app
       if (__DEV__) {
@@ -271,19 +260,10 @@ export function identifyUser(userId: string, properties: Record<string, any> = {
       production_db_dev: flags.production_db_dev_mode,
     });
     
-    // Set user context in Sentry with proper null checks
+    // Set user context in Sentry
     try {
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        // Native platforms
-        if (Sentry.Native && typeof Sentry.Native.setUser === 'function') {
-          Sentry.Native.setUser({
-            id: userId,
-            ...scrubbedProperties,
-          });
-        }
-      } else if (Sentry.Browser && typeof Sentry.Browser.setUser === 'function') {
-        // Web platform
-        Sentry.Browser.setUser({
+      if (typeof Sentry.setUser === 'function') {
+        Sentry.setUser({
           id: userId,
           ...scrubbedProperties,
         });

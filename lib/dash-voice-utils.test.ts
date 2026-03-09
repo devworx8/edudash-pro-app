@@ -1,7 +1,9 @@
 import {
   buildVoicePlaybackText,
   splitForTTS,
+  splitForTTSWithFastStart,
   TTS_CHUNK_MAX_LEN,
+  TTS_FAST_START_FIRST_CHUNK_MAX_LEN,
   shouldEnableVoiceTurnTools,
 } from './dash-voice-utils';
 
@@ -67,6 +69,59 @@ describe('dash-voice-utils', () => {
       expect(spoken.length).toBeLessThanOrEqual(120);
       expect(spoken).toContain('First sentence');
       expect(spoken).not.toContain('Third sentence');
+    });
+  });
+
+  describe('splitForTTSWithFastStart', () => {
+    it('matches normal chunking when fast start is disabled', () => {
+      const text = [
+        'First sentence stays together.',
+        'Second sentence also stays together.',
+        'Third sentence rounds things off.',
+      ].join(' ');
+
+      expect(
+        splitForTTSWithFastStart(text, {
+          enabled: false,
+          maxLen: 80,
+          firstChunkMaxLen: 30,
+        })
+      ).toEqual(splitForTTS(text, 80));
+    });
+
+    it('only shortens the first chunk and keeps the remainder grouped normally', () => {
+      const text = [
+        'Sentence one is deliberately long enough to exceed the fast start threshold.',
+        'Sentence two should remain in the normal remainder chunk.',
+        'Sentence three should stay grouped with the remainder as well.',
+      ].join(' ');
+
+      const chunks = splitForTTSWithFastStart(text, {
+        enabled: true,
+        maxLen: TTS_CHUNK_MAX_LEN,
+        firstChunkMaxLen: 90,
+      });
+
+      expect(chunks).toHaveLength(2);
+      expect(chunks[0].length).toBeLessThanOrEqual(90);
+      expect(chunks[1]).toContain('Sentence two');
+      expect(chunks[1]).toContain('Sentence three');
+    });
+
+    it('does not shred a short reply into many tiny chunks', () => {
+      const text = [
+        'Dash can help with that.',
+        'Please upload the image when you are ready.',
+        'I will look at it and explain what I see.',
+      ].join(' ');
+
+      const chunks = splitForTTSWithFastStart(text, {
+        enabled: true,
+        maxLen: TTS_CHUNK_MAX_LEN,
+        firstChunkMaxLen: TTS_FAST_START_FIRST_CHUNK_MAX_LEN,
+      });
+
+      expect(chunks.length).toBeLessThanOrEqual(2);
     });
   });
 

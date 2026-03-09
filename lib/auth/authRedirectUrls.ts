@@ -3,10 +3,12 @@
  * Pure functions for testability; callers pass platform and optional web origin.
  */
 
+import { buildEduDashWebUrl } from '@/lib/config/urls';
+
 export type AuthRedirectPlatform = 'web' | 'ios' | 'android';
 
 const NATIVE_RESET_REDIRECT = 'edudashpro://auth-callback?type=recovery';
-const NATIVE_EMAIL_CHANGE_REDIRECT = 'https://www.edudashpro.org.za/landing?flow=email-change';
+const NATIVE_EMAIL_CHANGE_REDIRECT = buildEduDashWebUrl('/landing?flow=email-change');
 
 /**
  * Redirect URL for Supabase resetPasswordForEmail (forgot-password flow).

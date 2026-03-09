@@ -43,6 +43,7 @@ const KNOWN_VALID_ROUTES = new Set([
   '/screens/parent-my-exams',
   '/screens/parent-timetable',
   '/screens/group-management',
+  '/(k12)/student/calculator',
 ]);
 
 /** Routes that must NOT appear in the action map (they don't exist). */

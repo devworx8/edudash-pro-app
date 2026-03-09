@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
@@ -9,10 +10,10 @@ import { assertSupabase } from '@/lib/supabase';
 import { track } from '@/lib/analytics';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
-import { router } from 'expo-router';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { logger } from '@/lib/logger';
 import { EducationalPDFService } from '@/lib/services/EducationalPDFService'
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 const TAG = 'AIProgressAnalysis';
 
@@ -41,6 +42,7 @@ export default function AIProgressAnalysisScreen() {
   const { user } = useAuth();
   const { theme } = useTheme();
   const { tier } = useSubscription();
+  const { showAlert, alertProps } = useAlertModal();
   const hasPremiumOrHigher = ['premium','pro','enterprise'].includes(String(tier || ''));
   const [loading, setLoading] = useState(true);
   const [analysisData, setAnalysisData] = useState<{
@@ -67,14 +69,15 @@ export default function AIProgressAnalysisScreen() {
       const gate = await canUseFeature('grading_assistance', 1);
       if (!gate.allowed) {
         const status = await getQuotaStatus('grading_assistance');
-        Alert.alert(
-          'Monthly limit reached',
-          `You have used ${status.used} of ${status.limit} progress analyses this month.`,
-          [
+        showAlert({
+          title: 'Monthly limit reached',
+          message: `You have used ${status.used} of ${status.limit} progress analyses this month.`,
+          type: 'warning',
+          buttons: [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'See plans', onPress: () => router.push('/pricing') },
-          ]
-        );
+            { text: 'See plans', onPress: () => navigateToUpgrade({ source: 'ai_progress_quota', reason: 'limit_reached' }) },
+          ],
+        });
         return;
       }
 
@@ -143,7 +146,7 @@ export default function AIProgressAnalysisScreen() {
 
     } catch (error) {
       console.error('Failed to fetch progress data:', error);
-      Alert.alert('Error', 'Failed to load progress analysis. Please try again.');
+      showAlert({ title: 'Error', message: 'Failed to load progress analysis. Please try again.', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -168,9 +171,9 @@ export default function AIProgressAnalysisScreen() {
       const classesText = (analysisData?.classAnalytics || []).map(c => `${c.className}: avg ${c.averagePerformance}%`).join('\n')
       const body = [insightsText, classesText].filter(Boolean).join('\n\n') || 'No analysis available.'
       await EducationalPDFService.generateTextPDF(title, body)
-      Alert.alert('Export PDF', 'PDF generated successfully')
+      showAlert({ title: 'Export PDF', message: 'PDF generated successfully', type: 'success' })
     } catch {
-      Alert.alert('Export PDF', 'Failed to generate PDF')
+      showAlert({ title: 'Export PDF', message: 'Failed to generate PDF', type: 'error' })
     }
   }
 
@@ -432,7 +435,7 @@ export default function AIProgressAnalysisScreen() {
           </Text>
           <TouchableOpacity
             style={{ marginTop: 12, backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 }}
-            onPress={() => router.push('/screens/subscription-upgrade-post?reason=ai_progress')}
+            onPress={() => navigateToUpgrade({ source: 'ai_progress_analysis', reason: 'feature_needed' })}
           >
             <Text style={{ color: '#fff', fontWeight: '700' }}>Upgrade</Text>
           </TouchableOpacity>
@@ -496,6 +499,7 @@ export default function AIProgressAnalysisScreen() {
           )}
         </View>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

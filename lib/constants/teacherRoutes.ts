@@ -311,6 +311,32 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     color: '#E91E63',
     category: 'classroom',
   },
+
+  // === SA-SPECIFIC ===
+  cptd_logger: {
+    path: '/screens/cptd-logger' as Href,
+    title: 'CPTD Logger',
+    titleKey: 'teacher.cptd_logger',
+    icon: 'ribbon',
+    color: '#7C3AED',
+    category: 'reports',
+  },
+  nsnp_reporting: {
+    path: '/screens/nsnp-reporting' as Href,
+    title: 'NSNP Meals',
+    titleKey: 'teacher.nsnp_reporting',
+    icon: 'nutrition',
+    color: '#F59200',
+    category: 'reports',
+  },
+  class_story: {
+    path: '/screens/class-story' as Href,
+    title: 'Class Story',
+    titleKey: 'teacher.class_story',
+    icon: 'camera',
+    color: '#EC4899',
+    category: 'communication',
+  },
 } as const;
 
 /**
@@ -382,6 +408,9 @@ export const TEACHER_QUICK_ACTIONS: (keyof typeof TEACHER_ROUTES)[] = [
   'homework_helper',
   'progress_analysis',
   'call_parent',
+  'cptd_logger',
+  'nsnp_reporting',
+  'class_story',
 ];
 
 /**

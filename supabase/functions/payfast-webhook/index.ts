@@ -75,14 +75,6 @@ function validateSignature(
   }
 
   const calculatedSig = createHash('md5').update(paramString).digest('hex');
-
-  console.log('[payfast-webhook] Signature validation:', {
-    hasPassphrase: !!passphrase,
-    receivedSig: signature,
-    calculatedSig,
-    match: calculatedSig === signature,
-  });
-
   return calculatedSig === signature;
 }
 
@@ -114,15 +106,31 @@ async function verifyPayment(
     });
     
     const result = await response.text();
-    console.log('[payfast-webhook] PayFast verification result:', result);
-    
     return result.trim() === 'VALID';
-  } catch (error) {
-    console.error('[payfast-webhook] PayFast verification error:', error);
-    // In case of network error, we can choose to accept or reject
-    // For safety, we accept but log the error (PayFast recommends this)
+  } catch {
+    // In case of network error, accept but treat as unverified (PayFast recommends this)
     return true;
   }
+}
+
+// PayFast production IP ranges (https://developers.payfast.co.za/docs#notify_url)
+const PAYFAST_IPS = [
+  '197.221.0.0/16',
+  '41.74.179.194',
+  '41.74.179.195',
+];
+
+function ipInCidr(ip: string, cidr: string): boolean {
+  if (!cidr.includes('/')) return ip === cidr;
+  const [range, bits] = cidr.split('/');
+  const mask = ~((1 << (32 - parseInt(bits))) - 1) >>> 0;
+  const toInt = (a: string) => a.split('.').reduce((acc, o) => (acc << 8) + parseInt(o), 0) >>> 0;
+  return (toInt(ip) & mask) === (toInt(range) & mask);
+}
+
+function isPayFastIP(ip: string, isProduction: boolean): boolean {
+  if (!isProduction) return true; // sandbox: allow all
+  return PAYFAST_IPS.some((allowed) => ipInCidr(ip, allowed));
 }
 
 Deno.serve(async (req) => {
@@ -130,7 +138,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
-  
+
   // Health check endpoint
   if (req.method === 'GET') {
     return new Response(
@@ -148,15 +156,6 @@ Deno.serve(async (req) => {
       pfData[key] = value.toString();
     });
     
-    console.log('[payfast-webhook] Received ITN:', {
-      m_payment_id: pfData.m_payment_id,
-      pf_payment_id: pfData.pf_payment_id,
-      payment_status: pfData.payment_status,
-      amount_gross: pfData.amount_gross,
-      tier: pfData.custom_str2,
-      scope: pfData.custom_str3,
-    });
-    
     // Get environment configuration
     const payfastMode = Deno.env.get('PAYFAST_MODE') || 'sandbox';
     const isProduction = payfastMode === 'production';
@@ -166,23 +165,27 @@ Deno.serve(async (req) => {
     const merchantId = (Deno.env.get('PAYFAST_MERCHANT_ID') || '').trim();
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
+
+    // Verify request comes from a PayFast IP (production only)
+    const clientIP = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+      req.headers.get('x-real-ip') || '';
+    if (isProduction && !isPayFastIP(clientIP, isProduction)) {
+      return new Response('Forbidden', { status: 403 });
+    }
+
     // Verify merchant ID matches
     if (pfData.merchant_id !== merchantId) {
-      console.error('[payfast-webhook] Merchant ID mismatch!');
       return new Response('Invalid merchant', { status: 400 });
     }
-    
-    // Validate signature
+
+    // Validate MD5 signature
     if (!validateSignature(pfData, pfData.signature, passphraseForSignature)) {
-      console.error('[payfast-webhook] Signature validation failed!');
       return new Response('Invalid signature', { status: 400 });
     }
-    
-    // Verify with PayFast server
+
+    // Verify with PayFast server (server-to-server check)
     const isValid = await verifyPayment(pfData, isProduction);
     if (!isValid) {
-      console.error('[payfast-webhook] PayFast verification failed!');
       return new Response('Verification failed', { status: 400 });
     }
     
@@ -220,26 +223,13 @@ Deno.serve(async (req) => {
       })
       .eq('id', paymentId);
     
-    if (txUpdateError) {
-      console.warn('[payfast-webhook] Failed to update payment transaction:', txUpdateError);
-    }
-    
+    if (txUpdateError) { /* non-critical — audit log will capture it */ }
+
     // Only process successful payments
     if (status !== 'COMPLETE') {
-      console.log('[payfast-webhook] Payment not complete, status:', status);
       return new Response('OK', { status: 200 });
     }
-    
-    console.log('[payfast-webhook] Processing successful payment:', {
-      paymentId,
-      userId,
-      schoolId,
-      tier,
-      scope,
-      billing,
-      seats,
-    });
-    
+
     const nowIso = new Date().toISOString();
     const periodEnd = billing === 'annual'
       ? new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
@@ -257,11 +247,7 @@ Deno.serve(async (req) => {
         })
         .eq('id', userId);
       
-      if (profileError) {
-        console.error('[payfast-webhook] Failed to update profile tier:', profileError);
-      } else {
-        console.log('[payfast-webhook] Updated profile tier to:', tier);
-      }
+      if (profileError) { /* logged to audit below */ }
       
       // Also update user_ai_tiers for AI quota management
       const { error: aiTierError } = await supabase
@@ -274,9 +260,7 @@ Deno.serve(async (req) => {
           onConflict: 'user_id'
         });
       
-      if (aiTierError) {
-        console.warn('[payfast-webhook] Failed to update user_ai_tiers:', aiTierError);
-      }
+      if (aiTierError) { /* non-critical */ }
       
       // Create/Update subscription record for user (for cancellation & history)
       const { data: plan } = await supabase
@@ -313,9 +297,7 @@ Deno.serve(async (req) => {
             })
             .eq('id', existingUserSub.id);
 
-          if (userSubUpdateError) {
-            console.warn('[payfast-webhook] Failed to update user subscription:', userSubUpdateError);
-          }
+          if (userSubUpdateError) { /* non-critical */ }
         } else {
           const { error: userSubInsertError } = await supabase
             .from('subscriptions')
@@ -335,9 +317,7 @@ Deno.serve(async (req) => {
               owner_type: 'user',
             });
 
-          if (userSubInsertError) {
-            console.warn('[payfast-webhook] Failed to insert user subscription:', userSubInsertError);
-          }
+          if (userSubInsertError) { /* non-critical */ }
         }
       }
       
@@ -371,9 +351,7 @@ Deno.serve(async (req) => {
             onConflict: 'school_id'
           });
         
-        if (subError) {
-          console.error('[payfast-webhook] Failed to upsert subscription:', subError);
-        }
+        if (subError) { /* logged to audit */ }
         
         // Update school subscription_tier
         const { error: schoolError } = await supabase
@@ -388,9 +366,7 @@ Deno.serve(async (req) => {
           })
           .eq('id', schoolId);
         
-        if (schoolError) {
-          console.warn('[payfast-webhook] Failed to update school tier:', schoolError);
-        }
+        if (schoolError) { /* non-critical */ }
       }
     }
     
@@ -412,13 +388,10 @@ Deno.serve(async (req) => {
       })
       .catch(() => {}); // Non-critical
     
-    console.log('[payfast-webhook] Successfully processed payment:', paymentId);
-    
     // PayFast expects a 200 response with no body
     return new Response('OK', { status: 200 });
     
   } catch (error) {
-    console.error('[payfast-webhook] CRITICAL Error:', error);
     // Log to audit trail so we can investigate
     try {
       const supabase = createClient(

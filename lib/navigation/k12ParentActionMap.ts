@@ -36,7 +36,8 @@ export type K12ParentActionId =
   | 'annual_calendar'
   | 'event_detail'
   | 'school_communication'
-  | 'child_detail';
+  | 'child_detail'
+  | 'calculator';
 
 export interface K12ParentActionConfig {
   /** Destination route path */
@@ -170,6 +171,10 @@ export const K12_PARENT_ACTIONS: Record<K12ParentActionId, K12ParentActionConfig
   child_detail: {
     route: '/screens/parent-children',
     label: 'Child Detail',
+  },
+  calculator: {
+    route: '/(k12)/student/calculator',
+    label: 'Calculator',
   },
 };
 

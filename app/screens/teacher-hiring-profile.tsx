@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, Platform } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +36,7 @@ export default function TeacherHiringProfileScreen() {
   const [locationLat, setLocationLat] = useState<number | null>(null);
   const [locationLng, setLocationLng] = useState<number | null>(null);
   const [locationSource, setLocationSource] = useState<'gps' | 'manual' | null>(null);
+  const supportsGpsLookup = Platform.OS === 'ios';
 
   const loadProfile = useCallback(async () => {
     if (!user?.id) return;
@@ -63,6 +64,15 @@ export default function TeacherHiringProfileScreen() {
   }, [loadProfile]);
 
   const handleUseGps = useCallback(async () => {
+    if (!supportsGpsLookup) {
+      showAlert({
+        title: 'Manual location only',
+        message: 'GPS matching is currently available on iPhone and iPad builds only. Please enter your city and province manually on this device.',
+        type: 'warning',
+      });
+      return;
+    }
+
     const Location = loadExpoLocation();
     if (!Location) {
       showAlert({
@@ -97,7 +107,7 @@ export default function TeacherHiringProfileScreen() {
     } catch (_e) {
       showAlert({ title: 'GPS error', message: 'Could not access your location. Please enter it manually.', type: 'error' });
     }
-  }, [city, province, showAlert]);
+  }, [city, province, showAlert, supportsGpsLookup]);
 
   const handleSave = useCallback(async () => {
     if (!user?.id) return;
@@ -174,12 +184,20 @@ export default function TeacherHiringProfileScreen() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Location</Text>
           <Text style={styles.cardHint}>
-            Use GPS for precise matching, or enter your area manually.
+            {supportsGpsLookup
+              ? 'Use GPS for precise matching, or enter your area manually.'
+              : 'Enter your city and province manually on this device. GPS matching is available on supported iPhone and iPad builds.'}
           </Text>
 
-          <TouchableOpacity style={styles.gpsButton} onPress={handleUseGps}>
+          <TouchableOpacity
+            style={[styles.gpsButton, !supportsGpsLookup && styles.gpsButtonDisabled]}
+            onPress={handleUseGps}
+            disabled={!supportsGpsLookup}
+          >
             <Ionicons name="navigate-outline" size={16} color={theme.primary} />
-            <Text style={styles.gpsButtonText}>Use Current Location</Text>
+            <Text style={styles.gpsButtonText}>
+              {supportsGpsLookup ? 'Use Current Location' : 'Manual Entry Required'}
+            </Text>
           </TouchableOpacity>
 
           <View style={styles.formGroup}>
@@ -292,6 +310,9 @@ const createStyles = (theme: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 8,
       borderRadius: 999,
+    },
+    gpsButtonDisabled: {
+      opacity: 0.5,
     },
     gpsButtonText: {
       color: theme.primary,

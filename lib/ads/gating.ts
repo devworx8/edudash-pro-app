@@ -7,6 +7,7 @@
 
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { isUnderAgeOfConsent } from '@/lib/services/consentService';
 import { AdGatingContext } from './types';
 
 // Conditionally import NetInfo to avoid web bundling issues
@@ -71,7 +72,7 @@ export function isLearnerRole(userProfile: any): boolean {
 }
 
 /**
- * Check if user is a membership/organization user (Soil of Africa, etc.)
+ * Check if user is a membership/organization user (EduPro, etc.)
  */
 export function isMembershipUser(userProfile: any): boolean {
   if (!userProfile) return false;
@@ -91,14 +92,21 @@ export function isMembershipUser(userProfile: any): boolean {
 }
 
 /**
- * Check if user is eligible for ads (parent, learner, OR membership user)
- * Note: Teachers and principals are excluded from ads
+ * Check if user is a membership/community user (EduPro, youth leagues, etc.)
+ * School/admin roles are intentionally excluded from ads.
  */
 export function isAdsEligibleUser(userProfile: any): boolean {
   if (!userProfile) return false;
   const role = String(userProfile.role || '').toLowerCase();
+  const dateOfBirth = userProfile.date_of_birth || userProfile.dateOfBirth || null;
   if (role === 'super_admin' || role === 'superadmin') return false;
-  return isParentRole(userProfile) || isLearnerRole(userProfile) || isMembershipUser(userProfile);
+  if (['parent', 'teacher', 'student', 'learner', 'principal', 'principal_admin', 'admin'].includes(role)) {
+    return false;
+  }
+  if (isUnderAgeOfConsent(dateOfBirth)) {
+    return false;
+  }
+  return isMembershipUser(userProfile);
 }
 
 /**

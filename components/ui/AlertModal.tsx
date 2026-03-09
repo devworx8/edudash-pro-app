@@ -123,7 +123,7 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   onClose,
   type = 'info',
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const scaleAnim = React.useRef(new Animated.Value(0)).current;
   const isWeb = Platform.OS === 'web';
   const closeGuardEnabledRef = React.useRef(false);
@@ -188,8 +188,13 @@ export const AlertModal: React.FC<AlertModalProps> = ({
   }, [type, icon]);
 
   const finalIconColor = iconColor || getTypeColor();
-  const modalSurfaceColor = toOpaqueColor((theme as any).cardBackground || theme.surface, toOpaqueColor(theme.background, '#111827'));
-  const subtleSurfaceColor = toOpaqueColor((theme as any).surfaceVariant || theme.surface, modalSurfaceColor);
+  // In dark mode use a dark modal surface so title/body and buttons have clear contrast (light text on dark).
+  const modalSurfaceColor = isDark
+    ? toOpaqueColor(theme.background, '#1e293b')
+    : toOpaqueColor((theme as any).cardBackground || theme.surface, toOpaqueColor(theme.background, '#111827'));
+  const subtleSurfaceColor = isDark
+    ? toOpaqueColor((theme as any).surfaceVariant || theme.surface, '#334155')
+    : toOpaqueColor((theme as any).surfaceVariant || theme.surface, modalSurfaceColor);
   const borderColor = toOpaqueColor(theme.border, '#334155');
 
   const handleButtonPress = async (button: AlertButton) => {
@@ -224,6 +229,14 @@ export const AlertModal: React.FC<AlertModalProps> = ({
         borderColor: getTypeColor(),
       };
     }
+    // In dark mode give default buttons a distinct, visible background (e.g. primary or surface variant).
+    if (isDark) {
+      const defaultBg = index === 0 ? getTypeColor() : subtleSurfaceColor;
+      return {
+        backgroundColor: defaultBg,
+        borderColor: defaultBg,
+      };
+    }
     return {
       backgroundColor: subtleSurfaceColor,
       borderColor: theme.border,
@@ -236,6 +249,8 @@ export const AlertModal: React.FC<AlertModalProps> = ({
     const isPrimary = !isCancel && !isDestructive && index === buttons.length - 1;
 
     if (isCancel || isDestructive || isPrimary) return '#FFFFFF';
+    // In dark mode default buttons use colored/dark backgrounds; use white for contrast.
+    if (isDark) return '#FFFFFF';
     return theme.text;
   };
 

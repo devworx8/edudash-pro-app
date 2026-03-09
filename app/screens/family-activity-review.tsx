@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +16,7 @@ import { SubPageHeader } from '@/components/SubPageHeader';
 import { assertSupabase } from '@/lib/supabase';
 import { getPOPFileUrl } from '@/lib/popUpload';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 interface StudentSummary {
   id: string;
@@ -92,6 +92,7 @@ const parseMetadata = (metadata: any): Record<string, any> => {
 export default function FamilyActivityReviewScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const role = String(profile?.role || '').toLowerCase();
@@ -288,17 +289,17 @@ export default function FamilyActivityReviewScreen() {
     try {
       const signedUrl = await getPOPFileUrl('picture_of_progress', upload.file_path);
       if (!signedUrl) {
-        Alert.alert('Unable to open file', 'Could not create a secure link for this upload.');
+        showAlert({ title: 'Unable to open file', message: 'Could not create a secure link for this upload.', type: 'error' });
         return;
       }
       const canOpen = await Linking.canOpenURL(signedUrl);
       if (!canOpen) {
-        Alert.alert('Unable to open file', 'No app is available to open this file link.');
+        showAlert({ title: 'Unable to open file', message: 'No app is available to open this file link.', type: 'error' });
         return;
       }
       await Linking.openURL(signedUrl);
     } catch (openError: any) {
-      Alert.alert('Unable to open file', openError?.message || 'Please try again.');
+      showAlert({ title: 'Unable to open file', message: openError?.message || 'Please try again.', type: 'error' });
     }
   }, []);
 
@@ -457,6 +458,7 @@ export default function FamilyActivityReviewScreen() {
           )}
         </ScrollView>
       )}
+      <AlertModal {...alertProps} />
     </View>
   );
 }

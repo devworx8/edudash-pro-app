@@ -179,6 +179,13 @@ interface AlertState {
   bannerMode?: boolean;
 }
 
+type PendingDashRequest = {
+  text: string;
+  attachments: DashAttachment[];
+  signature: string;
+  queuedAt: number;
+};
+
 interface UseDashAssistantReturn {
   // State
   messages: DashMessage[];
@@ -271,6 +278,7 @@ const DASH_AI_SERVICE_TYPE: AIQuotaFeature = 'homework_help';
 const LOCAL_SNAPSHOT_LIMIT = 200;
 const LOCAL_SNAPSHOT_MAX = 200;
 const GENERIC_ACK_PATTERN = /^(ok(?:ay)?|sure|got it|let me|working on|one moment|please wait)\b/i;
+const DUPLICATE_SEND_WINDOW_MS = 1200;
 
 type ResponseLifecycleState = 'idle' | 'draft_streaming' | 'committed' | 'finalized';
 
@@ -279,6 +287,25 @@ interface ResponseLifecycleTracker {
   state: ResponseLifecycleState;
   committedText: string | null;
 }
+
+const normalizeDashRequestText = (value: string) => value.trim().replace(/\s+/g, ' ');
+
+const buildDashRequestSignature = (text: string, attachments: DashAttachment[]) => {
+  const attachmentSignature = attachments
+    .map((attachment) => [
+      attachment.kind,
+      attachment.name,
+      attachment.mimeType,
+      attachment.size,
+      attachment.storagePath,
+      attachment.previewUri,
+      attachment.uri,
+    ].join(':'))
+    .sort()
+    .join('|');
+
+  return `${normalizeDashRequestText(text)}::${attachmentSignature}`;
+};
 
 const buildTutorKickoffPrompt = (
   mode: NonNullable<UseDashAssistantOptions['externalTutorMode']>,
@@ -441,12 +468,16 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   const sttFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sttTranscriptBufferRef = useRef('');
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollFollowUpTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const lastAutoScrollAtRef = useRef<number>(0);
-  const requestQueueRef = useRef<Array<{ text: string; attachments: DashAttachment[] }>>([]);
+  const requestQueueRef = useRef<PendingDashRequest[]>([]);
   const isProcessingRef = useRef(false);
   const prevLengthRef = useRef<number>(0);
   const messagesLengthRef = useRef<number>(0);
   const isNearBottomRef = useRef<boolean>(true);
+  const initialConversationScrollRef = useRef<string | null>(null);
+  const lastQueuedRequestRef = useRef<{ signature: string; queuedAt: number } | null>(null);
+  const activeRequestSignatureRef = useRef<string | null>(null);
   const wasTypingActiveRef = useRef<boolean>(false);
   const tutorOverridesRef = useRef<Record<string, string>>({});
   const learnerContextRef = useRef<LearnerContext | null>(null);
@@ -860,37 +891,96 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       clearTimeout(scrollTimeoutRef.current);
       scrollTimeoutRef.current = null;
     }
+    if (scrollFollowUpTimersRef.current.length > 0) {
+      scrollFollowUpTimersRef.current.forEach((timer) => clearTimeout(timer));
+      scrollFollowUpTimersRef.current = [];
+    }
 
-    const performScroll = () => {
+    const performScroll = (animatedPass: boolean) => {
       const list = flashListRef.current;
       if (!list) return;
+      const lastIndex = Math.max(0, (messagesLengthRef.current || 1) - 1);
+      let didScroll = false;
+
+      if (Platform.OS === 'web') {
+        try {
+          const scrollNode = list.getScrollableNode?.() ?? list.getNativeScrollRef?.();
+          if (scrollNode) {
+            if (typeof scrollNode.scrollTo === 'function') {
+              try {
+                scrollNode.scrollTo({
+                  top: scrollNode.scrollHeight ?? 999999,
+                  behavior: animatedPass ? 'smooth' : 'auto',
+                });
+                didScroll = true;
+              } catch {
+                scrollNode.scrollTo({ y: 999999, animated: animatedPass });
+                didScroll = true;
+              }
+            } else if (typeof scrollNode.scrollTop === 'number') {
+              scrollNode.scrollTop = scrollNode.scrollHeight ?? 999999;
+              didScroll = true;
+            }
+          }
+        } catch (e) {
+          console.debug('[useDashAssistant] web DOM scroll failed:', e);
+        }
+      }
 
       try {
         if (typeof list.scrollToEnd === 'function') {
-          list.scrollToEnd({ animated });
-        } else if (typeof list.scrollToOffset === 'function') {
-          list.scrollToOffset({ offset: Number.MAX_SAFE_INTEGER, animated });
-        } else if (typeof list.scrollToIndex === 'function') {
-          const lastIndex = Math.max(0, (messagesLengthRef.current || 1) - 1);
-          list.scrollToIndex({ index: lastIndex, animated, viewPosition: 1 });
+          list.scrollToEnd({ animated: animatedPass });
+          didScroll = true;
         }
-        lastAutoScrollAtRef.current = Date.now();
       } catch (e) {
-        console.debug('[useDashAssistant] scrollToBottom failed:', e);
+        console.debug('[useDashAssistant] scrollToEnd failed:', e);
       }
+      try {
+        if (typeof list.scrollToOffset === 'function') {
+          list.scrollToOffset({ offset: 999999, animated: false });
+          didScroll = true;
+        }
+      } catch (e) {
+        console.debug('[useDashAssistant] scrollToOffset failed:', e);
+      }
+      try {
+        if (Platform.OS !== 'web' && typeof list.scrollToIndex === 'function') {
+          list.scrollToIndex({ index: lastIndex, animated: false, viewPosition: 1 });
+          didScroll = true;
+        }
+      } catch (e) {
+        console.debug('[useDashAssistant] scrollToIndex failed:', e);
+      }
+
+      if (didScroll) {
+        lastAutoScrollAtRef.current = Date.now();
+      }
+    };
+
+    const queueFollowUpScroll = (timeoutMs: number) => {
+      const timer = setTimeout(() => {
+        requestAnimationFrame(() => {
+          performScroll(false);
+        });
+      }, timeoutMs);
+      scrollFollowUpTimersRef.current.push(timer);
     };
 
     if (delay <= 0 || force) {
       requestAnimationFrame(() => {
-        performScroll();
+        performScroll(animated);
       });
+      queueFollowUpScroll(force ? 90 : 140);
+      queueFollowUpScroll(force ? 240 : 320);
       return;
     }
 
     scrollTimeoutRef.current = setTimeout(() => {
       requestAnimationFrame(() => {
-        performScroll();
+        performScroll(animated);
       });
+      queueFollowUpScroll(animated ? 180 : 110);
+      queueFollowUpScroll(animated ? 360 : 240);
     }, delay);
   }, []);
 
@@ -909,6 +999,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       if (msg.metadata && typeof msg.metadata === 'object') {
         if ('tts' in msg.metadata) meta.tts = (msg.metadata as any).tts;
         if ('ackType' in msg.metadata) meta.ackType = (msg.metadata as any).ackType;
+        if ('turn_id' in msg.metadata) meta.turn_id = (msg.metadata as any).turn_id;
       }
       return {
         id: msg.id,
@@ -1249,7 +1340,8 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
         scrollToBottom({ animated: true, delay: 120 });
       }
 
-      const userText = text || 'Attached files';
+      // Empty text is fine when the user sends only an image — Dash infers from the attachment.
+      const userText = text || '';
       let outgoingText = userText;
       let displayText = userText;
       const languageOverride = detectLanguageOverrideFromText(userText);
@@ -2311,11 +2403,15 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     isProcessingRef.current = true;
     const request = requestQueueRef.current.shift();
     
-    if (request) {
-      await sendMessageInternal(request.text, request.attachments);
+    try {
+      if (request) {
+        activeRequestSignatureRef.current = request.signature;
+        await sendMessageInternal(request.text, request.attachments);
+      }
+    } finally {
+      activeRequestSignatureRef.current = null;
+      isProcessingRef.current = false;
     }
-    
-    isProcessingRef.current = false;
     
     if (requestQueueRef.current.length > 0) {
       setTimeout(() => processQueue(), 0);
@@ -2447,7 +2543,9 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       await stopVoiceRecording();
     }
 
-    if ((!text && dashAttachments.selectedAttachments.length === 0) || !dashInstance) return;
+    const normalizedText = typeof text === 'string' ? text.trim() : '';
+    const requestAttachments = [...dashAttachments.selectedAttachments];
+    if ((!normalizedText && requestAttachments.length === 0) || !dashInstance) return;
     
     if (user?.id) {
       try {
@@ -2475,9 +2573,9 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       }
     }
 
-    if (user?.id && text) {
+    if (user?.id && normalizedText) {
       try {
-        const wantsLesson = wantsLessonGenerator(text);
+        const wantsLesson = wantsLessonGenerator(normalizedText);
         if (wantsLesson) {
           const lessonQuota = await checkAIQuota('lesson_generation', user.id, 1);
           if (!lessonQuota.allowed) {
@@ -2494,11 +2592,39 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
         console.warn('[useDashAssistant] Lesson quota check failed:', lessonQuotaError);
       }
     }
+
+    const requestSignature = buildDashRequestSignature(normalizedText, requestAttachments);
+    const now = Date.now();
+    const isQueuedDuplicate = requestQueueRef.current.some(
+      (request) => request.signature === requestSignature
+    );
+    const isActiveDuplicate = activeRequestSignatureRef.current === requestSignature;
+    const isRecentDuplicate =
+      lastQueuedRequestRef.current?.signature === requestSignature &&
+      now - (lastQueuedRequestRef.current?.queuedAt || 0) <= DUPLICATE_SEND_WINDOW_MS;
+
+    if (isQueuedDuplicate || isActiveDuplicate || isRecentDuplicate) {
+      if (__DEV__) {
+        console.debug('[useDashAssistant] Suppressed duplicate Dash send', {
+          requestSignature,
+          isQueuedDuplicate,
+          isActiveDuplicate,
+          isRecentDuplicate,
+        });
+      }
+      return;
+    }
     
     requestQueueRef.current.push({
-      text,
-      attachments: [...dashAttachments.selectedAttachments],
+      text: normalizedText,
+      attachments: requestAttachments,
+      signature: requestSignature,
+      queuedAt: now,
     });
+    lastQueuedRequestRef.current = {
+      signature: requestSignature,
+      queuedAt: now,
+    };
 
     setInputText('');
     dashAttachments.setSelectedAttachments([]);
@@ -2998,10 +3124,20 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
 
   // Auto-scroll effects
   useEffect(() => {
-    if (isInitialized && messages.length > 0 && flashListRef.current) {
-      scrollToBottom({ animated: false, delay: 300 });
-    }
-  }, [isInitialized]);
+    if (!isInitialized || messages.length === 0 || !flashListRef.current) return;
+    const activeConversationId = conversation?.id || conversationId || '__dash_default__';
+    if (initialConversationScrollRef.current === activeConversationId) return;
+    initialConversationScrollRef.current = activeConversationId;
+
+    scrollToBottom({ animated: false, delay: 0, force: true });
+    const settleTimer = setTimeout(() => {
+      scrollToBottom({ animated: false, delay: 0, force: true });
+    }, 180);
+
+    return () => {
+      clearTimeout(settleTimer);
+    };
+  }, [conversation?.id, conversationId, isInitialized, messages.length, scrollToBottom]);
 
   useEffect(() => {
     const isTypingActive = isLoading || !!loadingStatus;
@@ -3032,6 +3168,12 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     useCallback(() => {
       loadChatPrefs();
       let active = true;
+      const focusScrollTimers = [90, 240, 480].map((timeoutMs) => (
+        setTimeout(() => {
+          if (!active || messagesLengthRef.current === 0) return;
+          scrollToBottom({ animated: false, delay: 0, force: true });
+        }, timeoutMs)
+      ));
 
       if (dashInstance && conversation?.id) {
         dashInstance.getConversation(conversation.id).then((updatedConv: any) => {
@@ -3041,12 +3183,21 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
             setMessages(normalizeConversationMessages(updatedConv.messages));
             setConversation(updatedConv);
             persistConversationSnapshot(updatedConv).catch((e: unknown) => { if (__DEV__) console.warn('[DashAssistant] Suppressed:', (e as Error)?.message); });
+            [70, 210].forEach((timeoutMs) => {
+              const refreshScrollTimer = setTimeout(() => {
+                if (!active) return;
+                scrollToBottom({ animated: false, delay: 0, force: true });
+              }, timeoutMs);
+              focusScrollTimers.push(refreshScrollTimer);
+            });
           }
         }).catch((e: unknown) => { if (__DEV__) console.warn('[DashAssistant] Suppressed:', (e as Error)?.message); });
       }
 
       return () => {
         active = false;
+        initialConversationScrollRef.current = null;
+        focusScrollTimers.forEach((timer) => clearTimeout(timer));
         stopAllActivity().catch((e: unknown) => { if (__DEV__) console.warn('[DashAssistant] Suppressed:', (e as Error)?.message); });
       };
     }, [
@@ -3056,6 +3207,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       stopAllActivity,
       normalizeConversationMessages,
       persistConversationSnapshot,
+      scrollToBottom,
     ])
   );
 
@@ -3064,6 +3216,10 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
+      }
+      if (scrollFollowUpTimersRef.current.length > 0) {
+        scrollFollowUpTimersRef.current.forEach((timer) => clearTimeout(timer));
+        scrollFollowUpTimersRef.current = [];
       }
       cancelVoiceAutoSend();
       if (sttFinalizeTimerRef.current) {

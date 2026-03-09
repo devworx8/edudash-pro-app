@@ -12,7 +12,7 @@
 
 import React, { useMemo, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { router } from 'expo-router';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -168,7 +168,7 @@ export const AIQuotaDisplay: React.FC<AIQuotaDisplayProps> = ({
       service_type: serviceType,
     });
     
-    router.push('/pricing');
+    navigateToUpgrade({ source: 'quota_display' });
   }, [usageStats.percentage, serviceType, currentTier]);
   
   // Notify parent when quota is exceeded
@@ -405,7 +405,7 @@ export const AIQuotaOverview: React.FC<{
               target_tier: 'pro',
               quota_percentage: overallPercentage,
             });
-            router.push('/pricing');
+            navigateToUpgrade({ source: 'quota_overview' });
           }}
         >
           <Text style={styles.overviewUpgradeText}>

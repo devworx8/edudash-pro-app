@@ -1,12 +1,14 @@
 /**
- * DashTutorWhiteboard — Interactive whiteboard for concept explanations
+ * DashTutorWhiteboard — Chalkboard with live diagram rendering
  *
- * Appears when Dash explains a concept (e.g. multiplication) with [WHITEBOARD]...[/WHITEBOARD].
- * Teacher-at-board style: student sees the explanation, then confirms understanding to dismiss.
- * Only shown for concept explanations, not randomly.
+ * When Dash wraps content in [WHITEBOARD]...[/WHITEBOARD]:
+ *  - Detects the diagram type (long division, fraction, column addition, etc.)
+ *  - Renders an actual SVG diagram as a teacher would draw it on a board
+ *  - Reveals each step as the student taps "Next"
+ *  - Falls back to chalk text lines when no diagram is detected
  */
 
-import React, { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -15,16 +17,30 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  Easing,
+  FadeIn,
+  FadeInDown,
+} from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme } from '@/contexts/ThemeContext';
+import Svg, {
+  Line,
+  Text as SvgText,
+  G,
+} from 'react-native-svg';
+import { clampPercent } from '@/lib/progress/clampPercent';
+import MathRenderer from '../ai/dash-assistant/MathRenderer';
 
-// Always create a fresh regex instance — module-level `g`/`gi` regexes are stateful
-// and cause .exec() to return null on subsequent calls once lastIndex advances past a match.
+// ─── Regex helpers ────────────────────────────────────────────────────────────
 function whiteboardRegex(): RegExp {
   return /\[WHITEBOARD\]([\s\S]*?)\[\/WHITEBOARD\]/gi;
 }
-
-// Matches orphan/unclosed WHITEBOARD tags (e.g. AI omits closing tag)
 function orphanTagRegex(): RegExp {
   return /\[\/?\s*WHITEBOARD\s*\]/gi;
 }
@@ -34,20 +50,15 @@ export interface WhiteboardContent {
   lines: string[];
 }
 
-/** Extract whiteboard content from AI response. Returns null if none. */
 export function extractWhiteboardContent(response: string): WhiteboardContent | null {
   const match = whiteboardRegex().exec(response);
   if (!match?.[1]) return null;
   const raw = match[1].trim();
   if (!raw) return null;
-  const lines = raw
-    .split(/\n+/)
-    .map((l) => l.trim())
-    .filter(Boolean);
+  const lines = raw.split(/\n+/).map((l) => l.trim()).filter(Boolean);
   return { raw, lines };
 }
 
-/** Strip [WHITEBOARD]...[/WHITEBOARD] blocks (and orphan tags) from display text. */
 export function stripWhiteboardFromDisplay(text: string): string {
   return text
     .replace(whiteboardRegex(), '')
@@ -56,156 +67,711 @@ export function stripWhiteboardFromDisplay(text: string): string {
     .trim();
 }
 
-export interface DashTutorWhiteboardProps {
-  content: WhiteboardContent;
-  onDismiss: () => void;
-  onUnderstood?: () => void;
+// ─── Design palette ───────────────────────────────────────────────────────────
+const C = {
+  // Text / chalk
+  white:  '#f1f5f9',
+  yellow: '#fde68a',
+  cyan:   '#67e8f9',
+  green:  '#86efac',
+  pink:   '#f9a8d4',
+  dim:    'rgba(241,245,249,0.4)',
+  board:  'transparent',
+  // UI chrome — indigo/violet theme
+  indigo:   '#6366f1',
+  violet:   '#8b5cf6',
+  indigoD:  '#4f46e5',
+  indigoGl: 'rgba(99,102,241,0.15)',
+  border:   'rgba(99,102,241,0.4)',
+};
+
+// ─── Long Division ────────────────────────────────────────────────────────────
+interface DivStep {
+  carry:        number;  // working number at this step
+  quotientDigit:number;
+  product:      number;  // quotientDigit × divisor
+  remainder:    number;
+  posEnd:       number;  // rightmost dividend column this step covers
 }
 
-export function DashTutorWhiteboard({
-  content,
-  onDismiss,
-  onUnderstood,
-}: DashTutorWhiteboardProps) {
-  const { theme } = useTheme();
+interface LongDivData {
+  dividend:    number;
+  divisor:     number;
+  dividendStr: string;
+  divisorStr:  string;
+  quotientStr: string;
+  steps:       DivStep[];
+}
 
-  const handleUnderstood = useCallback(() => {
-    onUnderstood?.();
-    onDismiss();
-  }, [onDismiss, onUnderstood]);
+function performLongDivision(dividend: number, divisor: number): LongDivData {
+  const dividendStr = String(dividend);
+  const divisorStr  = String(divisor);
+  const steps: DivStep[] = [];
+  const qDigits: string[] = [];
+  let current = 0;
+  let started = false;
 
-  const styles = useMemo(
-    () =>
-      StyleSheet.create({
-        overlay: {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 1000,
-          padding: 16,
-        },
-        board: {
-          backgroundColor: '#f8f9fa',
-          borderRadius: 16,
-          width: '100%',
-          maxWidth: 400,
-          maxHeight: '70%',
-          borderWidth: 2,
-          borderColor: theme.border || '#e2e8f0',
-          ...Platform.select({
-            web: { boxShadow: '0 8px 32px rgba(0,0,0,0.15)' },
-            default: { elevation: 8 },
-          }),
-        },
-        header: {
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: 16,
-          paddingVertical: 12,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border || '#e2e8f0',
-        },
-        title: {
-          fontSize: 16,
-          fontWeight: '600',
-          color: theme.text || '#1e293b',
-        },
-        closeBtn: {
-          padding: 4,
-        },
-        scroll: {
-          padding: 20,
-          maxHeight: 320,
-        },
-        line: {
-          fontSize: 18,
-          lineHeight: 28,
-          color: theme.text || '#334155',
-          marginBottom: 8,
-          fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-        },
-        step: {
-          fontSize: 16,
-          lineHeight: 24,
-          color: theme.text || '#475569',
-          marginBottom: 6,
-          paddingLeft: 8,
-          borderLeftWidth: 3,
-          borderLeftColor: theme.primary || '#6366f1',
-        },
-        footer: {
-          flexDirection: 'row',
-          justifyContent: 'flex-end',
-          gap: 12,
-          padding: 16,
-          borderTopWidth: 1,
-          borderTopColor: theme.border || '#e2e8f0',
-        },
-        btn: {
-          paddingHorizontal: 20,
-          paddingVertical: 10,
-          borderRadius: 10,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-        },
-        btnSecondary: {
-          backgroundColor: theme.surface || '#f1f5f9',
-        },
-        btnPrimary: {
-          backgroundColor: theme.primary || '#6366f1',
-        },
-        btnText: {
-          fontSize: 15,
-          fontWeight: '600',
-        },
-      }),
-    [theme]
-  );
+  for (let i = 0; i < dividendStr.length; i++) {
+    current = current * 10 + parseInt(dividendStr[i], 10);
+    if (!started && current < divisor && i < dividendStr.length - 1) continue;
+    started = true;
 
-  const renderLine = (line: string, i: number) => {
-    const isStep = /^\d+[.)]\s/.test(line) || line.startsWith('- ') || line.startsWith('• ');
-    return (
-      <Text key={i} style={isStep ? styles.step : styles.line}>
-        {line}
-      </Text>
-    );
+    const qd      = Math.floor(current / divisor);
+    const product  = qd * divisor;
+    const rem      = current - product;
+    qDigits.push(String(qd));
+    steps.push({ carry: current, quotientDigit: qd, product, remainder: rem, posEnd: i });
+    current = rem;
+  }
+
+  return {
+    dividend, divisor, dividendStr, divisorStr,
+    quotientStr: qDigits.join('') || '0',
+    steps,
   };
+}
+
+function parseLongDivision(lines: string[]): LongDivData | null {
+  const re = /(\d+)\s*[÷\/]\s*(\d+)/;
+  for (const l of lines) {
+    const m = re.exec(l);
+    if (m) {
+      const dividend = parseInt(m[1], 10);
+      const divisor  = parseInt(m[2], 10);
+      if (divisor === 0) return null;
+      return performLongDivision(dividend, divisor);
+    }
+  }
+  return null;
+}
+
+// ─── Long Division SVG Diagram ────────────────────────────────────────────────
+const CELL    = 30;   // px per digit column
+const ROW_H   = 44;   // px per row
+const FS      = 20;   // font size
+const MONO    = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+
+function LongDivisionDiagram({
+  data,
+  revealed,
+}: {
+  data:     LongDivData;
+  revealed: number; // 0 = problem only; 1..N = each step revealed
+}) {
+  const { dividendStr, divisorStr, steps } = data;
+  const dvnLen  = dividendStr.length;
+  const divLen  = divisorStr.length;
+
+  // Layout constants
+  const GUTTER     = 14;
+  const DIV_AREA_W = divLen * CELL + 32;   // space for divisor digits + bracket gap
+  const DVN_W      = dvnLen * CELL;
+  const SVG_W      = GUTTER * 2 + DIV_AREA_W + DVN_W;
+
+  // Total rows: quotient(1) + dividend(1) + per step: product(1) + remainder/carry(1)
+  const totalRows = 2 + steps.length * 2;
+  const SVG_H     = totalRows * ROW_H + 12;
+
+  // x center of dividend column `col`
+  const cx = (col: number) => GUTTER + DIV_AREA_W + col * CELL + CELL / 2;
+  // y center of row `row`
+  const ry = (row: number) => row * ROW_H + ROW_H / 2 + 6;
+
+  const vincX  = GUTTER + DIV_AREA_W - 6;
+  const vincX2 = GUTTER + DIV_AREA_W + DVN_W + 6;
+  const vincY  = ROW_H;   // top of vinculum = bottom of quotient row
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.board}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Whiteboard</Text>
-          <TouchableOpacity onPress={onDismiss} style={styles.closeBtn} accessibilityLabel="Close">
-            <Ionicons name="close" size={24} color={theme.textSecondary || '#64748b'} />
-          </TouchableOpacity>
+    <Svg width={SVG_W} height={SVG_H}>
+
+      {/* Divisor */}
+      <SvgText
+        x={GUTTER + DIV_AREA_W - 28}
+        y={ry(1)}
+        textAnchor="end"
+        fill={C.white} fontSize={FS} fontFamily={MONO}
+      >
+        {divisorStr}
+      </SvgText>
+
+      {/* Division bracket ⌐ — vinculum (top) + vertical arm */}
+      <Line x1={vincX} y1={vincY} x2={vincX2} y2={vincY}
+            stroke={C.white} strokeWidth={2} />
+      <Line x1={vincX} y1={vincY} x2={vincX} y2={vincY + ROW_H + 6}
+            stroke={C.white} strokeWidth={2} />
+
+      {/* Dividend digits */}
+      {dividendStr.split('').map((d, i) => (
+        <SvgText key={`dvn${i}`}
+          x={cx(i)} y={ry(1)}
+          textAnchor="middle"
+          fill={C.white} fontSize={FS} fontFamily={MONO}
+        >{d}</SvgText>
+      ))}
+
+      {/* Steps — revealed one at a time */}
+      {steps.map((step, si) => {
+        if (si >= revealed) return null;
+
+        const prodStr = String(step.product);
+        const prodLen = prodStr.length;
+        const prodStart = step.posEnd - prodLen + 1;
+        const stepRow   = 2 + si * 2;
+        const remRow    = stepRow + 1;
+        const isLast    = si === steps.length - 1;
+
+        // Rule line under subtraction
+        const ruleX1 = cx(prodStart) - CELL / 2 - 4;
+        const ruleX2 = cx(step.posEnd)  + CELL / 2 + 4;
+        const ruleY  = stepRow * ROW_H + ROW_H - 4;
+
+        // Carry / bring-down string for non-last steps
+        const carryStr = isLast ? String(step.remainder) : String(steps[si + 1]?.carry ?? '');
+        const carryLen = carryStr.length;
+        // The carry sits ending at column posEnd+1 (i.e. one further right than current posEnd)
+        const carryEndCol = isLast ? step.posEnd : step.posEnd + 1;
+        const carryStart  = carryEndCol - carryLen + 1;
+
+        return (
+          <G key={`step${si}`}>
+            {/* Minus sign */}
+            <SvgText
+              x={cx(prodStart) - CELL * 0.75}
+              y={ry(stepRow)}
+              textAnchor="middle"
+              fill={C.cyan} fontSize={FS} fontFamily={MONO}
+            >−</SvgText>
+
+            {/* Product digits */}
+            {prodStr.split('').map((d, di) => (
+              <SvgText key={`prod${si}${di}`}
+                x={cx(prodStart + di)} y={ry(stepRow)}
+                textAnchor="middle"
+                fill={C.cyan} fontSize={FS} fontFamily={MONO}
+              >{d}</SvgText>
+            ))}
+
+            {/* Rule */}
+            <Line x1={ruleX1} y1={ruleY} x2={ruleX2} y2={ruleY}
+                  stroke={C.white} strokeWidth={1.5} />
+
+            {/* Remainder / carry */}
+            {carryStr.split('').map((d, di) => (
+              <SvgText key={`carry${si}${di}`}
+                x={cx(carryStart + di)} y={ry(remRow)}
+                textAnchor="middle"
+                fill={isLast ? (step.remainder === 0 ? C.green : C.pink) : C.white}
+                fontSize={FS} fontFamily={MONO}
+              >{d}</SvgText>
+            ))}
+
+            {/* Quotient digit — appears above the vinculum over column posEnd */}
+            <SvgText
+              x={cx(step.posEnd)} y={ry(0)}
+              textAnchor="middle"
+              fill={C.yellow} fontSize={FS} fontFamily={MONO}
+              fontWeight="bold"
+            >{step.quotientDigit}</SvgText>
+          </G>
+        );
+      })}
+
+      {/* Answer label — only when all steps revealed */}
+      {revealed >= steps.length && (
+        <SvgText
+          x={vincX2 + 8} y={ry(0)}
+          textAnchor="start"
+          fill={C.green} fontSize={14} fontFamily={MONO}
+        >✓</SvgText>
+      )}
+    </Svg>
+  );
+}
+
+// ─── Markdown stripper ────────────────────────────────────────────────────────
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/, '')           // ## headings
+    .replace(/\*\*(.+?)\*\*/g, '$1')     // **bold**
+    .replace(/\*(.+?)\*/g, '$1')         // *italic*
+    .replace(/__(.+?)__/g, '$1')         // __bold__
+    .replace(/_([^_]+)_/g, '$1')         // _italic_
+    .replace(/`([^`]+)`/g, '$1');        // `code`
+}
+
+// ─── Math segment parser ──────────────────────────────────────────────────────
+type ChalkSegment = { type: 'text' | 'inlineMath'; content: string };
+
+function splitInlineMath(text: string): ChalkSegment[] {
+  const segments: ChalkSegment[] = [];
+  const re = /\$([^$\n]+?)\$/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > cursor) segments.push({ type: 'text', content: text.slice(cursor, match.index) });
+    segments.push({ type: 'inlineMath', content: match[1] });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) segments.push({ type: 'text', content: text.slice(cursor) });
+  return segments;
+}
+
+// ─── Line classifier (for text fallback) ─────────────────────────────────────
+type LineKind = 'heading' | 'equation' | 'step' | 'result' | 'plain';
+
+function classifyLine(line: string): LineKind {
+  if (/^#+\s/.test(line) || /^[A-Z\s\d:]{6,}$/.test(line)) return 'heading';
+  if (/[=÷×+\-±√∑∫∞→]/.test(line) || /\d+\s*[÷×+\-]\s*\d+/.test(line)) return 'equation';
+  if (/^\d+[.)]\s|^Step\s*\d|^[•·▶]\s/.test(line)) return 'step';
+  if (/^(Answer|Result|So|Therefore|∴)\b/i.test(line)) return 'result';
+  return 'plain';
+}
+
+const KIND_COLORS: Record<LineKind, string> = {
+  heading:  C.yellow,
+  equation: C.cyan,
+  step:     C.green,
+  result:   C.pink,
+  plain:    C.white,
+};
+const KIND_SIZES: Record<LineKind, number> = {
+  heading: 19, equation: 21, step: 16, result: 18, plain: 15,
+};
+
+function ChalkLine({ line, index }: { line: string; index: number }) {
+  const kind  = classifyLine(line);
+  const color = KIND_COLORS[kind];
+  const size  = KIND_SIZES[kind];
+
+  const wipe    = useSharedValue(0);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    const delay = index * 260;
+    opacity.value = withDelay(delay, withTiming(1, { duration: 100 }));
+    wipe.value    = withDelay(delay, withTiming(1, {
+      duration: Math.max(280, line.length * 16),
+      easing: Easing.out(Easing.quad),
+    }));
+  }, []);
+
+  const anim = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scaleX: wipe.value }],
+  }));
+
+  const stepNum = kind === 'step'
+    ? (line.match(/^(\d+)[.)]/) || line.match(/Step\s*(\d+)/i) || [])[1]
+    : null;
+
+  const rawDisplay = kind === 'step'
+    ? line.replace(/^[•·▶]\s|^\d+[.)]\s/, '').replace(/^Step\s*\d+:?\s*/i, '')
+    : line;
+  const display = stripMarkdown(rawDisplay);
+
+  const chalkTextStyle = [styles.chalkText, {
+    color, fontSize: size,
+    fontFamily: Platform.OS === 'ios' ? 'Chalkboard SE' : MONO,
+    fontWeight: (kind === 'heading' || kind === 'result') ? '700' : '400',
+    textShadowColor: color + '44',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  } as const, kind === 'heading' && { letterSpacing: 1, textTransform: 'uppercase' as const }];
+
+  // ── Display math: entire line is $$...$$
+  const displayMathMatch = /^\$\$([\s\S]*?)\$\$$/.exec(display.trim());
+  if (displayMathMatch) {
+    return (
+      <Animated.View style={[styles.lineRow, styles.equationRow, anim]}>
+        <MathRenderer expression={displayMathMatch[1].trim()} displayMode={true} />
+      </Animated.View>
+    );
+  }
+
+  // ── Inline math: line contains $...$
+  const hasInlineMath = /\$[^$\n]+?\$/.test(display);
+  if (hasInlineMath) {
+    const segments = splitInlineMath(display);
+    return (
+      <Animated.View style={[styles.lineRow,
+        kind === 'heading' && styles.headingRow,
+        kind === 'equation' && styles.equationRow,
+        kind === 'result'  && styles.resultRow,
+        anim,
+      ]}>
+        {stepNum ? (
+          <View style={[styles.stepBadge, { borderColor: color }]}>
+            <Text style={[styles.stepNum, { color }]}>{stepNum}</Text>
+          </View>
+        ) : null}
+        <Text style={[chalkTextStyle, { flex: 1 }]}>
+          {segments.map((seg, i) =>
+            seg.type === 'text' ? (
+              <Text key={i}>{seg.content}</Text>
+            ) : (
+              // Inline math: render as italic cyan monospace — avoids block-div layout issues
+              <Text key={i} style={{
+                color: C.cyan,
+                fontFamily: MONO,
+                fontStyle: 'italic',
+                fontWeight: '600',
+              }}>{seg.content}</Text>
+            )
+          )}
+        </Text>
+      </Animated.View>
+    );
+  }
+
+  return (
+    <Animated.View style={[styles.lineRow,
+      kind === 'heading' && styles.headingRow,
+      kind === 'equation' && styles.equationRow,
+      kind === 'result'  && styles.resultRow,
+      anim,
+    ]}>
+      {stepNum ? (
+        <View style={[styles.stepBadge, { borderColor: color }]}>
+          <Text style={[styles.stepNum, { color }]}>{stepNum}</Text>
         </View>
-        <ScrollView style={styles.scroll} showsVerticalScrollIndicator>
-          {content.lines.map(renderLine)}
-        </ScrollView>
-        <View style={styles.footer}>
-          <TouchableOpacity
-            style={[styles.btn, styles.btnSecondary]}
-            onPress={onDismiss}
-          >
-            <Text style={[styles.btnText, { color: theme.text }]}>Close</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.btn, styles.btnPrimary]}
-            onPress={handleUnderstood}
-          >
-            <Ionicons name="checkmark-circle" size={18} color="#fff" />
-            <Text style={[styles.btnText, { color: '#fff' }]}>I understand</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      ) : null}
+      <Text style={chalkTextStyle}>
+        {display}
+      </Text>
+    </Animated.View>
+  );
+}
+
+function RulingLines() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {Array.from({ length: 12 }).map((_, i) => (
+        <View key={i} style={{
+          position: 'absolute', top: 68 + i * 44, left: 14, right: 14,
+          height: 1, backgroundColor: 'rgba(99,102,241,0.07)',
+        }} />
+      ))}
     </View>
   );
 }
+
+// ─── Main Component ───────────────────────────────────────────────────────────
+export interface DashTutorWhiteboardProps {
+  content:      WhiteboardContent;
+  onDismiss:    () => void;
+  onUnderstood?: () => void;
+}
+
+export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTutorWhiteboardProps) {
+  // Detect diagram type
+  const divData = parseLongDivision(content.lines);
+  const hasDiagram = !!divData;
+
+  // Total "pages": diagram steps + text lines
+  const diagramSteps = divData ? divData.steps.length : 0;
+  const textLines    = content.lines;
+  const totalSteps   = hasDiagram
+    ? diagramSteps + textLines.length   // diagram first, then text explanation
+    : textLines.length;
+
+  const [step, setStep]       = useState(0);
+  const [paused, setPaused]   = useState(false);
+  const [finished, setFinished] = useState(false);
+  const scrollRef             = useRef<ScrollView>(null);
+
+  const AUTOPLAY_MS = hasDiagram ? 1800 : 2200;
+
+  const diagramRevealed = hasDiagram ? Math.min(step, diagramSteps) : 0;
+  const textRevealed    = hasDiagram
+    ? Math.max(0, step - diagramSteps)
+    : step + 1;   // text-only: reveal from step 0 (show line 0 immediately)
+
+  const allDone = step >= totalSteps - (hasDiagram ? 0 : 1);
+
+  // Auto-advance
+  useEffect(() => {
+    if (paused || allDone) return;
+    const t = setTimeout(() => setStep((s) => s + 1), AUTOPLAY_MS);
+    return () => clearTimeout(t);
+  }, [step, paused, allDone, AUTOPLAY_MS]);
+
+  // Mark finished so replay button can appear
+  useEffect(() => {
+    if (allDone) setFinished(true);
+  }, [allDone]);
+
+  const handleNext = useCallback(() => {
+    if (allDone) {
+      onUnderstood?.();
+      onDismiss();
+    } else {
+      setStep((s) => s + 1);
+    }
+  }, [allDone, onDismiss, onUnderstood]);
+
+  const handleReplay = useCallback(() => {
+    setStep(0);
+    setFinished(false);
+    setPaused(false);
+  }, []);
+
+  useEffect(() => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  }, [step]);
+
+  const visibleLines = textLines.slice(0, textRevealed);
+
+  // Progress: how far through the total journey
+  const progressFrac = totalSteps > 0 ? Math.min(step / (totalSteps - (hasDiagram ? 0 : 1)), 1) : 1;
+  const progressWidth = clampPercent(progressFrac * 100, {
+    source: 'components/ai/DashTutorWhiteboard.progress',
+  });
+
+  return (
+    <Animated.View entering={FadeIn.duration(180)} style={styles.overlay}>
+      <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
+
+      <Animated.View entering={FadeInDown.duration(280).springify()} style={styles.board}>
+        {/* Deep-space background */}
+        <LinearGradient
+          colors={['#080d1e', '#0c1233', '#080a18']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        {/* Indigo top-glow vignette */}
+        <LinearGradient
+          colors={['rgba(99,102,241,0.18)', 'rgba(99,102,241,0.04)', 'transparent']}
+          start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        {/* Edge darkening */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.25)']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <RulingLines />
+
+        {/* Header tray */}
+        <View style={styles.tray}>
+          <View style={styles.trayLeft}>
+            <View style={styles.trayIconWrap}>
+              <Ionicons name="telescope-outline" size={14} color={C.indigo} />
+            </View>
+            <Text style={styles.trayTitle}>Dash Board</Text>
+          </View>
+          <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
+            <Ionicons name="close-circle" size={21} color="rgba(165,180,252,0.45)" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView ref={scrollRef} style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}>
+
+          {/* ── SVG Diagram ── */}
+          {hasDiagram && divData && (
+            <View style={styles.diagramWrap}>
+              {/* Problem label */}
+              <Text style={styles.diagramLabel}>
+                {divData.dividend} ÷ {divData.divisor}
+              </Text>
+              <LongDivisionDiagram data={divData} revealed={diagramRevealed} />
+              {/* Answer callout once all diagram steps are revealed */}
+              {diagramRevealed >= diagramSteps && (
+                <Animated.View entering={FadeIn.duration(300)} style={styles.answerBubble}>
+                  <Text style={styles.answerText}>
+                    {divData.dividend} ÷ {divData.divisor} = {divData.quotientStr}
+                  </Text>
+                </Animated.View>
+              )}
+            </View>
+          )}
+
+          {/* ── Chalk text explanation ── */}
+          {visibleLines.length > 0 && (
+            <View style={styles.textSection}>
+              {hasDiagram && (
+                <View style={styles.textDivider}>
+                  <View style={styles.textDividerLine} />
+                  <Text style={styles.textDividerLabel}>How it works</Text>
+                  <View style={styles.textDividerLine} />
+                </View>
+              )}
+              {visibleLines.map((line, i) => (
+                <ChalkLine key={i} line={line} index={i} />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Progress bar */}
+        <View style={styles.progressTrack}>
+          <View style={[styles.progressFill, { width: `${progressWidth}%` as any }]} />
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          {finished ? (
+            <TouchableOpacity style={styles.skipBtn} onPress={handleReplay}>
+              <Ionicons name="refresh" size={16} color={C.cyan} />
+              <Text style={[styles.skipText, { color: C.cyan, marginLeft: 4 }]}>Replay</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.skipBtn} onPress={() => setPaused((p) => !p)}>
+              <Ionicons name={paused ? 'play' : 'pause'} size={16} color="rgba(165,180,252,0.5)" />
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.footerCenter}>
+            <Text style={styles.footerHint}>
+              {hasDiagram && step < diagramSteps
+                ? `Step ${step + 1} of ${diagramSteps}`
+                : allDone
+                  ? 'All done!'
+                  : `${textRevealed} / ${textLines.length}`}
+            </Text>
+          </View>
+
+          <TouchableOpacity style={styles.nextBtn} onPress={handleNext} activeOpacity={0.8}>
+            <LinearGradient
+              colors={allDone ? ['#10b981', '#059669'] : ['#6366f1', '#4f46e5']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.nextGrad}
+            >
+              <Ionicons
+                name={allDone ? 'checkmark-circle' : 'arrow-forward-circle'}
+                size={18} color="#fff"
+              />
+              <Text style={styles.nextText}>
+                {allDone ? 'Got it!' : hasDiagram && step < diagramSteps ? 'Next step' : 'Next'}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  overlay: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: 16,
+  },
+  board: {
+    width: '100%', maxWidth: 430, maxHeight: '86%',
+    borderRadius: 16, overflow: 'hidden',
+    borderWidth: 1.5, borderColor: 'rgba(99,102,241,0.5)',
+    elevation: 24,
+    shadowColor: '#6366f1', shadowOpacity: 0.35, shadowRadius: 32, shadowOffset: { width: 0, height: 12 },
+  },
+  tray: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(99,102,241,0.25)',
+    backgroundColor: 'rgba(99,102,241,0.1)',
+  },
+  trayLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trayIconWrap: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.2)',
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  trayTitle: {
+    color: '#a5b4fc', fontSize: 12, fontWeight: '700', letterSpacing: 1.1,
+    textTransform: 'uppercase',
+  },
+  closeBtn: { padding: 2 },
+
+  scroll: { maxHeight: 380 },
+  scrollContent: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 6 },
+
+  // Diagram
+  diagramWrap: {
+    alignItems: 'center', paddingTop: 8, paddingBottom: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.08)',
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)',
+    marginBottom: 8,
+  },
+  diagramLabel: {
+    color: 'rgba(165,180,252,0.6)', fontSize: 11, letterSpacing: 0.8,
+    fontWeight: '600', marginBottom: 6, textTransform: 'uppercase',
+  },
+  answerBubble: {
+    marginTop: 10,
+    paddingHorizontal: 18, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1.5, borderColor: C.green,
+    backgroundColor: 'rgba(134,239,172,0.1)',
+  },
+  answerText: {
+    color: C.green, fontSize: 17, fontWeight: '700', letterSpacing: 0.4,
+    fontFamily: Platform.OS === 'ios' ? 'Chalkboard SE' : 'monospace',
+  },
+
+  // Text section
+  textSection: { paddingTop: 4 },
+  textDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, marginTop: 4 },
+  textDividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(99,102,241,0.2)' },
+  textDividerLabel: {
+    color: 'rgba(165,180,252,0.45)', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase',
+  },
+
+  // Chalk lines
+  lineRow: {
+    flexDirection: 'row', alignItems: 'center', marginBottom: 9, gap: 8,
+  },
+  headingRow: {
+    borderBottomWidth: 1, borderBottomColor: 'rgba(253,230,138,0.2)',
+    paddingBottom: 5, marginBottom: 12,
+  },
+  equationRow: {
+    backgroundColor: 'rgba(99,102,241,0.1)',
+    borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+    borderLeftWidth: 2, borderLeftColor: 'rgba(99,102,241,0.6)',
+  },
+  resultRow: {
+    backgroundColor: 'rgba(249,168,212,0.07)',
+    borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+    borderLeftWidth: 2.5, borderLeftColor: C.pink,
+  },
+  chalkText: { flex: 1, lineHeight: 26 },
+  stepBadge: {
+    width: 22, height: 22, borderRadius: 11, borderWidth: 1.5,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  stepNum: { fontSize: 11, fontWeight: '700' },
+
+  // Progress
+  progressTrack: {
+    height: 3, backgroundColor: 'rgba(99,102,241,0.15)', marginHorizontal: 14, borderRadius: 2,
+  },
+  progressFill: {
+    height: 3, backgroundColor: C.indigo, borderRadius: 2,
+  },
+
+  // Footer
+  footer: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 11,
+    borderTopWidth: 1, borderTopColor: 'rgba(99,102,241,0.25)',
+    backgroundColor: 'rgba(8,13,30,0.85)',
+  },
+  footerCenter: { flex: 1, alignItems: 'center' },
+  footerHint: {
+    color: 'rgba(165,180,252,0.5)', fontSize: 11, letterSpacing: 0.5,
+  },
+  skipBtn: { paddingHorizontal: 10, paddingVertical: 6 },
+  skipText: { color: 'rgba(165,180,252,0.6)', fontSize: 13 },
+  nextBtn: { borderRadius: 22, overflow: 'hidden' },
+  nextGrad: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 18, paddingVertical: 9,
+  },
+  nextText: { color: '#fff', fontSize: 14, fontWeight: '700', letterSpacing: 0.3 },
+});

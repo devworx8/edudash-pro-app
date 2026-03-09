@@ -17,6 +17,8 @@ import { useLearnerEnrollments } from '@/hooks/useLearnerData';
 import { MobileNavDrawer } from '@/components/navigation/MobileNavDrawer';
 import { QuickActions } from '@/components/learner/QuickActions';
 import type { LearnerQuickAction } from '@/components/learner/QuickActions';
+import { StreakBadge } from '@/components/dashboard/cards/StreakBadge';
+import { XPProgressBar } from '@/components/dashboard/cards/XPProgressBar';
 import { logger } from '@/lib/logger';
 
 const TAG = 'StudentDashboard';
@@ -191,6 +193,10 @@ export default function StudentDashboard() {
             {t('student.continue_learning', { defaultValue: 'Continue your learning journey' })}
           </Text>
         </View>
+
+        {/* Streak & XP Progress */}
+        <StreakBadge />
+        <XPProgressBar />
 
         {/* AI Quota Display */}
         <AIQuotaDisplay 

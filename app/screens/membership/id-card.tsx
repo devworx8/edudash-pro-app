@@ -106,7 +106,7 @@ export default function MemberIDCardScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `${member.first_name} ${member.last_name}\nMember ID: ${member.member_number}\nOrganization: ${member.organization?.name || 'Soil of Africa'}\nStatus: ${member.membership_status}`,
+        message: `${member.first_name} ${member.last_name}\nMember ID: ${member.member_number}\nOrganization: ${member.organization?.name || 'EduPro'}\nStatus: ${member.membership_status}`,
         title: 'My Membership ID',
       });
     } catch (error) {

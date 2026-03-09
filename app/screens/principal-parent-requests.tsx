@@ -11,6 +11,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { InviteCodeService } from '@/lib/services/inviteCodeService';
 import { toast } from '@/components/ui/ToastProvider';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
+import { buildEduDashWebUrl } from '@/lib/config/urls';
 
 export default function PrincipalParentRequestsScreen() {
   const { user, profile } = useAuth();
@@ -309,7 +310,7 @@ export default function PrincipalParentRequestsScreen() {
       const studentCode = selectedStudent.student_id || selectedStudent.id.slice(0, 8).toUpperCase();
       const childName = `${selectedStudent.first_name} ${selectedStudent.last_name}`;
       const schoolName = profile?.organization_name || 'your school';
-      const inviteLink = `https://www.edudashpro.org.za/invite/parent?code=${encodeURIComponent(invite.code)}`;
+      const inviteLink = buildEduDashWebUrl(`/invite/parent?code=${encodeURIComponent(invite.code)}`);
       const subject = `EduDash Pro invite from ${schoolName}`;
       const message = `Hello,\n\nYou've been invited to connect to ${schoolName} on EduDash Pro.\n\nChild: ${childName}\nStudent Code: ${studentCode}\n\nUse this invite code: ${invite.code}\nInvite Link: ${inviteLink}\n\nOnce you sign up, the school will connect your account to ${childName}.\n`;
       const html = `

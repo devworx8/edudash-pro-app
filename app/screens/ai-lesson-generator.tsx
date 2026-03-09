@@ -3,14 +3,14 @@
  * Creates AI-powered lesson plans using Anthropic Claude models.
  * @module app/screens/ai-lesson-generator
  */
-
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, TextInput } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { router, useLocalSearchParams } from 'expo-router';
-
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { assertSupabase } from '@/lib/supabase';
 import { LessonGeneratorService } from '@/lib/ai/lessonGenerator';
 import { setPreferredModel } from '@/lib/ai/preferences';
@@ -35,31 +35,25 @@ import {
   summarizeQuickLessonContext,
   type QuickLessonThemeContext,
 } from '@/lib/lesson-planning/quickLessonThemeContext';
-
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 type LanguageCode = 'en' | 'es' | 'fr' | 'pt' | 'de' | 'af' | 'zu' | 'st';
-
 type LessonSectionCard = {
   title: string;
   body: string;
 };
-
 function parseLessonSections(raw: string): LessonSectionCard[] {
   const text = String(raw || '').trim();
   if (!text) return [];
-
   const lines = text.split('\n');
   const sections: LessonSectionCard[] = [];
   let currentTitle = 'Overview';
   let buffer: string[] = [];
-
   const pushSection = () => {
     const body = buffer.join('\n').trim();
     if (!body) return;
     sections.push({ title: currentTitle, body });
     buffer = [];
   };
-
   lines.forEach((line) => {
     const headingMatch = line.match(/^#{1,3}\s+(.+)$/);
     if (headingMatch) {
@@ -69,19 +63,17 @@ function parseLessonSections(raw: string): LessonSectionCard[] {
     }
     buffer.push(line);
   });
-
   pushSection();
   return sections.length > 0 ? sections : [{ title: 'Lesson', body: text }];
 }
-
 export default function AILessonGeneratorScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { profile, user } = useAuth();
   const palette = useMemo(() => ({
     bg: theme.background, text: theme.text, textSec: theme.textSecondary,
     outline: theme.border, surface: theme.surface, primary: theme.primary, accent: theme.accent,
   }), [theme]);
-
   // Form state
   const [topic, setTopic] = useState('Fractions');
   const [subject, setSubject] = useState('Mathematics');
@@ -99,7 +91,6 @@ export default function AILessonGeneratorScreen() {
   const flags = getFeatureFlagsSync();
   const progressContractEnabled = flags.progress_contract_v1 !== false;
   const lessonFullscreenEnabled = flags.lesson_fullscreen_v1 !== false;
-
   // Search params for prefill
   const searchParams = useLocalSearchParams<{
     topic?: string;
@@ -115,7 +106,6 @@ export default function AILessonGeneratorScreen() {
   const modeParam = Array.isArray(searchParams?.mode) ? searchParams.mode[0] : searchParams?.mode;
   const isQuickMode = modeParam === 'quick';
   const schoolId = profile?.organization_id || profile?.preschool_id || null;
-
   // Hooks
   const { generated, setGenerated, pending, progress, progressPhase, progressMessage, errorMsg, lastPayload, usage, quotaStatus, isQuotaExhausted, onGenerate, onCancel, refreshUsage } = useAILessonGeneration();
   const { availableModels, selectedModel, setSelectedModel, isLoading: modelsLoading } = useLessonGeneratorModels();
@@ -142,7 +132,6 @@ export default function AILessonGeneratorScreen() {
   });
   const showInlineProgress = pending && !lessonFullscreenEnabled;
   const showInlineGenerated = !!generatedContentText && !lessonFullscreenEnabled;
-
   const categoriesQuery = useQuery({
     queryKey: ['lesson_categories'],
     queryFn: async () => {
@@ -152,14 +141,11 @@ export default function AILessonGeneratorScreen() {
     },
     staleTime: 60_000,
   });
-
   const handleRefresh = useCallback(async () => {
     await refreshUsage();
     await categoriesQuery.refetch();
   }, [refreshUsage, categoriesQuery]);
-
   const { refreshing, onRefreshHandler } = useSimplePullToRefresh(handleRefresh, 'ai_lesson_generator');
-
   // Apply prefill from search params
   useEffect(() => {
     const t = (searchParams?.topic || '').trim();
@@ -170,7 +156,6 @@ export default function AILessonGeneratorScreen() {
     const m = (searchParams?.model || '').trim();
     const lang = (searchParams?.language || '').trim().toLowerCase();
     const routineCtx = (searchParams?.routineContext || '').trim();
-
     if (t) setTopic(t);
     if (s) setSubject(s);
     if (g && /^\d+$/.test(g)) setGradeLevel(g);
@@ -189,7 +174,6 @@ export default function AILessonGeneratorScreen() {
       setSelectedModel(m as typeof selectedModel);
     }
   }, [searchParams, setSelectedModel]);
-
   useEffect(() => {
     if (!isQuickMode || quickDefaultsApplied.current) return;
     setDuration('20');
@@ -199,11 +183,9 @@ export default function AILessonGeneratorScreen() {
     });
     quickDefaultsApplied.current = true;
   }, [isQuickMode]);
-
   useEffect(() => {
     if (!schoolId || !user?.id) return;
     let cancelled = false;
-
     const loadContext = async () => {
       setQuickLessonContextLoading(true);
       const context = await loadQuickLessonThemeContext({
@@ -216,13 +198,11 @@ export default function AILessonGeneratorScreen() {
         setQuickLessonContextLoading(false);
       }
     };
-
     void loadContext();
     return () => {
       cancelled = true;
     };
   }, [schoolId, user?.id]);
-
   const buildDashPrompt = useCallback(() => {
     const objs = (objectives || '').split(';').map(s => s.trim()).filter(Boolean);
     const langSuffix = language && language !== 'en' ? `\nPlease respond in ${language}.` : '';
@@ -235,22 +215,19 @@ export default function AILessonGeneratorScreen() {
       : '';
     return `Generate a ${Number(duration) || 45} minute lesson plan for Grade ${Number(gradeLevel) || 3} in ${subject} on "${topic}". Learning objectives: ${objs.join('; ') || 'derive objectives'}. Provide objectives, warm-up, activities, assessment, and closure.${quickHint}${planningHint ? `\nPlanning Alignment Context:\n${planningHint}` : ''}${routineHint}.${langSuffix}`;
   }, [topic, subject, gradeLevel, duration, objectives, language, isQuickMode, quickLessonContext, explicitRoutineContext]);
-
   const onOpenWithDash = useCallback(() => {
     const initialMessage = buildDashPrompt();
     try { const { safeRouter } = require('@/lib/navigation/safeRouter'); safeRouter.push({ pathname: '/screens/dash-assistant', params: { initialMessage } }); }
     catch { router.push({ pathname: '/screens/dash-assistant', params: { initialMessage } }); }
   }, [buildDashPrompt]);
-
   const onExportPDF = useCallback(async () => {
     const content = generatedContentText;
-    if (!content) { Alert.alert('Export PDF', 'Generate a lesson first.'); return; }
+    if (!content) { showAlert({ title: 'Export PDF', message: 'Generate a lesson first.', type: 'info' }); return; }
     try { await EducationalPDFService.generateTextPDF(`${subject}: ${topic}`, content); toast.success('PDF generated'); }
     catch { toast.error('Failed to generate PDF'); }
   }, [subject, topic, generatedContentText]);
-
   const handleGenerate = useCallback(() => {
-    if (isQuotaExhausted) { router.push('/pricing'); return; }
+    if (isQuotaExhausted) { navigateToUpgrade({ source: 'lesson_generator' }); return; }
     if (lessonFullscreenEnabled) {
       setShowFullscreenLesson(true);
     }
@@ -283,17 +260,14 @@ export default function AILessonGeneratorScreen() {
     explicitRoutineContext,
     lessonFullscreenEnabled,
   ]);
-
   useEffect(() => {
     if (!lessonFullscreenEnabled) return;
     if (pending) setShowFullscreenLesson(true);
   }, [lessonFullscreenEnabled, pending]);
-
   useEffect(() => {
     if (!lessonFullscreenEnabled) return;
     if (generatedContentText) setShowFullscreenLesson(true);
   }, [generatedContentText, lessonFullscreenEnabled]);
-
   const onSave = useCallback(async () => {
     try {
       setSaving(true);
@@ -302,7 +276,6 @@ export default function AILessonGeneratorScreen() {
       const { data: profile } = await assertSupabase().from('profiles').select('id,preschool_id,organization_id').eq('auth_user_id', auth?.user?.id || '').maybeSingle();
       if (!profile) { toast.error('Not signed in'); return; }
       const schoolId = profile.preschool_id || profile.organization_id;
-      
       // Get or create a default category if none exists
       let categoryId = categoriesQuery.data?.[0]?.id;
       if (!categoryId) {
@@ -312,7 +285,6 @@ export default function AILessonGeneratorScreen() {
           .insert({ name: 'General', description: 'General lessons' })
           .select('id')
           .single();
-        
         if (catError) {
           console.error('[AILessonGen] Failed to create category:', catError);
           toast.warn('Could not create lesson category. Please contact support.');
@@ -320,7 +292,6 @@ export default function AILessonGeneratorScreen() {
         }
         categoryId = newCat.id;
       }
-      
       const res = await LessonGeneratorService.saveGeneratedLesson({ 
         lesson: generated, 
         teacherId: profile.id, 
@@ -330,23 +301,21 @@ export default function AILessonGeneratorScreen() {
         template: { duration: parseInt(duration) || 30, complexity: 'moderate' }, 
         isPublished: true 
       });
-      
       if (!res.success) { toast.error(`Save failed: ${res.error || 'Unknown error'}`); return; }
       toast.success(`Lesson saved! View in My Lessons`);
-      
       // Optionally navigate to Browse Lessons
-      Alert.alert(
-        'Lesson Saved!',
-        'Your lesson has been saved. Would you like to browse your lessons?',
-        [
+      showAlert({
+        title: 'Lesson Saved!',
+        message: 'Your lesson has been saved. Would you like to browse your lessons?',
+        type: 'success',
+        buttons: [
           { text: 'Stay Here', style: 'cancel' },
           { text: 'Browse Lessons', onPress: () => router.push('/screens/teacher-lessons') }
         ]
-      );
+      });
     } catch (e: unknown) { toast.error(`Save error: ${e instanceof Error ? e.message : 'Failed'}`); }
     finally { setSaving(false); }
   }, [categoriesQuery.data, generated, duration]);
-
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
       <ScreenHeader title="AI Lesson Generator" subtitle="Create AI-powered lesson plans" showBackButton />
@@ -360,7 +329,6 @@ export default function AILessonGeneratorScreen() {
         <TouchableOpacity style={[styles.actionBtn, { borderColor: palette.outline, marginRight: 8 }]} onPress={onExportPDF}><Ionicons name="document-outline" size={16} color={palette.text} /><Text style={[styles.actionBtnText, { color: palette.text }]}>PDF</Text></TouchableOpacity>
         <TouchableOpacity style={[styles.actionBtn, { borderColor: palette.outline }]} onPress={onOpenWithDash}><Ionicons name="chatbubbles-outline" size={16} color={palette.text} /><Text style={[styles.actionBtnText, { color: palette.text }]}>Dash</Text></TouchableOpacity>
       </View>
-
       {(isQuickMode || quickLessonContextLoading || !!quickLessonContext) && (
         <View style={[styles.quickModeBanner, { backgroundColor: theme.primary + '20', borderColor: theme.primary }]}>
           <Ionicons name="flash" size={16} color={theme.primary} />
@@ -376,7 +344,6 @@ export default function AILessonGeneratorScreen() {
           </View>
         </View>
       )}
-
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefreshHandler} tintColor="#3B82F6" />}>
         {/* Parameters Card */}
         <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline, marginTop: 16 }]}>
@@ -394,7 +361,6 @@ export default function AILessonGeneratorScreen() {
           <Text style={{ color: palette.textSec, marginTop: 12 }}>This month: {usage.lesson_generation} lessons</Text>
           <QuotaBar used={usage.lesson_generation} limit={quotaStatus?.limit || 5} />
         </View>
-
         {/* Model Selector */}
         {!modelsLoading && (
           <ModelSelectorChips
@@ -406,7 +372,6 @@ export default function AILessonGeneratorScreen() {
             title="AI Model"
           />
         )}
-
         {/* Buttons */}
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <TouchableOpacity onPress={handleGenerate} style={[styles.btn, { backgroundColor: isQuotaExhausted ? '#9CA3AF' : theme.primary, flex: 1 }]} disabled={pending}>
@@ -425,7 +390,6 @@ export default function AILessonGeneratorScreen() {
             <Text style={[styles.btnText, { color: theme.primary, marginLeft: 8 }]}>Open Fullscreen Lesson</Text>
           </TouchableOpacity>
         )}
-
         {/* Progress */}
         {showInlineProgress && (
           <View style={[styles.card, { backgroundColor: palette.surface, borderColor: theme.primary, marginTop: 16 }]}>
@@ -438,7 +402,6 @@ export default function AILessonGeneratorScreen() {
             <Text style={{ color: palette.textSec, fontSize: 11, textAlign: 'center', marginTop: 4 }}>{Math.round(safeProgress)}% • {progressPhase.replace('_', ' ')}</Text>
           </View>
         )}
-
         {/* Error */}
         {errorMsg && !pending && (
           <View style={[styles.card, { backgroundColor: palette.surface, borderColor: '#EF4444', borderWidth: 1, marginTop: 16 }]}>
@@ -450,7 +413,6 @@ export default function AILessonGeneratorScreen() {
             <Text style={{ color: palette.textSec, fontSize: 13 }}>{errorMsg}</Text>
           </View>
         )}
-
         {/* Generated Content - No maxHeight to allow full scrolling */}
         {showInlineGenerated && (
           <View style={[styles.card, { backgroundColor: palette.surface, borderColor: theme.success, borderWidth: 2, marginTop: 16, marginBottom: 100 }]}>
@@ -478,7 +440,6 @@ export default function AILessonGeneratorScreen() {
             <View style={{ backgroundColor: palette.bg, borderRadius: 8, padding: 10, minHeight: 100 }}>
               {(() => {
                 const contentText = generatedContentText || 'No content generated';
-
                 if (resultViewMode === 'cards') {
                   const sections = parseLessonSections(contentText);
                   return (
@@ -495,7 +456,6 @@ export default function AILessonGeneratorScreen() {
                     </View>
                   );
                 }
-
                 return (
                   <Text style={{ color: palette.text, fontSize: 14, lineHeight: 22 }}>
                     {contentText || 'No content generated. Please try again.'}
@@ -545,10 +505,10 @@ export default function AILessonGeneratorScreen() {
           }
         />
       )}
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16 },

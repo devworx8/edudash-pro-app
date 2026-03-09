@@ -16,7 +16,11 @@ import { Linking } from 'react-native';
 import { assertSupabase } from '@/lib/supabase';
 import { selectFeeStructureForChild } from '@/lib/utils/feeStructureSelector';
 import { isTuitionFee } from '@/lib/utils/feeUtils';
-import { ReceiptService } from '@/lib/services/ReceiptService';
+import {
+  buildManualFeePaymentReference,
+  fetchReceiptUrlByPaymentReference,
+  finalizePaidFlow,
+} from '@/services/finance/paidFlowService';
 import type {
   Student,
   StudentFee,
@@ -346,7 +350,7 @@ export async function upsertPaymentRecord(
 ): Promise<void> {
   const supabase = assertSupabase();
   const nowIso = new Date().toISOString();
-  const paymentReference = `MANUAL-FEE-${fee.id.slice(0, 8)}`;
+  const paymentReference = buildManualFeePaymentReference(fee.id);
   const amount = fee.final_amount || fee.amount;
   const preschoolId = student.preschool_id || organizationId;
   if (!preschoolId) return;
@@ -395,7 +399,7 @@ export async function upsertFinancialTransaction(
 ): Promise<void> {
   const supabase = assertSupabase();
   const nowIso = new Date().toISOString();
-  const reference = `MANUAL-FEE-${fee.id.slice(0, 8)}`;
+  const reference = buildManualFeePaymentReference(fee.id);
   const amount = fee.final_amount || fee.amount;
   const preschoolId = student.preschool_id || organizationId;
   if (!preschoolId) return;
@@ -457,7 +461,7 @@ export async function attachReceiptToPayments(
 ): Promise<void> {
   const supabase = assertSupabase();
   const nowIso = new Date().toISOString();
-  const paymentReference = `MANUAL-FEE-${fee.id.slice(0, 8)}`;
+  const paymentReference = buildManualFeePaymentReference(fee.id);
 
   const { data: payment } = await supabase
     .from('payments')
@@ -527,44 +531,39 @@ export async function generateReceiptForFee(
 ): Promise<{ receiptUrl?: string | null; storagePath?: string | null } | null> {
   const preschoolId = student.preschool_id || organizationId;
   if (!preschoolId) return null;
-
-  const parentProfile = await fetchParentProfile(student.parent_id);
   const issuerName =
     profile.full_name || `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'School Administrator';
-  const studentName = `${student.first_name} ${student.last_name}`.trim();
-  const paymentReference = `MANUAL-FEE-${fee.id.slice(0, 8)}`;
-  const receiptNumber = `REC-${new Date().getFullYear()}-${fee.id.slice(0, 6).toUpperCase()}`;
+  const paymentReference = buildManualFeePaymentReference(fee.id);
 
   try {
-    const result = await ReceiptService.generateFeeReceipt({
-      schoolId: preschoolId,
-      fee: {
-        id: fee.id,
-        description: fee.description || fee.fee_type || 'School fee',
-        amount,
-        dueDate: fee.due_date,
-        paidDate,
-        paymentReference,
-        paymentMethod: 'manual',
-      },
-      student: { id: student.id, firstName: student.first_name, lastName: student.last_name, className: student.class_name || null },
-      parent: {
-        id: parentProfile?.id || null,
-        name: parentProfile ? `${parentProfile.first_name || ''} ${parentProfile.last_name || ''}`.trim() : null,
-        email: parentProfile?.email || null,
+    const result = await finalizePaidFlow({
+      context: 'manual_fee',
+      organizationId: preschoolId,
+      amount,
+      paidDate,
+      dueDate: fee.due_date,
+      billingMonth: fee.billing_month || fee.due_date || null,
+      description: fee.description || fee.fee_type || 'School fee',
+      paymentReference,
+      paymentMethod: 'manual',
+      categoryCode: fee.category_code || fee.fee_type || null,
+      feeIds: [fee.id],
+      student: {
+        id: student.id,
+        firstName: student.first_name,
+        lastName: student.last_name,
+        className: student.class_name || null,
+        parentId: student.parent_id || null,
       },
       issuer: { id: profile.id, name: issuerName },
+      metadata: {
+        source: 'manual_principal_update',
+        fee_id: fee.id,
+        fee_type: fee.fee_type,
+      },
+      sendNotification: true,
     });
-
-    await attachReceiptToPayments(fee, result.receiptUrl ?? null, result.storagePath);
-    await sendReceiptNotification(parentProfile, studentName, result.receiptUrl ?? null, receiptNumber, amount, {
-      studentId: student.id,
-      feeId: fee.id,
-      feeType: fee.fee_type,
-      paymentPurpose: fee.description || fee.fee_type,
-      paymentReference,
-    });
-    return { receiptUrl: result.receiptUrl ?? null, storagePath: result.storagePath };
+    return { receiptUrl: result.receiptUrl, storagePath: result.receiptStoragePath };
   } catch (error) {
     console.warn('[StudentFeeManagement] Receipt generation failed:', error);
     return null;
@@ -572,27 +571,7 @@ export async function generateReceiptForFee(
 }
 
 export async function fetchReceiptUrlForFee(fee: StudentFee): Promise<string | null> {
-  const supabase = assertSupabase();
-  const paymentReference = `MANUAL-FEE-${fee.id.slice(0, 8)}`;
-  const { data: payment } = await supabase
-    .from('payments')
-    .select('attachment_url, metadata')
-    .eq('payment_reference', paymentReference)
-    .maybeSingle();
-
-  const metadata = (payment?.metadata as Record<string, any>) || {};
-  const receiptUrl =
-    (typeof metadata.receipt_url === 'string' && metadata.receipt_url) ||
-    (typeof payment?.attachment_url === 'string' && payment.attachment_url) ||
-    null;
-  const receiptStoragePath = typeof metadata.receipt_storage_path === 'string' ? metadata.receipt_storage_path : null;
-
-  if (receiptUrl) return receiptUrl;
-  if (receiptStoragePath) {
-    const { data, error } = await supabase.storage.from('generated-pdfs').createSignedUrl(receiptStoragePath, 3600);
-    if (!error) return data?.signedUrl || null;
-  }
-  return null;
+  return fetchReceiptUrlByPaymentReference(buildManualFeePaymentReference(fee.id));
 }
 
 export async function openReceiptUrl(url: string, router: any): Promise<void> {

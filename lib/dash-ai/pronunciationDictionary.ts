@@ -46,13 +46,13 @@ export interface PronunciationEntry {
 const BRAND_NAMES: PronunciationEntry[] = [
   {
     pattern: /\bEduDash\s*Pro\b/gi,
-    alias: 'EduDash Pro',
+    alias: 'Edyoo-dash Pro',
     ipa: 'ˌɛdjuːˈdæʃ proʊ',
-    note: 'Single compound name, NOT "Edu Dash Pro"',
+    note: 'Single compound name, NOT "E D U Dash Pro"',
   },
   {
     pattern: /\bEduDash\b/gi,
-    alias: 'EduDash',
+    alias: 'Edyoo-dash',
     ipa: 'ˌɛdjuːˈdæʃ',
     note: 'Without "Pro" suffix',
   },
@@ -324,6 +324,67 @@ const SA_SLANG: PronunciationEntry[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// South African Personal Names
+// ---------------------------------------------------------------------------
+
+const SA_PERSONAL_NAMES: PronunciationEntry[] = [
+  // Zulu / Nguni names
+  { pattern: /\bThabo\b/gi, ipa: 'tʰɑˈboː', lang: 'zu-ZA', note: 'Common SA male name' },
+  { pattern: /\bSipho\b/gi, ipa: 'ˈsiːpʰo', lang: 'zu-ZA', note: 'isiZulu male name: gift' },
+  { pattern: /\bZanele\b/gi, ipa: 'zɑˈneːle', lang: 'zu-ZA', note: 'isiZulu female name' },
+  { pattern: /\bNomsa\b/gi, ipa: 'ˈnɔmsɑ', lang: 'zu-ZA', note: 'isiZulu female name: kindness' },
+  { pattern: /\bBongani\b/gi, ipa: 'bɔŋˈɡɑːni', lang: 'zu-ZA', note: 'isiZulu male name: be thankful' },
+  { pattern: /\bLerato\b/gi, ipa: 'leˈrɑːto', note: 'Sesotho: love' },
+  { pattern: /\bNaledi\b/gi, ipa: 'nɑˈleːdi', note: 'Sesotho/Setswana: star' },
+  { pattern: /\bMandla\b/gi, ipa: 'ˈmɑndlɑ', lang: 'zu-ZA', note: 'isiZulu male name: power' },
+  { pattern: /\bNokuthula\b/gi, ipa: 'nɔkuˈtʰuːlɑ', lang: 'zu-ZA', note: 'isiZulu female name: peace' },
+  { pattern: /\bNkosazana\b/gi, ipa: 'ŋkɔsɑˈzɑːnɑ', lang: 'zu-ZA', note: 'isiZulu: princess' },
+  { pattern: /\bTshepo\b/gi, ipa: 'ˈtsʰɛpɔ', note: 'Sesotho/Setswana: hope' },
+  { pattern: /\bMpho\b/gi, ipa: 'ˈmpʰo', note: 'Sesotho: gift' },
+  { pattern: /\bLupfuno\b/gi, ipa: 'luˈpfuno', lang: 've-ZA', note: 'Tshivenda name' },
+  { pattern: /\bMukhesa\b/gi, ipa: 'muˈkʰesɑ', lang: 've-ZA', note: 'Tshivenda surname' },
+  { pattern: /\bThabang\b/gi, ipa: 'tʰɑˈbɑŋ', note: 'Sesotho male name: be happy' },
+  { pattern: /\bKagiso\b/gi, ipa: 'kɑˈɡiːso', note: 'Setswana: peace' },
+  { pattern: /\bNthabiseng\b/gi, ipa: 'ntʰɑbiˈsɛŋ', note: 'Sesotho female name' },
+  { pattern: /\bSiyanda\b/gi, ipa: 'sijɑˈndɑ', lang: 'zu-ZA', note: 'isiZulu: we are growing' },
+  { pattern: /\bAnele\b/gi, ipa: 'ɑˈneːle', lang: 'zu-ZA', note: 'isiZulu: enough' },
+  { pattern: /\bLindiwe\b/gi, ipa: 'linˈdiːwe', lang: 'zu-ZA', note: 'isiZulu female name: waited for' },
+  { pattern: /\bSbusiso\b/gi, ipa: 'sbuˈsiːso', lang: 'zu-ZA', note: 'isiZulu male name: blessing' },
+  { pattern: /\bNhlanhla\b/gi, ipa: 'ŋɬɑˈŋɬɑ', lang: 'zu-ZA', note: 'isiZulu: luck (lateral fricative)' },
+  { pattern: /\bPhumzile\b/gi, ipa: 'pʰumˈziːle', lang: 'zu-ZA', note: 'isiZulu female name: rest' },
+  { pattern: /\bThandeka\b/gi, ipa: 'tʰɑnˈdeːkɑ', lang: 'zu-ZA', note: 'isiZulu female name: loved one' },
+  { pattern: /\bMakunyane\b/gi, alias: 'Mah koo nya neh', note: 'Common SA surname — keep vowel spacing clear for TTS' },
+  { pattern: /\bMakhunyane\b/gi, alias: 'Mah khoo nya neh', note: 'Common SA surname — aspirated kh sound' },
+  // Afrikaans names
+  { pattern: /\bPieter\b/gi, ipa: 'ˈpiːtər', lang: 'af-ZA', note: 'Afrikaans male name' },
+  { pattern: /\bJohannes\b/gi, ipa: 'juˈɦɑnəs', lang: 'af-ZA', note: 'Afrikaans male name' },
+  { pattern: /\bMarietjie\b/gi, ipa: 'mɑˈriːki', lang: 'af-ZA', note: 'Afrikaans female name' },
+  { pattern: /\bJannie\b/gi, ipa: 'ˈjɑni', lang: 'af-ZA', note: 'Afrikaans male name' },
+  { pattern: /\bHendrik\b/gi, ipa: 'ˈɦɛndrɪk', lang: 'af-ZA', note: 'Afrikaans male name' },
+];
+
+// ---------------------------------------------------------------------------
+// South African Place Names
+// ---------------------------------------------------------------------------
+
+const SA_PLACE_NAMES: PronunciationEntry[] = [
+  { pattern: /\bTshwane\b/gi, ipa: 'ˈtʃwɑːne', note: 'Capital city (Pretoria metro)' },
+  { pattern: /\bGauteng\b/gi, ipa: 'xɑʊˈtɛŋ', note: 'Province — guttural "g"' },
+  { pattern: /\bKwaZulu[\s-]?Natal\b/gi, ipa: 'kwɑˈzuːlu nɑˈtɑːl', lang: 'zu-ZA', note: 'Province' },
+  { pattern: /\bMpumalanga\b/gi, ipa: 'mpumɑˈlɑŋɡɑ', note: 'Province: where the sun rises' },
+  { pattern: /\bLimpopo\b/gi, ipa: 'lɪmˈpoːpo', note: 'Province and river' },
+  { pattern: /\bSoweto\b/gi, ipa: 'sɔˈweːto', lang: 'zu-ZA', note: 'SOuth WEstern TOwnships' },
+  { pattern: /\bJohannesburg\b/gi, ipa: 'dʒoʊˈhænɪsbɜːrɡ', note: 'Largest SA city' },
+  { pattern: /\bDurban\b/gi, ipa: 'ˈdɜːrbən', note: 'City in KZN' },
+  { pattern: /\bCape\s+Town\b/gi, alias: 'Cape Town', note: 'Default English pronunciation is fine' },
+  { pattern: /\bPolokwane\b/gi, ipa: 'pɔlɔˈkwɑːne', note: 'Limpopo capital' },
+  { pattern: /\bBloemfontein\b/gi, ipa: 'ˈblumfɔnteɪn', lang: 'af-ZA', note: 'Free State capital' },
+  { pattern: /\bPietermaritzburg\b/gi, ipa: 'ˌpiːtərˈmɑrɪtsbɜːrɡ', note: 'KZN capital' },
+  { pattern: /\bMamelodi\b/gi, ipa: 'mɑmeˈloːdi', note: 'Township in Tshwane' },
+  { pattern: /\bKhayelitsha\b/gi, ipa: 'kɑjeˈlitʃɑ', lang: 'xh-ZA', note: 'Cape Town township' },
+];
+
+// ---------------------------------------------------------------------------
 // Master Dictionary (order matters — more specific patterns first)
 // ---------------------------------------------------------------------------
 
@@ -331,6 +392,8 @@ export const PRONUNCIATION_DICTIONARY: PronunciationEntry[] = [
   ...BRAND_NAMES,
   ...SA_LANGUAGE_NAMES,
   ...EDUCATIONAL_TERMS,
+  ...SA_PERSONAL_NAMES,
+  ...SA_PLACE_NAMES,
   ...SA_COMMON_WORDS,
   ...SA_SLANG,
   ...TECH_ABBREVIATIONS, // Last so "AI" doesn't override "Dash AI"

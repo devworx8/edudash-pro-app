@@ -5,7 +5,8 @@
  * compare available plans, and upgrade/downgrade their subscription.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, RefreshControl, Dimensions } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Dimensions } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -18,6 +19,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { assertSupabase } from '@/lib/supabase';
 import { listActivePlans } from '@/lib/subscriptions/rpc-subscriptions';
 import { track } from '@/lib/analytics';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { 
   TIER_PRICING, 
   TIER_QUOTAS, 
@@ -200,6 +202,7 @@ const PlanCard: React.FC<PlanCardProps> = ({ plan, isCurrentPlan, onSelect, annu
 
 export default function PlanManagementScreen() {
   const { t } = useTranslation();
+  const { showAlert, alertProps } = useAlertModal();
   const { profile } = useAuth();
   const { tier: currentTier, seats, refresh: refreshSubscription } = useSubscription();
   
@@ -269,12 +272,13 @@ export default function PlanManagementScreen() {
     const currentTierNorm = (currentTier || 'free').toLowerCase();
     
     if (isEnterprise) {
-      Alert.alert(
-        t('plan.enterprise_title', { defaultValue: 'Enterprise Plan' }),
-        t('plan.enterprise_message', { 
+      showAlert({
+        title: t('plan.enterprise_title', { defaultValue: 'Enterprise Plan' }),
+        message: t('plan.enterprise_message', { 
           defaultValue: 'Enterprise plans require custom configuration. Our team will contact you to discuss your needs.' 
         }),
-        [
+        type: 'info',
+        buttons: [
           { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
           { 
             text: t('plan.contact_sales', { defaultValue: 'Contact Sales' }),
@@ -284,17 +288,18 @@ export default function PlanManagementScreen() {
             }
           }
         ]
-      );
+      });
       return;
     }
     
     if (isFree && currentTierNorm !== 'free') {
-      Alert.alert(
-        t('plan.downgrade_title', { defaultValue: 'Downgrade Plan' }),
-        t('plan.downgrade_message', { 
+      showAlert({
+        title: t('plan.downgrade_title', { defaultValue: 'Downgrade Plan' }),
+        message: t('plan.downgrade_message', { 
           defaultValue: 'Are you sure you want to downgrade to the Free plan? You will lose access to premium features at the end of your billing period.' 
         }),
-        [
+        type: 'warning',
+        buttons: [
           { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
           { 
             text: t('plan.confirm_downgrade', { defaultValue: 'Downgrade' }),
@@ -306,18 +311,16 @@ export default function PlanManagementScreen() {
             }
           }
         ]
-      );
+      });
       return;
     }
     
     // Upgrade flow
     track('plan_upgrade_started', { from_tier: currentTier, to_tier: plan.tier });
-    router.push({
-      pathname: '/screens/subscription-setup',
-      params: { 
-        planId: plan.tier,
-        billing: annual ? 'annual' : 'monthly',
-      }
+    navigateToUpgrade({
+      source: 'plan_management',
+      planId: plan.tier,
+      billing: annual ? 'annual' : 'monthly',
     });
   };
 
@@ -525,6 +528,7 @@ export default function PlanManagementScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

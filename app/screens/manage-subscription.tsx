@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +12,7 @@ import { TierBadge } from '@/components/ui/TierBadge';
 import { SubscriptionStatusCard } from '@/components/ui/SubscriptionStatusCard';
 import { Card } from '@/components/ui/Card';
 import { cancelSubscription } from '@/lib/payments';
+import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 export default function ManageSubscriptionScreen() {
   const { theme } = useTheme();
@@ -18,16 +20,18 @@ export default function ManageSubscriptionScreen() {
   const { profile } = useAuth();
   const { tier, ready: subscriptionReady, refresh: refreshSubscription } = useSubscription();
   const styles = createStyles(theme);
+  const { showAlert, alertProps } = useAlertModal();
 
   const isFreeTier = !tier || tier === 'free';
 
   const handleCancelSubscription = () => {
-    Alert.alert(
-      t('settings.billing.cancel_subscription', { defaultValue: 'Cancel Subscription' }),
-      t('settings.billing.cancel_confirm', { 
+    showAlert({
+      title: t('settings.billing.cancel_subscription', { defaultValue: 'Cancel Subscription' }),
+      message: t('settings.billing.cancel_confirm', { 
         defaultValue: 'Are you sure you want to cancel your subscription? You will keep access until the end of your current billing period.' 
       }),
-      [
+      type: 'warning',
+      buttons: [
         { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
         {
           text: t('settings.billing.cancel_subscription', { defaultValue: 'Cancel Subscription' }),
@@ -42,22 +46,23 @@ export default function ManageSubscriptionScreen() {
               });
 
               if (result.error) {
-                Alert.alert('Error', result.error);
+                showAlert({ title: 'Error', message: result.error, type: 'error' });
                 return;
               }
 
-              Alert.alert(
-                t('settings.billing.cancel_success', { defaultValue: 'Cancellation requested' }),
-                t('settings.billing.cancel_success_message', { defaultValue: 'Your subscription has been cancelled. You will retain access until the end of your current billing period.' })
-              );
+              showAlert({
+                title: t('settings.billing.cancel_success', { defaultValue: 'Cancellation requested' }),
+                message: t('settings.billing.cancel_success_message', { defaultValue: 'Your subscription has been cancelled. You will retain access until the end of your current billing period.' }),
+                type: 'success',
+              });
               refreshSubscription();
             } catch (err) {
-              Alert.alert('Error', 'Failed to cancel subscription. Please try again.');
+              showAlert({ title: 'Error', message: 'Failed to cancel subscription. Please try again.', type: 'error' });
             }
           }
         },
       ]
-    );
+    });
   };
 
   return (
@@ -97,7 +102,7 @@ export default function ManageSubscriptionScreen() {
           {isFreeTier ? (
             <TouchableOpacity
               style={[styles.actionButton, { backgroundColor: theme.primary }]}
-              onPress={() => router.push('/screens/plan-management')}
+              onPress={() => navigateToUpgrade({ source: 'manage_subscription' })}
             >
               <Ionicons name="arrow-up-circle" size={24} color="#fff" />
               <View style={styles.actionContent}>
@@ -172,6 +177,7 @@ export default function ManageSubscriptionScreen() {
           </Card>
         )}
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

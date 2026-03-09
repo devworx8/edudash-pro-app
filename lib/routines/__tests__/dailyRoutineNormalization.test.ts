@@ -140,4 +140,75 @@ describe('dailyRoutineNormalization', () => {
     expect(classifyRoutineBlockIntent(nap)).toBe('nap');
     expect(classifyRoutineBlockIntent(lunch)).toBe('lunch');
   });
+
+  it('applies auto-added anchor note times and preserves nap/lunch semantics', () => {
+    const blocks: DailyProgramBlock[] = [
+      makeBlock({
+        day_of_week: 1,
+        block_order: 1,
+        block_type: 'circle_time',
+        title: 'Circle Time',
+        start_time: '06:51',
+        end_time: '07:42',
+        notes: 'Auto-added from preflight non-negotiable anchor (Circle Time 08:10).',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 2,
+        block_type: 'meal',
+        title: 'Lunch',
+        start_time: '11:30',
+        end_time: '12:00',
+        notes: 'Auto-added from preflight non-negotiable anchor (Nap / Quiet Time 11:30).',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 3,
+        block_type: 'meal',
+        title: 'Nap / Quiet Time',
+        start_time: '12:30',
+        end_time: '13:00',
+        notes: 'Anchor locked from preflight: Lunch at 12:30.',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 4,
+        block_type: 'transition',
+        title: 'Dismissal',
+        start_time: '13:30',
+        end_time: '14:00',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 5,
+        block_type: 'learning',
+        title: 'Literacy',
+        start_time: '09:00',
+        end_time: '09:45',
+      }),
+      makeBlock({
+        day_of_week: 1,
+        block_order: 6,
+        block_type: 'transition',
+        title: 'Arrival',
+        start_time: '06:00',
+        end_time: '08:00',
+      }),
+    ];
+
+    const result = stabilizeDailyRoutineBlocks(blocks, {
+      ageGroup: '4-6',
+      arrivalStartTime: '06:00',
+      pickupCutoffTime: '14:00',
+    });
+
+    const monday = result.blocks.filter((block) => block.day_of_week === 1);
+    const circle = monday.find((block) => /circle time/i.test(String(block.title || '')));
+    const nap = monday.find((block) => classifyRoutineBlockIntent(block) === 'nap');
+    const lunch = monday.find((block) => classifyRoutineBlockIntent(block) === 'lunch');
+
+    expect(circle?.start_time).toBe('08:10');
+    expect(nap?.start_time).toBe('11:30');
+    expect(lunch?.start_time).toBe('12:30');
+  });
 });

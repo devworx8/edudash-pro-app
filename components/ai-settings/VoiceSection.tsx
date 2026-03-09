@@ -6,6 +6,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { voiceService } from '@/lib/voice/client';
 import { normalizeLanguageCode, resolveDefaultVoiceId } from '@/lib/ai/dashSettings';
+import { clampPercent } from '@/lib/progress/clampPercent';
 import { SectionHeader } from './SectionHeader';
 import { ToggleSetting, SliderSetting, PickerSetting } from './SettingRows';
 import { AISettings, LANGUAGE_OPTIONS, TTS_SUPPORTED_LANGUAGES } from './types';
@@ -111,6 +112,13 @@ export function VoiceSection({
     }
   };
 
+  const resolveDefaultVoiceForLanguage = (language: string): string => {
+    const langNorm = normalizeLanguageCode(language);
+    return langNorm === 'en'
+      ? 'en-ZA-LukeNeural'
+      : resolveDefaultVoiceId(langNorm, 'female');
+  };
+
   const renderVoiceOptions = () => {
     const lang = settings.voiceLanguage;
     const voiceOptions: Record<string, Array<{ name: string; value: string; gender: string }>> = {
@@ -196,6 +204,10 @@ export function VoiceSection({
     );
   };
 
+  const sampleProgressPercent = clampPercent(sampleProgress * 100, {
+    source: 'components/ai-settings/VoiceSection.sampleProgress',
+  });
+
   return (
     <>
       <SectionHeader title="Voice & Speech" icon="🎙️" expanded={expanded} onToggle={onToggleSection} theme={theme} />
@@ -211,6 +223,7 @@ export function VoiceSection({
               onChange('responseLanguage', v);
               // Auto-sync voice language when response language changes
               onChange('voiceLanguage', v);
+              onChange('voiceType', resolveDefaultVoiceForLanguage(v));
             }}
             theme={theme}
           />
@@ -253,7 +266,10 @@ export function VoiceSection({
             subtitle="Primary language for voice output"
             value={settings.voiceLanguage}
             options={LANGUAGE_OPTIONS.filter(o => TTS_SUPPORTED_LANGUAGES.includes(o.value))}
-            onValueChange={(v) => onChange('voiceLanguage', v)}
+            onValueChange={(v) => {
+              onChange('voiceLanguage', v);
+              onChange('voiceType', resolveDefaultVoiceForLanguage(v));
+            }}
             theme={theme}
           />
           {renderVoiceOptions()}
@@ -270,7 +286,7 @@ export function VoiceSection({
             {(samplePlaying || sampleLoading) && (
               <View style={{ marginTop: 8 }}>
                 <View style={{ height: 6, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden' }}>
-                  <View style={{ width: `${Math.round(sampleProgress * 100)}%`, height: '100%', backgroundColor: theme.primary }} />
+                  <View style={{ width: `${sampleProgressPercent}%`, height: '100%', backgroundColor: theme.primary }} />
                 </View>
                 <Text style={{ marginTop: 6, fontSize: 12, color: theme.textSecondary }}>Playing… {Math.round(sampleProgress * 100)}%</Text>
               </View>

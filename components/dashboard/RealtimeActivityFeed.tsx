@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons'
 import { useTranslation } from 'react-i18next'
 import { 
@@ -404,10 +405,11 @@ export const RealtimeActivityFeed: React.FC<RealtimeActivityFeedProps> = ({
           )}
         </View>
       ) : (
-        <FlatList
+        <FlashList
           data={activities}
           renderItem={renderActivityItem}
           keyExtractor={(item) => item.id}
+          estimatedItemSize={80}
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={handleRefresh} />
           }

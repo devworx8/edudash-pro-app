@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import type { AttendanceLifecyclePolicy } from '@/lib/services/SchoolSettingsService';
 import LearnerLifecycleService, {
   type LearnerLifecycleSummary,
@@ -35,6 +35,7 @@ export default function PrincipalLearnerActivityControlScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
   const schoolId = profile?.organization_id || profile?.preschool_id || null;
 
   const [loading, setLoading] = useState(true);
@@ -59,7 +60,7 @@ export default function PrincipalLearnerActivityControlScreen() {
       setPolicy(policyData);
       setSummary(summaryData);
     } catch (error) {
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to load learner activity controls');
+      showAlert({ title: 'Error', message: error instanceof Error ? error.message : 'Failed to load learner activity controls', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -101,9 +102,9 @@ export default function PrincipalLearnerActivityControlScreen() {
     try {
       const next = await LearnerLifecycleService.updatePolicy(schoolId, policy);
       setPolicy(next);
-      Alert.alert('Saved', 'Learner lifecycle policy updated.');
+      showAlert({ title: 'Saved', message: 'Learner lifecycle policy updated.', type: 'success' });
     } catch (error) {
-      Alert.alert('Save failed', error instanceof Error ? error.message : 'Could not save policy');
+      showAlert({ title: 'Save failed', message: error instanceof Error ? error.message : 'Could not save policy', type: 'error' });
     } finally {
       setSavingPolicy(false);
     }
@@ -117,10 +118,10 @@ export default function PrincipalLearnerActivityControlScreen() {
       if (!result.success) {
         throw new Error(result.error || 'Monitor run failed');
       }
-      Alert.alert('Monitor started', 'Attendance lifecycle evaluator ran successfully.');
+      showAlert({ title: 'Monitor started', message: 'Attendance lifecycle evaluator ran successfully.', type: 'success' });
       await loadData();
     } catch (error) {
-      Alert.alert('Run failed', error instanceof Error ? error.message : 'Failed to run monitor');
+      showAlert({ title: 'Run failed', message: error instanceof Error ? error.message : 'Failed to run monitor', type: 'error' });
     } finally {
       setRunningNow(false);
     }
@@ -128,16 +129,16 @@ export default function PrincipalLearnerActivityControlScreen() {
 
   const notifyAtRiskParents = useCallback(async () => {
     if (!schoolId || !summary?.atRiskCases?.length) {
-      Alert.alert('No at-risk parents', 'There are no at-risk learners to notify.');
+      showAlert({ title: 'No at-risk parents', message: 'There are no at-risk learners to notify.', type: 'info' });
       return;
     }
 
     setNotifying(true);
     try {
       const result = await LearnerLifecycleService.notifyAtRiskParents(schoolId, summary.atRiskCases);
-      Alert.alert('Notifications sent', `Sent reminder notifications to ${result.sentTo} parent accounts.`);
+      showAlert({ title: 'Notifications sent', message: `Sent reminder notifications to ${result.sentTo} parent accounts.`, type: 'success' });
     } catch (error) {
-      Alert.alert('Notification failed', error instanceof Error ? error.message : 'Failed to notify parents');
+      showAlert({ title: 'Notification failed', message: error instanceof Error ? error.message : 'Failed to notify parents', type: 'error' });
     } finally {
       setNotifying(false);
     }
@@ -154,7 +155,7 @@ export default function PrincipalLearnerActivityControlScreen() {
         await LearnerLifecycleService.applyAction(caseItem.id, action, options);
         await loadData();
       } catch (error) {
-        Alert.alert('Action failed', error instanceof Error ? error.message : 'Could not apply action');
+        showAlert({ title: 'Action failed', message: error instanceof Error ? error.message : 'Could not apply action', type: 'error' });
       }
     },
     [loadData]
@@ -162,10 +163,11 @@ export default function PrincipalLearnerActivityControlScreen() {
 
   const confirmAction = useCallback(
     (caseItem: StudentInactivityCase, action: StudentInactivityAction) => {
-      Alert.alert(
-        ACTION_LABELS[action],
-        `Apply "${ACTION_LABELS[action]}" to ${caseLabel(caseItem)}?`,
-        [
+      showAlert({
+        title: ACTION_LABELS[action],
+        message: `Apply "${ACTION_LABELS[action]}" to ${caseLabel(caseItem)}?`,
+        type: action === 'force_inactivate' ? 'warning' : 'info',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'Confirm',
@@ -174,8 +176,8 @@ export default function PrincipalLearnerActivityControlScreen() {
               void applyAction(caseItem, action);
             },
           },
-        ]
-      );
+        ],
+      });
     },
     [applyAction]
   );
@@ -283,6 +285,7 @@ export default function PrincipalLearnerActivityControlScreen() {
           </View>
         </ScrollView>
       </View>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

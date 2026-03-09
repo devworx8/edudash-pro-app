@@ -7,14 +7,15 @@
  */
 
 import React, { useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 
-const { width } = Dimensions.get('window');
-const isTablet = width > 768;
-const isSmallScreen = width < 380;
+const getWindowMetrics = () => {
+  const { width } = Dimensions.get('window');
+  return { width, isTablet: width > 768, isSmallScreen: width < 380 };
+};
 
 export interface MetricCardProps {
   title: string;
@@ -55,7 +56,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   priority,
 }) => {
   const { theme } = useTheme();
+  const { isSmallScreen } = getWindowMetrics();
   const styles = createStyles(theme, customCardWidth);
+  const fillParentWidth = customCardWidth === 1;
 
   // Glow: shadow/opacity (useNativeDriver: false)
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -176,7 +179,9 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   return (
     <Animated.View
       style={[
-        customCardWidth
+        fillParentWidth
+          ? styles.fillParentShell
+          : customCardWidth
           ? { flexBasis: customCardWidth, flexGrow: 1, flexShrink: 0 }
           : undefined,
         glow && {
@@ -244,9 +249,11 @@ export const MetricCard: React.FC<MetricCardProps> = ({
               </View>
             )}
           </View>
-          <Text style={[styles.metricValue, valueColor && { color: valueColor }]}>
-            {value}
-          </Text>
+          {value !== '' && value !== null && value !== undefined ? (
+            <Text style={[styles.metricValue, valueColor && { color: valueColor }]}>
+              {value}
+            </Text>
+          ) : null}
           <Text style={styles.metricTitle}>{title}</Text>
           {subtitle && (
             <Text style={styles.metricSubtitle}>{subtitle}</Text>
@@ -269,6 +276,7 @@ const isDarkHex = (hex: string): boolean => {
 };
 
 const createStyles = (theme: any, customCardWidth?: number) => {
+  const { width, isTablet, isSmallScreen } = getWindowMetrics();
   const isDark = isDarkHex(theme?.background);
   const cardPadding = isTablet ? 20 : isSmallScreen ? 10 : 14;
   const cardGap = isTablet ? 12 : isSmallScreen ? 6 : 8;
@@ -277,18 +285,13 @@ const createStyles = (theme: any, customCardWidth?: number) => {
   const defaultCardWidth = isTablet ? (containerWidth - (cardGap * 3)) / 4 : (containerWidth - cardGap) / 2;
   const cardWidth = customCardWidth || defaultCardWidth;
 
-  // Fixed 3-column layout for small cards (Quick Actions)
-  // Calculate to ensure exactly 3 cards fit per row with proper spacing
-  // For 3 columns, we need: (totalWidth - horizontalPadding - 2 gaps) / 3
-  const smallCardWidth = isTablet 
-    ? (width - 80) / 5 
-    : Math.floor((width - (cardPadding * 2) - (cardGap * 2)) / 3);
-
   return StyleSheet.create({
     metricCard: {
       backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.cardBackground,
       borderRadius: isSmallScreen ? 14 : 18,
       padding: isSmallScreen ? 14 : 18,
+      // When customCardWidth is provided the parent cell owns the width —
+      // use '100%' so the card fills it without conflicting with metricCardSmall.
       width: customCardWidth ? '100%' : cardWidth,
       marginHorizontal: horizontalCardMargin,
       marginBottom: customCardWidth ? 0 : cardGap,
@@ -302,11 +305,15 @@ const createStyles = (theme: any, customCardWidth?: number) => {
       minHeight: isSmallScreen ? 110 : 130,
       overflow: 'hidden' as const,
     },
+    fillParentShell: {
+      width: '100%',
+    },
     metricCardLarge: {
       width: isTablet ? (width - 60) / 2 : width - (cardPadding * 2),
     },
     metricCardSmall: {
-      width: smallCardWidth,
+      // Width intentionally omitted — controlled by parent cell (MissionControlSection)
+      // or by metricCard base style when no customCardWidth is set.
       padding: isSmallScreen ? 8 : 12,
       minHeight: isSmallScreen ? 80 : 100,
     },

@@ -70,6 +70,8 @@ export async function getFinancialMetrics(preschoolId: string): Promise<Financia
 
       monthlyRevenue = (fallbackPayments || [])
         .filter((payment) => {
+          const metadata = payment?.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
+          if (metadata?.exclude_from_finance_metrics === true) return false;
           const date = getAccountingDate(payment);
           if (!date) return false;
           return (
@@ -82,6 +84,8 @@ export async function getFinancialMetrics(preschoolId: string): Promise<Financia
 
       totalOutstanding = (fallbackPayments || [])
         .filter((payment) => {
+          const metadata = payment?.metadata && typeof payment.metadata === 'object' ? payment.metadata : {};
+          if (metadata?.exclude_from_finance_metrics === true) return false;
           const date = getAccountingDate(payment);
           if (!date) return false;
           return (
@@ -218,13 +222,17 @@ export async function getMonthlyTrendData(preschoolId: string): Promise<MonthlyT
             (column) =>
               assertSupabase()
                 .from('payments')
-                .select('amount')
+                .select('amount, metadata')
                 .eq(column, preschoolId)
                 .in('status', ['completed', 'approved'])
                 .gte('created_at', monthStart)
                 .lt('created_at', nextMonthStart),
           );
-          revenue = monthlyRevenue?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+          revenue = (monthlyRevenue || []).reduce((sum, p: any) => {
+            const metadata = p?.metadata && typeof p.metadata === 'object' ? p.metadata : {};
+            if (metadata?.exclude_from_finance_metrics === true) return sum;
+            return sum + (p.amount || 0);
+          }, 0);
         } else {
           const feeRows = [
             ...((feesDueRes as any).data || []),
@@ -237,13 +245,17 @@ export async function getMonthlyTrendData(preschoolId: string): Promise<MonthlyT
           (column) =>
             assertSupabase()
               .from('payments')
-              .select('amount')
+              .select('amount, metadata')
               .eq(column, preschoolId)
               .in('status', ['completed', 'approved'])
               .gte('created_at', monthStart)
               .lt('created_at', nextMonthStart),
         );
-        revenue = monthlyRevenue?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+        revenue = (monthlyRevenue || []).reduce((sum, p: any) => {
+          const metadata = p?.metadata && typeof p.metadata === 'object' ? p.metadata : {};
+          if (metadata?.exclude_from_finance_metrics === true) return sum;
+          return sum + (p.amount || 0);
+        }, 0);
       }
 
       const { data: monthlyExpenses } = await withPettyCashTenant((column, client) =>

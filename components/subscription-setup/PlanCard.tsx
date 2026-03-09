@@ -1,22 +1,13 @@
-/**
- * Plan Card Component
- * Extracted from app/screens/subscription-setup.tsx
- */
-
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { SubscriptionPlan } from './types';
-import {
-  getPlanColor,
-  isParentPlan,
-  convertPriceToRands,
-  isLaunchPromoActive,
-} from './utils';
+import { getPlanColor, isParentPlan, convertPriceToRands, isLaunchPromoActive } from './utils';
 
 interface PlanCardProps {
   plan: SubscriptionPlan;
   annual: boolean;
   selected: boolean;
+  isCurrentPlan?: boolean;
   onSelect: () => void;
   onSubscribe: () => void;
   creating: boolean;
@@ -27,6 +18,7 @@ export function PlanCard({
   plan,
   annual,
   selected,
+  isCurrentPlan = false,
   onSelect,
   onSubscribe,
   creating,
@@ -37,9 +29,7 @@ export function PlanCard({
   const rawPrice = annual ? plan.price_annual : plan.price_monthly;
   const priceInRands = convertPriceToRands(rawPrice);
 
-  const rawYearlySavings = annual
-    ? Math.round((plan.price_monthly * 12 - plan.price_annual) / 12)
-    : 0;
+  const rawYearlySavings = annual ? Math.round((plan.price_monthly * 12 - plan.price_annual) / 12) : 0;
   const savings = rawYearlySavings > 100 ? rawYearlySavings / 100 : rawYearlySavings;
   const isFree = rawPrice === 0;
   const isEnterprise = tierLower === 'enterprise';
@@ -58,9 +48,8 @@ export function PlanCard({
   const planColor = getPlanColor(plan.tier);
 
   return (
-    <View style={[styles.planCard, selected && styles.planCardSelected]}>
+    <View style={[styles.planCard, selected && styles.planCardSelected, isCurrentPlan && styles.planCardCurrent]}>
       <TouchableOpacity style={styles.planCardTouchable} onPress={onSelect} activeOpacity={0.8}>
-        {/* Plan Header */}
         <View style={styles.planHeader}>
           <View style={styles.planTitleRow}>
             <View style={styles.planTitleContainer}>
@@ -74,10 +63,14 @@ export function PlanCard({
                 <Text style={styles.recommendedText}>Recommended</Text>
               </View>
             )}
+            {isCurrentPlan && (
+              <View style={styles.currentBadge}>
+                <Text style={styles.currentBadgeText}>Current Plan</Text>
+              </View>
+            )}
           </View>
         </View>
 
-        {/* Price Section */}
         <View style={styles.priceSection}>
           <View style={styles.priceContainer}>
             {isFree ? (
@@ -110,7 +103,6 @@ export function PlanCard({
           )}
         </View>
 
-        {/* Plan Details */}
         <View style={styles.planDetailsSection}>
           {plan.tier && !isParentTier && (
             <View style={styles.limitsContainer}>
@@ -156,27 +148,34 @@ export function PlanCard({
         </View>
       </TouchableOpacity>
 
-      {/* CTA Section */}
       <View style={styles.ctaSection}>
         {selected ? (
           <TouchableOpacity
             style={[
               styles.subscribeButton,
               { backgroundColor: planColor },
-              creating && styles.subscribeButtonDisabled,
+              (creating || isCurrentPlan) && styles.subscribeButtonDisabled,
             ]}
             onPress={onSubscribe}
-            disabled={creating}
+            disabled={creating || isCurrentPlan}
             testID={`subscribe-${plan.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={isCurrentPlan ? `${plan.name} current plan` : `Subscribe to ${plan.name}`}
           >
             {creating ? (
               <Text style={styles.subscribeButtonText}>Creating...</Text>
             ) : (
               <>
                 <Text style={styles.subscribeButtonText}>
-                  {isFree ? 'Get Started Free' : isEnterprise ? 'Contact Sales' : 'Subscribe Now'}
+                  {isCurrentPlan
+                    ? 'Current Plan'
+                    : isFree
+                      ? 'Get Started Free'
+                      : isEnterprise
+                        ? 'Contact Sales'
+                        : 'Subscribe Now'}
                 </Text>
-                {!isFree && !isEnterprise && (
+                {!isCurrentPlan && !isFree && !isEnterprise && (
                   <Text style={styles.subscribeButtonSubtext}>
                     Start your {annual ? 'annual' : 'monthly'} plan
                   </Text>
@@ -207,6 +206,9 @@ const styles = StyleSheet.create({
   },
   planCardSelected: {
     borderColor: '#00f5ff',
+  },
+  planCardCurrent: {
+    borderColor: '#10b981',
   },
   planCardTouchable: {
     flex: 1,
@@ -248,6 +250,19 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   recommendedText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  currentBadge: {
+    backgroundColor: '#10b981',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  currentBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '700',

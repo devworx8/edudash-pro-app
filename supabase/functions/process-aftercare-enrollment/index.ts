@@ -5,12 +5,12 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { renderEduDashProEmail } from '../_shared/edudashproEmail.ts';
+import { buildWebUrl } from '../_shared/urls.ts';
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
 const FROM_EMAIL = 'EduDash Pro <support@edudashpro.org.za>';
 const SUPPORT_EMAIL = 'support@edudashpro.org.za';
 const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/FQVPXqY6daRLIonPjQqZTv';
-const APP_URL = Deno.env.get('APP_URL') || 'https://edudashpro.org.za';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -228,7 +228,7 @@ serve(async (req) => {
             type: 'recovery',
             email: registration.parent_email.toLowerCase(),
             options: {
-              redirectTo: `${process.env.SUPABASE_URL?.replace('/rest/v1', '') || 'https://edudashpro.org.za'}/auth/callback?type=password-reset`,
+              redirectTo: buildWebUrl('/auth/callback?type=password-reset'),
             },
           });
           if (resetError) {
@@ -344,7 +344,7 @@ serve(async (req) => {
           type: 'recovery',
           email: registration.parent_email.toLowerCase(),
           options: {
-            redirectTo: `${APP_URL}/auth/callback?type=password-reset&redirect=/dashboard/parent`,
+            redirectTo: buildWebUrl('/auth/callback?type=password-reset&redirect=/dashboard/parent'),
           },
         });
 
@@ -379,7 +379,7 @@ serve(async (req) => {
           registration.parent_email.toLowerCase(),
           registration.parent_first_name,
           `${registration.child_first_name} ${registration.child_last_name}`,
-          `${APP_URL}/dashboard/parent` // Just link to dashboard for existing users
+          buildWebUrl('/dashboard/parent') // Just link to dashboard for existing users
         );
         welcomeEmailSent = emailResult.success;
         welcomeEmailId = emailResult.messageId;

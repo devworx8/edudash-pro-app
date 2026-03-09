@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -10,6 +10,7 @@ import * as Clipboard from 'expo-clipboard';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { extractOrganizationId } from '@/lib/tenant/compat';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface ImportProgress {
@@ -24,6 +25,7 @@ interface ImportProgress {
 export default function BulkCVImportScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const orgId = extractOrganizationId(profile);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -41,19 +43,17 @@ export default function BulkCVImportScreen() {
 
       const file = result.assets[0];
       
-      Alert.alert(
-        'Import CVs/Applications',
-        `Selected: ${file.name}\n\nThis will process CV data and create learner profiles. Make sure your CSV has columns: email, first_name, last_name, phone, id_number (optional), notes (optional).\n\nContinue?`,
-        [
+      showAlert({
+        title: 'Import CVs/Applications',
+        message: `Selected: ${file.name}\n\nThis will process CV data and create learner profiles. Make sure your CSV has columns: email, first_name, last_name, phone, id_number (optional), notes (optional).\n\nContinue?`,
+        type: 'info',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Import',
-            onPress: () => processCVImport(file.uri, file.name),
-          },
-        ]
-      );
+          { text: 'Import', onPress: () => processCVImport(file.uri, file.name) },
+        ],
+      });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to pick file');
+      showAlert({ title: 'Error', message: error.message || 'Failed to pick file', type: 'error' });
     }
   };
 
@@ -189,23 +189,24 @@ export default function BulkCVImportScreen() {
         }
       }
 
-      Alert.alert(
-        'Import Complete!',
-        `Processed: ${processed}\nCreated: ${created}\nUpdated: ${updated}\nErrors: ${errors}`,
-        [
+      showAlert({
+        title: 'Import Complete!',
+        message: `Processed: ${processed}\nCreated: ${created}\nUpdated: ${updated}\nErrors: ${errors}`,
+        type: 'success',
+        buttons: [
           {
             text: 'View Details',
             onPress: () => {
               if (errorsList.length > 0) {
-                Alert.alert('Errors', errorsList.slice(0, 10).join('\n'));
+                showAlert({ title: 'Errors', message: errorsList.slice(0, 10).join('\n'), type: 'error' });
               }
             },
           },
           { text: 'OK' },
-        ]
-      );
+        ],
+      });
     } catch (error: any) {
-      Alert.alert('Import Failed', error.message || 'Failed to process file');
+      showAlert({ title: 'Import Failed', message: error.message || 'Failed to process file', type: 'error' });
     } finally {
       setImporting(false);
       setProgress(null);
@@ -218,20 +219,21 @@ john.doe@example.com,John,Doe,+27123456789,1234567890123,CV received - intereste
 jane.smith@example.com,Jane,Smith,+27987654321,,Applicant from job fair
 bob.wilson@example.com,Bob,Wilson,+27555123456,9876543210987,Marketing course candidate`;
 
-    Alert.alert(
-      'CSV Template',
-      'Copy this template:\n\n' + template,
-      [
+    showAlert({
+      title: 'CSV Template',
+      message: 'Copy this template:\n\n' + template,
+      type: 'info',
+      buttons: [
         {
           text: 'Copy to Clipboard',
           onPress: async () => {
             await Clipboard.setStringAsync(template);
-            Alert.alert('Copied!', 'Template copied to clipboard');
+            showAlert({ title: 'Copied!', message: 'Template copied to clipboard', type: 'success' });
           },
         },
         { text: 'OK' },
-      ]
-    );
+      ],
+    });
   };
 
   return (
@@ -331,6 +333,8 @@ bob.wilson@example.com,Bob,Wilson,+27555123456,9876543210987,Marketing course ca
           </View>
         </View>
       </ScrollView>
+
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

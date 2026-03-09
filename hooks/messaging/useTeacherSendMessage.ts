@@ -21,12 +21,14 @@ export const useTeacherSendMessage = () => {
       voiceUrl,
       voiceDuration,
       replyToId,
+      scheduledAt,
     }: { 
       threadId: string; 
       content: string;
       voiceUrl?: string;
       voiceDuration?: number;
       replyToId?: string;
+      scheduledAt?: Date;
     }) => {
       if (!user?.id) throw new Error('User not authenticated');
       
@@ -43,6 +45,7 @@ export const useTeacherSendMessage = () => {
           voice_url: voiceUrl || null,
           voice_duration: voiceDuration || null,
           reply_to_id: replyToId || null,
+          ...(scheduledAt ? { scheduled_at: scheduledAt.toISOString(), is_scheduled: true } : {}),
         })
         .select()
         .single();
@@ -50,17 +53,22 @@ export const useTeacherSendMessage = () => {
       if (error) throw error;
       
       // Update thread's last_message_at (fire-and-forget, don't block UI)
-      client
-        .from('message_threads')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', threadId)
-        .then(() => {}, () => {});
+      // Skip for scheduled messages
+      if (!scheduledAt) {
+        client
+          .from('message_threads')
+          .update({ last_message_at: new Date().toISOString() })
+          .eq('id', threadId)
+          .then(() => {}, () => {});
+      }
       
       return data;
     },
     // Optimistic update — show bubble instantly before server responds
+    // Skip for scheduled messages
     onMutate: async (variables) => {
-      const { threadId, content, voiceUrl, voiceDuration, replyToId } = variables;
+      const { threadId, content, voiceUrl, voiceDuration, replyToId, scheduledAt } = variables;
+      if (scheduledAt) return { previousMessages: undefined, threadId };
 
       // Cancel outgoing refetches so they don't overwrite optimistic update
       await queryClient.cancelQueries({ queryKey: ['teacher', 'messages', threadId] });
@@ -106,6 +114,11 @@ export const useTeacherSendMessage = () => {
       }
     },
     onSuccess: async (data, variables) => {
+      if (variables.scheduledAt) {
+        queryClient.invalidateQueries({ queryKey: ['teacher', 'threads'] });
+        return;
+      }
+
       // Replace optimistic message with real server data
       queryClient.setQueryData<Message[]>(
         ['teacher', 'messages', variables.threadId],

@@ -7,7 +7,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  FlatList, 
   TouchableOpacity, 
   TextInput,
   RefreshControl,
@@ -15,6 +14,7 @@ import {
   Dimensions,
   Modal,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,7 +67,7 @@ const RESOURCES: Resource[] = [
     id: 'r1',
     category_id: '1',
     title: 'Facilitator Onboarding Guide 2024',
-    description: 'Complete guide for new facilitators joining Soil of Africa',
+    description: 'Complete guide for new facilitators joining EduPro',
     file_type: 'pdf',
     file_url: '#',
     file_size: 2500000,
@@ -95,7 +95,7 @@ const RESOURCES: Resource[] = [
   {
     id: 'r3',
     category_id: '4',
-    title: 'Introduction to Soil of Africa',
+    title: 'Introduction to EduPro',
     description: 'Welcome video for new members explaining our mission and vision',
     file_type: 'video',
     file_url: '#',
@@ -338,13 +338,14 @@ export default function ResourceHubScreen() {
             </TouchableOpacity>
           )}
         </View>
-        <FlatList
+        <FlashList
           data={CATEGORIES}
           renderItem={renderCategoryItem}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoriesList}
+          estimatedItemSize={100}
         />
       </View>
 
@@ -354,7 +355,7 @@ export default function ResourceHubScreen() {
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Featured Resources</Text>
           </View>
-          <FlatList
+          <FlashList
             data={RESOURCES.filter(r => r.is_featured)}
             renderItem={({ item }) => (
               <TouchableOpacity 
@@ -374,6 +375,7 @@ export default function ResourceHubScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.featuredList}
+            estimatedItemSize={200}
           />
         </View>
       )}
@@ -420,13 +422,14 @@ export default function ResourceHubScreen() {
       />
 
       <DashboardWallpaperBackground>
-      <FlatList
+      <FlashList
         data={filteredResources}
         renderItem={renderResourceItem}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
+        estimatedItemSize={80}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }

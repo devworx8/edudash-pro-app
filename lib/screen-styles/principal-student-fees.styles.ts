@@ -222,6 +222,9 @@ export const createStyles = (theme: any, isDark: boolean, insets: any) => StyleS
   registrationMarkUnpaidButton: {
     backgroundColor: theme.warning + '15',
   },
+  registrationReceiptButton: {
+    backgroundColor: theme.primary + '12',
+  },
   registrationMarkPaidText: {
     color: theme.success,
     fontSize: 12,
@@ -229,6 +232,11 @@ export const createStyles = (theme: any, isDark: boolean, insets: any) => StyleS
   },
   registrationMarkUnpaidText: {
     color: theme.warning,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  registrationReceiptText: {
+    color: theme.primary,
     fontSize: 12,
     fontWeight: '700',
   },

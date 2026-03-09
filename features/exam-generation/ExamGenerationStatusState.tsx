@@ -15,11 +15,13 @@ type ExamGenerationStatusStateProps = {
   examQuotaUsed: number;
   examQuotaWarning: string | null;
   generationLabel: string;
+  isQuotaExhausted: boolean;
   state: GenerationState;
   theme: ThemeColors;
   useTeacherContext: boolean;
   onBack: () => void;
   onRetry: () => void;
+  onUpgradePlan: () => void;
 };
 
 export function ExamGenerationStatusState({
@@ -29,11 +31,13 @@ export function ExamGenerationStatusState({
   examQuotaUsed,
   examQuotaWarning,
   generationLabel,
+  isQuotaExhausted,
   state,
   theme,
   useTeacherContext,
   onBack,
   onRetry,
+  onUpgradePlan,
 }: ExamGenerationStatusStateProps) {
   if (state === 'loading') {
     return (
@@ -85,9 +89,20 @@ export function ExamGenerationStatusState({
         >
           <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Back</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={onRetry}>
-          <Text style={styles.primaryButtonText}>Retry</Text>
-        </TouchableOpacity>
+        {isQuotaExhausted ? (
+          <>
+            <TouchableOpacity style={[styles.secondaryButton, { borderColor: theme.border }]} onPress={onRetry}>
+              <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Continue anyway</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={onUpgradePlan}>
+              <Text style={styles.primaryButtonText}>Upgrade plan</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <TouchableOpacity style={[styles.primaryButton, { backgroundColor: theme.primary }]} onPress={onRetry}>
+            <Text style={styles.primaryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

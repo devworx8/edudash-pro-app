@@ -57,6 +57,7 @@ type ProviderResponse = {
 const DEFAULT_OPENAI_ALLOWED_MODELS = ['gpt-4o-mini', 'gpt-4o'];
 const DEFAULT_ANTHROPIC_ALLOWED_MODELS = [
   'claude-3-haiku-20240307',
+  'claude-haiku-4-5-20251001',
   'claude-3-5-haiku-20241022',
   'claude-3-5-sonnet-20241022',
   'claude-3-7-sonnet-20250219',
@@ -136,6 +137,7 @@ const RequestSchema = z.object({
     input_schema: z.record(z.unknown()),
   })).optional(),
   metadata: z.record(z.unknown()).optional(),
+  mode: z.enum(['direct', 'socratic']).optional().default('direct'),
 });
 
 function normalizeServiceType(serviceType?: string): string {
@@ -162,6 +164,8 @@ const MAX_TOKENS_BY_SERVICE: Record<string, number> = {
   web_search: 1024,
   image_analysis: 2048,
   image_generation: 512,
+  smart_reply: 256,
+  message_translation: 512,
 };
 const DEFAULT_MAX_TOKENS = 2048;
 const DEFAULT_TEMPERATURE = 0.4;
@@ -219,13 +223,22 @@ const SERVER_TOOL_NAMES = new Set([
   'caps_curriculum_query',
 ]);
 
-const DEFAULT_SYSTEM_PROMPT = `You are Dash, a helpful AI assistant for schools and families.
+const DEFAULT_SYSTEM_PROMPT = `You are Dash, an AI learning companion for South African schools and families.
+
+PERSONALITY:
+- Warm, encouraging, and enthusiastic — especially with learners.
+- Celebrate curiosity: open answers with a brief, genuine acknowledgement ("Great question!", "Good thinking!", "Let's explore this together!").
+- Use relevant emojis naturally to add energy (1–3 per response, never forced).
+- Be age-appropriate: simpler vocabulary and short sentences for younger learners; richer detail for older students and teachers.
+- Never make a learner feel bad for not knowing something.
 
 CORE BEHAVIOR:
 - Give accurate, specific, context-aware answers.
-- Be concise, warm, and practical.
+- Break explanations into clear steps or short paragraphs — avoid walls of text.
+- Use analogies and real-world examples from South African life where helpful.
 - If attachments are provided, analyze them directly and reference concrete details.
 - Ask at most one clarifying question only when required.
+- For homework help: guide and scaffold — ask a leading question first rather than giving the answer outright. For direct questions from parents or teachers, answer directly.
 
 TOOLS:
 - Use available tools when real data or external information is needed.
@@ -234,6 +247,7 @@ TOOLS:
 LANGUAGE:
 - Follow explicit language instructions from the user or metadata.
 - If no language is specified, respond in clear English (South Africa).
+- Use South African terminology: "learner" not "student", "term" not "semester", "Grade R" not "Kindergarten".
 
 MATH RENDERING CONTRACT:
 - Use $...$ for inline math and $$...$$ for display equations/steps.
@@ -482,8 +496,10 @@ function getAnthropicSonnet37Model(): string {
 function getAnthropicHaiku4xModel(): string {
   return (
     getEnv('ANTHROPIC_HAIKU_4X_MODEL')
+    || getEnv('ANTHROPIC_HAIKU_4_5_MODEL')
+    || getEnv('ANTHROPIC_HAIKU_4_5')
     || getEnv('ANTHROPIC_HAIKU_4_MODEL')
-    || 'claude-3-5-haiku-20241022'
+    || 'claude-haiku-4-5-20251001'
   );
 }
 
@@ -491,10 +507,11 @@ function getAnthropicHaiku4xModel(): string {
 function getDefaultModelIdForTierProxy(tierRaw: string): string {
   const tier = normalizeTierName(tierRaw);
   const sonnet4 = getAnthropicSonnet4Model();
+  const sonnet45 = getAnthropicSonnet45Model();
   const sonnet37 = getAnthropicSonnet37Model();
   const haiku4x = getAnthropicHaiku4xModel();
 
-  if (tier.includes('enterprise') || tier === 'superadmin' || tier === 'super_admin') return sonnet4;
+  if (tier.includes('enterprise') || tier === 'superadmin' || tier === 'super_admin') return sonnet45;
   if (tier.includes('premium') || tier.includes('plus') || tier.includes('pro') || tier.includes('trial') || tier === 'trial') return sonnet4;
   if (tier.includes('basic') || tier.includes('starter')) return sonnet37;
   if (tier.includes('free')) return haiku4x;
@@ -950,7 +967,8 @@ function getResponseModePrompt(mode: ResponseMode | null): string | null {
 function buildSystemPrompt(
   extraContext?: string,
   serviceType?: string,
-  requestMetadata?: Record<string, unknown>
+  requestMetadata?: Record<string, unknown>,
+  pedagogicalMode?: 'direct' | 'socratic'
 ): string {
   // Grading requests get a specialised system prompt — the tutor persona
   // would otherwise attempt conversation instead of grading.
@@ -971,7 +989,20 @@ function buildSystemPrompt(
 
   const responseModePrompt = getResponseModePrompt(parseResponseMode(requestMetadata));
   const languagePrompt = getLanguagePrompt(requestMetadata);
-  const promptParts = [DEFAULT_SYSTEM_PROMPT, responseModePrompt, languagePrompt].filter(Boolean);
+
+  // Socratic mode: guide the student with questions instead of direct answers
+  const socraticPrompt = pedagogicalMode === 'socratic'
+    ? [
+        'SOCRATIC MODE (ACTIVE):',
+        '- Do NOT give the answer directly. Instead, ask a guiding question that leads the student toward the answer.',
+        '- Break complex problems into smaller steps and ask about the first step.',
+        '- If the student is stuck after 2-3 exchanges, give a stronger hint but still frame it as a question.',
+        '- Acknowledge correct reasoning enthusiastically before moving to the next step.',
+        '- Only reveal the full answer if the student explicitly asks you to after trying.',
+      ].join('\n')
+    : null;
+
+  const promptParts = [DEFAULT_SYSTEM_PROMPT, responseModePrompt, languagePrompt, socraticPrompt].filter(Boolean);
   const basePrompt = promptParts.join('\n\n');
   if (!extraContext) return basePrompt;
   
@@ -1257,7 +1288,11 @@ function normalizeRequestedModel(raw?: string | null): string | null {
     'claude-haiku-4x': haiku4x,
     'claude-haiku-4': haiku4x,
     'claude-haiku-4-latest': haiku4x,
+    'claude-haiku-4.5': haiku4x,
+    'claude-haiku-4-5': haiku4x,
+    'claude-haiku-4-5-latest': haiku4x,
     'haiku-4x': haiku4x,
+    'haiku-4.5': haiku4x,
   };
 
   return aliases[key] || trimmed;
@@ -3474,7 +3509,7 @@ serve(async (req) => {
     ].filter(Boolean);
     const mergedContext = contextParts.length > 0 ? contextParts.join('\n\n') : undefined;
 
-    const systemPrompt = buildSystemPrompt(mergedContext, normalizedServiceType, requestMetadata);
+    const systemPrompt = buildSystemPrompt(mergedContext, normalizedServiceType, requestMetadata, payload.mode);
     const rawMessages = normalizeMessages(payload.payload, systemPrompt);
     if (!hasActionableUserMessages(rawMessages)) {
       return new Response(JSON.stringify({
@@ -3714,6 +3749,13 @@ serve(async (req) => {
         if (usageResult.error) {
           console.warn('[ai-proxy] record_ai_usage returned error (non-fatal):', usageResult.error);
         }
+        // Increment user_ai_usage counters + ai_request_log for quota tracking
+        await supabase.rpc('increment_ai_usage', {
+          p_user_id: userData.user.id,
+          p_request_type: 'image_generation',
+          p_status: 'success',
+          p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
+        });
       } catch (usageError) {
         console.warn('[ai-proxy] record_ai_usage failed (non-fatal):', usageError);
       }
@@ -3777,6 +3819,13 @@ serve(async (req) => {
                 request_metadata: payload.metadata || {},
               },
             });
+            // Increment user_ai_usage counters + ai_request_log for quota tracking
+            await supabase.rpc('increment_ai_usage', {
+              p_user_id: userData.user.id,
+              p_request_type: normalizeServiceType(payload.service_type),
+              p_status: 'success',
+              p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
+            });
           } catch (usageErr) {
             console.warn('[ai-proxy] Streaming usage recording failed (non-fatal):', usageErr);
           }
@@ -3832,6 +3881,13 @@ serve(async (req) => {
                 streaming: true,
                 request_metadata: payload.metadata || {},
               },
+            });
+            // Increment user_ai_usage counters + ai_request_log for quota tracking
+            await supabase.rpc('increment_ai_usage', {
+              p_user_id: userData.user.id,
+              p_request_type: normalizeServiceType(payload.service_type),
+              p_status: 'success',
+              p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
             });
           } catch (usageErr) {
             console.warn('[ai-proxy] OpenAI streaming usage recording failed (non-fatal):', usageErr);
@@ -3984,6 +4040,13 @@ serve(async (req) => {
       if (usageResult.error) {
         console.warn('[ai-proxy] record_ai_usage returned error (non-fatal):', usageResult.error);
       }
+      // Increment user_ai_usage counters + ai_request_log for quota tracking
+      await supabase.rpc('increment_ai_usage', {
+        p_user_id: userData.user.id,
+        p_request_type: normalizeServiceType(payload.service_type),
+        p_status: 'success',
+        p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
+      });
     } catch (usageError) {
       console.warn('[ai-proxy] record_ai_usage failed (non-fatal):', usageError);
     }

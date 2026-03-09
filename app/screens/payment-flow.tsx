@@ -8,7 +8,8 @@
  */
 
 import React, { useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -25,6 +26,7 @@ import type { PaymentChild } from '@/types/payments';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function PaymentFlowScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { user } = useAuth();
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -79,11 +81,12 @@ export default function PaymentFlowScreen() {
   }, [openUpload, setShowUploadModal]);
 
   const handleUploadSuccess = () => {
-    Alert.alert(
-      'Payment Submitted! 🎉',
-      'Your proof of payment has been uploaded. The school will verify and confirm your payment within 24-48 hours.',
-      [{ text: 'Done', onPress: () => router.back() }]
-    );
+    showAlert({
+      title: 'Payment Submitted! 🎉',
+      message: 'Your proof of payment has been uploaded. The school will verify and confirm your payment within 24-48 hours.',
+      type: 'success',
+      buttons: [{ text: 'Done', onPress: () => router.back() }]
+    });
   };
 
   // Build child object for upload modal
@@ -363,6 +366,7 @@ export default function PaymentFlowScreen() {
         theme={theme}
       />
 
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

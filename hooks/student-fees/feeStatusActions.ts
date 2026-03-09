@@ -3,9 +3,12 @@
  */
 
 import { assertSupabase } from '@/lib/supabase';
+import {
+  buildManualFeePaymentReference,
+  clearCanonicalPaymentReceiptState,
+} from '@/services/finance/paidFlowService';
 import type { Student, StudentFee } from './types';
 import {
-  upsertPaymentRecord,
   upsertFinancialTransaction,
   generateReceiptForFee,
   fetchReceiptUrlForFee,
@@ -48,7 +51,6 @@ export async function markFeePaid(
     .eq('id', fee.id)
     .throwOnError();
 
-  await upsertPaymentRecord(fee, 'completed', student, organizationId, profileId);
   await upsertFinancialTransaction(fee, 'completed', student, organizationId, profileId);
   await generateReceiptForFee(fee, amount, paidDate, student, { id: profileId } as any, organizationId);
 
@@ -119,7 +121,11 @@ export async function markFeeUnpaid(
     .eq('id', fee.id)
     .throwOnError();
 
-  await upsertPaymentRecord(fee, 'reversed', student, organizationId, profileId);
+  await clearCanonicalPaymentReceiptState(
+    buildManualFeePaymentReference(fee.id),
+    profileId,
+    'Manual fee marked unpaid by school staff.',
+  );
   await upsertFinancialTransaction(fee, 'voided', student, organizationId, profileId);
 
   showAlert('Payment Updated', 'Fee marked as unpaid.', 'success');

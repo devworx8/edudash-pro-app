@@ -208,6 +208,12 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
         lastAutoScrollAtRef.current = now;
         scrollToBottom({ animated: !isLoading, delay: 0 });
       }}
+      onLoad={() => {
+        if (messages.length === 0) return;
+        requestAnimationFrame(() => {
+          scrollToBottom({ animated: false, delay: 0, force: true });
+        });
+      }}
       ListHeaderComponent={
         messages.length > 0 ? (
           <View style={{ gap: 8 }}>

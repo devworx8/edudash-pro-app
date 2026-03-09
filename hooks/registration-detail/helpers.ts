@@ -33,8 +33,11 @@ export const getStatusColor = (status: Registration['status']): string => {
 
 export const getStartMonthIso = (offset: number): string => {
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-  return monthStart.toISOString().split('T')[0];
+  const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  // Use local date parts to avoid UTC-offset shifting the date (e.g. UTC+2 → previous day)
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  return `${y}-${m}-01`;
 };
 
 export const canApprove = (reg: Registration): boolean => {

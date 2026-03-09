@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { logger } from '@/lib/logger';
 import * as Clipboard from 'expo-clipboard';
 import { extractOrganizationId } from '@/lib/tenant/compat';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 // AsyncStorage with web fallback
@@ -32,6 +33,7 @@ const AUTO_SAVE_DELAY = 1500; // 1.5 seconds debounce
 export default function CreateProgramScreen() {
   const { theme } = useTheme();
   const { user, profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const orgId = extractOrganizationId(profile);
   const userId = user?.id || profile?.id;
   
@@ -265,30 +267,30 @@ export default function CreateProgramScreen() {
     if (title.trim()) {
       setCourseCode(generateCourseCode());
     } else {
-      Alert.alert('Enter Title First', 'Please enter a program title to generate the code');
+      showAlert({ title: 'Enter Title First', message: 'Please enter a program title to generate the code', type: 'info' });
     }
   };
 
   const handleSave = async () => {
     // Validation
     if (!title.trim()) {
-      Alert.alert('Error', 'Program title is required');
+      showAlert({ title: 'Error', message: 'Program title is required', type: 'error' });
       return;
     }
 
     if (!courseCode.trim()) {
-      Alert.alert('Error', 'Course code is required. Click "Generate Code" or enter manually.');
+      showAlert({ title: 'Error', message: 'Course code is required. Click "Generate Code" or enter manually.', type: 'error' });
       return;
     }
 
     // Validation: Ensure we have required IDs
     if (!userId) {
-      Alert.alert('Error', 'User ID not available. Please sign in again.');
+      showAlert({ title: 'Error', message: 'User ID not available. Please sign in again.', type: 'error' });
       return;
     }
 
     if (!orgId) {
-      Alert.alert('Error', 'Organization ID not available. Please ensure you are linked to an organization.');
+      showAlert({ title: 'Error', message: 'Organization ID not available. Please ensure you are linked to an organization.', type: 'error' });
       return;
     }
 
@@ -326,15 +328,15 @@ export default function CreateProgramScreen() {
       // Clear draft after successful creation
       await clearDraft();
 
-      Alert.alert(
-        'Program Created!',
-        `${newProgram.title} has been created successfully.`,
-        [
+      showAlert({
+        title: 'Program Created!',
+        message: `${newProgram.title} has been created successfully.`,
+        type: 'success',
+        buttons: [
           {
             text: 'Create Another',
             style: 'cancel',
             onPress: () => {
-              // Reset form
               setTitle('');
               setDescription('');
               setCourseCode('');
@@ -364,10 +366,10 @@ export default function CreateProgramScreen() {
             text: 'Done',
             onPress: () => router.back(),
           },
-        ]
-      );
+        ],
+      });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create program');
+      showAlert({ title: 'Error', message: error.message || 'Failed to create program', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -716,17 +718,17 @@ export default function CreateProgramScreen() {
               <TouchableOpacity
                 style={[styles.clearDraftButton, { borderColor: theme.border }]}
                 onPress={async () => {
-                  Alert.alert(
-                    'Clear Draft?',
-                    'This will permanently delete your saved draft. Are you sure?',
-                    [
+                  showAlert({
+                    title: 'Clear Draft?',
+                    message: 'This will permanently delete your saved draft. Are you sure?',
+                    type: 'warning',
+                    buttons: [
                       { text: 'Cancel', style: 'cancel' },
                       {
                         text: 'Clear',
                         style: 'destructive',
                         onPress: async () => {
                           await clearDraft();
-                          // Reset form
                           setTitle('');
                           setDescription('');
                           setCourseCode('');
@@ -743,8 +745,8 @@ export default function CreateProgramScreen() {
                           setShowAdvanced(false);
                         },
                       },
-                    ]
-                  );
+                    ],
+                  });
                 }}
               >
                 <Ionicons name="trash-outline" size={16} color={theme.textSecondary} />
@@ -754,6 +756,7 @@ export default function CreateProgramScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

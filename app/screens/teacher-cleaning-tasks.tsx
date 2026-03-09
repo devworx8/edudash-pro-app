@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -9,6 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -30,6 +30,7 @@ export default function TeacherCleaningTasksScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const { user, profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const organizationId = profile?.organization_id || profile?.preschool_id || null;
@@ -59,7 +60,7 @@ export default function TeacherCleaningTasksScreen() {
       await startTask(assignmentId);
       await refresh();
     } catch (err) {
-      Alert.alert('Could not start task', err instanceof Error ? err.message : 'Try again.');
+      showAlert({ title: 'Could not start task', message: err instanceof Error ? err.message : 'Try again.', type: 'error' });
     }
   }, [refresh, startTask]);
 
@@ -69,7 +70,7 @@ export default function TeacherCleaningTasksScreen() {
       setCompletionNotes((prev) => ({ ...prev, [assignmentId]: '' }));
       await refresh();
     } catch (err) {
-      Alert.alert('Could not complete task', err instanceof Error ? err.message : 'Try again.');
+      showAlert({ title: 'Could not complete task', message: err instanceof Error ? err.message : 'Try again.', type: 'error' });
     }
   }, [completeTask, completionNotes, refresh]);
 
@@ -171,6 +172,7 @@ export default function TeacherCleaningTasksScreen() {
           );
         })}
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }
