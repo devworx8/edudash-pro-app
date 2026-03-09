@@ -13,6 +13,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getFeatureFlagsSync } from '@/lib/featureFlags';
 
 interface RoleOption {
   id: string;
@@ -85,8 +86,16 @@ export default function RoleSelectionScreen() {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const styles = createStyles(theme);
+  const flags = getFeatureFlagsSync();
 
   const handleRoleSelect = (route: string) => {
+    if (route === '/screens/principal-onboarding') {
+      router.push((flags.principal_signup_enabled
+        ? '/(auth)/principal-signup'
+        : '/screens/school-registration') as any);
+      return;
+    }
+
     router.push(route as any);
   };
 
@@ -317,6 +326,5 @@ const createStyles = (theme: any) => StyleSheet.create({
     fontWeight: '600',
   },
 });
-
 
 
