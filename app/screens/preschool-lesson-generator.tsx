@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl, TextInput, Share, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, TextInput, Share, Platform } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -111,6 +112,7 @@ interface GeneratedContent {
 export default function PreschoolLessonGeneratorScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const params = useLocalSearchParams<{
     mode?: string;
     topic?: string;
@@ -485,12 +487,12 @@ Schema:
     }
     
     if (!selectedSubject) {
-      Alert.alert('Select Subject', 'Please select a subject area for your lesson.');
+      showAlert({ title: 'Select Subject', message: 'Please select a subject area for your lesson.', type: 'warning' });
       return;
     }
     
     if (!selectedAgeGroup) {
-      Alert.alert('Select Age Group', 'Please select an age group for your lesson.');
+      showAlert({ title: 'Select Age Group', message: 'Please select an age group for your lesson.', type: 'warning' });
       return;
     }
 
@@ -528,10 +530,15 @@ Schema:
       if (!gate?.allowed) {
         clearProgressTimer();
         const status = await getQuotaStatus('lesson_generation');
-        Alert.alert('Monthly limit reached', `You have used ${status.used} of ${status.limit} generations.`, [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'See plans', onPress: () => router.push('/pricing') },
-        ]);
+        showAlert({
+          title: 'Monthly limit reached',
+          message: `You have used ${status.used} of ${status.limit} generations.`,
+          type: 'warning',
+          buttons: [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'See plans', onPress: () => router.push('/pricing') },
+          ]
+        });
         return;
       }
 
@@ -784,7 +791,7 @@ Schema:
 
   const onExportPDF = useCallback(async () => {
     if (!generated?.lesson) {
-      Alert.alert('Export PDF', 'Generate a lesson first.');
+      showAlert({ title: 'Export PDF', message: 'Generate a lesson first.', type: 'info' });
       return;
     }
 
@@ -1242,6 +1249,7 @@ Schema:
         icon="checkmark-circle"
         type="success"
       />
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

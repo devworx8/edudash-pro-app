@@ -6,13 +6,20 @@
 // Prefix guards ensure plain-text payloads never get parsed as structured media blocks
 const MEDIA_PREFIX = '__media__';
 const CALL_EVENT_PREFIX = '__call_event__';
+const INLINE_IMAGE_REGEX = /\[image\]\((.+?)\)/i;
+const INLINE_VIDEO_REGEX = /\[video\]\((.+?)\)/i;
+const DIRECT_URL_REGEX = /^https?:\/\/\S+$/i;
+const GIF_URL_REGEX = /(\.gif($|[?#]))|(giphy\.com\/media\/)|(media\d*\.giphy\.com\/media\/)|(media\.tenor\.com\/)/i;
+const IMAGE_URL_REGEX = /\.(png|jpe?g|webp|bmp|heic|heif|svg)($|[?#])/i;
+const VIDEO_URL_REGEX = /\.(mp4|mov|m4v|webm|avi)($|[?#])/i;
 
-export type MediaType = 'image' | 'audio' | 'file';
+export type MediaType = 'image' | 'audio' | 'file' | 'video' | 'gif';
 
 export interface MediaMessageContent {
   kind: 'media';
   mediaType: MediaType;
   url: string;
+  caption?: string;
   name?: string;
   mimeType?: string;
   size?: number;
@@ -75,20 +82,34 @@ export const encodeCallEventContent = (options: EncodeCallEventOptions): string 
  * Parse __call_event__ payloads for rich call cards.
  */
 export const parseCallEventContent = (rawContent: string): CallEventContent | null => {
-  if (typeof rawContent !== 'string' || !rawContent.startsWith(CALL_EVENT_PREFIX)) {
+  if (typeof rawContent !== 'string') {
+    return null;
+  }
+
+  const normalizedRawContent = rawContent.trimStart();
+  if (!normalizedRawContent.startsWith(CALL_EVENT_PREFIX)) {
     return null;
   }
 
   try {
-    const parsed = JSON.parse(rawContent.slice(CALL_EVENT_PREFIX.length));
+    const parsed = JSON.parse(normalizedRawContent.slice(CALL_EVENT_PREFIX.length));
     const callId = typeof parsed?.callId === 'string' ? parsed.callId : parsed?.call_id;
     const rawCallType = typeof parsed?.callType === 'string' ? parsed.callType : parsed?.call_type;
     if (!parsed || typeof callId !== 'string' || typeof rawCallType !== 'string') {
       return null;
     }
 
-    const eventType = parsed.eventType || parsed.event_type;
-    if (eventType !== 'missed_call') {
+    const eventTypeRaw =
+      typeof parsed?.eventType === 'string'
+        ? parsed.eventType
+        : typeof parsed?.event_type === 'string'
+          ? parsed.event_type
+          : 'missed_call';
+    const normalizedEventType =
+      eventTypeRaw === 'missed_video_call' || eventTypeRaw === 'missed_voice_call'
+        ? 'missed_call'
+        : eventTypeRaw;
+    if (normalizedEventType !== 'missed_call') {
       return null;
     }
 
@@ -104,6 +125,59 @@ export const parseCallEventContent = (rawContent: string): CallEventContent | nu
   } catch (_err) {
     return null;
   }
+};
+
+const extractCaption = (rawContent: string, token: string, defaultLead: RegExp): string | undefined => {
+  const trimmed = rawContent.trim();
+  const withoutToken = trimmed.replace(token, '').trim();
+  const withoutLead = withoutToken.replace(defaultLead, '').trim();
+  return withoutLead || undefined;
+};
+
+const parseInlineMediaContent = (rawContent: string): MediaMessageContent | null => {
+  const trimmed = rawContent.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const imageMatch = trimmed.match(INLINE_IMAGE_REGEX);
+  if (imageMatch?.[1]) {
+    const url = imageMatch[1].trim();
+    const isGif = GIF_URL_REGEX.test(url);
+    return {
+      kind: 'media',
+      mediaType: isGif ? 'gif' : 'image',
+      url,
+      caption: extractCaption(trimmed, imageMatch[0], /^📷\s*Photo\s*/i),
+      mimeType: isGif ? 'image/gif' : undefined,
+    };
+  }
+
+  const videoMatch = trimmed.match(INLINE_VIDEO_REGEX);
+  if (videoMatch?.[1]) {
+    return {
+      kind: 'media',
+      mediaType: 'video',
+      url: videoMatch[1].trim(),
+      caption: extractCaption(trimmed, videoMatch[0], /^🎬\s*Video\s*/i),
+    };
+  }
+
+  if (!DIRECT_URL_REGEX.test(trimmed)) {
+    return null;
+  }
+
+  if (GIF_URL_REGEX.test(trimmed)) {
+    return { kind: 'media', mediaType: 'gif', url: trimmed, mimeType: 'image/gif' };
+  }
+  if (IMAGE_URL_REGEX.test(trimmed)) {
+    return { kind: 'media', mediaType: 'image', url: trimmed };
+  }
+  if (VIDEO_URL_REGEX.test(trimmed)) {
+    return { kind: 'media', mediaType: 'video', url: trimmed };
+  }
+
+  return null;
 };
 
 /**
@@ -122,6 +196,7 @@ export const parseMessageContent = (rawContent: string): RichMessageContent => {
           kind: 'media',
           mediaType: parsed.mediaType,
           url: parsed.url,
+          caption: parsed.caption,
           name: parsed.name,
           mimeType: parsed.mimeType,
           size: parsed.size,
@@ -131,6 +206,11 @@ export const parseMessageContent = (rawContent: string): RichMessageContent => {
     } catch (_err) {
       // Intentionally fallback to text rendering if parsing fails
     }
+  }
+
+  const inlineMedia = parseInlineMediaContent(rawContent);
+  if (inlineMedia) {
+    return inlineMedia;
   }
 
   return { kind: 'text', text: rawContent };
@@ -146,6 +226,14 @@ export const isAudioMedia = (content: RichMessageContent): content is MediaMessa
 
 export const isFileMedia = (content: RichMessageContent): content is MediaMessageContent => {
   return content.kind === 'media' && content.mediaType === 'file';
+};
+
+export const isVideoMedia = (content: RichMessageContent): content is MediaMessageContent => {
+  return content.kind === 'media' && content.mediaType === 'video';
+};
+
+export const isGifMedia = (content: RichMessageContent): content is MediaMessageContent => {
+  return content.kind === 'media' && content.mediaType === 'gif';
 };
 
 /**
@@ -168,8 +256,12 @@ export const getMessageDisplayText = (rawContent: string): string => {
     switch (content.mediaType) {
       case 'audio':
         return '🎤 Voice message';
+      case 'gif':
+        return '✨ GIF';
       case 'image':
         return '📷 Image';
+      case 'video':
+        return '🎬 Video';
       case 'file':
         return content.name ? `📎 ${content.name}` : '📎 File attachment';
       default:

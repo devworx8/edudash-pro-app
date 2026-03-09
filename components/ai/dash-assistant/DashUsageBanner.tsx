@@ -44,57 +44,25 @@ export const DashUsageBanner: React.FC<DashUsageBannerProps> = ({
     : usageLabel;
 
   return (
-    <View style={[styles.usageBanner, { borderColor: theme.border, backgroundColor: theme.surface }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-        {safeLimit > 0 ? (
-          <CircularQuotaRing
-            used={safeUsed}
-            limit={safeLimit}
-            size={40}
-            strokeWidth={4}
-            showPercentage
-            percentageMode="used"
-          />
-        ) : (
-          <View
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 11,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: theme.primary + '1f',
-            }}
-          >
-            <Ionicons name="sparkles-outline" size={12} color={theme.primary} />
-          </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={[styles.usageBannerText, { color: theme.text, flex: 0 }]}>
-              {tierStatus.tierDisplayName}
-            </Text>
-            <View
-              style={{
-                borderRadius: 999,
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                backgroundColor: theme.surfaceVariant,
-              }}
-            >
-              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary }}>
-                AI USAGE
-              </Text>
-            </View>
-          </View>
-          <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 1 }}>{resolvedUsageLabel}</Text>
-        </View>
-      </View>
+    <View style={[styles.usageBanner, { borderColor: theme.border, backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center' }]}>
       {safeLimit > 0 ? (
-        <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary }}>
-          {Math.round(safePercentUsed)}% used this month
-        </Text>
-      ) : null}
+        <CircularQuotaRing
+          used={safeUsed}
+          limit={safeLimit}
+          size={28}
+          strokeWidth={3}
+          showPercentage={false}
+          percentageMode="used"
+        />
+      ) : (
+        <Ionicons name="sparkles-outline" size={12} color={theme.primary} />
+      )}
+      <Text style={[styles.usageBannerText, { color: theme.text, marginLeft: 6 }]} numberOfLines={1}>
+        {tierStatus.tierDisplayName}
+      </Text>
+      <Text style={{ fontSize: 11, color: theme.textSecondary }} numberOfLines={1}>
+        {resolvedUsageLabel}
+      </Text>
     </View>
   );
 };

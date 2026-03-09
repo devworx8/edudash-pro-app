@@ -15,7 +15,7 @@ import { voiceService } from '@/lib/voice/client';
 import type { DashMessage } from '@/services/dash-ai/types';
 import { normalizeForTTS } from '@/lib/dash-ai/ttsNormalize';
 import { shouldUsePhonicsMode } from '@/lib/dash-ai/phonicsDetection';
-import { getVoiceIdForLanguage } from '@/lib/voice/voiceMapping';
+import { resolveSelectedVoiceId } from '@/lib/voice/voiceMapping';
 
 // Azure TTS languages (short codes accepted by tts-proxy)
 const AZURE_TTS_LANGUAGES = ['en', 'af', 'zu', 'xh', 'nso', 'st', 'fr', 'pt', 'es', 'de'];
@@ -39,7 +39,8 @@ export interface VoiceSettings {
   rate: number;
   pitch: number;
   language: string;
-  voice?: 'male' | 'female';
+  voice?: string;
+  voice_id?: string;
   phonicsMode?: boolean;
 }
 
@@ -124,7 +125,12 @@ export class DashVoiceController {
       }
       
       // Detect static language fallback (e.g. Sesotho mapped to English voice)
-      const voiceForLang = getVoiceIdForLanguage(shortCode, voiceSettings.voice || 'female');
+      const voiceForLang = resolveSelectedVoiceId({
+        language: shortCode,
+        requestedVoiceId: voiceSettings.voice_id || voiceSettings.voice,
+        preferenceVoiceId: prefs?.voice_id,
+        preferenceLanguage: prefs?.language,
+      });
       const voiceLangPrefix = voiceForLang.split('-').slice(0, 2).join('-');
       const requestedBcp47 = LANG_SHORT_TO_BCP47[shortCode] || `${shortCode}-ZA`;
       if (voiceLangPrefix !== requestedBcp47) {

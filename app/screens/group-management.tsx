@@ -6,7 +6,8 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, RefreshControl } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,6 +50,7 @@ export default function GroupManagementScreen() {
   const queryClient = useQueryClient();
 
   const styles = useMemo(() => createStyles(theme, insets.top), [theme, insets.top]);
+  const { showAlert, alertProps } = useAlertModal();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
@@ -110,16 +112,16 @@ export default function GroupManagementScreen() {
       setNewGroupName('');
       setNewGroupDescription('');
       setNewGroupType('teacher_team');
-      Alert.alert('Success', 'Group created successfully.');
+      showAlert({ title: 'Success', message: 'Group created successfully.', type: 'success' });
     },
     onError: (err: any) => {
-      Alert.alert('Error', err?.message || 'Failed to create group');
+      showAlert({ title: 'Error', message: err?.message || 'Failed to create group', type: 'error' });
     },
   });
 
   const handleCreateGroup = () => {
     if (!newGroupName.trim()) {
-      Alert.alert('Missing name', 'Please enter a group name.');
+      showAlert({ title: 'Missing name', message: 'Please enter a group name.', type: 'warning' });
       return;
     }
     createGroupMutation.mutate();
@@ -256,6 +258,7 @@ export default function GroupManagementScreen() {
           </View>
         </View>
       </Modal>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

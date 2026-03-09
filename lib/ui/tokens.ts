@@ -117,7 +117,7 @@ export const uiTokens = {
   gradients: {
     purpleVibrant: ['#23214D', '#5A409D', '#9584C0'] as [string, string, string],
     greenFresh: ['#22433F', '#3C8E62', '#67A884'] as [string, string, string],
-    cosmicBlend: ['#23214D', '#3C8E62'] as [string, string],
+    cosmicBlend: ['#23214D', '#06B6D4'] as [string, string],
     warmSunrise: ['#F59E0B', '#EF4444'] as [string, string],
     coolOcean: ['#06B6D4', '#6366F1'] as [string, string],
     glassBorder: ['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)'] as [string, string],

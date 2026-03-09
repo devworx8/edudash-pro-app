@@ -133,7 +133,8 @@ export const MathRenderer: React.FC<MathRendererProps> = ({ expression, displayM
       const BlockMath = katex.BlockMath as React.ComponentType<{ math: string }>;
       const InlineMath = katex.InlineMath as React.ComponentType<{ math: string }>;
       return (
-        <View style={{ marginVertical: displayMode ? 8 : 0 }}>
+        // color cascades to KaTeX's currentColor — ensures math is visible on dark backgrounds
+        <View style={{ marginVertical: displayMode ? 8 : 0, color: '#e2e8f0' } as any}>
           {displayMode ? <BlockMath math={cleaned} /> : <InlineMath math={cleaned} />}
         </View>
       );

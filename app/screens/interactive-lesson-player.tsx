@@ -14,7 +14,8 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -44,6 +45,7 @@ interface Activity {
 export default function InteractiveLessonPlayerScreen() {
   const { theme } = useTheme();
   const { user } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const params = useLocalSearchParams();
   const activityId = params.activityId as string;
   const studentId = params.studentId as string;
@@ -76,7 +78,7 @@ export default function InteractiveLessonPlayerScreen() {
 
   const loadActivity = async () => {
     if (!activityId) {
-      Alert.alert('Error', 'No activity selected');
+      showAlert({ title: 'Error', message: 'No activity selected', type: 'error' });
       router.back();
       return;
     }
@@ -121,7 +123,7 @@ export default function InteractiveLessonPlayerScreen() {
       setAttemptsCount(attempts?.length || 0);
     } catch (error: any) {
       console.error('[InteractiveLessonPlayer] Error loading activity:', error);
-      Alert.alert('Error', error.message || 'Failed to load activity');
+      showAlert({ title: 'Error', message: error.message || 'Failed to load activity', type: 'error' });
       router.back();
     } finally {
       setLoading(false);
@@ -355,6 +357,7 @@ export default function InteractiveLessonPlayerScreen() {
           </View>
         )}
       </View>
+      <AlertModal {...alertProps} />
     </DesktopLayout>
   );
 }

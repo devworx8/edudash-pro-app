@@ -9,11 +9,11 @@ import React from 'react';
 import {
   View,
   Text,
-  FlatList,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useParentActivityHistory, CompletedActivity } from '@/hooks/activities/useParentActivityHistory';
 
@@ -135,12 +135,13 @@ export function ParentActivityHistory({ childId, theme }: ParentActivityHistoryP
           <Ionicons name="refresh-outline" size={20} color={theme.primary} />
         </TouchableOpacity>
       </View>
-      <FlatList
+      <FlashList
         data={activities}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        estimatedItemSize={80}
       />
     </View>
   );

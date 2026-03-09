@@ -15,7 +15,8 @@ export function resolveSpeechControlsLayoutState(
 ): SpeechControlsLayoutState {
   const hasAnySpeechContent = input.hasSpeechMessage && input.chunkCount > 0;
   const showFullControls = hasAnySpeechContent && (input.isSpeaking || input.expanded);
-  const showMiniControls = hasAnySpeechContent && !showFullControls;
+  // Only show mini controls while actively speaking — not after speech ends.
+  const showMiniControls = hasAnySpeechContent && input.isSpeaking && !showFullControls;
 
   return {
     showMiniControls,

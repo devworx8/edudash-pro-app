@@ -10,7 +10,6 @@ import {
   Text,
   Modal,
   TouchableOpacity,
-  StyleSheet,
   Animated,
   Dimensions,
   TouchableWithoutFeedback,
@@ -23,6 +22,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import * as Clipboard from 'expo-clipboard';
 import { toast } from '@/components/ui/ToastProvider';
+import { getMessageDisplayText } from '@/lib/utils/messageContent';
+import { createMessageActionsStyles } from './message-actions-menu/styles';
 
 // Lazy load EmojiPicker to avoid circular dependencies
 let EmojiPickerComponent: React.FC<any> | null = null;
@@ -57,6 +58,8 @@ interface MessageActionsMenuProps {
   onEdit?: () => void;
   onTranslate?: (language: 'en' | 'af' | 'zu') => void;
   isTranslating?: boolean;
+  onStar?: () => void;
+  isStarred?: boolean;
   /** Pin/unpin callback */
   onPin?: () => void;
   /** Whether the message is currently pinned */
@@ -83,6 +86,8 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
   onEdit,
   onTranslate,
   isTranslating = false,
+  onStar,
+  isStarred = false,
   onPin,
   isPinned = false,
   showAddToWeeklyProgram = false,
@@ -104,6 +109,7 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
   
   // Safe message content with fallback to prevent crashes
   const safeMessageContent = messageContent || '';
+  const previewText = getMessageDisplayText(safeMessageContent);
   
   useEffect(() => {
     if (!visible) {
@@ -179,167 +185,16 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
     ...(showConvertToRoutineRequest && onConvertToRoutineRequest ? [{ id: 'convert_to_routine_request', label: 'Convert to routine request', icon: 'clipboard-outline' as keyof typeof Ionicons.glyphMap, color: theme.primary }] : []),
     ...(isOwnMessage && onEdit ? [{ id: 'edit', label: 'Edit', icon: 'pencil-outline' as keyof typeof Ionicons.glyphMap }] : []),
     ...(onTranslate ? [{ id: 'translate', label: 'Translate', icon: 'language-outline' as keyof typeof Ionicons.glyphMap }] : []),
+    ...(onStar ? [{ id: 'star', label: isStarred ? 'Unstar' : 'Star', icon: (isStarred ? 'star' : 'star-outline') as keyof typeof Ionicons.glyphMap, color: '#f8ca59' }] : []),
     ...(onPin ? [{ id: 'pin', label: isPinned ? 'Unpin' : 'Pin', icon: (isPinned ? 'pin-outline' : 'pin') as keyof typeof Ionicons.glyphMap }] : []),
     { id: 'delete', label: 'Delete', icon: 'trash-outline', destructive: true, color: '#ef4444' },
   ];
   
-  const styles = StyleSheet.create({
-    container: {
-      flex: 1,
-      justifyContent: 'flex-end',
-    },
-    backdrop: {
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    },
-    sheet: {
-      backgroundColor: theme.surface,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      paddingBottom: insets.bottom + 16,
-      maxHeight: SCREEN_HEIGHT * 0.6,
-      width: '100%',
-      alignSelf: 'center',
-      maxWidth: Platform.OS === 'web' ? Math.min(viewportWidth, 760) : undefined,
-      ...Platform.select({
-        ios: {
-          shadowColor: '#000',
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.25,
-          shadowRadius: 16,
-        },
-        android: {
-          elevation: 16,
-        },
-      }),
-    },
-    handle: {
-      width: 40,
-      height: 4,
-      backgroundColor: theme.border,
-      borderRadius: 2,
-      alignSelf: 'center',
-      marginTop: 12,
-      marginBottom: 16,
-    },
-    messagePreview: {
-      marginHorizontal: 16,
-      marginBottom: 16,
-      padding: 12,
-      backgroundColor: theme.elevated,
-      borderRadius: 12,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.primary,
-    },
-    previewText: {
-      color: theme.textSecondary,
-      fontSize: 14,
-      lineHeight: 20,
-    },
-    reactionsContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-around',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    reactionButton: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: theme.elevated,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    reactionEmoji: {
-      fontSize: 24,
-    },
-    moreReactionsButton: {
-      width: 48,
-      height: 48,
-      borderRadius: 24,
-      backgroundColor: theme.elevated,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    fullEmojiPickerContainer: {
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-    },
-    emojiPickerHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-    },
-    emojiPickerTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    actionsGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      paddingHorizontal: 8,
-      paddingTop: 8,
-    },
-    actionButton: {
-      width: '25%',
-      alignItems: 'center',
-      paddingVertical: 16,
-    },
-    actionIconContainer: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      backgroundColor: theme.elevated,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 8,
-    },
-    actionLabel: {
-      fontSize: 12,
-      color: theme.text,
-      fontWeight: '500',
-    },
-    destructiveLabel: {
-      color: '#ef4444',
-    },
-    translateContainer: {
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      paddingBottom: 8,
-    },
-    translateHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-    },
-    translateTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    translateOption: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      gap: 12,
-    },
-    translateFlag: {
-      fontSize: 22,
-    },
-    translateLabel: {
-      fontSize: 15,
-      fontWeight: '500',
-      flex: 1,
-    },
-    translateLoading: {
-      fontSize: 13,
-    },
+  const styles = createMessageActionsStyles({
+    theme,
+    insets,
+    viewportWidth,
+    screenHeight: SCREEN_HEIGHT,
   });
 
   if (!visible) return null;
@@ -376,7 +231,7 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
           {/* Message Preview */}
           <View style={styles.messagePreview}>
             <Text style={styles.previewText} numberOfLines={2}>
-              {safeMessageContent.startsWith('__media__') ? '📎 Media' : safeMessageContent}
+              {previewText}
             </Text>
           </View>
           
@@ -478,6 +333,9 @@ export const MessageActionsMenu: React.FC<MessageActionsMenuProps> = ({
                         break;
                       case 'translate':
                         setShowTranslateOptions(true);
+                        break;
+                      case 'star':
+                        if (onStar) handleAction(onStar);
                         break;
                       case 'add_to_weekly_program':
                         if (onAddToWeeklyProgram) handleAction(onAddToWeeklyProgram);

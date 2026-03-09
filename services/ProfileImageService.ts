@@ -457,6 +457,36 @@ class ProfileImageService {
    */
   static async validateImage(uri: string): Promise<{ valid: boolean; error?: string }> {
     try {
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+
+        if (!response.ok) {
+          return {
+            valid: false,
+            error: `Failed to read image (${response.status} ${response.statusText})`,
+          };
+        }
+
+        const blob = await response.blob();
+        const mimeType = blob.type?.toLowerCase() ?? '';
+
+        if (blob.size > this.getMaxFileSize()) {
+          return {
+            valid: false,
+            error: `File size (${Math.round(blob.size / 1024 / 1024)}MB) exceeds limit (5MB)`,
+          };
+        }
+
+        if (mimeType && !this.getAllowedMimeTypes().includes(mimeType)) {
+          return {
+            valid: false,
+            error: 'Unsupported image type. Please use JPG, PNG, WEBP, or AVIF.',
+          };
+        }
+
+        return { valid: true };
+      }
+
       // Check if file exists and get info
       const info = await FileSystem.getInfoAsync(uri);
       

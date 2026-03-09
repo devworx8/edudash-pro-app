@@ -11,12 +11,12 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   Linking,
   ActivityIndicator,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '@/contexts/ThemeContext';
 import { HiringHubService } from '@/lib/services/HiringHubService';
@@ -313,13 +313,14 @@ export function ApplicationsView({
         ))}
       </View>
 
-      <FlatList
+      <FlashList
         data={filtered}
         keyExtractor={(i) => i.id}
         renderItem={renderApplication}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchApplications} />}
+        estimatedItemSize={120}
         ListEmptyComponent={
           loading ? (
             <ActivityIndicator size="large" color={theme?.primary || '#4F46E5'} style={{ marginTop: 40 }} />

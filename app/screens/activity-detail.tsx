@@ -16,10 +16,10 @@ import {
   FlatList,
   TouchableOpacity,
   TextInput,
-  Alert,
   RefreshControl,
   Modal,
 } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
@@ -55,6 +55,7 @@ interface FilterOptions {
 
 export default function ActivityDetailScreen() {
   const { user, profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [filteredActivities, setFilteredActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -284,7 +285,7 @@ export default function ActivityDetailScreen() {
 
     } catch (error) {
       console.error('Failed to load activities:', error);
-      Alert.alert('Error', 'Failed to load activity feed');
+      showAlert({ title: 'Error', message: 'Failed to load activity feed', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -384,14 +385,15 @@ export default function ActivityDetailScreen() {
 
   const handleDeleteActivity = (activityId: string) => {
     if (!canManageActivity()) {
-      Alert.alert('Access Denied', 'Only principals can delete activities.');
+      showAlert({ title: 'Access Denied', message: 'Only principals can delete activities.', type: 'error' });
       return;
     }
 
-    Alert.alert(
-      'Delete Activity',
-      'Are you sure you want to delete this activity? This action cannot be undone.',
-      [
+    showAlert({
+      title: 'Delete Activity',
+      message: 'Are you sure you want to delete this activity? This action cannot be undone.',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -401,8 +403,8 @@ export default function ActivityDetailScreen() {
             // In production, this would call the delete API
           }
         }
-      ]
-    );
+      ],
+    });
   };
 
   const renderActivityItem = ({ item }: { item: ActivityItem }) => (
@@ -588,6 +590,7 @@ export default function ActivityDetailScreen() {
 
       {/* Filter Modal */}
       {renderFilterModal()}
+      <AlertModal {...alertProps} />
     </View>
   );
 }

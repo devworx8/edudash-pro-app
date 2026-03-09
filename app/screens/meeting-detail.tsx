@@ -1,7 +1,8 @@
 // Meeting Detail Screen - View full meeting agenda with notes
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Alert, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Share, Linking } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,6 +62,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function MeetingDetailScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = createStyles(theme);
   const params = useLocalSearchParams<{ id: string }>();
   const meetingId = params.id;
@@ -185,14 +187,14 @@ export default function MeetingDetailScreen() {
       }
     } catch (err) {
       console.error('Share error:', err);
-      Alert.alert('Error', 'Failed to share meeting');
+      showAlert({ title: 'Error', message: 'Failed to share meeting', type: 'error' });
     }
   };
 
   const copyToClipboard = async () => {
     const message = generateWhatsAppMessage();
     await Clipboard.setStringAsync(message);
-    Alert.alert('Copied!', 'Meeting details copied to clipboard');
+    showAlert({ title: 'Copied!', message: 'Meeting details copied to clipboard', type: 'success' });
   };
 
   const shareGeneral = async () => {
@@ -428,6 +430,7 @@ export default function MeetingDetailScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

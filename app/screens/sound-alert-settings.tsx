@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Alert, Platform, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Platform, Modal, TextInput } from 'react-native';
 import { Stack, router } from 'expo-router';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
@@ -130,6 +131,7 @@ const HAPTIC_PATTERNS: { value: HapticPattern; label: string; description: strin
 export default function SoundAlertSettingsScreen() {
   const { profile } = useAuth();
   const { theme, isDark } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<Map<AlertType, SoundAlertSettings>>(new Map());
   const [selectedAlert, setSelectedAlert] = useState<AlertType | null>(null);
@@ -186,7 +188,7 @@ export default function SoundAlertSettingsScreen() {
       
     } catch (error) {
       console.error('Failed to load sound settings:', error);
-      Alert.alert('Error', 'Failed to load sound alert settings');
+      showAlert({ title: 'Error', message: 'Failed to load sound alert settings', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -216,7 +218,7 @@ export default function SoundAlertSettingsScreen() {
       
     } catch (error) {
       console.error('Failed to update alert setting:', error);
-      Alert.alert('Error', 'Failed to update sound alert setting');
+      showAlert({ title: 'Error', message: 'Failed to update sound alert setting', type: 'error' });
     }
   };
 
@@ -236,16 +238,17 @@ export default function SoundAlertSettingsScreen() {
       
     } catch (error) {
       console.error('Failed to test alert:', error);
-      Alert.alert('Error', 'Failed to test sound alert');
+      showAlert({ title: 'Error', message: 'Failed to test sound alert', type: 'error' });
       setTestingAlert(null);
     }
   };
 
   const openSystemSettings = (): void => {
-    Alert.alert(
-      'System Settings',
-      'To modify system-level notification settings, please go to your device settings.',
-      [
+    showAlert({
+      title: 'System Settings',
+      message: 'To modify system-level notification settings, please go to your device settings.',
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Open Settings',
@@ -259,15 +262,16 @@ export default function SoundAlertSettingsScreen() {
             }
           }
         }
-      ]
-    );
+      ],
+    });
   };
 
   const resetToDefaults = (): void => {
-    Alert.alert(
-      'Reset to Defaults',
-      'This will reset all sound alert settings to their default values. Are you sure?',
-      [
+    showAlert({
+      title: 'Reset to Defaults',
+      message: 'This will reset all sound alert settings to their default values. Are you sure?',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Reset',
@@ -285,16 +289,16 @@ export default function SoundAlertSettingsScreen() {
                 });
               }
               
-              Alert.alert('Success', 'Sound alert settings have been reset to defaults');
+              showAlert({ title: 'Success', message: 'Sound alert settings have been reset to defaults', type: 'success' });
               
             } catch (error) {
               console.error('Failed to reset settings:', error);
-              Alert.alert('Error', 'Failed to reset sound alert settings');
+              showAlert({ title: 'Error', message: 'Failed to reset sound alert settings', type: 'error' });
             }
           }
         }
-      ]
-    );
+      ],
+    });
   };
 
   const updateQuietHours = async (): Promise<void> => {
@@ -314,11 +318,11 @@ export default function SoundAlertSettingsScreen() {
       }
       
       setShowQuietHoursModal(false);
-      Alert.alert('Success', 'Quiet hours have been updated');
+      showAlert({ title: 'Success', message: 'Quiet hours have been updated', type: 'success' });
       
     } catch (error) {
       console.error('Failed to update quiet hours:', error);
-      Alert.alert('Error', 'Failed to update quiet hours');
+      showAlert({ title: 'Error', message: 'Failed to update quiet hours', type: 'error' });
     }
   };
 
@@ -690,6 +694,7 @@ export default function SoundAlertSettingsScreen() {
       {/* Modals */}
       {renderDetailModal()}
       {renderQuietHoursModal()}
+      <AlertModal {...alertProps} />
     </View>
   );
 }

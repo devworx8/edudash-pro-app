@@ -33,7 +33,7 @@ const GIPHY_API_KEY =
 const GIPHY_BASE = 'https://api.giphy.com/v1/gifs';
 const GIF_COLUMNS = 3;
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CELL_SIZE = (SCREEN_WIDTH - 24) / GIF_COLUMNS;
+const CELL_SIZE = (SCREEN_WIDTH - 12) / GIF_COLUMNS;
 
 interface GiphyGif {
   id: string;
@@ -272,28 +272,30 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 8,
-    marginTop: 6,
-    marginBottom: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+    marginHorizontal: 3,
+    marginTop: 2,
+    marginBottom: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 14,
     gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(125, 211, 252, 0.12)',
   },
   searchInput: {
     flex: 1,
     fontSize: 14,
-    paddingVertical: 2,
+    paddingVertical: 1,
   },
   gifGrid: {
-    paddingHorizontal: 4,
-    paddingBottom: 8,
+    paddingHorizontal: 1,
+    paddingBottom: 2,
   },
   gifCell: {
     width: CELL_SIZE,
     height: CELL_SIZE,
-    margin: 2,
-    borderRadius: 8,
+    margin: 0.5,
+    borderRadius: 10,
     overflow: 'hidden',
   },
   gifImage: {
@@ -318,26 +320,26 @@ const styles = StyleSheet.create({
   poweredBy: {
     fontSize: 10,
     textAlign: 'center',
-    paddingVertical: 4,
+    paddingVertical: 1,
   },
   fallbackContainer: {
     flex: 1,
-    padding: 12,
+    padding: 8,
   },
   fallbackNote: {
     fontSize: 12,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
   },
   categoryCard: {
     width: (SCREEN_WIDTH - 56) / 3,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
@@ -354,8 +356,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
-    paddingVertical: 10,
+    marginTop: 12,
+    paddingVertical: 9,
     borderRadius: 10,
     borderWidth: 1,
     gap: 6,

@@ -28,10 +28,10 @@ export default function PrivacyPolicy() {
 
       <LegalHeading level={2}>1. Introduction & Scope</LegalHeading>
       <LegalText>
-        Welcome to EduDash Pro. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our AI-powered educational platform designed for preschools, teachers, parents, and children aged 3-6 years.
+        Welcome to EduDash Pro. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our AI-powered educational platform for schools, preschools, tutoring programmes, educators, parents, and learners.
       </LegalText>
       <LegalText>
-        We are committed to protecting the privacy and security of all users, with special attention to the protection of children's data in compliance with international regulations.
+        We are committed to protecting the privacy and security of all users, with special attention to the protection of child and learner data in compliance with applicable international and South African regulations.
       </LegalText>
 
       <LegalHeading level={3}>Regulatory Compliance</LegalHeading>
@@ -49,12 +49,12 @@ export default function PrivacyPolicy() {
       
       <LegalHeading level={3}>Account Information</LegalHeading>
       <LegalText>
-        We collect basic account information necessary to provide our educational services: full name, email address, phone number, school/preschool affiliation, role (teacher, parent, principal, student), and date of birth for age verification.
+        We collect basic account information necessary to provide our educational services: full name, email address, phone number, organization affiliation, role (teacher, parent, principal, student, admin, or similar), and date of birth for age verification and consent controls.
       </LegalText>
 
-      <LegalHeading level={3}>Children's Information (Ages 3-6)</LegalHeading>
+      <LegalHeading level={3}>Student & Child Information</LegalHeading>
       <LegalText variant="bold">With parental consent, we collect:</LegalText>
-      <LegalText variant="list-item">Child's first name, age, grade level</LegalText>
+      <LegalText variant="list-item">Child or learner first name, age, and grade level</LegalText>
       <LegalText variant="list-item">Learning progress and assessment data</LegalText>
       <LegalText variant="list-item">Educational activities and assignments</LegalText>
       <LegalText variant="list-item">Attendance records</LegalText>
@@ -66,7 +66,7 @@ export default function PrivacyPolicy() {
       <LegalText variant="list-item">Minimal data collection principle</LegalText>
       <LegalText variant="list-item">Parental consent required before collection</LegalText>
       <LegalText variant="list-item">Secure storage with encryption</LegalText>
-      <LegalText variant="list-item">No personal advertising targeting</LegalText>
+      <LegalText variant="list-item">Core school, parent, educator, and learner flows are ad-free</LegalText>
 
       <LegalHeading level={3}>Usage & Analytics Data</LegalHeading>
       <LegalText>
@@ -125,10 +125,10 @@ export default function PrivacyPolicy() {
       </LegalText>
 
       <LegalHeading level={3}>No Behavioral Advertising to Children</LegalHeading>
-      <LegalText variant="list-item">Child accounts see no personalized advertising</LegalText>
-      <LegalText variant="list-item">AdMob configured for child-directed treatment</LegalText>
-      <LegalText variant="list-item">Development environment uses test ad IDs only</LegalText>
-      <LegalText variant="list-item">No third-party data sharing for advertising</LegalText>
+      <LegalText variant="list-item">Child and learner accounts do not see third-party advertising in core product flows</LegalText>
+      <LegalText variant="list-item">Teacher, parent, principal, admin, and school management workflows are ad-free</LegalText>
+      <LegalText variant="list-item">Any limited sponsored placements are restricted to eligible adult community users and use non-personalized ads</LegalText>
+      <LegalText variant="list-item">Development environments use test ad IDs only</LegalText>
 
       <LegalHeading level={2}>5. Data Subject Rights (GDPR & POPIA)</LegalHeading>
       <LegalText>All users have the following rights:</LegalText>
@@ -211,6 +211,9 @@ export default function PrivacyPolicy() {
       </LegalText>
       <LegalText variant="list-item">
         <LegalText variant="bold">PostHog:</LegalText> Product analytics - production only (EU)
+      </LegalText>
+      <LegalText variant="list-item">
+        <LegalText variant="bold">Google AdMob:</LegalText> Limited non-personalized advertising for eligible adult community users only
       </LegalText>
 
       <LegalText style={{ marginTop: DesignSystem.spacing.md }}>
@@ -303,7 +306,7 @@ export default function PrivacyPolicy() {
         marginBottom: DesignSystem.spacing.xl,
       }}>
         <LegalText>
-          By using EduDash Pro, you acknowledge that you have read and understood this Privacy Policy. For children's accounts, we require verifiable parental consent before collection of any personal information.
+          By using EduDash Pro, you acknowledge that you have read and understood this Privacy Policy. For child or learner accounts, we require verifiable parent, guardian, or institutional consent before collection of personal information.
         </LegalText>
       </View>
 

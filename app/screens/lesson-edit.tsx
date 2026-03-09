@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -19,6 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { assertSupabase } from '@/lib/supabase';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface LessonForm {
@@ -86,6 +87,7 @@ export default function LessonEditScreen() {
   const [newMaterial, setNewMaterial] = useState('');
 
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   // Check if user can edit this lesson
   const canEdit = useCallback(() => {
@@ -107,7 +109,7 @@ export default function LessonEditScreen() {
   useEffect(() => {
     const loadLesson = async () => {
       if (!lessonId) {
-        Alert.alert('Error', 'No lesson ID provided');
+        showAlert({ title: 'Error', message: 'No lesson ID provided', type: 'error' });
         router.back();
         return;
       }
@@ -121,7 +123,7 @@ export default function LessonEditScreen() {
 
         if (error) throw error;
         if (!data) {
-          Alert.alert('Error', 'Lesson not found');
+          showAlert({ title: 'Error', message: 'Lesson not found', type: 'error' });
           router.back();
           return;
         }
@@ -139,7 +141,7 @@ export default function LessonEditScreen() {
         });
       } catch (error) {
         console.error('[LessonEdit] Error loading lesson:', error);
-        Alert.alert('Error', 'Failed to load lesson');
+        showAlert({ title: 'Error', message: 'Failed to load lesson', type: 'error' });
         router.back();
       } finally {
         setLoading(false);
@@ -151,12 +153,12 @@ export default function LessonEditScreen() {
 
   const handleSave = async () => {
     if (!form.title.trim()) {
-      Alert.alert('Validation Error', 'Lesson title is required');
+      showAlert({ title: 'Validation Error', message: 'Lesson title is required', type: 'warning' });
       return;
     }
 
     if (!canEdit()) {
-      Alert.alert('Permission Denied', 'You do not have permission to edit this lesson');
+      showAlert({ title: 'Permission Denied', message: 'You do not have permission to edit this lesson', type: 'error' });
       return;
     }
 
@@ -178,15 +180,13 @@ export default function LessonEditScreen() {
         .eq('id', lessonId);
 
       if (error) {
-        Alert.alert('Error', error.message || 'Failed to update lesson');
+        showAlert({ title: 'Error', message: error.message || 'Failed to update lesson', type: 'error' });
       } else {
-        Alert.alert('Success', 'Lesson updated successfully', [
-          { text: 'OK', onPress: () => router.back() },
-        ]);
+        showAlert({ title: 'Success', message: 'Lesson updated successfully', type: 'success', buttons: [{ text: 'OK', onPress: () => router.back() }] });
       }
     } catch (error) {
       console.error('[LessonEdit] Save error:', error);
-      Alert.alert('Error', 'Failed to save changes');
+      showAlert({ title: 'Error', message: 'Failed to save changes', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -443,6 +443,7 @@ export default function LessonEditScreen() {
           <View style={{ height: 100 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

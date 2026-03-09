@@ -176,19 +176,19 @@ export const headerStyles = StyleSheet.create({
     borderRadius: 999,
   },
 
-  // Usage Banner
+  // Usage Banner — compact single-row strip
   usageBanner: {
     marginHorizontal: 0,
     marginTop: 0,
     marginBottom: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
     borderWidth: 1,
-    gap: 8,
+    gap: 6,
   },
   usageBannerText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     flex: 1,
   },

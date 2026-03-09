@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -30,6 +31,7 @@ export default function ManualEnrollmentScreen() {
   const [address, setAddress] = useState('');
   const [notes, setNotes] = useState('');
 
+  const { showAlert, alertProps } = useAlertModal();
   const selectedProgram = programs?.find((p) => p.id === selectedProgramId);
 
   const handleProgramSelect = (programId: string) => {
@@ -40,12 +42,12 @@ export default function ManualEnrollmentScreen() {
   const handleSave = async () => {
     // Validation
     if (!selectedProgramId) {
-      Alert.alert('Error', 'Please select a program');
+      showAlert({ title: 'Error', message: 'Please select a program', type: 'error' });
       return;
     }
 
     if (!email || !firstName || !lastName) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      showAlert({ title: 'Error', message: 'Please fill in all required fields', type: 'error' });
       return;
     }
 
@@ -113,10 +115,11 @@ export default function ManualEnrollmentScreen() {
 
       if (enrollError) throw enrollError;
 
-      Alert.alert(
-        'Success!',
-        `${firstName} ${lastName} has been enrolled in ${selectedProgram?.title || 'the program'}.`,
-        [
+      showAlert({
+        title: 'Success!',
+        message: `${firstName} ${lastName} has been enrolled in ${selectedProgram?.title || 'the program'}.`,
+        type: 'success',
+        buttons: [
           {
             text: 'Add Another',
             onPress: () => {
@@ -135,10 +138,10 @@ export default function ManualEnrollmentScreen() {
             text: 'Done',
             onPress: () => router.back(),
           },
-        ]
-      );
+        ],
+      });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to enroll student');
+      showAlert({ title: 'Error', message: error.message || 'Failed to enroll student', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -386,6 +389,7 @@ export default function ManualEnrollmentScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

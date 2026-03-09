@@ -35,6 +35,13 @@ interface UseAISettingsReturn {
 const STREAMING_PREF_KEY = '@dash_streaming_enabled';
 const STREAMING_PREF_USER_SET_KEY = '@dash_streaming_pref_user_set';
 
+function getDefaultVoiceTypeForLanguage(lang: string): string {
+  const langNorm = normalizeLanguageCode(lang);
+  return langNorm === 'en'
+    ? 'en-ZA-LukeNeural'
+    : resolveDefaultVoiceId(langNorm, 'female');
+}
+
 export function useAISettings(): UseAISettingsReturn {
   const [dashAIInstance, setDashAIInstance] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -148,7 +155,7 @@ export function useAISettings(): UseAISettingsReturn {
           voiceLanguage,
           responseLanguage,
           strictLanguageMode: !!personality.strict_language_mode,
-          voiceType: personality.voice_settings?.voice || defaultSettings.voiceType,
+          voiceType: voicePrefs?.voice_id || personality.voice_settings?.voice_id || personality.voice_settings?.voice || getDefaultVoiceTypeForLanguage(voiceLanguage),
           voiceRate: voicePrefs?.speaking_rate ?? personality.voice_settings?.rate ?? defaultSettings.voiceRate,
           voicePitch: voicePrefs?.pitch ?? personality.voice_settings?.pitch ?? defaultSettings.voicePitch,
           voiceVolume: voicePrefs?.volume ?? personality.voice_settings?.volume ?? defaultSettings.voiceVolume,
@@ -208,6 +215,7 @@ export function useAISettings(): UseAISettingsReturn {
       if (sig === lastSavedRef.current) { setSaving(false); return; }
       
       const dashPersonality = {
+        ...(dashAIInstance.getPersonality?.() || {}),
         personality_traits: [
           settings.personality,
           'educational',
@@ -218,6 +226,7 @@ export function useAISettings(): UseAISettingsReturn {
         voice_settings: {
           language: settings.responseLanguage || settings.voiceLanguage,
           voice: settings.voiceType,
+          voice_id: /Neural$/i.test(settings.voiceType || '') ? settings.voiceType : undefined,
           rate: settings.voiceRate,
           pitch: settings.voicePitch,
           volume: settings.voiceVolume
@@ -296,11 +305,13 @@ export function useAISettings(): UseAISettingsReturn {
       });
       
       const dashPersonality = {
+        ...(dashAIInstance.getPersonality?.() || {}),
         personality_traits: [settings.personality, 'educational', 'supportive'],
         response_style: settings.personality,
         voice_settings: {
           language: settings.voiceLanguage,
           voice: settings.voiceType,
+          voice_id: /Neural$/i.test(settings.voiceType || '') ? settings.voiceType : undefined,
           rate: settings.voiceRate,
           pitch: settings.voicePitch,
           volume: settings.voiceVolume
@@ -338,7 +349,11 @@ export function useAISettings(): UseAISettingsReturn {
           text: 'Reset',
           style: 'destructive',
           onPress: () => {
-            setSettings({ ...DEFAULT_SETTINGS, localProcessing: Platform.OS === 'ios' });
+            setSettings({
+              ...DEFAULT_SETTINGS,
+              localProcessing: Platform.OS === 'ios',
+              voiceType: getDefaultVoiceTypeForLanguage(DEFAULT_SETTINGS.voiceLanguage),
+            });
             Alert.alert('Settings Reset', 'All settings have been reset to defaults');
           }
         }

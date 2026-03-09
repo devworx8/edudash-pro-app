@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Switch, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Switch } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +15,7 @@ export default function TeacherReferenceCreateScreen() {
   const { profile } = useAuth();
   const { teacherUserId, teacherName } = useLocalSearchParams<{ teacherUserId?: string; teacherName?: string }>();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
@@ -26,7 +28,7 @@ export default function TeacherReferenceCreateScreen() {
 
     const orgId = profile.organization_id || (profile as { preschool_id?: string }).preschool_id;
     if (!orgId) {
-      Alert.alert('Missing school', 'No school context found for your account.');
+      showAlert({ title: 'Missing school', message: 'No school context found for your account.', type: 'error' });
       return;
     }
 
@@ -56,17 +58,17 @@ export default function TeacherReferenceCreateScreen() {
       const validated = CreateTeacherReferenceSchema.safeParse(payload);
       if (!validated.success) {
         const message = validated.error.issues[0]?.message || 'Please check the reference details.';
-        Alert.alert('Invalid reference', message);
+        showAlert({ title: 'Invalid reference', message: message, type: 'warning' });
         return;
       }
 
       await TeacherReputationService.createReference(validated.data);
 
-      Alert.alert('Submitted', 'Your reference has been saved.');
+      showAlert({ title: 'Submitted', message: 'Your reference has been saved.', type: 'success' });
       router.back();
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Failed to submit reference.';
-      Alert.alert('Error', message);
+      showAlert({ title: 'Error', message, type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -133,6 +135,7 @@ export default function TeacherReferenceCreateScreen() {
           {saving ? <EduDashSpinner color={theme.onPrimary} /> : <Text style={styles.submitText}>Submit Reference</Text>}
         </TouchableOpacity>
       </View>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }
