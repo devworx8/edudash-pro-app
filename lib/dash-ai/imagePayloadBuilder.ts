@@ -124,10 +124,12 @@ export async function buildImagePayloadsFromAttachments(
         : null;
 
     let base64 = stripDataUriPrefix(metadataBase64);
+    // Prefer meta.image_media_type (set from actual blob content) over attachment.mimeType
+    // which may be wrong (e.g. picker reports jpeg but file is actually png).
     const rawMediaType = String(
-      attachment?.mimeType ||
       attachment?.meta?.image_media_type ||
       attachment?.meta?.media_type ||
+      attachment?.mimeType ||
       'image/jpeg'
     );
     const normalizedMedia = normalizeMediaType(rawMediaType);

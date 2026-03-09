@@ -291,6 +291,12 @@ export function buildSystemPrompt(
     'Praise effort. For wrong answers: "Good try! The answer is actually..."',
     'Only greet on the very first message. After that, continue naturally.',
     'WHITEBOARD: Wrap concept explanations in [WHITEBOARD]...[/WHITEBOARD]. Not for greetings.',
+    'MULTIPLICATION TABLES: Always generate times tables up to ×12 (not ×10). South African curriculum requires 1–12.',
+    'SPELLING: For spelling bee/practice, NEVER write the target word in plain text. Use the spelling card:',
+    '```spelling',
+    '{"type":"spelling_practice","word":"WORD","prompt":"Listen and spell the word","hint":"Optional sentence","language":"en","hide_word_reveal":true}',
+    '```',
+    'The card hides the word from view and lets the student listen then type. Never expose the word in prose.',
     '',
   );
 
@@ -431,6 +437,8 @@ export function cleanRawJSON(text: string): string {
 
 /** Canonical max chunk length for TTS. Tuned higher to reduce chunk round-trips. */
 export const TTS_CHUNK_MAX_LEN = 1800;
+/** Optional smaller first chunk for faster playback start without fragmenting the full response. */
+export const TTS_FAST_START_FIRST_CHUNK_MAX_LEN = 220;
 
 /**
  * Split text into sentence-aligned chunks for TTS.
@@ -466,6 +474,51 @@ export function splitForTTS(text: string, maxLen = TTS_CHUNK_MAX_LEN): string[] 
   if (current.trim()) chunks.push(current.trim());
 
   return chunks.length > 0 ? chunks : [text];
+}
+
+/**
+ * Build TTS chunks with an optional smaller first chunk.
+ * Unlike naively re-splitting the first base chunk, this keeps the
+ * remainder grouped at the normal max length so playback stays fluent.
+ */
+export function splitForTTSWithFastStart(
+  text: string,
+  opts?: {
+    enabled?: boolean;
+    maxLen?: number;
+    firstChunkMaxLen?: number;
+  },
+): string[] {
+  const normalized = String(text || '').trim();
+  if (!normalized) return [];
+
+  const maxLen = Number.isFinite(opts?.maxLen as number)
+    ? Number(opts?.maxLen)
+    : TTS_CHUNK_MAX_LEN;
+  const firstChunkMaxLen = Number.isFinite(opts?.firstChunkMaxLen as number)
+    ? Number(opts?.firstChunkMaxLen)
+    : TTS_FAST_START_FIRST_CHUNK_MAX_LEN;
+  const baseChunks = splitForTTS(normalized, maxLen);
+
+  if (!opts?.enabled || baseChunks.length === 0) {
+    return baseChunks;
+  }
+
+  const [firstBaseChunk, ...remainingBaseChunks] = baseChunks;
+  if (firstBaseChunk.length <= firstChunkMaxLen) {
+    return baseChunks;
+  }
+
+  const firstChunkCandidates = splitForTTS(firstBaseChunk, firstChunkMaxLen);
+  if (firstChunkCandidates.length <= 1) {
+    return baseChunks;
+  }
+
+  const [fastStartChunk, ...firstChunkRemainder] = firstChunkCandidates;
+  const remainderText = [...firstChunkRemainder, ...remainingBaseChunks].join(' ').trim();
+  const remainderChunks = remainderText ? splitForTTS(remainderText, maxLen) : [];
+
+  return [fastStartChunk, ...remainderChunks];
 }
 
 // ── Streaming Placeholder ────────────────────────────────────────────

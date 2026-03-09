@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Platform, StatusBar } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, StatusBar } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,7 @@ export default function TeacherNewMessageScreen() {
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const { terminology } = useOrganizationTerminology();
+  const { showAlert, alertProps } = useAlertModal();
 
   const organizationId =
     (profile as any)?.organization_membership?.organization_id ||
@@ -90,10 +92,11 @@ export default function TeacherNewMessageScreen() {
 
     const parentId = selectedStudent.parentId || selectedStudent.guardianId;
     if (!parentId) {
-      Alert.alert(
-        t('teacher.noParentTitle', { defaultValue: 'Parent not linked' }),
-        t('teacher.noParentMessage', { defaultValue: 'This child does not have a linked parent yet.' })
-      );
+      showAlert({
+        title: t('teacher.noParentTitle', { defaultValue: 'Parent not linked' }),
+        message: t('teacher.noParentMessage', { defaultValue: 'This child does not have a linked parent yet.' }),
+        type: 'warning',
+      });
       return null;
     }
 
@@ -143,10 +146,11 @@ export default function TeacherNewMessageScreen() {
 
   const handleStartMessage = useCallback(async () => {
     if (!selectedStudentId) {
-      Alert.alert(
-        t('teacher.selectChildTitle', { defaultValue: 'Select a child' }),
-        t('teacher.selectChildMessage', { defaultValue: 'Choose a child to message their parent.' })
-      );
+      showAlert({
+        title: t('teacher.selectChildTitle', { defaultValue: 'Select a child' }),
+        message: t('teacher.selectChildMessage', { defaultValue: 'Choose a child to message their parent.' }),
+        type: 'info',
+      });
       return;
     }
 
@@ -167,10 +171,11 @@ export default function TeacherNewMessageScreen() {
         },
       });
     } catch (err) {
-      Alert.alert(
-        t('common.error', { defaultValue: 'Error' }),
-        err instanceof Error ? err.message : t('teacher.threadCreateError', { defaultValue: 'Unable to start a message.' })
-      );
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: err instanceof Error ? err.message : t('teacher.threadCreateError', { defaultValue: 'Unable to start a message.' }),
+        type: 'error',
+      });
     }
   }, [createThreadWithParent, parentMap, selectedStudent, selectedStudentId, t]);
 
@@ -342,6 +347,7 @@ export default function TeacherNewMessageScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

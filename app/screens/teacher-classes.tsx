@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
 import { removeTeacherFromSchool } from '@/lib/services/teacherRemovalService';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface ClassInfo {
@@ -43,6 +44,7 @@ export default function TeacherClassesScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const styles = createStyles(theme);
+  const { showAlert, alertProps } = useAlertModal();
   const orgId = profile?.organization_id || (profile as any)?.preschool_id;
 
   const fetchData = useCallback(async () => {
@@ -116,7 +118,7 @@ export default function TeacherClassesScreen() {
       setClasses(transformedClasses);
     } catch (error: any) {
       console.error('Error fetching teacher classes:', error);
-      Alert.alert('Error', 'Failed to load teacher information');
+      showAlert({ title: 'Error', message: 'Failed to load teacher information', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -150,22 +152,23 @@ export default function TeacherClassesScreen() {
 
   const handleRemoveTeacher = () => {
     if (!orgId) {
-      Alert.alert('Error', 'No school found for this account.');
+      showAlert({ title: 'Error', message: 'No school found for this account.', type: 'error' });
       return;
     }
     if (!teacherId) {
-      Alert.alert('Error', 'Missing teacher identifier.');
+      showAlert({ title: 'Error', message: 'Missing teacher identifier.', type: 'error' });
       return;
     }
     if (!teacherInfo?.teacherRecordId) {
-      Alert.alert('Error', 'Missing teacher record.');
+      showAlert({ title: 'Error', message: 'Missing teacher record.', type: 'error' });
       return;
     }
 
-    Alert.alert(
-      'Archive Teacher',
-      `Archive ${teacherInfo?.name || 'this teacher'} from your school? Their class history will be kept and their seat will be revoked.`,
-      [
+    showAlert({
+      title: 'Archive Teacher',
+      message: `Archive ${teacherInfo?.name || 'this teacher'} from your school? Their class history will be kept and their seat will be revoked.`,
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Archive',
@@ -178,17 +181,15 @@ export default function TeacherClassesScreen() {
                 teacherUserId: teacherInfo.teacherUserId || teacherId,
                 reason: 'Archived via teacher classes screen',
               });
-              Alert.alert('Success', 'Teacher archived', [
-                { text: 'OK', onPress: navigateBack },
-              ]);
+              showAlert({ title: 'Success', message: 'Teacher archived', type: 'success', buttons: [{ text: 'OK', onPress: navigateBack }] });
             } catch (error) {
               console.error('Error removing teacher:', error);
-              Alert.alert('Error', 'Failed to archive teacher');
+              showAlert({ title: 'Error', message: 'Failed to archive teacher', type: 'error' });
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const getEnrollmentColor = (current: number, max: number) => {
@@ -342,6 +343,7 @@ export default function TeacherClassesScreen() {
           )}
         </View>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

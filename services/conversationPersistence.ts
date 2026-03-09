@@ -15,6 +15,7 @@ export interface PersistedMessage {
   meta?: {
     tts?: boolean;
     ackType?: 'greet' | 'followup' | 'clarify' | 'confirm' | 'thanks' | 'short';
+    turn_id?: string;
   };
 }
 

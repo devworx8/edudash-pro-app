@@ -7,7 +7,9 @@
  * @module app/screens/admin/manage-join-requests
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, RefreshControl, TextInput } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -55,6 +57,7 @@ export default function ManageJoinRequestsScreen() {
   const { user, profile } = useAuth();
   const { theme } = useTheme();
   const queryClient = useQueryClient();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [activeTab, setActiveTab] = useState<TabType>('pending');
@@ -158,10 +161,10 @@ export default function ManageJoinRequestsScreen() {
       queryClient.invalidateQueries({ queryKey: ['joinRequests'] });
       setSelectedRequest(null);
       setReviewNotes('');
-      Alert.alert('Approved', 'The join request has been approved.');
+      showAlert({ title: 'Approved', message: 'The join request has been approved.', type: 'success' });
     },
     onError: (err: Error) => {
-      Alert.alert('Failed', err.message);
+      showAlert({ title: 'Failed', message: err.message, type: 'error' });
     },
   });
 
@@ -178,22 +181,24 @@ export default function ManageJoinRequestsScreen() {
       queryClient.invalidateQueries({ queryKey: ['joinRequests'] });
       setSelectedRequest(null);
       setReviewNotes('');
-      Alert.alert('Rejected', 'The join request has been rejected.');
+      showAlert({ title: 'Rejected', message: 'The join request has been rejected.', type: 'info' });
     },
     onError: (err: Error) => {
-      Alert.alert('Failed', err.message);
+      showAlert({ title: 'Failed', message: err.message, type: 'error' });
     },
   });
 
   const handleApprove = useCallback(
     (request: JoinRequestWithProfile) => {
-      Alert.alert('Approve Request', 'Are you sure you want to approve this request?', [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Approve',
-          onPress: () => approveMutation.mutate(request.id),
-        },
-      ]);
+      showAlert({
+        title: 'Approve Request',
+        message: 'Are you sure you want to approve this request?',
+        type: 'info',
+        buttons: [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Approve', onPress: () => approveMutation.mutate(request.id) },
+        ],
+      });
     },
     [approveMutation]
   );
@@ -208,7 +213,7 @@ export default function ManageJoinRequestsScreen() {
   const submitRejection = useCallback(() => {
     if (!selectedRequest) return;
     if (!reviewNotes.trim()) {
-      Alert.alert('Required', 'Please provide a reason for rejection.');
+      showAlert({ title: 'Required', message: 'Please provide a reason for rejection.', type: 'warning' });
       return;
     }
     rejectMutation.mutate(selectedRequest.id);
@@ -241,11 +246,11 @@ export default function ManageJoinRequestsScreen() {
         });
 
         if (!result.success) {
-          Alert.alert('Screening Failed', result.error || 'Could not update screening status.');
+          showAlert({ title: 'Screening Failed', message: result.error || 'Could not update screening status.', type: 'error' });
           return;
         }
 
-        Alert.alert('Screened', 'Screening recommendation saved for principal review.');
+        showAlert({ title: 'Screened', message: 'Screening recommendation saved for principal review.', type: 'success' });
         queryClient.invalidateQueries({ queryKey: ['joinRequests'] });
       } finally {
         setScreeningRequestId(null);
@@ -502,7 +507,7 @@ export default function ManageJoinRequestsScreen() {
       )}
 
       {/* Requests List */}
-      <FlatList
+      <FlashList
         data={requests}
         keyExtractor={(item) => item.id}
         renderItem={renderRequestCard}
@@ -516,6 +521,7 @@ export default function ManageJoinRequestsScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
+        estimatedItemSize={120}
       />
 
       {/* Rejection Modal */}
@@ -561,6 +567,8 @@ export default function ManageJoinRequestsScreen() {
           </View>
         </View>
       )}
+
+      <AlertModal {...alertProps} />
     </View>
   );
 }

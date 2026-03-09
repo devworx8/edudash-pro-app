@@ -7,7 +7,9 @@
  * @module app/screens/discover-organizations
  */
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, RefreshControl, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Image } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -41,6 +43,7 @@ export default function DiscoverOrganizationsScreen() {
   const { theme } = useTheme();
   const queryClient = useQueryClient();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedOrg, setSelectedOrg] = useState<PublicOrganization | null>(null);
@@ -143,36 +146,41 @@ export default function DiscoverOrganizationsScreen() {
       queryClient.invalidateQueries({ queryKey: ['userPendingRequests'] });
       setSelectedOrg(null);
       setJoinMessage('');
-      Alert.alert(
-        'Request Submitted',
-        'Your request has been sent to the organization. You will be notified when they respond.',
-        [{ text: 'OK' }]
-      );
+      showAlert({
+        title: 'Request Submitted',
+        message: 'Your request has been sent to the organization. You will be notified when they respond.',
+        type: 'success',
+      });
     },
     onError: (err: Error) => {
-      Alert.alert('Failed', err.message);
+      showAlert({ title: 'Failed', message: err.message, type: 'error' });
     },
   });
 
   const handleJoinRequest = useCallback(
     (org: PublicOrganization) => {
       if (!user?.id) {
-        Alert.alert('Sign In Required', 'Please sign in to join an organization.', [
-          { text: 'Cancel' },
-          { text: 'Sign In', onPress: () => router.push('/login') },
-        ]);
+        showAlert({
+          title: 'Sign In Required',
+          message: 'Please sign in to join an organization.',
+          type: 'warning',
+          buttons: [
+            { text: 'Cancel' },
+            { text: 'Sign In', onPress: () => router.push('/login') },
+          ]
+        });
         return;
       }
 
       // Check if already has pending request
       if (pendingRequests?.includes(org.id)) {
-        Alert.alert('Already Requested', 'You have a pending request for this organization.');
+        showAlert({ title: 'Already Requested', message: 'You have a pending request for this organization.', type: 'info' });
         return;
       }
 
       // Check if already a member
       if (profile?.organization_id === org.id) {
-        Alert.alert('Already a Member', 'You are already a member of this organization.');
+        showAlert({ title: 'Already a Member', message: 'You are already a member of this organization.', type: 'info' });
         return;
       }
 
@@ -329,7 +337,7 @@ export default function DiscoverOrganizationsScreen() {
       )}
 
       {/* Organizations List */}
-      <FlatList
+      <FlashList
         data={organizations}
         keyExtractor={(item) => item.id}
         renderItem={renderOrganizationCard}
@@ -343,6 +351,7 @@ export default function DiscoverOrganizationsScreen() {
           />
         }
         showsVerticalScrollIndicator={false}
+        estimatedItemSize={200}
       />
 
       {/* Join Request Modal */}
@@ -388,6 +397,7 @@ export default function DiscoverOrganizationsScreen() {
           </View>
         </View>
       )}
+      <AlertModal {...alertProps} />
     </View>
   );
 }

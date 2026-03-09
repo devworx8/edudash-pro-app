@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -47,6 +48,7 @@ export default function LessonDetailScreen() {
   
   const params = useLocalSearchParams();
   const lessonId = typeof params?.lessonId === 'string' ? params.lessonId : Array.isArray(params?.lessonId) ? params.lessonId[0] : null;
+  const { showAlert, alertProps } = useAlertModal();
   
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [progress, setProgress] = useState<LessonProgress | null>(null);
@@ -188,11 +190,11 @@ export default function LessonDetailScreen() {
         started_at: new Date().toISOString(),
       });
       
-      Alert.alert('Lesson Started', 'You have started this lesson! Progress will be tracked.');
+      showAlert({ title: 'Lesson Started', message: 'You have started this lesson! Progress will be tracked.', type: 'success' });
       loadLessonData(); // Refresh progress
     } catch (error) {
       console.error('Error starting lesson:', error);
-      Alert.alert('Error', 'Failed to start lesson. Please try again.');
+      showAlert({ title: 'Error', message: 'Failed to start lesson. Please try again.', type: 'error' });
     }
   };
 
@@ -206,11 +208,11 @@ export default function LessonDetailScreen() {
         completed_at: new Date().toISOString(),
       });
       
-      Alert.alert('Congratulations!', 'You have completed this lesson!');
+      showAlert({ title: 'Congratulations!', message: 'You have completed this lesson!', type: 'success' });
       loadLessonData(); // Refresh progress
     } catch (error) {
       console.error('Error completing lesson:', error);
-      Alert.alert('Error', 'Failed to complete lesson. Please try again.');
+      showAlert({ title: 'Error', message: 'Failed to complete lesson. Please try again.', type: 'error' });
     }
   };
 
@@ -221,13 +223,14 @@ export default function LessonDetailScreen() {
       const newBookmarkStatus = await lessonsService.toggleLessonBookmark(lesson.id);
       setIsBookmarked(newBookmarkStatus);
       
-      Alert.alert(
-        newBookmarkStatus ? 'Bookmarked' : 'Bookmark Removed', 
-        newBookmarkStatus ? 'Lesson added to your bookmarks' : 'Lesson removed from your bookmarks'
-      );
+      showAlert({
+        title: newBookmarkStatus ? 'Bookmarked' : 'Bookmark Removed', 
+        message: newBookmarkStatus ? 'Lesson added to your bookmarks' : 'Lesson removed from your bookmarks',
+        type: 'success',
+      });
     } catch (error) {
       console.error('Error toggling bookmark:', error);
-      Alert.alert('Error', 'Failed to update bookmark. Please try again.');
+      showAlert({ title: 'Error', message: 'Failed to update bookmark. Please try again.', type: 'error' });
     }
   };
 
@@ -557,6 +560,7 @@ export default function LessonDetailScreen() {
         {/* Bottom Safe Area Spacing */}
         <View style={{ height: Math.max(32, insets.bottom + 16) }} />
       </ScrollView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

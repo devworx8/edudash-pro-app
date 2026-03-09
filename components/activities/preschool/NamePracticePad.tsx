@@ -198,11 +198,7 @@ export function NamePracticePad({
           });
 
         if (!uploadError) {
-          const signed = await supabase.storage
-            .from('name-practice-snapshots')
-            .createSignedUrl(path, 60 * 60 * 24 * 30);
-
-          snapshotUrl = signed.data?.signedUrl || path;
+          snapshotUrl = path;
         }
       }
 

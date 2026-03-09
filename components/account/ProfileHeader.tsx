@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import type { ViewStyle, TextStyle, ImageStyle } from 'react-native';
 
 interface ProfileHeaderProps {
@@ -52,7 +53,12 @@ export function ProfileHeader({
   styles,
 }: ProfileHeaderProps) {
   return (
-    <View style={styles.profileHeader}>
+    <LinearGradient
+      colors={['rgba(18, 28, 54, 0.98)', 'rgba(48, 30, 95, 0.9)', 'rgba(9, 18, 40, 0.98)']}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.profileHeader}
+    >
       <TouchableOpacity
         style={styles.avatarContainer}
         onPress={onImagePress}
@@ -61,9 +67,14 @@ export function ProfileHeader({
         {displayUri || profileImage ? (
           <Image source={{ uri: (displayUri || profileImage) ?? '' }} style={styles.avatar} />
         ) : (
-          <View style={styles.avatarPlaceholder}>
+          <LinearGradient
+            colors={['#5c7cff', '#7c5cff', '#08c5ff']}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.9, y: 1 }}
+            style={styles.avatarPlaceholder}
+          >
             <Text style={styles.avatarText}>{initials}</Text>
-          </View>
+          </LinearGradient>
         )}
 
         <View style={styles.cameraIconContainer}>
@@ -87,6 +98,6 @@ export function ProfileHeader({
           </Text>
         </View>
       )}
-    </View>
+    </LinearGradient>
   );
 }

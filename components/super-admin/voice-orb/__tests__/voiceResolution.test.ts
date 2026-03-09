@@ -34,13 +34,13 @@ describe('resolveEffectiveVoiceId', () => {
     expect(resolved.source).toBe('voice_preferences');
   });
 
-  it('uses deterministic locale default with female fallback', () => {
+  it('uses Luke as the deterministic default English voice', () => {
     const resolved = resolveEffectiveVoiceId({
       language: 'en-ZA',
     });
 
-    expect(resolved.voiceId).toBe('en-ZA-LeahNeural');
+    expect(resolved.voiceId).toBe('en-ZA-LukeNeural');
     expect(resolved.source).toBe('locale_default');
-    expect(resolved.fallbackGender).toBe('female');
+    expect(resolved.fallbackGender).toBe('male');
   });
 });

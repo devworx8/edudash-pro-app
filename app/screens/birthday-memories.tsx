@@ -1,11 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, FlatList, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as WebBrowser from 'expo-web-browser';
 import { Image } from 'expo-image';
 import { useTheme, type ThemeColors } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { BirthdayMemoriesService } from '@/features/birthday-memories/services/BirthdayMemoriesService';
 import type { BirthdayMemoryEvent, BirthdayMemoryMedia } from '@/features/birthday-memories/types/birthdayMemories.types';
 import { BirthdayMontageService, type MontageJob } from '@/features/birthday-memories/services/BirthdayMontageService';
@@ -15,6 +17,7 @@ export default function BirthdayMemoriesScreen() {
   const params = useLocalSearchParams();
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const organizationId = typeof params.organizationId === 'string' ? params.organizationId : null;
@@ -90,7 +93,7 @@ export default function BirthdayMemoriesScreen() {
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert('Permission required', 'Allow access to your media library to upload memories.');
+      showAlert({ title: 'Permission required', message: 'Allow access to your media library to upload memories.', type: 'warning' });
       return;
     }
 
@@ -117,7 +120,7 @@ export default function BirthdayMemoriesScreen() {
       }
       await loadMedia();
     } catch (err) {
-      Alert.alert('Upload failed', err instanceof Error ? err.message : 'Unable to upload media');
+      showAlert({ title: 'Upload failed', message: err instanceof Error ? err.message : 'Unable to upload media', type: 'error' });
     } finally {
       setUploading(false);
     }
@@ -126,7 +129,7 @@ export default function BirthdayMemoriesScreen() {
   const handleView = useCallback(async (item: BirthdayMemoryMedia) => {
     const url = await BirthdayMemoriesService.getViewUrl(item.id);
     if (!url) {
-      Alert.alert('Unable to open media');
+      showAlert({ title: 'Unable to open media', type: 'error' });
       return;
     }
     if (item.mediaType === 'image') {
@@ -140,7 +143,7 @@ export default function BirthdayMemoriesScreen() {
   const handleDownload = useCallback(async (item: BirthdayMemoryMedia) => {
     const url = await BirthdayMemoriesService.getDownloadUrl(item.id);
     if (!url) {
-      Alert.alert('Download unavailable', 'Only parents of the birthday child can download.');
+      showAlert({ title: 'Download unavailable', message: 'Only parents of the birthday child can download.', type: 'warning' });
       return;
     }
     await WebBrowser.openBrowserAsync(url);
@@ -150,22 +153,19 @@ export default function BirthdayMemoriesScreen() {
     if (!event?.id) return;
     const job = await BirthdayMontageService.queue(event.id);
     if (!job) {
-      Alert.alert('Unable to queue montage');
+      showAlert({ title: 'Unable to queue montage', type: 'error' });
       return;
     }
     setMontageJob(job);
     await loadMontageStatus();
-    Alert.alert(
-      'Montage queued',
-      'We are preparing the highlight video. You can preview it once it is ready.'
-    );
+    showAlert({ title: 'Montage queued', message: 'We are preparing the highlight video. You can preview it once it is ready.', type: 'success' });
   }, [event?.id, loadMontageStatus]);
 
   const handlePreviewMontage = useCallback(async () => {
     if (!event?.id) return;
     const url = await BirthdayMontageService.getViewUrl(event.id);
     if (!url) {
-      Alert.alert('Preview unavailable', 'The highlight video is not ready yet.');
+      showAlert({ title: 'Preview unavailable', message: 'The highlight video is not ready yet.', type: 'warning' });
       return;
     }
     await WebBrowser.openBrowserAsync(url);
@@ -177,11 +177,11 @@ export default function BirthdayMemoriesScreen() {
     const updated = await BirthdayMontageService.approveAndSend(event.id);
     setMontageSending(false);
     if (!updated) {
-      Alert.alert('Unable to send', 'Please try again.');
+      showAlert({ title: 'Unable to send', message: 'Please try again.', type: 'error' });
       return;
     }
     setMontageJob(updated);
-    Alert.alert('Sent', 'Highlight video approved and sent to parents.');
+    showAlert({ title: 'Sent', message: 'Highlight video approved and sent to parents.', type: 'success' });
   }, [event?.id]);
 
   return (
@@ -261,13 +261,13 @@ export default function BirthdayMemoriesScreen() {
             </View>
           )}
 
-          <FlatList
+          <FlashList
             data={media}
             numColumns={2}
-            columnWrapperStyle={styles.gridRow}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.list}
             ListEmptyComponent={<Text style={styles.muted}>No memories yet.</Text>}
+            estimatedItemSize={150}
             renderItem={({ item }) => (
               <View style={styles.gridCard}>
                 {item.mediaType === 'image' && (
@@ -310,6 +310,8 @@ export default function BirthdayMemoriesScreen() {
           </Modal>
         </>
       )}
+
+      <AlertModal {...alertProps} />
     </View>
   );
 }

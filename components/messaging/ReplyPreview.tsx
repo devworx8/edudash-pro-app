@@ -8,6 +8,7 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { getMessageDisplayText } from '@/lib/utils/messageContent';
 import type { Message } from './types';
 
 interface ReplyPreviewProps {
@@ -30,7 +31,17 @@ function getMediaPreview(message: Message): { icon: string; text: string; color:
   if (ct === 'file') {
     return { icon: 'document-attach', text: 'File', color: '#f59e0b' };
   }
-  return { icon: '', text: message.content || '', color: '' };
+  const displayText = getMessageDisplayText(message.content || '');
+  if (displayText.startsWith('📞') || displayText.startsWith('📹')) {
+    return { icon: 'call', text: displayText.replace(/^[^\s]+\s*/, ''), color: '#7dd3fc' };
+  }
+  if (displayText.startsWith('✨')) {
+    return { icon: 'sparkles', text: 'GIF', color: '#f8ca59' };
+  }
+  if (displayText.startsWith('🎬')) {
+    return { icon: 'play-circle', text: 'Video', color: '#93c5fd' };
+  }
+  return { icon: '', text: displayText, color: '' };
 }
 
 export const ReplyPreview: React.FC<ReplyPreviewProps> = React.memo(({ message, onClose }) => {
@@ -118,14 +129,16 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 10,
     paddingLeft: 0,
-    backgroundColor: 'rgba(51, 65, 85, 0.7)',
+    backgroundColor: 'rgba(17, 27, 55, 0.84)',
     borderRadius: 12,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 211, 252, 0.16)',
   },
   accentBar: {
     width: 3,
     alignSelf: 'stretch',
-    backgroundColor: '#6366f1',
+    backgroundColor: '#7c5cff',
     borderTopLeftRadius: 12,
     borderBottomLeftRadius: 12,
     marginRight: 8,
@@ -149,7 +162,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    color: '#818cf8',
+    color: '#b7a7ff',
     fontWeight: '600',
     marginBottom: 2,
   },
@@ -162,7 +175,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 13,
-    color: '#94a3b8',
+    color: '#b7c5e4',
     flex: 1,
   },
   closeBtn: {

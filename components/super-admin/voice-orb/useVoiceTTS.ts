@@ -142,7 +142,11 @@ export function resolveEffectiveVoiceId(input: {
   aiSettingsVoice?: unknown;
   fallbackGender?: 'male' | 'female';
 }): EffectiveVoiceResolution {
-  const fallbackGender = normalizeVoiceGender(input.fallbackGender);
+  const fallbackGender = input.fallbackGender
+    ? normalizeVoiceGender(input.fallbackGender)
+    : normalizeLanguageBase(input.language) === 'en'
+      ? 'male'
+      : 'female';
   const localeDefault = resolveLocaleDefaultVoice(input.language, fallbackGender);
   const base = normalizeLanguageBase(input.language);
 

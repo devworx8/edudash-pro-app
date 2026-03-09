@@ -29,6 +29,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
 import { getWelcomeMessage } from '@/lib/ai/constants';
 import { formatTranscript } from '@/lib/voice/formatTranscript';
+import { useWebTTS } from '@/lib/voice/useWebTTS';
 import { getOrganizationType } from '@/lib/tenant/compat';
 import { detectPhonicsIntent } from '@/lib/dash-ai/phonicsDetection';
 import { assessPhonicsAttempt } from '@/lib/dash-ai/phonicsAssessmentClient';
@@ -147,6 +148,8 @@ export default function DashTutorVoiceChat() {
 
   const listRef = useRef<FlashListRef<ChatMessageData>>(null);
   const voiceOrbRef = useRef<VoiceOrbRefType>(null);
+  // Web fallback TTS — used when VoiceOrb is not available (web platform)
+  const webTTS = useWebTTS();
   const isVoiceModeRef = useRef(true);
   const isSpeakingRef = useRef(false);
   const speechQueueRef = useRef<string[]>([]);
@@ -315,7 +318,13 @@ export default function DashTutorVoiceChat() {
     context.push('- Encourage curiosity and critical thinking');
     context.push('');
     context.push('**Whiteboard:** When explaining a concept (math steps, worked examples, diagrams), wrap the explanation in [WHITEBOARD]...[/WHITEBOARD]. Use ONLY for concept explanations. Inside: clear steps, numbers. End with "Does that make sense?"');
+    context.push('**Multiplication tables:** Always go up to ×12 (not ×10). SA CAPS curriculum standard is 1–12.');
     context.push('');
+    context.push('**Spelling Practice:** When running a spelling bee or spelling exercise, NEVER reveal the target word in plain text. Always use the spelling card format:');
+    context.push('```spelling');
+    context.push('{"type":"spelling_practice","word":"WORD_HERE","prompt":"Listen and spell the word","hint":"Optional sentence using the word","language":"en","hide_word_reveal":true}');
+    context.push('```');
+    context.push('The card hides the word and lets the student listen and type. Do NOT write "Here\'s your word: garden" in prose — put the word only inside the spelling card JSON.');
     context.push('**Deterministic Tutor Response Contract:**');
     context.push('- Use this structure when tutoring:');
     context.push('  Goal: one-line objective');
@@ -347,7 +356,9 @@ export default function DashTutorVoiceChat() {
 
   const speakResponse = useCallback(async (text: string) => {
     if (!isVoiceModeRef.current) return;
-    if (!voiceOrbRef.current) return;
+    // On web, VoiceOrb is null — use the web TTS fallback instead
+    const ttsTarget = voiceOrbRef.current ?? (isWeb ? webTTS : null);
+    if (!ttsTarget) return;
     const cleanText = cleanForTTS(text);
     if (!cleanText) return;
     
@@ -378,7 +389,7 @@ export default function DashTutorVoiceChat() {
           language: stableLanguage,
           phonicsMode,
         });
-        await voiceOrbRef.current.speakText(chunk, stableLanguage, { phonicsMode });
+        await ttsTarget.speakText(chunk, stableLanguage, { phonicsMode });
         console.log('[DashTutorVoiceChat][TTS] chunk:end', { sessionId, index: idx + 1, total: chunks.length });
       }
     } catch (error) {
@@ -391,7 +402,7 @@ export default function DashTutorVoiceChat() {
       isSpeakingRef.current = false;
       setIsSpeaking(false);
     }
-  }, [preferredLanguage]);
+  }, [preferredLanguage, webTTS]);
 
   const processSpeechQueue = useCallback(async () => {
     if (!isVoiceModeRef.current || isSpeakingRef.current) return;

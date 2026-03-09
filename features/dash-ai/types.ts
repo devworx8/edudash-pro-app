@@ -629,6 +629,7 @@ export interface DashPersonality {
     pitch: number;     // Pitch (0.5 = low, 1.0 = normal, 2.0 = high)
     language: string;  // Language code (en-US, en-ZA, af-ZA, etc.)
     voice?: string;    // Specific voice ID (Azure/Google voices)
+    voice_id?: string; // Explicit provider voice ID persisted for runtime lookup
   };
   
   /** Language enforcement settings */

@@ -32,10 +32,10 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, {
   Line,
   Text as SvgText,
-  Rect,
   G,
-  Path,
 } from 'react-native-svg';
+import { clampPercent } from '@/lib/progress/clampPercent';
+import MathRenderer from '../ai/dash-assistant/MathRenderer';
 
 // ─── Regex helpers ────────────────────────────────────────────────────────────
 function whiteboardRegex(): RegExp {
@@ -67,15 +67,22 @@ export function stripWhiteboardFromDisplay(text: string): string {
     .trim();
 }
 
-// ─── Chalk palette ────────────────────────────────────────────────────────────
+// ─── Design palette ───────────────────────────────────────────────────────────
 const C = {
+  // Text / chalk
   white:  '#f1f5f9',
-  yellow: '#fbbf24',
+  yellow: '#fde68a',
   cyan:   '#67e8f9',
   green:  '#86efac',
   pink:   '#f9a8d4',
-  dim:    'rgba(241,245,249,0.35)',
+  dim:    'rgba(241,245,249,0.4)',
   board:  'transparent',
+  // UI chrome — indigo/violet theme
+  indigo:   '#6366f1',
+  violet:   '#8b5cf6',
+  indigoD:  '#4f46e5',
+  indigoGl: 'rgba(99,102,241,0.15)',
+  border:   'rgba(99,102,241,0.4)',
 };
 
 // ─── Long Division ────────────────────────────────────────────────────────────
@@ -281,6 +288,34 @@ function LongDivisionDiagram({
   );
 }
 
+// ─── Markdown stripper ────────────────────────────────────────────────────────
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/^#{1,6}\s+/, '')           // ## headings
+    .replace(/\*\*(.+?)\*\*/g, '$1')     // **bold**
+    .replace(/\*(.+?)\*/g, '$1')         // *italic*
+    .replace(/__(.+?)__/g, '$1')         // __bold__
+    .replace(/_([^_]+)_/g, '$1')         // _italic_
+    .replace(/`([^`]+)`/g, '$1');        // `code`
+}
+
+// ─── Math segment parser ──────────────────────────────────────────────────────
+type ChalkSegment = { type: 'text' | 'inlineMath'; content: string };
+
+function splitInlineMath(text: string): ChalkSegment[] {
+  const segments: ChalkSegment[] = [];
+  const re = /\$([^$\n]+?)\$/g;
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > cursor) segments.push({ type: 'text', content: text.slice(cursor, match.index) });
+    segments.push({ type: 'inlineMath', content: match[1] });
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) segments.push({ type: 'text', content: text.slice(cursor) });
+  return segments;
+}
+
 // ─── Line classifier (for text fallback) ─────────────────────────────────────
 type LineKind = 'heading' | 'equation' | 'step' | 'result' | 'plain';
 
@@ -329,9 +364,64 @@ function ChalkLine({ line, index }: { line: string; index: number }) {
     ? (line.match(/^(\d+)[.)]/) || line.match(/Step\s*(\d+)/i) || [])[1]
     : null;
 
-  const display = kind === 'step'
+  const rawDisplay = kind === 'step'
     ? line.replace(/^[•·▶]\s|^\d+[.)]\s/, '').replace(/^Step\s*\d+:?\s*/i, '')
     : line;
+  const display = stripMarkdown(rawDisplay);
+
+  const chalkTextStyle = [styles.chalkText, {
+    color, fontSize: size,
+    fontFamily: Platform.OS === 'ios' ? 'Chalkboard SE' : MONO,
+    fontWeight: (kind === 'heading' || kind === 'result') ? '700' : '400',
+    textShadowColor: color + '44',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  } as const, kind === 'heading' && { letterSpacing: 1, textTransform: 'uppercase' as const }];
+
+  // ── Display math: entire line is $$...$$
+  const displayMathMatch = /^\$\$([\s\S]*?)\$\$$/.exec(display.trim());
+  if (displayMathMatch) {
+    return (
+      <Animated.View style={[styles.lineRow, styles.equationRow, anim]}>
+        <MathRenderer expression={displayMathMatch[1].trim()} displayMode={true} />
+      </Animated.View>
+    );
+  }
+
+  // ── Inline math: line contains $...$
+  const hasInlineMath = /\$[^$\n]+?\$/.test(display);
+  if (hasInlineMath) {
+    const segments = splitInlineMath(display);
+    return (
+      <Animated.View style={[styles.lineRow,
+        kind === 'heading' && styles.headingRow,
+        kind === 'equation' && styles.equationRow,
+        kind === 'result'  && styles.resultRow,
+        anim,
+      ]}>
+        {stepNum ? (
+          <View style={[styles.stepBadge, { borderColor: color }]}>
+            <Text style={[styles.stepNum, { color }]}>{stepNum}</Text>
+          </View>
+        ) : null}
+        <Text style={[chalkTextStyle, { flex: 1 }]}>
+          {segments.map((seg, i) =>
+            seg.type === 'text' ? (
+              <Text key={i}>{seg.content}</Text>
+            ) : (
+              // Inline math: render as italic cyan monospace — avoids block-div layout issues
+              <Text key={i} style={{
+                color: C.cyan,
+                fontFamily: MONO,
+                fontStyle: 'italic',
+                fontWeight: '600',
+              }}>{seg.content}</Text>
+            )
+          )}
+        </Text>
+      </Animated.View>
+    );
+  }
 
   return (
     <Animated.View style={[styles.lineRow,
@@ -345,14 +435,7 @@ function ChalkLine({ line, index }: { line: string; index: number }) {
           <Text style={[styles.stepNum, { color }]}>{stepNum}</Text>
         </View>
       ) : null}
-      <Text style={[styles.chalkText, {
-        color, fontSize: size,
-        fontFamily: Platform.OS === 'ios' ? 'Chalkboard SE' : MONO,
-        fontWeight: (kind === 'heading' || kind === 'result') ? '700' : '400',
-        textShadowColor: color + '44',
-        textShadowOffset: { width: 1, height: 1 },
-        textShadowRadius: 3,
-      }, kind === 'heading' && { letterSpacing: 1, textTransform: 'uppercase' }]}>
+      <Text style={chalkTextStyle}>
         {display}
       </Text>
     </Animated.View>
@@ -365,7 +448,7 @@ function RulingLines() {
       {Array.from({ length: 12 }).map((_, i) => (
         <View key={i} style={{
           position: 'absolute', top: 68 + i * 44, left: 14, right: 14,
-          height: 1, backgroundColor: 'rgba(255,255,255,0.04)',
+          height: 1, backgroundColor: 'rgba(99,102,241,0.07)',
         }} />
       ))}
     </View>
@@ -391,8 +474,12 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
     ? diagramSteps + textLines.length   // diagram first, then text explanation
     : textLines.length;
 
-  const [step, setStep]       = useState(hasDiagram ? 0 : 0);
+  const [step, setStep]       = useState(0);
+  const [paused, setPaused]   = useState(false);
+  const [finished, setFinished] = useState(false);
   const scrollRef             = useRef<ScrollView>(null);
+
+  const AUTOPLAY_MS = hasDiagram ? 1800 : 2200;
 
   const diagramRevealed = hasDiagram ? Math.min(step, diagramSteps) : 0;
   const textRevealed    = hasDiagram
@@ -400,6 +487,18 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
     : step + 1;   // text-only: reveal from step 0 (show line 0 immediately)
 
   const allDone = step >= totalSteps - (hasDiagram ? 0 : 1);
+
+  // Auto-advance
+  useEffect(() => {
+    if (paused || allDone) return;
+    const t = setTimeout(() => setStep((s) => s + 1), AUTOPLAY_MS);
+    return () => clearTimeout(t);
+  }, [step, paused, allDone, AUTOPLAY_MS]);
+
+  // Mark finished so replay button can appear
+  useEffect(() => {
+    if (allDone) setFinished(true);
+  }, [allDone]);
 
   const handleNext = useCallback(() => {
     if (allDone) {
@@ -410,6 +509,12 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
     }
   }, [allDone, onDismiss, onUnderstood]);
 
+  const handleReplay = useCallback(() => {
+    setStep(0);
+    setFinished(false);
+    setPaused(false);
+  }, []);
+
   useEffect(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   }, [step]);
@@ -418,19 +523,31 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
 
   // Progress: how far through the total journey
   const progressFrac = totalSteps > 0 ? Math.min(step / (totalSteps - (hasDiagram ? 0 : 1)), 1) : 1;
+  const progressWidth = clampPercent(progressFrac * 100, {
+    source: 'components/ai/DashTutorWhiteboard.progress',
+  });
 
   return (
     <Animated.View entering={FadeIn.duration(180)} style={styles.overlay}>
       <BlurView intensity={30} tint="dark" style={StyleSheet.absoluteFill} />
 
       <Animated.View entering={FadeInDown.duration(280).springify()} style={styles.board}>
+        {/* Deep-space background */}
         <LinearGradient
-          colors={['#1a3a2a', '#162e22', '#0f2018']}
+          colors={['#080d1e', '#0c1233', '#080a18']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={StyleSheet.absoluteFill}
         />
+        {/* Indigo top-glow vignette */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(0,0,0,0.2)']}
+          colors={['rgba(99,102,241,0.18)', 'rgba(99,102,241,0.04)', 'transparent']}
+          start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 0.5 }}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        {/* Edge darkening */}
+        <LinearGradient
+          colors={['rgba(0,0,0,0.35)', 'transparent', 'rgba(0,0,0,0.25)']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
@@ -440,11 +557,13 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
         {/* Header tray */}
         <View style={styles.tray}>
           <View style={styles.trayLeft}>
-            <Ionicons name="school-outline" size={15} color={C.green} />
-            <Text style={styles.trayTitle}>Dash Whiteboard</Text>
+            <View style={styles.trayIconWrap}>
+              <Ionicons name="telescope-outline" size={14} color={C.indigo} />
+            </View>
+            <Text style={styles.trayTitle}>Dash Board</Text>
           </View>
           <TouchableOpacity onPress={onDismiss} style={styles.closeBtn}>
-            <Ionicons name="close-circle" size={21} color="rgba(255,255,255,0.45)" />
+            <Ionicons name="close-circle" size={21} color="rgba(165,180,252,0.45)" />
           </TouchableOpacity>
         </View>
 
@@ -490,14 +609,21 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
 
         {/* Progress bar */}
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progressFrac * 100}%` as any }]} />
+          <View style={[styles.progressFill, { width: `${progressWidth}%` as any }]} />
         </View>
 
         {/* Footer */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.skipBtn} onPress={onDismiss}>
-            <Text style={styles.skipText}>Close</Text>
-          </TouchableOpacity>
+          {finished ? (
+            <TouchableOpacity style={styles.skipBtn} onPress={handleReplay}>
+              <Ionicons name="refresh" size={16} color={C.cyan} />
+              <Text style={[styles.skipText, { color: C.cyan, marginLeft: 4 }]}>Replay</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.skipBtn} onPress={() => setPaused((p) => !p)}>
+              <Ionicons name={paused ? 'play' : 'pause'} size={16} color="rgba(165,180,252,0.5)" />
+            </TouchableOpacity>
+          )}
 
           <View style={styles.footerCenter}>
             <Text style={styles.footerHint}>
@@ -538,22 +664,27 @@ const styles = StyleSheet.create({
   },
   board: {
     width: '100%', maxWidth: 430, maxHeight: '86%',
-    borderRadius: 12, overflow: 'hidden',
-    borderWidth: 6, borderColor: '#5c3d1e',
+    borderRadius: 16, overflow: 'hidden',
+    borderWidth: 1.5, borderColor: 'rgba(99,102,241,0.5)',
     elevation: 24,
-    shadowColor: '#000', shadowOpacity: 0.65, shadowRadius: 28, shadowOffset: { width: 0, height: 14 },
+    shadowColor: '#6366f1', shadowOpacity: 0.35, shadowRadius: 32, shadowOffset: { width: 0, height: 12 },
   },
   tray: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 9,
-    borderBottomWidth: 2, borderBottomColor: '#5c3d1e',
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderBottomWidth: 1, borderBottomColor: 'rgba(99,102,241,0.25)',
+    backgroundColor: 'rgba(99,102,241,0.1)',
   },
-  trayLeft: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  trayLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trayIconWrap: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.2)',
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.4)',
+    alignItems: 'center', justifyContent: 'center',
+  },
   trayTitle: {
-    color: C.green, fontSize: 12, fontWeight: '700', letterSpacing: 0.9,
+    color: '#a5b4fc', fontSize: 12, fontWeight: '700', letterSpacing: 1.1,
     textTransform: 'uppercase',
-    fontFamily: Platform.OS === 'ios' ? 'Chalkboard SE' : 'monospace',
   },
   closeBtn: { padding: 2 },
 
@@ -562,14 +693,15 @@ const styles = StyleSheet.create({
 
   // Diagram
   diagramWrap: {
-    alignItems: 'center', paddingTop: 4, paddingBottom: 8,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    marginBottom: 6,
+    alignItems: 'center', paddingTop: 8, paddingBottom: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(99,102,241,0.08)',
+    borderWidth: 1, borderColor: 'rgba(99,102,241,0.2)',
+    marginBottom: 8,
   },
   diagramLabel: {
-    color: C.dim, fontSize: 11, letterSpacing: 0.6, marginBottom: 4,
-    fontFamily: Platform.OS === 'ios' ? 'Chalkboard SE' : 'monospace',
+    color: 'rgba(165,180,252,0.6)', fontSize: 11, letterSpacing: 0.8,
+    fontWeight: '600', marginBottom: 6, textTransform: 'uppercase',
   },
   answerBubble: {
     marginTop: 10,
@@ -585,9 +717,9 @@ const styles = StyleSheet.create({
   // Text section
   textSection: { paddingTop: 4 },
   textDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, marginTop: 4 },
-  textDividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.1)' },
+  textDividerLine: { flex: 1, height: 1, backgroundColor: 'rgba(99,102,241,0.2)' },
   textDividerLabel: {
-    color: 'rgba(255,255,255,0.3)', fontSize: 10, letterSpacing: 0.8, textTransform: 'uppercase',
+    color: 'rgba(165,180,252,0.45)', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase',
   },
 
   // Chalk lines
@@ -595,12 +727,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', marginBottom: 9, gap: 8,
   },
   headingRow: {
-    borderBottomWidth: 1, borderBottomColor: 'rgba(251,191,36,0.25)',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(253,230,138,0.2)',
     paddingBottom: 5, marginBottom: 12,
   },
   equationRow: {
-    backgroundColor: 'rgba(103,232,249,0.07)',
+    backgroundColor: 'rgba(99,102,241,0.1)',
     borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+    borderLeftWidth: 2, borderLeftColor: 'rgba(99,102,241,0.6)',
   },
   resultRow: {
     backgroundColor: 'rgba(249,168,212,0.07)',
@@ -616,25 +749,25 @@ const styles = StyleSheet.create({
 
   // Progress
   progressTrack: {
-    height: 3, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 14, borderRadius: 2,
+    height: 3, backgroundColor: 'rgba(99,102,241,0.15)', marginHorizontal: 14, borderRadius: 2,
   },
   progressFill: {
-    height: 3, backgroundColor: C.green, borderRadius: 2,
+    height: 3, backgroundColor: C.indigo, borderRadius: 2,
   },
 
   // Footer
   footer: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 14, paddingVertical: 11,
-    borderTopWidth: 2, borderTopColor: '#5c3d1e',
-    backgroundColor: 'rgba(0,0,0,0.22)',
+    borderTopWidth: 1, borderTopColor: 'rgba(99,102,241,0.25)',
+    backgroundColor: 'rgba(8,13,30,0.85)',
   },
   footerCenter: { flex: 1, alignItems: 'center' },
   footerHint: {
-    color: 'rgba(255,255,255,0.3)', fontSize: 11, letterSpacing: 0.4,
+    color: 'rgba(165,180,252,0.5)', fontSize: 11, letterSpacing: 0.5,
   },
   skipBtn: { paddingHorizontal: 10, paddingVertical: 6 },
-  skipText: { color: 'rgba(255,255,255,0.4)', fontSize: 13 },
+  skipText: { color: 'rgba(165,180,252,0.6)', fontSize: 13 },
   nextBtn: { borderRadius: 22, overflow: 'hidden' },
   nextGrad: {
     flexDirection: 'row', alignItems: 'center', gap: 5,

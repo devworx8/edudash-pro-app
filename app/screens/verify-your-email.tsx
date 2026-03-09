@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { assertSupabase } from '@/lib/supabase';
@@ -9,13 +10,14 @@ import { buildEduDashWebUrl } from '@/lib/config/urls';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function VerifyYourEmailScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { email } = useLocalSearchParams<{ email?: string }>();
   const [resending, setResending] = useState(false);
   const [sent, setSent] = useState(false);
 
   const resend = async () => {
     if (!email) {
-      Alert.alert('Email required', 'We need your email address to resend the confirmation.');
+      showAlert({ title: 'Email required', message: 'We need your email address to resend the confirmation.', type: 'warning' });
       return;
     }
     setResending(true);
@@ -30,9 +32,9 @@ export default function VerifyYourEmailScreen() {
       } as any);
       if (error) throw error;
       setSent(true);
-      Alert.alert('Email sent', 'We’ve resent the confirmation email. Please check your inbox (and spam).');
+      showAlert({ title: 'Email sent', message: 'We\'ve resent the confirmation email. Please check your inbox (and spam).', type: 'success' });
     } catch (e: any) {
-      Alert.alert('Failed to resend', e?.message || 'Please try again later.');
+      showAlert({ title: 'Failed to resend', message: e?.message || 'Please try again later.', type: 'error' });
     } finally {
       setResending(false);
     }
@@ -75,6 +77,7 @@ export default function VerifyYourEmailScreen() {
           Tip: If you don’t see it, check your spam folder or search for “EduDash Pro”.
         </Text>
       </View>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

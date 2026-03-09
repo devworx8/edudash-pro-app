@@ -19,7 +19,7 @@ export interface SectionHeaderProps {
   /** Action button label (e.g. "See All") */
   actionLabel?: string;
   onAction?: () => void;
-  /** Accent underline color (defaults to green) */
+  /** Accent underline color (defaults to cyan) */
   accentColor?: string;
   /** Show the subtle accent underline (default true) */
   showAccent?: boolean;
@@ -30,7 +30,7 @@ export function SectionHeader({
   subtitle,
   actionLabel,
   onAction,
-  accentColor = nextGenPalette.green2,
+  accentColor = nextGenPalette.cyan2,
   showAccent = true,
 }: SectionHeaderProps) {
   return (

@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { getMessageDisplayText } from '@/lib/utils/messageContent';
 import type { Message } from './types';
 
 interface ReplyBubbleQuoteProps {
@@ -19,7 +20,7 @@ function getReplyPreview(content: string, contentType?: string): string {
   if (contentType === 'voice' || content?.startsWith('🎤')) return '🎤 Voice message';
   if (contentType === 'image' || content?.match(/\[image\]/)) return '📷 Photo';
   if (contentType === 'file') return '📎 File';
-  return content || '';
+  return getMessageDisplayText(content || '');
 }
 
 export const ReplyBubbleQuote: React.FC<ReplyBubbleQuoteProps> = React.memo(({
@@ -37,7 +38,7 @@ export const ReplyBubbleQuote: React.FC<ReplyBubbleQuoteProps> = React.memo(({
     <TouchableOpacity
       style={[
         styles.container,
-        { borderLeftColor: isOwn ? '#93c5fd' : '#a78bfa' },
+        { borderLeftColor: isOwn ? '#8fe8ff' : '#b994ff' },
         { backgroundColor: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(148,163,184,0.1)' },
       ]}
       onPress={onPress}

@@ -3,7 +3,8 @@
  * Modal bottom sheet for selecting users to call
  */
 import React, { useState, useMemo } from 'react';
-import { View, Text, Modal, TouchableOpacity, TextInput, FlatList, StyleSheet } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -240,13 +241,13 @@ export function ContactsPicker({ visible, onClose, onSelectContact }: ContactsPi
               </Text>
             </View>
           ) : (
-            <FlatList
+            <FlashList
               data={filteredContacts}
               renderItem={renderContact}
               keyExtractor={item => item.id}
-              style={styles.list}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
+              estimatedItemSize={60}
             />
           )}
         </View>

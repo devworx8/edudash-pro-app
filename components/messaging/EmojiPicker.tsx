@@ -136,7 +136,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   onClose,
   onEmojiSelect,
   onGifSelect,
-  height = 280,
+  height = Platform.OS === 'web' ? 404 : 312,
 }) => {
   const { theme } = useTheme();
   const [activeCategory, setActiveCategory] = useState('smileys');
@@ -170,19 +170,19 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   const styles = StyleSheet.create({
     container: {
       height,
-      backgroundColor: theme.surface,
+      backgroundColor: 'rgba(7, 12, 30, 0.98)',
       borderTopWidth: 1,
-      borderTopColor: theme.border,
+      borderTopColor: 'rgba(125, 211, 252, 0.14)',
     },
     categoryTabs: {
       flexDirection: 'row',
       borderBottomWidth: 1,
-      borderBottomColor: theme.border,
-      backgroundColor: theme.elevated,
+      borderBottomColor: 'rgba(125, 211, 252, 0.12)',
+      backgroundColor: 'rgba(15, 23, 42, 0.82)',
     },
     categoryTab: {
       flex: 1,
-      paddingVertical: 10,
+      paddingVertical: 8,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -193,11 +193,12 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
     emojiGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      padding: 8,
+      paddingHorizontal: 6,
+      paddingVertical: 4,
     },
     emojiButton: {
-      width: (SCREEN_WIDTH - 16) / 8,
-      height: 44,
+      width: (SCREEN_WIDTH - 12) / 8,
+      height: 40,
       alignItems: 'center',
       justifyContent: 'center',
     },

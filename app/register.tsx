@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '@/lib/supabase';
 import { useQuery } from '@tanstack/react-query';
@@ -79,6 +80,7 @@ async function fetchProgramByCode(programCode: string): Promise<ProgramInfo | nu
 export default function PublicRegistrationScreen() {
   const { theme } = useTheme();
   const { user, loading: authLoading } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const params = useLocalSearchParams();
   const getParam = (key: string): string | undefined => {
     const value = (params as Record<string, string | string[] | undefined>)[key];
@@ -130,7 +132,7 @@ export default function PublicRegistrationScreen() {
 
   const handleCodeSubmit = async () => {
     if (!programCode.trim()) {
-      Alert.alert('Error', 'Please enter a program code');
+      showAlert({ title: 'Error', message: 'Please enter a program code', type: 'warning' });
       return;
     }
 
@@ -138,14 +140,14 @@ export default function PublicRegistrationScreen() {
     try {
       const data = await fetchProgramByCode(programCode);
       if (!data) {
-        Alert.alert('Invalid Code', 'The program code you entered is invalid or the program is no longer active.');
+        showAlert({ title: 'Invalid Code', message: 'The program code you entered is invalid or the program is no longer active.', type: 'error' });
         return;
       }
 
       setProgramInfo(data);
       setStep('details');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to verify program code');
+      showAlert({ title: 'Error', message: error.message || 'Failed to verify program code', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -154,17 +156,17 @@ export default function PublicRegistrationScreen() {
   const handleRegister = async () => {
     // Validation
     if (!email || !firstName || !lastName || !password) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      showAlert({ title: 'Error', message: 'Please fill in all required fields', type: 'warning' });
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showAlert({ title: 'Error', message: 'Passwords do not match', type: 'warning' });
       return;
     }
 
     if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
+      showAlert({ title: 'Error', message: 'Password must be at least 8 characters', type: 'warning' });
       return;
     }
 
@@ -235,18 +237,16 @@ export default function PublicRegistrationScreen() {
         }
       }
 
-      Alert.alert(
-        'Registration Successful!',
-        'Your account has been created. Please check your email to verify your account, then log in to access the program.',
-        [
-          {
-            text: 'Go to Sign In',
-            onPress: () => router.replace('/(auth)/sign-in'),
-          },
-        ]
-      );
+      showAlert({
+        title: 'Registration Successful!',
+        message: 'Your account has been created. Please check your email to verify your account, then log in to access the program.',
+        type: 'success',
+        buttons: [
+          { text: 'Go to Sign In', onPress: () => router.replace('/(auth)/sign-in') },
+        ],
+      });
     } catch (error: any) {
-      Alert.alert('Registration Failed', error.message || 'Failed to create account');
+      showAlert({ title: 'Registration Failed', message: error.message || 'Failed to create account', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -441,6 +441,8 @@ export default function PublicRegistrationScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

@@ -9,7 +9,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
@@ -17,6 +16,7 @@ import {
   ActionSheetIOS,
   Platform,
 } from 'react-native';
+import { FlashList, type ListRenderItemInfo } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { DashConversation } from '@/services/dash-ai/types';
@@ -232,7 +232,7 @@ export const DashConversationsHistory: React.FC<DashConversationsHistoryProps> =
     return preview.length < String(lastMessage.content).length ? `${preview}...` : preview;
   };
 
-  const renderConversationItem = ({ item }: { item: DashConversation }) => (
+  const renderConversationItem = ({ item }: ListRenderItemInfo<DashConversation>) => (
     <TouchableOpacity
       style={[styles.conversationItem, { backgroundColor: theme.cardBackground, borderColor: theme.border }]}
       onPress={() => handleConversationPress(item)}
@@ -401,22 +401,27 @@ export const DashConversationsHistory: React.FC<DashConversationsHistoryProps> =
         </View>
       )}
 
-      <FlatList
-        data={conversations}
-        keyExtractor={(item) => item.id}
-        renderItem={renderConversationItem}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            tintColor={theme.primary}
-            colors={[theme.primary]}
-          />
-        }
-        contentContainerStyle={conversations.length === 0 ? styles.emptyContainer : styles.listContent}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={renderEmptyState}
-      />
+      {conversations.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          {renderEmptyState()}
+        </View>
+      ) : (
+        <FlashList
+          data={conversations}
+          keyExtractor={(item) => item.id}
+          renderItem={renderConversationItem}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
+            />
+          }
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
       
       {conversations.length > 0 && (
         <TouchableOpacity

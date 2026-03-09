@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -15,6 +15,7 @@ import { base64ToUint8Array } from '@/lib/utils/base64';
 import { ensureImageLibraryPermission } from '@/lib/utils/mediaLibrary';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizeRole } from '@/lib/rbac';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { ImageConfirmModal } from '@/components/ui/ImageConfirmModal';
@@ -23,6 +24,7 @@ export default function OrgBrandingScreen() {
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   
   const { data: orgSettings, isLoading } = useOrgSettings();
   const updateSettings = useUpdateOrgSettings();
@@ -62,28 +64,31 @@ export default function OrgBrandingScreen() {
   const handlePickImage = async () => {
     try {
       if (!canManageBranding) {
-        Alert.alert(
-          t('common.permission_denied', { defaultValue: 'Permission Denied' }),
-          t('branding.permission_required', { defaultValue: 'You do not have permission to update branding settings.' })
-        );
+        showAlert({
+          title: t('common.permission_denied', { defaultValue: 'Permission Denied' }),
+          message: t('branding.permission_required', { defaultValue: 'You do not have permission to update branding settings.' }),
+          type: 'warning',
+        });
         return;
       }
 
       const orgId = orgSettings?.id || profile?.organization_id;
       if (!orgId) {
-        Alert.alert(
-          t('common.error', { defaultValue: 'Error' }),
-          t('branding.no_organization', { defaultValue: 'No organization found.' })
-        );
+        showAlert({
+          title: t('common.error', { defaultValue: 'Error' }),
+          message: t('branding.no_organization', { defaultValue: 'No organization found.' }),
+          type: 'error',
+        });
         return;
       }
 
       const hasPermission = await ensureImageLibraryPermission();
       if (!hasPermission) {
-        Alert.alert(
-          t('common.permission_required', { defaultValue: 'Permission Required' }),
-          t('common.photo_permission', { defaultValue: 'Please grant photo library access to upload a logo' })
-        );
+        showAlert({
+          title: t('common.permission_required', { defaultValue: 'Permission Required' }),
+          message: t('common.photo_permission', { defaultValue: 'Please grant photo library access to upload a logo' }),
+          type: 'warning',
+        });
         return;
       }
 
@@ -97,10 +102,11 @@ export default function OrgBrandingScreen() {
 
       setPendingLogoUri(result.assets[0].uri);
     } catch (error: any) {
-      Alert.alert(
-        t('common.error', { defaultValue: 'Error' }),
-        error.message || t('branding.logo_upload_failed', { defaultValue: 'Failed to select image' })
-      );
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: error.message || t('branding.logo_upload_failed', { defaultValue: 'Failed to select image' }),
+        type: 'error',
+      });
     }
   };
 
@@ -122,16 +128,18 @@ export default function OrgBrandingScreen() {
         },
       });
 
-      Alert.alert(
-        t('common.success', { defaultValue: 'Success' }),
-        t('branding.saved', { defaultValue: 'Branding settings saved successfully' }),
-        [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }]
-      );
+      showAlert({
+        title: t('common.success', { defaultValue: 'Success' }),
+        message: t('branding.saved', { defaultValue: 'Branding settings saved successfully' }),
+        type: 'success',
+        buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }],
+      });
     } catch (error: any) {
-      Alert.alert(
-        t('common.error', { defaultValue: 'Error' }),
-        error.message || t('common.save_failed', { defaultValue: 'Failed to save settings' })
-      );
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: error.message || t('common.save_failed', { defaultValue: 'Failed to save settings' }),
+        type: 'error',
+      });
     }
   };
 
@@ -345,7 +353,7 @@ export default function OrgBrandingScreen() {
             if (!publicData?.publicUrl) throw new Error('Failed to generate logo URL');
             setLogoUrl(publicData.publicUrl);
           } catch (error: any) {
-            Alert.alert(t('common.error', { defaultValue: 'Error' }), error.message || 'Failed to upload logo');
+            showAlert({ title: t('common.error', { defaultValue: 'Error' }), message: error.message || 'Failed to upload logo', type: 'error' });
           } finally {
             setLogoUploading(false);
             setPendingLogoUri(null);
@@ -358,6 +366,8 @@ export default function OrgBrandingScreen() {
         cropAspect={[1, 1]}
         loading={logoUploading}
       />
+
+      <AlertModal {...alertProps} />
     </View>
   );
 }

@@ -9,7 +9,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Switch, Alert, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, Switch, RefreshControl } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -47,6 +48,7 @@ export default function BirthdayPlannerScreen() {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const { user, profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const organizationId = profile?.organization_id ?? profile?.preschool_id ?? null;
   const { studentId } = useLocalSearchParams<{ studentId?: string }>();
   
@@ -135,13 +137,13 @@ export default function BirthdayPlannerScreen() {
       const result = await savePreferences(selectedStudentId, formData);
       
       if (result.success) {
-        Alert.alert('Success', 'Birthday preferences saved successfully!');
+        showAlert({ title: 'Success', message: 'Birthday preferences saved successfully!', type: 'success' });
         setHasChanges(false);
       } else {
-        Alert.alert('Error', result.error || 'Failed to save preferences');
+        showAlert({ title: 'Error', message: result.error || 'Failed to save preferences', type: 'error' });
       }
     } catch (err) {
-      Alert.alert('Error', 'Failed to save preferences');
+      showAlert({ title: 'Error', message: 'Failed to save preferences', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -467,6 +469,7 @@ export default function BirthdayPlannerScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }
