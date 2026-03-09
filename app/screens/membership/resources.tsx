@@ -7,7 +7,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  FlatList, 
   TouchableOpacity, 
   TextInput,
   RefreshControl,
@@ -15,6 +14,7 @@ import {
   Dimensions,
   Modal,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -338,13 +338,14 @@ export default function ResourceHubScreen() {
             </TouchableOpacity>
           )}
         </View>
-        <FlatList
+        <FlashList
           data={CATEGORIES}
           renderItem={renderCategoryItem}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.categoriesList}
+          estimatedItemSize={100}
         />
       </View>
 
@@ -354,7 +355,7 @@ export default function ResourceHubScreen() {
           <View style={styles.sectionHeader}>
             <Text style={[styles.sectionTitle, { color: theme.text }]}>Featured Resources</Text>
           </View>
-          <FlatList
+          <FlashList
             data={RESOURCES.filter(r => r.is_featured)}
             renderItem={({ item }) => (
               <TouchableOpacity 
@@ -374,6 +375,7 @@ export default function ResourceHubScreen() {
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.featuredList}
+            estimatedItemSize={200}
           />
         </View>
       )}
@@ -420,13 +422,14 @@ export default function ResourceHubScreen() {
       />
 
       <DashboardWallpaperBackground>
-      <FlatList
+      <FlashList
         data={filteredResources}
         renderItem={renderResourceItem}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={ListHeader}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 80 }]}
         showsVerticalScrollIndicator={false}
+        estimatedItemSize={80}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }

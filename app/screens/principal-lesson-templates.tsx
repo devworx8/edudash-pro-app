@@ -1,7 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  FlatList,
   Modal,
   RefreshControl,
   StyleSheet,
@@ -11,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
@@ -18,6 +17,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
 import { extractOrganizationId } from '@/lib/tenant/compat';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import type { LessonTemplate } from '@/types/ecd-planning';
 
 type TemplateForm = {
@@ -49,6 +49,7 @@ export default function PrincipalLessonTemplatesScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
   const organizationId = extractOrganizationId(profile);
   const createdBy = (profile as any)?.id || user?.id;
 
@@ -81,7 +82,7 @@ export default function PrincipalLessonTemplatesScreen() {
       if (error) throw error;
       setTemplates((data || []) as LessonTemplate[]);
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to load lesson templates');
+      showAlert({ title: 'Error', message: error?.message || 'Failed to load lesson templates', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -118,11 +119,11 @@ export default function PrincipalLessonTemplatesScreen() {
 
   const saveTemplate = async () => {
     if (!organizationId || !createdBy) {
-      Alert.alert('Missing profile', 'Unable to identify your school profile.');
+      showAlert({ title: 'Missing profile', message: 'Unable to identify your school profile.', type: 'error' });
       return;
     }
     if (!form.name.trim()) {
-      Alert.alert('Validation', 'Template name is required.');
+      showAlert({ title: 'Validation', message: 'Template name is required.', type: 'warning' });
       return;
     }
 
@@ -166,7 +167,7 @@ export default function PrincipalLessonTemplatesScreen() {
       setForm(EMPTY_FORM);
       await fetchTemplates();
     } catch (error: any) {
-      Alert.alert('Save failed', error?.message || 'Unable to save template.');
+      showAlert({ title: 'Save failed', message: error?.message || 'Unable to save template.', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -187,31 +188,36 @@ export default function PrincipalLessonTemplatesScreen() {
       if (error) throw error;
       await fetchTemplates();
     } catch (error: any) {
-      Alert.alert('Update failed', error?.message || 'Unable to set default template.');
+      showAlert({ title: 'Update failed', message: error?.message || 'Unable to set default template.', type: 'error' });
     }
   };
 
   const archiveTemplate = async (template: LessonTemplate) => {
-    Alert.alert('Archive template', `Archive "${template.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Archive',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const supabase = assertSupabase();
-            const { error } = await supabase
-              .from('lesson_templates')
-              .update({ is_active: false, is_default: false })
-              .eq('id', template.id);
-            if (error) throw error;
-            await fetchTemplates();
-          } catch (error: any) {
-            Alert.alert('Archive failed', error?.message || 'Unable to archive template.');
-          }
+    showAlert({
+      title: 'Archive template',
+      message: `Archive "${template.name}"?`,
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const supabase = assertSupabase();
+              const { error } = await supabase
+                .from('lesson_templates')
+                .update({ is_active: false, is_default: false })
+                .eq('id', template.id);
+              if (error) throw error;
+              await fetchTemplates();
+            } catch (error: any) {
+              showAlert({ title: 'Archive failed', message: error?.message || 'Unable to archive template.', type: 'error' });
+            }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const renderItem = ({ item }: { item: LessonTemplate }) => (
@@ -264,12 +270,13 @@ export default function PrincipalLessonTemplatesScreen() {
           </TouchableOpacity>
         </View>
 
-        <FlatList
+        <FlashList
           data={templates}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          estimatedItemSize={100}
           ListEmptyComponent={
             !loading ? (
               <View style={styles.emptyState}>
@@ -353,6 +360,8 @@ export default function PrincipalLessonTemplatesScreen() {
             </View>
           </View>
         </Modal>
+
+        <AlertModal {...alertProps} />
       </View>
     </DesktopLayout>
   );

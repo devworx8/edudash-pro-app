@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, RefreshControl } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons'
 // import { assertSupabase } from '@/lib/supabase'
@@ -26,6 +27,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function AIHomeworkHelperScreen() {
   const { profile } = useAuth()
   const { theme } = useTheme()
+  const { showAlert, alertProps } = useAlertModal()
   const [question, setQuestion] = useState('Explain how to solve long division: 156 ÷ 12 step by step for a Grade 4 learner.')
   const [subject, setSubject] = useState('Mathematics')
   const { loading, generate, result } = useHomeworkGenerator()
@@ -99,14 +101,15 @@ export default function AIHomeworkHelperScreen() {
     if (!gate.allowed) {
       const status = await getQuotaStatus('homework_help')
       setQuotaStatus(status)
-      Alert.alert(
-        'Monthly limit reached',
-        `You have used ${status.used} of ${status.limit} homework help sessions this month. ${gate.requiresPrepay ? 'Please upgrade or purchase more to continue.' : ''}`,
-        [
+      showAlert({
+        title: 'Monthly limit reached',
+        message: `You have used ${status.used} of ${status.limit} homework help sessions this month. ${gate.requiresPrepay ? 'Please upgrade or purchase more to continue.' : ''}`,
+        type: 'warning',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           { text: 'See plans', onPress: () => router.push('/pricing') },
         ]
-      )
+      })
       setPending(false)
       return
     }
@@ -235,6 +238,7 @@ export default function AIHomeworkHelperScreen() {
           )}
         </View>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   )
 }

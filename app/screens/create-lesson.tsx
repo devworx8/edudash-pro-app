@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
 import { Stack, router } from 'expo-router'
@@ -16,6 +17,7 @@ export default function CreateLessonScreen() {
   const hasActiveSeat = profile?.hasActiveSeat?.() || profile?.seat_status === 'active'
   const canCreate = hasActiveSeat || (!!profile?.hasCapability && profile.hasCapability('create_assignments' as any))
   const palette = { background: '#0b1220', text: '#FFFFFF', textSecondary: '#9CA3AF', outline: '#1f2937', surface: '#111827', primary: '#00f5ff' }
+  const { showAlert, alertProps } = useAlertModal();
 
   const [mode, setMode] = useState<'manual' | 'ai'>('manual')
   const [title, setTitle] = useState(t('lessons_create.default_title', { defaultValue: 'New Lesson' }))
@@ -37,16 +39,16 @@ export default function CreateLessonScreen() {
 
   const onSave = async () => {
     try {
-      if (!title.trim()) { Alert.alert('Title required', 'Please enter a lesson title.'); return }
+      if (!title.trim()) { showAlert({ title: 'Title required', message: 'Please enter a lesson title.', type: 'warning' }); return }
       const catId = categoryId || categoriesQuery.data?.[0]?.id
-      if (!catId) { Alert.alert('No category', 'Please create a lesson category first.'); return }
+      if (!catId) { showAlert({ title: 'No category', message: 'Please create a lesson category first.', type: 'warning' }); return }
 
       setSaving(true)
       const { data: auth } = await assertSupabase().auth.getUser()
       const authUserId = auth?.user?.id || ''
       // Use auth_user_id to lookup profile (NOT profiles.id!)
       const { data: profile } = await assertSupabase().from('profiles').select('id,preschool_id,organization_id').eq('auth_user_id', authUserId).maybeSingle()
-      if (!profile) { Alert.alert('Not signed in', 'No user profile.'); return }
+      if (!profile) { showAlert({ title: 'Not signed in', message: 'No user profile.', type: 'error' }); return }
       const schoolId = profile.preschool_id || profile.organization_id;
 
       const res = await LessonGeneratorService.saveGeneratedLesson({
@@ -58,10 +60,10 @@ export default function CreateLessonScreen() {
         template: { duration: parseInt(duration) || 30, complexity },
         isPublished: true,
       })
-      if (!res.success) { Alert.alert('Save failed', res.error || 'Unknown error'); return }
-      Alert.alert('Saved', `Lesson saved with id ${res.lessonId}`, [{ text: 'OK', onPress: () => router.back() }])
+      if (!res.success) { showAlert({ title: 'Save failed', message: res.error || 'Unknown error', type: 'error' }); return }
+      showAlert({ title: 'Saved', message: `Lesson saved with id ${res.lessonId}`, type: 'success', buttons: [{ text: 'OK', onPress: () => router.back() }] })
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to save')
+      showAlert({ title: 'Error', message: e?.message || 'Failed to save', type: 'error' })
     } finally {
       setSaving(false)
     }
@@ -149,6 +151,7 @@ export default function CreateLessonScreen() {
             </>
           )}
         </ScrollView>
+        <AlertModal {...alertProps} />
       </SafeAreaView>
     </View>
   )

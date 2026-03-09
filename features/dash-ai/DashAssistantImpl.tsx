@@ -45,8 +45,8 @@ import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { DASH_TELEMETRY_EVENTS, trackDashTelemetry } from '@/lib/telemetry/events';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { CircularQuotaRing } from '@/components/ui/CircularQuotaRing';
 import { useRealtimeTier } from '@/hooks/useRealtimeTier';
-import { DashUsageBanner } from '@/components/ai/dash-assistant';
 
 // Merge all style domains for backward compatibility with child components
 const styles = {
@@ -56,7 +56,7 @@ const styles = {
   ...inputStyles,
 };
 
-const COMPOSER_FLOAT_GAP = 2;
+const COMPOSER_FLOAT_GAP = 0;
 const COMPOSER_OVERLAY_MIN_HEIGHT = 64;
 const COMPOSER_ANDROID_NAV_LIFT = 14;
 
@@ -153,12 +153,8 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
     []
   );
 
-  const { tierStatus } = useRealtimeTier();
-  const usageLabel = tierStatus
-    ? tierStatus.quotaLimit > 0
-      ? `${tierStatus.quotaUsed}/${tierStatus.quotaLimit} used this month`
-      : 'Unlimited usage'
-    : '';
+  const { tierStatus, refresh: refreshTierStatus } = useRealtimeTier();
+  const prevIsLoadingRef = useRef(false);
 
   const refreshScanBudget = useCallback(async (tierOverride?: string | null) => {
     const activeTier = String(tierOverride || tierRef.current || 'free');
@@ -259,6 +255,16 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
   }, [refreshScanBudget, tier]);
 
   const isTypingActive = isLoading || !!loadingStatus;
+
+  // Refresh quota ring when AI response finishes (isLoading: true → false)
+  useEffect(() => {
+    if (prevIsLoadingRef.current && !isLoading) {
+      const timer = setTimeout(() => refreshTierStatus(), 2000);
+      return () => clearTimeout(timer);
+    }
+    prevIsLoadingRef.current = isLoading;
+  }, [isLoading, refreshTierStatus]);
+
   const allModels = useMemo(() => getDefaultModels(), []);
   const normalizedTier = useMemo(() => normalizeTierToSubscription(tier), [tier]);
   const canSelectHeaderModel = useCallback((modelId: AIModelId) => canAccessModel(normalizedTier, modelId), [normalizedTier]);
@@ -580,11 +586,9 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
       speakingMessageId={speakingMessageId}
       isLoading={isLoading}
       voiceEnabled={effectiveVoiceEnabled}
-      showFollowUps={effectiveShowFollowUps}
       onSpeak={speakResponse}
       onRetry={(content) => sendMessage(content)}
       onSendFollowUp={(text) => sendMessage(text)}
-      extractFollowUps={extractFollowUps}
       assistantLabel={roleCopy.assistantLabel}
       onRetakeForClarity={handleRetakeForClarity}
     />
@@ -593,10 +597,8 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
     speakingMessageId,
     isLoading,
     effectiveVoiceEnabled,
-    effectiveShowFollowUps,
     speakResponse,
     sendMessage,
-    extractFollowUps,
     roleCopy.assistantLabel,
     handleRetakeForClarity,
   ]);
@@ -622,7 +624,13 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
   const keyboardUp = keyboardHeight > 0;
   const safeComposerHeight = Math.max(composerHeight, COMPOSER_OVERLAY_MIN_HEIGHT);
   const composerExtraBottom = keyboardUp ? composerBottomInset : 0;
-  const messageViewportInset = keyboardHeight + COMPOSER_FLOAT_GAP + composerExtraBottom + safeComposerHeight;
+  const bottomThinkingDockClearance = showBottomThinkingDock ? 58 : 0;
+  const messageViewportInset =
+    keyboardHeight +
+    COMPOSER_FLOAT_GAP +
+    composerExtraBottom +
+    safeComposerHeight +
+    bottomThinkingDockClearance;
   const backgroundBase: [string, string, string] = isDark
     ? ['#0B1020', '#0F172A', theme.background]
     : ['#F7FAFF', '#EEF2FF', '#F8FAFC'];
@@ -694,6 +702,16 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
                     {shellSubtitle}
                   </Text>
                 </View>
+                {tierStatus && tierStatus.quotaLimit > 0 && (
+                  <CircularQuotaRing
+                    used={tierStatus.quotaUsed}
+                    limit={tierStatus.quotaLimit}
+                    size={32}
+                    strokeWidth={3}
+                    showPercentage={false}
+                    percentageMode="used"
+                  />
+                )}
                 <View style={headerStyles.headerRight}>
                   <View
                     style={[
@@ -909,15 +927,6 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
             </View>
           </View>
 
-          {tierStatus && tierStatus.quotaLimit > 0 && (
-            <DashUsageBanner
-              tierStatus={tierStatus}
-              usageLabel={usageLabel}
-              styles={styles}
-              theme={theme}
-            />
-          )}
-
           {/* Messages */}
           <View style={[layoutStyles.messagesClip, { marginBottom: messageViewportInset }]}>
             <DashAssistantMessages
@@ -943,7 +952,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
           </View>
 
           {/* Jump to bottom FAB */}
-          {Platform.OS === 'android' && !isNearBottom && messages.length > 0 && (
+          {!isNearBottom && messages.length > 0 && (
             <TouchableOpacity
               style={[
                 messageStyles.scrollToBottomFab,
@@ -954,7 +963,13 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
                   elevation: 16,
                 },
               ]}
-              onPress={() => { setUnreadCount(0); scrollToBottom({ animated: true, delay: 0, force: true }); }}
+              onPress={() => {
+                setUnreadCount(0);
+                scrollToBottom({ animated: true, delay: 0, force: true });
+                requestAnimationFrame(() => {
+                  scrollToBottom({ animated: false, delay: 0, force: true });
+                });
+              }}
               accessibilityLabel="Jump to bottom"
               activeOpacity={0.8}
               hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}

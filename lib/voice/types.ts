@@ -101,7 +101,7 @@ export const SUPPORTED_LANGUAGES: Record<SupportedLanguage, LanguageInfo> = {
     name: 'English (SA)',
     englishName: 'English (South Africa)',
     flag: '🇿🇦',
-    defaultVoiceId: 'en-ZA-LeahNeural',
+    defaultVoiceId: 'en-ZA-LukeNeural',
     sampleText: 'Hello, welcome to EduDash Pro. I can help you teach and learn better.',
   },
   af: {

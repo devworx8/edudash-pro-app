@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, FlatList, RefreshControl, Platform } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -39,6 +40,7 @@ if (!isWeb) {
 export default function MyLessonsScreen() {
   const { theme, isDark } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>(null);
@@ -167,10 +169,11 @@ export default function MyLessonsScreen() {
   }, []);
 
   const handleDeleteLesson = useCallback(async (lessonId: string) => {
-    Alert.alert(
-      'Delete Lesson',
-      'Are you sure you want to delete this lesson? This action cannot be undone.',
-      [
+    showAlert({
+      title: 'Delete Lesson',
+      message: 'Are you sure you want to delete this lesson? This action cannot be undone.',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
@@ -185,16 +188,16 @@ export default function MyLessonsScreen() {
               if (error) throw error;
               
               queryClient.invalidateQueries({ queryKey: ['my-lessons'] });
-              Alert.alert('Success', 'Lesson deleted successfully');
+              showAlert({ title: 'Success', message: 'Lesson deleted successfully', type: 'success' });
             } catch (e) {
               console.error('[MyLessons] Delete error:', e);
-              Alert.alert('Error', 'Failed to delete lesson');
+              showAlert({ title: 'Error', message: 'Failed to delete lesson', type: 'error' });
             }
           },
         },
-      ]
-    );
-  }, [queryClient]);
+      ],
+    });
+  }, [queryClient, showAlert]);
 
   const getSubjectIcon = (subject: string) => {
     const subjectLower = subject?.toLowerCase() || '';
@@ -399,6 +402,7 @@ export default function MyLessonsScreen() {
           <Ionicons name="add" size={28} color="#FFF" />
         </TouchableOpacity>
       )}
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

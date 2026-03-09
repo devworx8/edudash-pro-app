@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -10,6 +11,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function TeacherProfileCompletionScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
 
   // Personal details
   const [firstName, setFirstName] = useState(profile?.first_name || '');
@@ -59,7 +61,7 @@ export default function TeacherProfileCompletionScreen() {
 
   const onSave = async () => {
     if (!firstName.trim() || !lastName.trim()) {
-      Alert.alert('Missing info', 'Please provide your first and last name');
+      showAlert({ title: 'Missing info', message: 'Please provide your first and last name', type: 'warning' });
       return;
     }
     setSaving(true);
@@ -147,10 +149,10 @@ export default function TeacherProfileCompletionScreen() {
       }
 
       // Profile already updated above via profiles table upsert
-      Alert.alert('Saved', 'Your profile has been updated.');
+      showAlert({ title: 'Saved', message: 'Your profile has been updated.', type: 'success' });
     } catch (e: any) {
       console.error('Teacher profile save error:', e);
-      Alert.alert('Failed to save', e?.message || 'Please try again');
+      showAlert({ title: 'Failed to save', message: e?.message || 'Please try again', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -240,6 +242,7 @@ export default function TeacherProfileCompletionScreen() {
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

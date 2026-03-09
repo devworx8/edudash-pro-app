@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { Stack, router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,12 +18,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
 import { normalizeRole } from '@/lib/rbac';
 import { ensureImageLibraryPermission } from '@/lib/utils/mediaLibrary';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function CVUploadScreen() {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = createStyles(theme);
 
   const [uploading, setUploading] = useState(false);
@@ -39,10 +41,11 @@ export default function CVUploadScreen() {
   const handlePickDocument = async () => {
     try {
       if (!canUploadCVs) {
-        Alert.alert(
-          t('common.permission_denied', { defaultValue: 'Permission Denied' }),
-          t('cv_upload.permission_required', { defaultValue: 'You do not have permission to upload CVs.' })
-        );
+        showAlert({
+          title: t('common.permission_denied', { defaultValue: 'Permission Denied' }),
+          message: t('cv_upload.permission_required', { defaultValue: 'You do not have permission to upload CVs.' }),
+          type: 'warning',
+        });
         return;
       }
 
@@ -56,29 +59,32 @@ export default function CVUploadScreen() {
         await processFiles(result.assets);
       }
     } catch (error: any) {
-      Alert.alert(
-        t('cv_upload.error', { defaultValue: 'Error' }),
-        error.message || t('cv_upload.pick_error', { defaultValue: 'Failed to pick documents' })
-      );
+      showAlert({
+        title: t('cv_upload.error', { defaultValue: 'Error' }),
+        message: error.message || t('cv_upload.pick_error', { defaultValue: 'Failed to pick documents' }),
+        type: 'error',
+      });
     }
   };
 
   const handlePickImages = async () => {
     try {
       if (!canUploadCVs) {
-        Alert.alert(
-          t('common.permission_denied', { defaultValue: 'Permission Denied' }),
-          t('cv_upload.permission_required', { defaultValue: 'You do not have permission to upload CVs.' })
-        );
+        showAlert({
+          title: t('common.permission_denied', { defaultValue: 'Permission Denied' }),
+          message: t('cv_upload.permission_required', { defaultValue: 'You do not have permission to upload CVs.' }),
+          type: 'warning',
+        });
         return;
       }
 
       const hasPermission = await ensureImageLibraryPermission();
       if (!hasPermission) {
-        Alert.alert(
-          t('common.permission_required', { defaultValue: 'Permission Required' }),
-          t('cv_upload.photo_permission', { defaultValue: 'Please grant photo library access' })
-        );
+        showAlert({
+          title: t('common.permission_required', { defaultValue: 'Permission Required' }),
+          message: t('cv_upload.photo_permission', { defaultValue: 'Please grant photo library access' }),
+          type: 'warning',
+        });
         return;
       }
 
@@ -97,19 +103,21 @@ export default function CVUploadScreen() {
         })));
       }
     } catch (error: any) {
-      Alert.alert(
-        t('cv_upload.error', { defaultValue: 'Error' }),
-        error.message || t('cv_upload.pick_error', { defaultValue: 'Failed to pick images' })
-      );
+      showAlert({
+        title: t('cv_upload.error', { defaultValue: 'Error' }),
+        message: error.message || t('cv_upload.pick_error', { defaultValue: 'Failed to pick images' }),
+        type: 'error',
+      });
     }
   };
 
   const processFiles = async (files: any[]) => {
     if (!profile?.organization_id) {
-      Alert.alert(
-        t('common.error', { defaultValue: 'Error' }),
-        t('cv_upload.no_organization', { defaultValue: 'No organization found' })
-      );
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: t('cv_upload.no_organization', { defaultValue: 'No organization found' }),
+        type: 'error',
+      });
       return;
     }
 
@@ -191,15 +199,17 @@ export default function CVUploadScreen() {
       }
 
       setUploadedFiles([...uploadedFiles, ...processedFiles]);
-      Alert.alert(
-        t('common.success', { defaultValue: 'Success' }),
-        t('cv_upload.uploaded', { defaultValue: `${files.length} file(s) uploaded successfully` })
-      );
+      showAlert({
+        title: t('common.success', { defaultValue: 'Success' }),
+        message: t('cv_upload.uploaded', { defaultValue: `${files.length} file(s) uploaded successfully` }),
+        type: 'success',
+      });
     } catch (error: any) {
-      Alert.alert(
-        t('cv_upload.error', { defaultValue: 'Error' }),
-        error.message || t('cv_upload.upload_failed', { defaultValue: 'Failed to upload files' })
-      );
+      showAlert({
+        title: t('cv_upload.error', { defaultValue: 'Error' }),
+        message: error.message || t('cv_upload.upload_failed', { defaultValue: 'Failed to upload files' }),
+        type: 'error',
+      });
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -335,6 +345,8 @@ export default function CVUploadScreen() {
           </Text>
         </Card>
       </ScrollView>
+
+      <AlertModal {...alertProps} />
     </View>
   );
 }

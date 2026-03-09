@@ -5,7 +5,7 @@
  * Searches messages via ILIKE and highlights matching results.
  */
 
-import React, { useCallback, useRef, useEffect } from 'react';
+import React, { useCallback, useRef, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   StyleSheet,
   Animated,
   Keyboard,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Message } from '@/components/messaging';
@@ -43,6 +44,11 @@ export function ChatSearchOverlay({
   const slideAnim = useRef(new Animated.Value(-120)).current;
   const inputRef = useRef<TextInput>(null);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [localQuery, setLocalQuery] = useState(query);
+
+  useEffect(() => {
+    setLocalQuery(query);
+  }, [query, visible]);
 
   useEffect(() => {
     Animated.timing(slideAnim, {
@@ -58,6 +64,7 @@ export function ChatSearchOverlay({
 
   const handleChangeText = useCallback(
     (text: string) => {
+      setLocalQuery(text);
       // Debounce search to avoid hammering DB on every keystroke
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       debounceTimer.current = setTimeout(() => {
@@ -71,6 +78,79 @@ export function ChatSearchOverlay({
     Keyboard.dismiss();
     onClose();
   }, [onClose]);
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      backgroundColor: 'rgba(7, 12, 30, 0.98)',
+      borderBottomWidth: 1,
+      borderBottomColor: 'rgba(125, 211, 252, 0.14)',
+      maxHeight: 360,
+      zIndex: 50,
+    },
+    searchBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      gap: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(125, 211, 252, 0.12)',
+    },
+    input: {
+      flex: 1,
+      fontSize: 15,
+      color: '#f8fafc',
+      paddingVertical: 4,
+      ...(Platform.OS === 'web'
+        ? ({
+            outlineStyle: 'none',
+            outlineWidth: 0,
+            outlineColor: 'transparent',
+            boxShadow: 'none',
+            borderWidth: 0,
+          } as any)
+        : null),
+    },
+    resultsList: {
+      maxHeight: 272,
+    },
+    resultItem: {
+      paddingHorizontal: 16,
+      paddingVertical: 11,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: 'rgba(125, 211, 252, 0.1)',
+      backgroundColor: 'rgba(9, 18, 38, 0.72)',
+    },
+    resultMeta: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginBottom: 4,
+      gap: 12,
+    },
+    senderName: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#e2e8f0',
+      flex: 1,
+    },
+    resultTime: {
+      fontSize: 11,
+      color: '#94a3b8',
+    },
+    resultContent: {
+      fontSize: 14,
+      color: '#cbd5e1',
+      lineHeight: 20,
+    },
+    noResults: {
+      alignItems: 'center',
+      paddingVertical: 20,
+    },
+    noResultsText: {
+      color: '#94a3b8',
+      fontSize: 14,
+    },
+  }), []);
 
   if (!visible) return null;
 
@@ -88,7 +168,10 @@ export function ChatSearchOverlay({
     return (
       <TouchableOpacity
         style={styles.resultItem}
-        onPress={() => onScrollToMessage?.(item.id)}
+        onPress={() => {
+          onScrollToMessage?.(item.id);
+          handleClose();
+        }}
         activeOpacity={0.7}
       >
         <View style={styles.resultMeta}>
@@ -96,7 +179,7 @@ export function ChatSearchOverlay({
           <Text style={styles.resultTime}>{time}</Text>
         </View>
         <Text style={styles.resultContent} numberOfLines={2}>
-          {highlightMatch(item.content, query)}
+          {highlightMatch(item.content, localQuery)}
         </Text>
       </TouchableOpacity>
     );
@@ -114,7 +197,7 @@ export function ChatSearchOverlay({
           style={styles.input}
           placeholder="Search messages..."
           placeholderTextColor="#9ca3af"
-          defaultValue={query}
+          value={localQuery}
           onChangeText={handleChangeText}
           returnKeyType="search"
           autoCapitalize="none"
@@ -137,7 +220,7 @@ export function ChatSearchOverlay({
           style={styles.resultsList}
           keyboardShouldPersistTaps="handled"
         />
-      ) : query.length > 0 && !isSearching ? (
+      ) : localQuery.trim().length > 0 && !isSearching ? (
         <View style={styles.noResults}>
           <Text style={styles.noResultsText}>No messages found</Text>
         </View>
@@ -163,71 +246,10 @@ function highlightMatch(text: string, query: string): React.ReactNode {
   return (
     <Text>
       {before}
-      <Text style={{ fontWeight: '700', color: '#6366f1' }}>{match}</Text>
+      <Text style={{ fontWeight: '700', color: '#7c5cff' }}>{match}</Text>
       {after}
     </Text>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
-    maxHeight: 340,
-    zIndex: 50,
-  },
-  searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f3f4f6',
-  },
-  input: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111827',
-    paddingVertical: 4,
-  },
-  resultsList: {
-    maxHeight: 260,
-  },
-  resultItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f3f4f6',
-  },
-  resultMeta: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  senderName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#374151',
-  },
-  resultTime: {
-    fontSize: 11,
-    color: '#9ca3af',
-  },
-  resultContent: {
-    fontSize: 14,
-    color: '#6b7280',
-    lineHeight: 20,
-  },
-  noResults: {
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  noResultsText: {
-    color: '#9ca3af',
-    fontSize: 14,
-  },
-});
 
 export default ChatSearchOverlay;

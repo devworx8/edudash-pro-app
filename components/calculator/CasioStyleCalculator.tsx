@@ -428,9 +428,10 @@ export function CasioStyleCalculator() {
   const displayExpression = expression || ' ';
   const displayResult = useMemo(() => {
     if (result != null) return result;
-    if (lastAns != null) return formatResult(lastAns);
+    // AC clears result to null — show 0, not the stale last answer.
+    // (lastAns is still accessible via the Ans button.)
     return '0';
-  }, [lastAns, result]);
+  }, [result]);
   const isError = displayResult === 'Math ERROR';
 
   return (

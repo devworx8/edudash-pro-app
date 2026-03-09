@@ -1,15 +1,16 @@
 /**
  * Color constants for EduDash Pro
  * 
- * Modern dark theme color system based on educational app design
- * Features navy blue backgrounds with purple/green accents
+ * Modern dark theme color system based on the EduDash Pro cosmic brand
+ * Features deep indigo backgrounds with purple/cyan/gold accents
  */
 
 // Brand Colors
 const primaryPurple = '#8B5CF6';
 const primaryPurpleLight = '#A78BFA';
 const primaryPurpleDark = '#7C3AED';
-const accentPink = '#EC4899';
+const accentCyan = '#22D3EE';
+const accentGold = '#FCD34D';
 
 export const Colors = {
   light: {
@@ -29,7 +30,7 @@ export const Colors = {
     primary: primaryPurple,
     primaryLight: primaryPurpleLight,
     primaryDark: primaryPurpleDark,
-    accent: accentPink,
+    accent: accentCyan,
     
     // Tab/Nav Colors
     tabIconDefault: '#9CA3AF',
@@ -70,7 +71,7 @@ export const Colors = {
     navActive: primaryPurple,
     navInactive: '#9CA3AF',
     gradientStart: primaryPurple,
-    gradientEnd: accentPink,
+    gradientEnd: accentGold,
 
     // Button Colors (light parity)
     buttonPrimary: primaryPurple,
@@ -110,11 +111,11 @@ export const Colors = {
     primary: primaryPurple,
     primaryLight: primaryPurpleLight,
     primaryDark: primaryPurpleDark,
-    accent: accentPink,
+    accent: accentCyan,
     
     // Gradient Colors
     gradientStart: primaryPurple,
-    gradientEnd: accentPink,
+    gradientEnd: accentGold,
     
     // Tab/Nav Colors
     tabIconDefault: '#6B7280',
@@ -180,8 +181,9 @@ export const themeColors = {
   purpleLight: primaryPurpleLight,
   purpleDark: primaryPurpleDark,
   
-  // Accent Pink
-  pink: accentPink,
+  // Accent Cyan / Gold
+  cyan: accentCyan,
+  gold: accentGold,
   
   // Status Colors
   green: '#10B981',

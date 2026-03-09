@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Alert, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, RefreshControl, Modal } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { FlashList } from '@shopify/flash-list';
 import { Stack } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -19,6 +20,7 @@ export default function PrincipalParentsScreen() {
   const { profile } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   const schoolId = (profile?.organization_id as string) || (profile as any)?.preschool_id || null;
 
@@ -94,7 +96,7 @@ export default function PrincipalParentsScreen() {
 
       setParents(merged);
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to load parents');
+      showAlert({ title: 'Error', message: e?.message || 'Failed to load parents', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -162,10 +164,10 @@ export default function PrincipalParentsScreen() {
         )
       );
 
-      Alert.alert('Success', 'Parent details updated.');
+      showAlert({ title: 'Success', message: 'Parent details updated.', type: 'success' });
       closeEdit();
     } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update parent details');
+      showAlert({ title: 'Error', message: e?.message || 'Failed to update parent details', type: 'error' });
     } finally {
       setSavingEdit(false);
     }
@@ -274,6 +276,7 @@ export default function PrincipalParentsScreen() {
           </View>
         </View>
       </Modal>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

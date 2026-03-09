@@ -10,7 +10,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -287,12 +288,13 @@ export function ActivityComments({ activityId, theme, isTeacher = false }: Activ
           No comments yet. Be the first to comment!
         </Text>
       ) : (
-        <FlatList
+        <FlashList
           data={comments}
           renderItem={renderComment}
           keyExtractor={(item) => item.id}
           scrollEnabled={false}
           contentContainerStyle={styles.commentsList}
+          estimatedItemSize={60}
         />
       )}
 

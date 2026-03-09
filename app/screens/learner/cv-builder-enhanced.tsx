@@ -5,7 +5,8 @@
  * Now with template selection and enhanced preview
  */
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -41,6 +42,7 @@ export default function CVBuilderEnhancedScreen() {
   const { data: cvs } = useLearnerCVs();
   const existingCV = cvs?.find((cv) => cv.id === id);
   const createCV = useCreateCV();
+  const { showAlert, alertProps } = useAlertModal();
   
   // Show template selector for new CVs
   const [showContentTemplateSelector, setShowContentTemplateSelector] = useState(!id && !existingCV);
@@ -93,29 +95,34 @@ export default function CVBuilderEnhancedScreen() {
 
   const handleSave = async () => {
     if (!cvTitle.trim()) {
-      Alert.alert(t('common.error', { defaultValue: 'Error' }), t('cv.title_required', { defaultValue: 'Please enter a CV title' }));
+      showAlert({ title: t('common.error', { defaultValue: 'Error' }), message: t('cv.title_required', { defaultValue: 'Please enter a CV title' }), type: 'warning' });
       return;
     }
     setIsSaving(true);
     try {
       await createCV.mutateAsync({ title: cvTitle, cv_data: { sections, template: selectedTemplate } });
-      Alert.alert(t('common.success', { defaultValue: 'Success' }), t('cv.saved', { defaultValue: 'CV saved successfully' }), [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }]);
+      showAlert({ title: t('common.success', { defaultValue: 'Success' }), message: t('cv.saved', { defaultValue: 'CV saved successfully' }), type: 'success', buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }] });
     } catch (error: any) {
-      Alert.alert(t('common.error', { defaultValue: 'Error' }), error.message || t('common.save_failed', { defaultValue: 'Failed to save CV' }));
+      showAlert({ title: t('common.error', { defaultValue: 'Error' }), message: error.message || t('common.save_failed', { defaultValue: 'Failed to save CV' }), type: 'error' });
     } finally {
       setIsSaving(false);
     }
   };
 
   const showShareOptions = () => {
-    Alert.alert(t('cv.share_cv', { defaultValue: 'Share CV' }), t('cv.select_share_method', { defaultValue: 'Select sharing method' }), [
-      { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
-      { text: t('cv.share_as_pdf', { defaultValue: 'Share as PDF' }), onPress: () => doShare('pdf') },
-      { text: t('cv.share_as_text', { defaultValue: 'Share as Text' }), onPress: () => doShare('native') },
-      { text: 'LinkedIn', onPress: () => doShare('linkedin') },
-      { text: 'WhatsApp', onPress: () => doShare('whatsapp') },
-      { text: t('cv.email', { defaultValue: 'Email' }), onPress: () => doShare('email') },
-    ]);
+    showAlert({
+      title: t('cv.share_cv', { defaultValue: 'Share CV' }),
+      message: t('cv.select_share_method', { defaultValue: 'Select sharing method' }),
+      type: 'info',
+      buttons: [
+        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+        { text: t('cv.share_as_pdf', { defaultValue: 'Share as PDF' }), onPress: () => doShare('pdf') },
+        { text: t('cv.share_as_text', { defaultValue: 'Share as Text' }), onPress: () => doShare('native') },
+        { text: 'LinkedIn', onPress: () => doShare('linkedin') },
+        { text: 'WhatsApp', onPress: () => doShare('whatsapp') },
+        { text: t('cv.email', { defaultValue: 'Email' }), onPress: () => doShare('email') },
+      ]
+    });
   };
 
   const doShare = async (method: 'native' | 'pdf' | 'linkedin' | 'whatsapp' | 'email') => {
@@ -123,7 +130,7 @@ export default function CVBuilderEnhancedScreen() {
     try {
       await handleShare(method, sections, cvTitle, profile, theme, t);
     } catch (error: any) {
-      Alert.alert(t('common.error', { defaultValue: 'Error' }), error.message || t('cv.share_failed', { defaultValue: 'Failed to share CV' }));
+      showAlert({ title: t('common.error', { defaultValue: 'Error' }), message: error.message || t('cv.share_failed', { defaultValue: 'Failed to share CV' }), type: 'error' });
     } finally {
       setIsSharing(false);
     }
@@ -141,11 +148,12 @@ export default function CVBuilderEnhancedScreen() {
       { type: 'achievements', label: t('cv.achievements', { defaultValue: 'Achievements' }) },
       { type: 'volunteer', label: t('cv.volunteer', { defaultValue: 'Volunteer Work' }) },
     ];
-    Alert.alert(
-      t('cv.add_section', { defaultValue: 'Add Section' }),
-      t('cv.select_section_type', { defaultValue: 'Select section type' }),
-      [{ text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' }, ...options.map((o) => ({ text: o.label, onPress: () => addSection(o.type) }))]
-    );
+    showAlert({
+      title: t('cv.add_section', { defaultValue: 'Add Section' }),
+      message: t('cv.select_section_type', { defaultValue: 'Select section type' }),
+      type: 'info',
+      buttons: [{ text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' }, ...options.map((o) => ({ text: o.label, onPress: () => addSection(o.type) }))]
+    });
   };
 
   return (
@@ -253,6 +261,7 @@ export default function CVBuilderEnhancedScreen() {
         onClose={() => setShowContentTemplateSelector(false)}
         theme={theme}
       />
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

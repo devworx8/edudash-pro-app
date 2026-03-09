@@ -30,7 +30,14 @@
       "Bash(gh pr checks 1 --repo devworx8/edudash-pro-app)",
       "Bash(gh api repos/devworx8/edudash-pro-app/actions/runs/22823799543/jobs --jq '.jobs[] | {name: .name, conclusion: .conclusion, steps: [.steps[] | select\\(.conclusion == \"\"failure\"\"\\) | {name: .name}]}')",
       "Bash(gh api repos/devworx8/edudash-pro-app/actions/runs/22823799543/jobs --jq '.jobs[0].steps[] | select\\(.name | contains\\(\"\"gitleaks\"\"\\)\\) | .')",
-      "Bash(git add -A)"
+      "Bash(git add -A)",
+      "Bash(grep -E \"\\\\.tsx?$\")",
+      "Bash(curl -s \"http://localhost:8081/index.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(npx expo install expo-media-library)"
+    ],
+    "additionalDirectories": [
+      "/home/edp/.claude/projects/-home-edp-Desktop-dashpro"
     ]
   }
 }

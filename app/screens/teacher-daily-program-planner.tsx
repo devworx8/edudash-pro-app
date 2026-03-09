@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, Alert, ActivityIndicator } from 'react-native';
+import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -125,6 +126,7 @@ function normalizeGradeLevelNumber(rawValue: string): number {
 export default function TeacherDailyProgramPlannerScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const { width } = useWindowDimensions();
   const { data, loading, refresh } = useTeacherDashboard();
   const classLabelById = useMemo(() => {
@@ -324,11 +326,11 @@ export default function TeacherDailyProgramPlannerScreen() {
       const gate = await canUseFeature('lesson_generation', activeWeekdays.length);
       if (!gate.allowed) {
         const status = gate.status || await getQuotaStatus('lesson_generation');
-        Alert.alert(
-          'Monthly limit reached',
-          `You need ${activeWeekdays.length} generations, but only ${status.remaining} are available.`,
-          [{ text: 'OK', style: 'default' }],
-        );
+        showAlert({
+          title: 'Monthly limit reached',
+          message: `You need ${activeWeekdays.length} generations, but only ${status.remaining} are available.`,
+          type: 'warning',
+        });
         return;
       }
 
@@ -488,10 +490,15 @@ export default function TeacherDailyProgramPlannerScreen() {
       const summary = `Created ${created} lesson(s), skipped ${skipped}, failed ${failed}.`;
       if (created > 0) {
         toast.success(`Weekly generation complete. ${summary}`);
-        Alert.alert('Week lessons generated', summary, [
-          { text: 'Stay here', style: 'cancel' },
-          { text: 'Open lesson plans', onPress: () => router.push('/screens/teacher-lessons') },
-        ]);
+        showAlert({
+          title: 'Week lessons generated',
+          message: summary,
+          type: 'success',
+          buttons: [
+            { text: 'Stay here', style: 'cancel' },
+            { text: 'Open lesson plans', onPress: () => router.push('/screens/teacher-lessons') },
+          ],
+        });
       } else {
         toast.error(`No lessons were created. ${summary}`);
       }
@@ -710,6 +717,7 @@ export default function TeacherDailyProgramPlannerScreen() {
           </View>
         </ScrollView>
       )}
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 const TAG = 'EditTeacher';
 import { removeTeacherFromSchool } from '@/lib/services/teacherRemovalService';
@@ -39,6 +40,7 @@ export default function EditTeacherScreen() {
   const [teacherRecordId, setTeacherRecordId] = useState<string | null>(null);
 
   const styles = createStyles(theme);
+  const { showAlert, alertProps } = useAlertModal();
   const orgId = profile?.organization_id || (profile as any)?.preschool_id;
 
   const fetchData = useCallback(async () => {
@@ -88,7 +90,7 @@ export default function EditTeacherScreen() {
       setAssignedClasses((classesData || []).map((c: any) => c.name));
     } catch (error: any) {
       console.error('Error fetching teacher:', error);
-      Alert.alert('Error', 'Failed to load teacher information');
+      showAlert({ title: 'Error', message: 'Failed to load teacher information', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -110,12 +112,12 @@ export default function EditTeacherScreen() {
     if (!formData) return;
 
     if (!formData.first_name.trim()) {
-      Alert.alert('Validation Error', 'First name is required');
+      showAlert({ title: 'Validation Error', message: 'First name is required', type: 'warning' });
       return;
     }
 
     if (!formData.last_name.trim()) {
-      Alert.alert('Validation Error', 'Last name is required');
+      showAlert({ title: 'Validation Error', message: 'Last name is required', type: 'warning' });
       return;
     }
 
@@ -154,12 +156,10 @@ export default function EditTeacherScreen() {
         logger.info(TAG, 'teachers table update skipped:', teacherError.message);
       }
 
-      Alert.alert('Success', 'Teacher profile updated successfully', [
-        { text: 'OK', onPress: navigateBack },
-      ]);
+      showAlert({ title: 'Success', message: 'Teacher profile updated successfully', type: 'success', buttons: [{ text: 'OK', onPress: navigateBack }] });
     } catch (error: any) {
       console.error('Error updating teacher:', error);
-      Alert.alert('Error', 'Failed to update teacher profile');
+      showAlert({ title: 'Error', message: 'Failed to update teacher profile', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -167,21 +167,22 @@ export default function EditTeacherScreen() {
 
   const handleRemoveFromSchool = () => {
     if (!orgId) {
-      Alert.alert('Error', 'No school found for this account.');
+      showAlert({ title: 'Error', message: 'No school found for this account.', type: 'error' });
       return;
     }
     if (!teacherId) {
-      Alert.alert('Error', 'Missing teacher identifier.');
+      showAlert({ title: 'Error', message: 'Missing teacher identifier.', type: 'error' });
       return;
     }
     if (!teacherRecordId) {
-      Alert.alert('Error', 'Missing teacher record.');
+      showAlert({ title: 'Error', message: 'Missing teacher record.', type: 'error' });
       return;
     }
-    Alert.alert(
-      'Archive Teacher',
-      'Archive this teacher from your school? They will be hidden from active lists and lose access, but history will be kept.',
-      [
+    showAlert({
+      title: 'Archive Teacher',
+      message: 'Archive this teacher from your school? They will be hidden from active lists and lose access, but history will be kept.',
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Archive',
@@ -195,17 +196,15 @@ export default function EditTeacherScreen() {
                 reason: 'Archived via edit teacher screen',
               });
 
-              Alert.alert('Success', 'Teacher archived', [
-                { text: 'OK', onPress: navigateBack },
-              ]);
+              showAlert({ title: 'Success', message: 'Teacher archived', type: 'success', buttons: [{ text: 'OK', onPress: navigateBack }] });
             } catch (error: any) {
               console.error('Error removing teacher:', error);
-              Alert.alert('Error', 'Failed to archive teacher');
+              showAlert({ title: 'Error', message: 'Failed to archive teacher', type: 'error' });
             }
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   if (loading) {
@@ -354,6 +353,7 @@ export default function EditTeacherScreen() {
           </View>
         </View>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

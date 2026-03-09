@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 // import { router } from 'expo-router'; // TODO: Use for navigation after export complete
@@ -115,6 +116,7 @@ export default function DataExportScreen() {
   const { profile } = useAuth();
   const { theme } = useTheme();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
   const [exportingItems, setExportingItems] = useState<Set<string>>(new Set());
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
@@ -132,15 +134,16 @@ export default function DataExportScreen() {
   const handleExport = async (option: ExportOption) => {
     const preschoolId = getPreschoolId();
     if (!preschoolId || !canAccessExports()) {
-      Alert.alert('Access Denied', 'You do not have permission to export data.');
+      showAlert({ title: 'Access Denied', message: 'You do not have permission to export data.', type: 'error' });
       return;
     }
 
     // Show confirmation dialog
-    Alert.alert(
-      `Export ${option.title}`,
-      `This will export ${option.title} as ${option.format} format (${option.estimatedSize}).\n\nThe export will be sent to your email address and may take a few minutes to process.`,
-      [
+    showAlert({
+      title: `Export ${option.title}`,
+      message: `This will export ${option.title} as ${option.format} format (${option.estimatedSize}).\n\nThe export will be sent to your email address and may take a few minutes to process.`,
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Export',
@@ -153,18 +156,18 @@ export default function DataExportScreen() {
               // For now, simulate the export process
               await simulateExport(option, preschoolId);
               
-              Alert.alert(
-                'Export Started',
-                `${option.title} export has been queued. You'll receive an email with the download link within 10-15 minutes.`,
-                [{ text: 'OK' }]
-              );
+              showAlert({
+                title: 'Export Started',
+                message: `${option.title} export has been queued. You'll receive an email with the download link within 10-15 minutes.`,
+                type: 'success',
+              });
             } catch (error) {
               console.error('Export error:', error);
-              Alert.alert(
-                'Export Failed',
-                'Failed to start export. Please check your connection and try again.',
-                [{ text: 'OK' }]
-              );
+              showAlert({
+                title: 'Export Failed',
+                message: 'Failed to start export. Please check your connection and try again.',
+                type: 'error',
+              });
             } finally {
               // Clear loading state after export attempt
               setExportingItems(prev => {
@@ -176,7 +179,7 @@ export default function DataExportScreen() {
           }
         }
       ]
-    );
+    });
   };
 
   const simulateExport = async (option: ExportOption, preschoolId: string): Promise<void> => {
@@ -320,23 +323,24 @@ export default function DataExportScreen() {
           <TouchableOpacity
             style={styles.bulkExportCard}
             onPress={() => {
-              Alert.alert(
-                'Full School Export',
-                'This will export ALL school data in a comprehensive package. This may take 30-45 minutes to process and will be sent to your email.\n\nFile size: ~25 MB',
-                [
+              showAlert({
+                title: 'Full School Export',
+                message: 'This will export ALL school data in a comprehensive package. This may take 30-45 minutes to process and will be sent to your email.\n\nFile size: ~25 MB',
+                type: 'info',
+                buttons: [
                   { text: 'Cancel', style: 'cancel' },
                   {
                     text: 'Start Export',
                     onPress: () => {
-                      Alert.alert(
-                        'Full Export Started',
-                        'Your complete school data export has been queued. You will receive multiple files via email within 45 minutes.',
-                        [{ text: 'OK' }]
-                      );
+                      showAlert({
+                        title: 'Full Export Started',
+                        message: 'Your complete school data export has been queued. You will receive multiple files via email within 45 minutes.',
+                        type: 'success',
+                      });
                     }
                   }
                 ]
-              );
+              });
             }}
           >
             <View style={styles.bulkExportContent}>
@@ -354,6 +358,7 @@ export default function DataExportScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

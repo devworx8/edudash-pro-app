@@ -230,11 +230,6 @@ function confirmDelete(org: Organization, deps: OrgActionDeps): void {
               logger.debug('[Organizations] Profile unlink error (non-fatal):', unlinkError.message);
             }
 
-            // Unlink users table (may not have column)
-            try {
-              await supabase.from('users').update({ [profileColumn]: null }).eq(profileColumn, actualId);
-            } catch { /* column may not exist */ }
-
             // Delete the organization
             const { error } = await supabase.from(table).delete().eq('id', actualId);
             if (error) throw error;

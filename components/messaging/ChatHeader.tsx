@@ -4,12 +4,11 @@
  */
 
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { TypingIndicator } from './TypingIndicator';
 import { ConnectionStatusBar } from './ConnectionStatusBar';
 
 interface ChatHeaderProps {
@@ -24,6 +23,7 @@ interface ChatHeaderProps {
   typingName?: string;
   typingText?: string | null;
   recipientRole?: string | null;
+  avatarUrl?: string | null;
   onVoiceCall: () => void;
   onVideoCall: () => void;
   onOptionsPress: () => void;
@@ -43,6 +43,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   typingName,
   typingText,
   recipientRole,
+  avatarUrl,
   onVoiceCall,
   onVideoCall,
   onOptionsPress,
@@ -73,11 +74,11 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   return (
     <>
     <LinearGradient
-      colors={['#0f172a', '#1e293b']}
+      colors={['#081027', '#101b42', '#1f174d']}
       style={[styles.header, { borderBottomColor: borderColor, paddingTop: insets.top + 10 }]}
     >
       <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Ionicons name="arrow-back" size={24} color="#e2e8f0" />
+        <Ionicons name="arrow-back" size={21} color="#f8fafc" />
       </TouchableOpacity>
       
       <TouchableOpacity
@@ -87,11 +88,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         disabled={!onHeaderPress}
       >
         <LinearGradient
-          colors={['#3b82f6', '#6366f1']}
+          colors={['#6f7dff', '#7c3aed', '#1cc8ff']}
           style={styles.avatar}
         >
-          {isGroup ? (
-            <Ionicons name="people" size={20} color="#fff" />
+          {avatarUrl && !isGroup ? (
+            <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
+          ) : isGroup ? (
+            <Ionicons name="people" size={18} color="#fff" />
           ) : (
             <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
           )}
@@ -119,13 +122,13 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
       <View style={styles.headerActions}>
         <TouchableOpacity style={styles.headerBtn} onPress={onVoiceCall}>
-          <Ionicons name="call-outline" size={22} color="#94a3b8" />
+          <Ionicons name="call-outline" size={17} color="#d9e3ff" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.headerBtn} onPress={onVideoCall}>
-          <Ionicons name="videocam-outline" size={22} color="#94a3b8" />
+          <Ionicons name="videocam-outline" size={17} color="#d9e3ff" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.headerBtn} onPress={onOptionsPress}>
-          <Ionicons name="ellipsis-vertical" size={22} color="#94a3b8" />
+          <Ionicons name="ellipsis-vertical" size={17} color="#d9e3ff" />
         </TouchableOpacity>
       </View>
     </LinearGradient>
@@ -138,49 +141,65 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 10,
+    paddingHorizontal: 6,
+    paddingBottom: 8,
     borderBottomWidth: 1,
   },
   backBtn: { 
-    padding: 8,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 211, 252, 0.14)',
   },
   headerInfo: { 
     flex: 1, 
     flexDirection: 'row', 
     alignItems: 'center',
-    marginLeft: 4,
+    marginLeft: 5,
+    minWidth: 0,
   },
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
     shadowColor: '#010e24ff',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 1.3,
-    shadowRadius: 6,
-    elevation: 4,
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    elevation: 6,
   },
   avatarText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 19,
   },
   headerText: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 8,
+    minWidth: 0,
   },
   headerTitle: { 
-    fontSize: 17, 
-    fontWeight: '600',
-    color: '#f1f5f9',
+    fontSize: 16, 
+    fontWeight: '700',
+    color: '#f8fafc',
   },
   onlineStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
+    marginTop: 1,
   },
   onlineDot: {
     width: 8,
@@ -199,31 +218,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#60a5fa',
   },
   headerSub: { 
-    fontSize: 13,
-    color: '#94a3b8',
+    fontSize: 11,
+    color: '#bfd4ff',
+    flexShrink: 1,
   },
   roleInline: {
-    fontSize: 13,
-    color: '#a78bfa',
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  typingIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
-  typingName: {
-    fontSize: 13,
-    color: '#94a3b8',
-    fontWeight: '500',
+    fontSize: 11,
+    color: '#d0a7ff',
+    marginLeft: 3,
+    fontWeight: '600',
   },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    marginLeft: 5,
   },
   headerBtn: { 
-    padding: 8,
-    marginLeft: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 211, 252, 0.12)',
   },
 });

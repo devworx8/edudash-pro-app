@@ -6,12 +6,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Alert, Share } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { EducationalPDFService } from '@/lib/services/EducationalPDFService';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -199,6 +200,7 @@ interface LessonPlan {
 export default function LessonViewer() {
   const { theme, isDark } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const [lesson, setLesson] = useState<LessonPlan | null>(null);
@@ -217,7 +219,7 @@ export default function LessonViewer() {
   const loadLessonData = async () => {
     try {
       if (!params.lessonId) {
-        Alert.alert('Error', 'No lesson ID provided');
+        showAlert({ title: 'Error', message: 'No lesson ID provided', type: 'error' });
         router.back();
         return;
       }
@@ -373,7 +375,7 @@ export default function LessonViewer() {
       }
     } catch (error) {
       console.error('Failed to load lesson:', error);
-      Alert.alert('Error', 'Failed to load lesson plan');
+      showAlert({ title: 'Error', message: 'Failed to load lesson plan', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -405,20 +407,21 @@ export default function LessonViewer() {
       });
 
       if (pdfResult.success && pdfResult.filePath) {
-        Alert.alert(
-          'PDF Generated!',
-          'Your lesson plan PDF is ready to download.',
-          [
+        showAlert({
+          title: 'PDF Generated!',
+          message: 'Your lesson plan PDF is ready to download.',
+          type: 'success',
+          buttons: [
             { text: 'View', onPress: () => sharePDF(pdfResult.filePath!) },
-            { text: 'OK' }
-          ]
-        );
+            { text: 'OK' },
+          ],
+        });
       } else {
-        Alert.alert('Error', pdfResult.error || 'Failed to generate PDF');
+        showAlert({ title: 'Error', message: pdfResult.error || 'Failed to generate PDF', type: 'error' });
       }
     } catch (error) {
       console.error('PDF generation failed:', error);
-      Alert.alert('Error', 'Failed to generate PDF');
+      showAlert({ title: 'Error', message: 'Failed to generate PDF', type: 'error' });
     } finally {
       setGenerating(false);
     }
@@ -430,11 +433,11 @@ export default function LessonViewer() {
       if (isAvailable) {
         await Sharing.shareAsync(filePath);
       } else {
-        Alert.alert('Share Not Available', 'Sharing is not available on this device');
+        showAlert({ title: 'Share Not Available', message: 'Sharing is not available on this device', type: 'warning' });
       }
     } catch (error) {
       console.error('Failed to share PDF:', error);
-      Alert.alert('Error', 'Failed to share PDF');
+      showAlert({ title: 'Error', message: 'Failed to share PDF', type: 'error' });
     }
   };
 
@@ -498,11 +501,12 @@ export default function LessonViewer() {
       { text: 'Cancel', style: 'cancel' }
     );
 
-    Alert.alert(
-      'Lesson Actions',
-      `${lesson.title}`,
-      actions
-    );
+    showAlert({
+      title: 'Lesson Actions',
+      message: `${lesson.title}`,
+      type: 'info',
+      buttons: actions,
+    });
   };
 
   if (loading) {
@@ -731,6 +735,8 @@ export default function LessonViewer() {
 
         <View style={[styles.bottomSpacing, { height: Math.max(32, insets.bottom + 16) }]} />
       </ScrollView>
+
+      <AlertModal {...alertProps} />
     </View>
   );
 }

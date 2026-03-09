@@ -12,8 +12,8 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  FlatList,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal } from '@/components/ui/AlertModal';
@@ -457,12 +457,13 @@ export const EnhancedUserManagement: React.FC = () => {
       )}
 
       {/* Users List */}
-      <FlatList
+      <FlashList
         data={filteredUsers}
         renderItem={renderUser}
         keyExtractor={item => item.id}
         refreshing={refreshing}
         onRefresh={fetchUsers}
+        estimatedItemSize={80}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={

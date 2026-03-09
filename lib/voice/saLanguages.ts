@@ -86,7 +86,7 @@ export const SA_LANGUAGES: Record<SALanguageCode, SALanguage> = {
  */
 export const AZURE_TTS_VOICES: Record<string, string> = {
   // English (South Africa) - Verified ✅
-  'en-ZA': 'en-ZA-LeahNeural',
+  'en-ZA': 'en-ZA-LukeNeural',
   'en-ZA-male': 'en-ZA-LukeNeural',
   
   // Afrikaans - Verified ✅

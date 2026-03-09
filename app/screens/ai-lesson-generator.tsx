@@ -4,7 +4,8 @@
  * @module app/screens/ai-lesson-generator
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, TextInput } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -67,6 +68,7 @@ function parseLessonSections(raw: string): LessonSectionCard[] {
 }
 export default function AILessonGeneratorScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { profile, user } = useAuth();
   const palette = useMemo(() => ({
     bg: theme.background, text: theme.text, textSec: theme.textSecondary,
@@ -220,7 +222,7 @@ export default function AILessonGeneratorScreen() {
   }, [buildDashPrompt]);
   const onExportPDF = useCallback(async () => {
     const content = generatedContentText;
-    if (!content) { Alert.alert('Export PDF', 'Generate a lesson first.'); return; }
+    if (!content) { showAlert({ title: 'Export PDF', message: 'Generate a lesson first.', type: 'info' }); return; }
     try { await EducationalPDFService.generateTextPDF(`${subject}: ${topic}`, content); toast.success('PDF generated'); }
     catch { toast.error('Failed to generate PDF'); }
   }, [subject, topic, generatedContentText]);
@@ -302,14 +304,15 @@ export default function AILessonGeneratorScreen() {
       if (!res.success) { toast.error(`Save failed: ${res.error || 'Unknown error'}`); return; }
       toast.success(`Lesson saved! View in My Lessons`);
       // Optionally navigate to Browse Lessons
-      Alert.alert(
-        'Lesson Saved!',
-        'Your lesson has been saved. Would you like to browse your lessons?',
-        [
+      showAlert({
+        title: 'Lesson Saved!',
+        message: 'Your lesson has been saved. Would you like to browse your lessons?',
+        type: 'success',
+        buttons: [
           { text: 'Stay Here', style: 'cancel' },
           { text: 'Browse Lessons', onPress: () => router.push('/screens/teacher-lessons') }
         ]
-      );
+      });
     } catch (e: unknown) { toast.error(`Save error: ${e instanceof Error ? e.message : 'Failed'}`); }
     finally { setSaving(false); }
   }, [categoriesQuery.data, generated, duration]);
@@ -502,6 +505,7 @@ export default function AILessonGeneratorScreen() {
           }
         />
       )}
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

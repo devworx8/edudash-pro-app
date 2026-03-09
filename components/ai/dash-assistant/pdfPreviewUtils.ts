@@ -1,3 +1,46 @@
+import { Platform, Alert, Linking } from 'react-native';
+import { router } from 'expo-router';
+
+export async function openPdfPreview(
+  targetUrl: string,
+  title?: string,
+  storagePath?: string,
+): Promise<void> {
+  const safeUrl = String(targetUrl || '').trim();
+  const safeStoragePath = String(storagePath || '').trim();
+  if (!safeUrl && !safeStoragePath) return;
+  if (Platform.OS !== 'web') {
+    try {
+      router.push({
+        pathname: '/screens/pdf-viewer',
+        params: {
+          ...(safeUrl ? { url: safeUrl } : {}),
+          title: title || 'Generated PDF',
+          ...(safeStoragePath ? { storagePath: safeStoragePath } : {}),
+        },
+      } as any);
+      return;
+    } catch {
+      // fall through to external open
+    }
+  }
+  try {
+    if (!safeUrl) {
+      Alert.alert('Unable to preview PDF', 'Please regenerate the PDF to refresh the preview link.');
+      return;
+    }
+    if (Platform.OS === 'web') {
+      window.open(safeUrl, '_blank');
+    } else {
+      const canOpen = await Linking.canOpenURL(safeUrl);
+      if (!canOpen) throw new Error('UNSUPPORTED_URL');
+      await Linking.openURL(safeUrl);
+    }
+  } catch {
+    Alert.alert('Unable to preview PDF', 'Please try again from a stable connection.');
+  }
+}
+
 const GENERATED_PDFS_PUBLIC_URL_REGEX = /\/storage\/v1\/object\/public\/generated-pdfs\//i;
 
 export function isGeneratedPdfsPublicUrl(value?: string | null): boolean {

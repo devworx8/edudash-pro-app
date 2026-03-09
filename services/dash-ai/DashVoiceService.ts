@@ -24,6 +24,7 @@ import { resolveEffectiveTier } from '@/lib/tiers/resolveEffectiveTier';
 import { normalizeForTTS } from '@/lib/dash-ai/ttsNormalize';
 import { shouldUsePhonicsMode } from '@/lib/dash-ai/phonicsDetection';
 import { AZURE_RATE_PHONICS } from '@/lib/dash-ai/ttsConstants';
+import { resolveSelectedVoiceId } from '@/lib/voice/voiceMapping';
 
 // Declare global window for web platform type safety
 declare const window: any;
@@ -778,7 +779,7 @@ export class DashVoiceService {
       const requestedLang = options?.language || voiceSettings.language || 'en';
       try {
         const { getCurrentLanguage } = await import('@/lib/i18n');
-        const { normalizeLanguageCode, resolveDefaultVoiceId } = await import('@/lib/ai/dashSettings');
+        const { normalizeLanguageCode } = await import('@/lib/ai/dashSettings');
         const ui = getCurrentLanguage?.();
         shortLang = normalizeLanguageCode(requestedLang || ui || voiceSettings.language) as SupportedLanguage;
 
@@ -809,10 +810,12 @@ export class DashVoiceService {
         // Resolve voice ID preference
         const prefs = await this.getCachedVoicePreferences();
         const { voiceService } = await import('@/lib/voice/client');
-        const gender = (voiceSettings as any).voice === 'male' ? 'male' : 'female';
-        const voice_id = (prefs?.language === shortLang && prefs?.voice_id)
-          ? prefs.voice_id
-          : resolveDefaultVoiceId(shortLang as any, gender as any);
+        const voice_id = resolveSelectedVoiceId({
+          language: shortLang,
+          requestedVoiceId: (voiceSettings as any).voice_id || (voiceSettings as any).voice,
+          preferenceVoiceId: prefs?.voice_id,
+          preferenceLanguage: prefs?.language,
+        });
 
         // Convert rate/pitch (1.0 baseline) to -50..+50 scale expected by Edge Function
         const baseRate = Number.isFinite(voiceSettings.rate) && voiceSettings.rate > 0

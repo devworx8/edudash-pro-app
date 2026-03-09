@@ -3,7 +3,8 @@
  * Allows learners to discover and enroll in available programs/courses
  */
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,6 +51,7 @@ export default function BrowseProgramsScreen() {
   const [programCode, setProgramCode] = useState('');
   
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   // Fetch available programs
   const { data: programs, isLoading, error, refetch } = useQuery({
@@ -172,17 +174,18 @@ export default function BrowseProgramsScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['available-programs'] });
       queryClient.invalidateQueries({ queryKey: ['learner-enrollments'] });
-      Alert.alert(
-        'Success', 
-        'You have been enrolled in the program!',
-        [{ text: 'OK', onPress: () => router.push('/screens/learner/programs') }]
-      );
+      showAlert({
+        title: 'Success',
+        message: 'You have been enrolled in the program!',
+        type: 'success',
+        buttons: [{ text: 'OK', onPress: () => router.push('/screens/learner/programs') }],
+      });
       setShowEnrollModal(false);
       setSelectedProgram(null);
       setProgramCode('');
     },
     onError: (error: any) => {
-      Alert.alert('Enrollment Failed', error.message || 'Failed to enroll in program');
+      showAlert({ title: 'Enrollment Failed', message: error.message || 'Failed to enroll in program', type: 'error' });
     },
   });
 
@@ -215,17 +218,18 @@ export default function BrowseProgramsScreen() {
       setShowEnrollModal(true);
     } else {
       // Direct enrollment
-      Alert.alert(
-        'Enroll in Program',
-        `Would you like to enroll in "${program.title}"?`,
-        [
+      showAlert({
+        title: 'Enroll in Program',
+        message: `Would you like to enroll in "${program.title}"?`,
+        type: 'info',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
           { 
             text: 'Enroll', 
             onPress: () => enrollMutation.mutate({ programId: program.id }) 
           },
-        ]
-      );
+        ],
+      });
     }
   };
 
@@ -515,6 +519,7 @@ export default function BrowseProgramsScreen() {
           </View>
         </View>
       )}
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

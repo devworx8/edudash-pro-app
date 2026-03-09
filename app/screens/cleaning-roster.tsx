@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -32,6 +32,7 @@ export default function CleaningRosterScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
   const styles = useMemo(() => createCleaningRosterStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   const organizationId = profile?.organization_id || profile?.preschool_id || null;
   const role = normalizeRole(profile?.role || '');
@@ -100,7 +101,7 @@ export default function CleaningRosterScreen() {
       setAreaDescription('');
       await loadCurrentWeek();
     } catch (err) {
-      Alert.alert('Create Area Failed', err instanceof Error ? err.message : 'Could not create cleaning area.');
+      showAlert({ title: 'Create Area Failed', message: err instanceof Error ? err.message : 'Could not create cleaning area.', type: 'error' });
     }
   }, [areaDescription, areaName, createArea, loadCurrentWeek]);
 
@@ -116,7 +117,7 @@ export default function CleaningRosterScreen() {
       setShiftNotes('');
       await loadCurrentWeek();
     } catch (err) {
-      Alert.alert('Create Shift Failed', err instanceof Error ? err.message : 'Could not create shift.');
+      showAlert({ title: 'Create Shift Failed', message: err instanceof Error ? err.message : 'Could not create shift.', type: 'error' });
     }
   }, [createShift, loadCurrentWeek, requiredStaffCount, selectedAreaId, shiftDate, shiftNotes, shiftSlot]);
 
@@ -125,7 +126,7 @@ export default function CleaningRosterScreen() {
       await assignTeacher(shiftId, teacherUserId);
       await loadCurrentWeek();
     } catch (err) {
-      Alert.alert('Assign Teacher Failed', err instanceof Error ? err.message : 'Could not assign teacher.');
+      showAlert({ title: 'Assign Teacher Failed', message: err instanceof Error ? err.message : 'Could not assign teacher.', type: 'error' });
     }
   }, [assignTeacher, loadCurrentWeek]);
 
@@ -134,7 +135,7 @@ export default function CleaningRosterScreen() {
       await unassignTeacher(assignmentId);
       await loadCurrentWeek();
     } catch (err) {
-      Alert.alert('Unassign Failed', err instanceof Error ? err.message : 'Could not remove assignment.');
+      showAlert({ title: 'Unassign Failed', message: err instanceof Error ? err.message : 'Could not remove assignment.', type: 'error' });
     }
   }, [loadCurrentWeek, unassignTeacher]);
 
@@ -143,7 +144,7 @@ export default function CleaningRosterScreen() {
       await updateAssignmentStatus(assignmentId, status);
       await loadCurrentWeek();
     } catch (err) {
-      Alert.alert('Status Update Failed', err instanceof Error ? err.message : 'Could not update task status.');
+      showAlert({ title: 'Status Update Failed', message: err instanceof Error ? err.message : 'Could not update task status.', type: 'error' });
     }
   }, [loadCurrentWeek, updateAssignmentStatus]);
 
@@ -355,6 +356,7 @@ export default function CleaningRosterScreen() {
           })}
         </View>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

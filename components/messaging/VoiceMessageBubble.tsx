@@ -62,6 +62,8 @@ interface VoiceMessageBubbleProps {
   onReactionPress?: (messageId: string, emoji: string) => void;
   /** Handler for long-press on reaction to show who reacted */
   onReactionLongPress?: (emoji: string, reactedByUserIds: string[]) => void;
+  /** Group chats open reaction details on tap instead of treating taps as remove */
+  showReactionDetailsOnPress?: boolean;
   /** Transcription text (pre-fetched from useVoiceTranscription cache) */
   transcriptionText?: string;
   /** Whether this message is currently being transcribed */
@@ -99,9 +101,6 @@ function formatDuration(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-/**
- * Generate deterministic waveform heights from URL
- */
 function generateWaveformFromUrl(url: string): number[] {
   const bars: number[] = [];
   let hash = 0;
@@ -177,6 +176,7 @@ export default function VoiceMessageBubble({
   messageId,
   onReactionPress,
   onReactionLongPress,
+  showReactionDetailsOnPress = false,
   transcriptionText,
   isTranscribing = false,
   onTranscribe,
@@ -654,7 +654,7 @@ export default function VoiceMessageBubble({
               ]}
               onPress={() => {
                 const ids = reaction.reactedByUserIds ?? [];
-                if (ids.length > 0 && onReactionLongPress && reaction.count > 1) {
+                if (showReactionDetailsOnPress && ids.length > 0 && onReactionLongPress) {
                   onReactionLongPress(reaction.emoji, ids);
                   return;
                 }

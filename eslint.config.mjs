@@ -217,6 +217,7 @@ export default [
       'dist/',
       'build/',
       '.expo/',
+      '.claude/',
       '.cache/',
       'android/',
       'ios/',

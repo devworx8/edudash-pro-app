@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { Stack, router } from 'expo-router';
 import type { Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, type ThemeColors } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { useCapability } from '@/hooks/useCapability';
 import { useRealtimeTier } from '@/hooks/useRealtimeTier';
 import { useDashConversation, useSendMessage, useStartConversation } from '@/hooks/useDashConversation';
@@ -74,6 +75,7 @@ const buildFallbackPlan = (prompt: string, guardianLabel: string, instructorLabe
 export default function DashStudioScreen() {
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
   const { can, ready, tier } = useCapability();
   const { tierStatus } = useRealtimeTier();
   const { profile } = useAuth();
@@ -143,11 +145,11 @@ export default function DashStudioScreen() {
 
   const handleGeneratePlan = useCallback(async () => {
     if (!requestText.trim()) {
-      Alert.alert('Add a request', 'Describe what you want Dash to plan.');
+      showAlert({ title: 'Add a request', message: 'Describe what you want Dash to plan.', type: 'warning' });
       return;
     }
     if (!canUseStudio) {
-      Alert.alert('Premium Feature', 'Dash Studio is available on Premium/Pro tiers.');
+      showAlert({ title: 'Premium Feature', message: 'Dash Studio is available on Premium/Pro tiers.', type: 'info' });
       return;
     }
 
@@ -251,16 +253,16 @@ export default function DashStudioScreen() {
 
   const handleGenerateForm = useCallback(async () => {
     if (!canUseStudio) {
-      Alert.alert('Premium Feature', 'Dash Studio is available on Premium/Pro tiers.');
+      showAlert({ title: 'Premium Feature', message: 'Dash Studio is available on Premium/Pro tiers.', type: 'info' });
       return;
     }
     if (!organizationId) {
-      Alert.alert('Organization missing', 'Please refresh your profile and try again.');
+      showAlert({ title: 'Organization missing', message: 'Please refresh your profile and try again.', type: 'warning' });
       return;
     }
     const formDraft = buildAutoForm();
     if (!formDraft.title || formDraft.fields.length === 0) {
-      Alert.alert('Add details', 'Provide a clearer request so Dash can build the form.');
+      showAlert({ title: 'Add details', message: 'Provide a clearer request so Dash can build the form.', type: 'warning' });
       return;
     }
 
@@ -282,10 +284,10 @@ export default function DashStudioScreen() {
         audience: formDraft.audience,
       });
 
-      Alert.alert('Form published', `We notified ${formDraft.audience.join(', ')}.`);
+      showAlert({ title: 'Form published', message: `We notified ${formDraft.audience.join(', ')}.`, type: 'success' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to generate the form.';
-      Alert.alert('Error', message);
+      showAlert({ title: 'Error', message, type: 'error' });
     } finally {
       setIsCreatingForm(false);
     }
@@ -466,6 +468,8 @@ export default function DashStudioScreen() {
           <Text style={[styles.cardBody, { color: theme.textSecondary }]}>{quotaText}</Text>
         </View>
       </ScrollView>
+
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

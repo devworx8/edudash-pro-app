@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { IconSymbol } from '@/components/ui/IconSymbol'
 import { useQuery } from '@tanstack/react-query'
@@ -9,11 +9,13 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { WorksheetQuickWidget } from '@/components/worksheets/WorksheetQuickAction'
 import type { Assignment } from '@/lib/models/Assignment'
 import { useTeacherSchool } from '@/hooks/useTeacherSchool'
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function AssignHomeworkScreen() {
   const { profile } = require('@/contexts/AuthContext') as any
   const canAssign = !!profile?.hasCapability && profile.hasCapability('create_assignments' as any)
+  const { showAlert, alertProps } = useAlertModal();
   const palette = { background: '#fff', text: '#111827', textSecondary: '#6B7280', outline: '#E5E7EB', surface: '#FFFFFF', primary: '#3B82F6' }
   
   // Get teacher's school ID
@@ -79,8 +81,8 @@ export default function AssignHomeworkScreen() {
   })
 
   const onAssign = async () => {
-    if (mode === 'class' && !classId) { Alert.alert('Select class', 'Please select a class to assign to.'); return }
-    if (mode === 'students' && selected.size === 0) { Alert.alert('Pick students', 'Please pick at least one student.'); return }
+    if (mode === 'class' && !classId) { showAlert({ title: 'Select class', message: 'Please select a class to assign to.', type: 'warning' }); return }
+    if (mode === 'students' && selected.size === 0) { showAlert({ title: 'Pick students', message: 'Please pick at least one student.', type: 'warning' }); return }
     setAssigning(true)
     try {
       // Resolve current auth user
@@ -100,16 +102,17 @@ export default function AssignHomeworkScreen() {
         materialsNeeded: [],
       })
       if (res.success) {
-        Alert.alert(
-          'Homework assigned',
-          'Homework has been sent to students.',
-          [{ text: 'OK', onPress: () => router.back() }]
-        )
+        showAlert({
+          title: 'Homework assigned',
+          message: 'Homework has been sent to students.',
+          type: 'success',
+          buttons: [{ text: 'OK', onPress: () => router.back() }],
+        })
       } else {
-        Alert.alert('Assign failed', res.error || 'Unknown error')
+        showAlert({ title: 'Assign failed', message: res.error || 'Unknown error', type: 'error' })
       }
     } catch (e: any) {
-      Alert.alert('Assign failed', e?.message || 'Unknown error')
+      showAlert({ title: 'Assign failed', message: e?.message || 'Unknown error', type: 'error' })
     } finally {
       setAssigning(false)
     }
@@ -268,20 +271,20 @@ export default function AssignHomeworkScreen() {
               // Import and show the worksheet generator
               import('@/components/worksheets/WorksheetGenerator').then(({ default: WorksheetGenerator }) => {
                 // You would typically use a state to control this modal
-                Alert.alert(
-                  '📝 Worksheet Generator',
-                  'Generate a printable worksheet for this assignment?',
-                  [
+                showAlert({
+                  title: '📝 Worksheet Generator',
+                  message: 'Generate a printable worksheet for this assignment?',
+                  type: 'info',
+                  buttons: [
                     { text: 'Cancel', style: 'cancel' },
                     {
                       text: 'Create Worksheet',
                       onPress: () => {
-                        // Navigate to worksheet generator or show modal
-                        Alert.alert('Feature Ready!', 'Worksheet generation is now available! The system can create math problems, reading activities, and more.');
+                        showAlert({ title: 'Feature Ready!', message: 'Worksheet generation is now available! The system can create math problems, reading activities, and more.', type: 'success' });
                       }
                     }
-                  ]
-                );
+                  ],
+                });
               });
             }}
           >
@@ -328,6 +331,8 @@ export default function AssignHomeworkScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   )
 }

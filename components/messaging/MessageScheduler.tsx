@@ -22,6 +22,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 
 interface SchedulePreset {
@@ -118,21 +119,23 @@ export function MessageScheduler({ visible, onClose, onSchedule }: MessageSchedu
   const styles = StyleSheet.create({
     overlay: {
       flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
+      backgroundColor: 'rgba(0,0,0,0.62)',
       justifyContent: 'flex-end',
     },
     sheet: {
-      backgroundColor: theme.surface,
+      backgroundColor: 'rgba(7, 12, 30, 0.98)',
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       paddingBottom: Platform.OS === 'ios' ? 34 : 24,
       maxHeight: '70%',
+      borderWidth: 1,
+      borderColor: 'rgba(125, 211, 252, 0.14)',
     },
     handle: {
       width: 40,
       height: 4,
       borderRadius: 2,
-      backgroundColor: theme.border,
+      backgroundColor: 'rgba(191, 212, 255, 0.28)',
       alignSelf: 'center',
       marginTop: 12,
       marginBottom: 8,
@@ -144,7 +147,7 @@ export function MessageScheduler({ visible, onClose, onSchedule }: MessageSchedu
       paddingHorizontal: 20,
       paddingVertical: 16,
       borderBottomWidth: 1,
-      borderBottomColor: theme.border,
+      borderBottomColor: 'rgba(125, 211, 252, 0.12)',
     },
     headerTitle: {
       fontSize: 20,
@@ -160,9 +163,11 @@ export function MessageScheduler({ visible, onClose, onSchedule }: MessageSchedu
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: theme.elevated,
+      backgroundColor: 'rgba(255,255,255,0.06)',
       alignItems: 'center',
       justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(191, 212, 255, 0.12)',
     },
     presetsList: {
       paddingHorizontal: 16,
@@ -175,25 +180,25 @@ export function MessageScheduler({ visible, onClose, onSchedule }: MessageSchedu
       paddingHorizontal: 16,
       marginBottom: 8,
       borderRadius: 14,
-      backgroundColor: theme.background,
+      backgroundColor: 'rgba(21, 31, 58, 0.88)',
       borderWidth: 2,
       borderColor: 'transparent',
     },
     presetItemSelected: {
-      borderColor: theme.primary,
-      backgroundColor: theme.primary + '08',
+      borderColor: '#7dd3fc',
+      backgroundColor: 'rgba(59, 130, 246, 0.14)',
     },
     presetIcon: {
       width: 44,
       height: 44,
       borderRadius: 22,
-      backgroundColor: theme.primary + '15',
+      backgroundColor: 'rgba(255,255,255,0.06)',
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 14,
     },
     presetIconSelected: {
-      backgroundColor: theme.primary,
+      backgroundColor: 'rgba(92, 124, 255, 0.92)',
     },
     presetTextContainer: {
       flex: 1,
@@ -216,13 +221,16 @@ export function MessageScheduler({ visible, onClose, onSchedule }: MessageSchedu
       paddingHorizontal: 20,
       paddingTop: 16,
       gap: 12,
+      alignItems: 'center',
     },
     cancelButton: {
       flex: 1,
       paddingVertical: 14,
       borderRadius: 14,
-      backgroundColor: theme.elevated,
+      backgroundColor: 'rgba(255,255,255,0.06)',
       alignItems: 'center',
+      borderWidth: 1,
+      borderColor: 'rgba(191, 212, 255, 0.12)',
     },
     cancelButtonText: {
       fontSize: 16,
@@ -233,11 +241,13 @@ export function MessageScheduler({ visible, onClose, onSchedule }: MessageSchedu
       flex: 2,
       paddingVertical: 14,
       borderRadius: 14,
-      backgroundColor: selectedDate ? theme.primary : theme.primary + '40',
       alignItems: 'center',
       flexDirection: 'row',
       justifyContent: 'center',
       gap: 8,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: selectedDate ? 'rgba(255,255,255,0.16)' : 'rgba(125, 211, 252, 0.12)',
     },
     scheduleButtonText: {
       fontSize: 16,
@@ -299,10 +309,19 @@ export function MessageScheduler({ visible, onClose, onSchedule }: MessageSchedu
               disabled={!selectedDate}
               activeOpacity={0.7}
             >
-              <Ionicons name="time-outline" size={20} color={theme.onPrimary} />
-              <Text style={styles.scheduleButtonText}>
-                {selectedDate ? 'Schedule' : 'Pick a time'}
-              </Text>
+              <LinearGradient
+                colors={
+                  selectedDate
+                    ? ['#5c7cff', '#7c3aed', '#08c5ff']
+                    : ['rgba(92,124,255,0.36)', 'rgba(124,58,237,0.28)']
+                }
+                style={{ width: '100%', paddingVertical: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8 }}
+              >
+                <Ionicons name="time-outline" size={20} color={theme.onPrimary} />
+                <Text style={styles.scheduleButtonText}>
+                  {selectedDate ? 'Schedule' : 'Pick a time'}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

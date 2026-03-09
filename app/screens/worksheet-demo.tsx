@@ -14,8 +14,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -27,6 +27,7 @@ import type { Assignment } from '@/lib/models/Assignment';
 export default function WorksheetDemoScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
 
   // Sample assignment data for testing
@@ -54,16 +55,17 @@ export default function WorksheetDemoScreen() {
   const sampleAssignments = [sampleAssignment];
 
   const testDirectGeneration = async () => {
-    Alert.alert(
-      'Test Direct Generation',
-      'Which type of worksheet would you like to test?',
-      [
+    showAlert({
+      title: 'Test Direct Generation',
+      message: 'Which type of worksheet would you like to test?',
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Math Worksheet', onPress: testMathWorksheet },
         { text: 'Reading Worksheet', onPress: testReadingWorksheet },
         { text: 'Activity Sheet', onPress: testActivitySheet },
-      ]
-    );
+      ],
+    });
   };
 
   const testMathWorksheet = async () => {
@@ -226,12 +228,13 @@ export default function WorksheetDemoScreen() {
             <WorksheetQuickWidget 
               recentAssignments={sampleAssignments}
               onCreateWorksheet={(assignment) => {
-                Alert.alert(
-                  'Widget Test',
-                  assignment 
+                showAlert({
+                  title: 'Widget Test',
+                  message: assignment 
                     ? `Creating worksheet from: ${assignment.title}`
-                    : 'Creating new worksheet'
-                );
+                    : 'Creating new worksheet',
+                  type: 'info',
+                });
               }}
             />
           </View>
@@ -332,6 +335,7 @@ export default function WorksheetDemoScreen() {
         size="large" 
         showLabel={true}
       />
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

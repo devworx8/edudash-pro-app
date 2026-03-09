@@ -12,13 +12,13 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   TouchableOpacity,
   RefreshControl,
   TextInput,
   ScrollView,
   Modal,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '@/contexts/ThemeContext';
 import { assertSupabase } from '@/lib/supabase';
@@ -299,7 +299,7 @@ export function PayrollView({ teachers, preschoolId, userId, theme, showAlert }:
           <View style={styles.totalBadge}><Text style={styles.totalLabel}>Monthly Total</Text><Text style={styles.totalValue}>R{totalMonthly.toLocaleString()}</Text></View>
         </View>
       </View>
-      <FlatList data={teachers} keyExtractor={(t) => t.id} renderItem={renderTeacher} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} />}
+      <FlashList data={teachers} keyExtractor={(t) => t.id} renderItem={renderTeacher} contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchData} />} estimatedItemSize={100}
         ListEmptyComponent={<View style={styles.emptyContainer}><Ionicons name="card-outline" size={48} color={theme?.textSecondary || '#9ca3af'} /><Text style={styles.emptyTitle}>No Teachers</Text><Text style={styles.emptyText}>Add teachers to manage payroll.</Text></View>} />
 
       {/* Salary Edit Modal */}

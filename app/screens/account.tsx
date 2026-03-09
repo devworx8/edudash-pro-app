@@ -23,9 +23,10 @@ import { ImageConfirmModal } from "@/components/ui/ImageConfirmModal";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useTranslation } from "react-i18next";
-import { useThemedStyles, themedStyles } from "@/hooks/useThemedStyles";
+import { useThemedStyles } from "@/hooks/useThemedStyles";
 import ProfileImageService from '@/services/ProfileImageService';
 import { AlertModal, useAlertModal, type AlertButton } from '@/components/ui/AlertModal';
+import { createAccountScreenStyles } from '@/lib/screen-styles/account.styles';
 
 // Extracted components
 import {
@@ -84,100 +85,28 @@ export default function AccountScreen() {
   // Exclude bottom from safe area so we don't double-count and clip content; add padding so Sign Out scrolls above tab bar.
   const TAB_BAR_HEIGHT = 64;
   const scrollBottomPadding = TAB_BAR_HEIGHT + bottomInset + 24;
+  const cosmicBackground = '#07101f';
+  const cosmicSurface = 'rgba(16, 26, 52, 0.9)';
+  const cosmicSurfaceStrong = 'rgba(12, 20, 40, 0.96)';
+  const cosmicBorder = 'rgba(125, 211, 252, 0.14)';
+  const cosmicBorderSoft = 'rgba(255,255,255,0.08)';
+  const cosmicAccent = '#7c5cff';
+  const roleBadgeBackground = 'rgba(124, 92, 255, 0.2)';
 
-  const styles = useThemedStyles((theme) => ({
-    container: { flex: 1, backgroundColor: theme.background },
-    scrollView: { flex: 1 },
-    scrollContent: { paddingBottom: scrollBottomPadding },
-    settingsButton: { padding: 8 },
-    profileHeader: {
-      alignItems: "center" as const,
-      paddingTop: 18,
-      paddingBottom: 14,
-      paddingHorizontal: 20,
-      backgroundColor: theme.surface,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.divider,
-    },
-    avatarContainer: { position: "relative" as const, marginBottom: 10 },
-    avatar: { width: 100, height: 100, borderRadius: 50 },
-    avatarPlaceholder: {
-      width: 100, height: 100, borderRadius: 50,
-      backgroundColor: theme.primary,
-      justifyContent: "center" as const, alignItems: "center" as const,
-    },
-    avatarText: { fontSize: 36, fontWeight: "600" as const, color: theme.onPrimary },
-    cameraIconContainer: {
-      position: "absolute" as const, bottom: 0, right: 0,
-      backgroundColor: theme.secondary, borderRadius: 20,
-      width: 32, height: 32,
-      justifyContent: "center" as const, alignItems: "center" as const,
-      borderWidth: 3, borderColor: theme.surface,
-    },
-    loadingIcon: { width: 32, height: 32, justifyContent: "center" as const, alignItems: "center" as const },
-    loadingText: { fontSize: 16, color: theme.onSecondary },
-    displayName: { fontSize: 24, fontWeight: "600" as const, color: theme.text, marginBottom: 2 },
-    email: { fontSize: 16, color: theme.textSecondary, marginBottom: 8 },
-    roleBadge: { backgroundColor: theme.primaryLight, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-    roleText: { fontSize: 12, fontWeight: "600" as const, color: theme.onPrimary },
-    infoSection: { padding: 20 },
-    sectionTitle: { fontSize: 18, fontWeight: "600" as const, color: theme.text, marginBottom: 16 },
-    infoCard: themedStyles.card(theme),
-    infoRow: { flexDirection: "row" as const, alignItems: "center" as const },
-    infoContent: { flex: 1, marginLeft: 16 },
-    infoLabel: { fontSize: 14, color: theme.textTertiary, marginBottom: 2 },
-    infoValue: { fontSize: 16, color: theme.text },
-    editButton: { padding: 8 },
-    signOutButton: {
-      flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "center" as const,
-      marginHorizontal: 20, marginTop: 20, paddingVertical: 16,
-      backgroundColor: theme.error, borderRadius: 12,
-      shadowColor: theme.error, shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
-    },
-    signOutText: { fontSize: 17, fontWeight: "700" as const, color: theme.onError, marginLeft: 8, letterSpacing: 0.5 },
-    modalOverlay: { flex: 1, backgroundColor: theme.modalOverlay, justifyContent: "flex-end" as const },
-    modalContent: {
-      backgroundColor: theme.modalBackground, borderTopLeftRadius: 20, borderTopRightRadius: 20,
-      paddingTop: 20, paddingBottom: bottomInset + 20, maxHeight: "80%" as const,
-    },
-    modalHeader: {
-      flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const,
-      paddingHorizontal: 20, paddingBottom: 20, borderBottomWidth: 1, borderBottomColor: theme.divider,
-    },
-    modalTitle: { fontSize: 20, fontWeight: "600" as const, color: theme.text },
-    settingItem: {
-      flexDirection: "row" as const, alignItems: "center" as const, justifyContent: "space-between" as const,
-      paddingVertical: 16, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: theme.divider,
-    },
-    settingLeft: { flexDirection: "row" as const, alignItems: "center" as const, flex: 1 },
-    settingText: { marginLeft: 16, flex: 1 },
-    settingTitle: { fontSize: 16, fontWeight: "500" as const, color: theme.text, marginBottom: 2 },
-    settingSubtitle: { fontSize: 14, color: theme.textSecondary },
-    switchContainer: { marginLeft: 12 },
-    editModalContainer: { flex: 1, backgroundColor: theme.background },
-    editModalHeader: {
-      flexDirection: "row" as const, justifyContent: "space-between" as const, alignItems: "center" as const,
-      paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1,
-      borderBottomColor: theme.divider, backgroundColor: theme.surface,
-    },
-    editModalCancel: { fontSize: 16, color: theme.error },
-    editModalTitle: { fontSize: 18, fontWeight: "600" as const, color: theme.text },
-    editModalSave: { fontSize: 16, color: theme.primary, fontWeight: "600" as const },
-    editModalContent: { flex: 1 },
-    editSection: { padding: 20 },
-    editSectionTitle: { fontSize: 16, fontWeight: "600" as const, color: theme.text, marginBottom: 20 },
-    editFieldContainer: { marginBottom: 20 },
-    editFieldLabel: { fontSize: 14, color: theme.textSecondary, marginBottom: 8 },
-    editFieldInput: { ...themedStyles.input(theme) },
-    themeSettingsModal: { flex: 1, backgroundColor: theme.background },
-    themeSettingsHeader: {
-      flexDirection: "row" as const, alignItems: "center" as const,
-      paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1,
-      borderBottomColor: theme.divider, backgroundColor: theme.surface,
-    },
-    themeSettingsTitle: { fontSize: 18, fontWeight: "600" as const, color: theme.text, marginLeft: 16 },
-  }));
+  const styles = useThemedStyles((theme) =>
+    createAccountScreenStyles({
+      theme,
+      bottomInset,
+      scrollBottomPadding,
+      cosmicBackground,
+      cosmicSurface,
+      cosmicSurfaceStrong,
+      cosmicBorder,
+      cosmicBorderSoft,
+      cosmicAccent,
+      roleBadgeBackground,
+    }),
+  );
 
   // Load user data
   const load = useCallback(async () => {
@@ -234,7 +163,8 @@ export default function AccountScreen() {
           .from('organization_members')
           .select('organization_id', { count: 'exact', head: true })
           .eq('user_id', u.id)
-          .eq('status', 'active');
+          .eq('seat_status', 'active')
+          .in('membership_status', ['active', 'pending_verification']);
         
         orgCount += count || 0;
         
@@ -302,7 +232,7 @@ export default function AccountScreen() {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -321,7 +251,7 @@ export default function AccountScreen() {
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'images',
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,

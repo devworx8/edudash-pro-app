@@ -28,9 +28,9 @@ export default function TermsOfService() {
 
       <LegalHeading level={2}>1. Service Description</LegalHeading>
       <LegalText>
-        EduDash Pro is an AI-powered educational platform designed specifically for preschool institutions, teachers, parents, and children aged 3-6 years. Our platform provides:
+        EduDash Pro is an AI-powered educational platform for schools, preschools, tutoring centres, educators, parents, administrators, and learners. Our platform provides:
       </LegalText>
-      <LegalText variant="list-item">Educational Content: Age-appropriate learning materials and activities</LegalText>
+      <LegalText variant="list-item">Educational Content: Age- and stage-appropriate learning materials and activities</LegalText>
       <LegalText variant="list-item">AI-Powered Tools: Lesson planning, homework assistance, and progress tracking</LegalText>
       <LegalText variant="list-item">Multi-User Dashboard: Separate interfaces for principals, teachers, parents, and students</LegalText>
       <LegalText variant="list-item">Subscription-Based Access: Tiered plans for different institutional needs</LegalText>
@@ -38,10 +38,10 @@ export default function TermsOfService() {
       <LegalHeading level={2}>2. User Eligibility & Child Safety</LegalHeading>
       
       <LegalHeading level={3}>Eligible Users</LegalHeading>
-      <LegalText variant="list-item">Educational Institutions: Preschools and early childhood centers</LegalText>
+      <LegalText variant="list-item">Educational Institutions: Schools, preschools, districts, tutoring programmes, and learning centres</LegalText>
       <LegalText variant="list-item">Educators: Teachers and educational staff (18+ years)</LegalText>
       <LegalText variant="list-item">Parents/Guardians: Adults (18+ years) acting on behalf of children</LegalText>
-      <LegalText variant="list-item">Children: Ages 3-6 under direct supervision of parents/guardians or educators</LegalText>
+      <LegalText variant="list-item">Learners: Child and student accounts used under parent, guardian, or educator supervision where required</LegalText>
 
       <LegalHeading level={3}>Child Protection (COPPA Compliance)</LegalHeading>
       <LegalText variant="list-item">
@@ -55,6 +55,9 @@ export default function TermsOfService() {
       </LegalText>
       <LegalText variant="list-item">
         <LegalText variant="bold">Educational Purpose Only:</LegalText> All child interactions are for educational purposes
+      </LegalText>
+      <LegalText variant="list-item">
+        <LegalText variant="bold">Ad-Free Core Flows:</LegalText> Teaching, parent, learner, finance, and school-management areas do not include third-party ads
       </LegalText>
 
       <LegalHeading level={2}>3. Subscription Terms & Billing</LegalHeading>
@@ -79,8 +82,8 @@ export default function TermsOfService() {
       <LegalHeading level={2}>4. Educational Content & AI Services</LegalHeading>
       
       <LegalHeading level={3}>Content Standards</LegalHeading>
-      <LegalText variant="list-item">Age-Appropriate: All content suitable for preschool children (ages 3-6)</LegalText>
-      <LegalText variant="list-item">Educational Value: Content aligned with early childhood development standards</LegalText>
+      <LegalText variant="list-item">Age-Appropriate: Content is designed to match the intended learner age or stage</LegalText>
+      <LegalText variant="list-item">Educational Value: Content aligned with classroom, tutoring, or early childhood learning goals as applicable</LegalText>
       <LegalText variant="list-item">Cultural Sensitivity: Respectful of diverse backgrounds and learning needs</LegalText>
       <LegalText variant="list-item">Quality Assurance: Regular review and updates of educational materials</LegalText>
 
@@ -274,7 +277,7 @@ export default function TermsOfService() {
         marginBottom: DesignSystem.spacing.xl,
       }}>
         <LegalText>
-          By using EduDash Pro, you agree to these Terms of Service and our Privacy Policy. Please ensure that all users of your institutional account are aware of and agree to these terms.
+          By using EduDash Pro, you agree to these Terms of Service and our Privacy Policy. Please ensure that all users of your institutional or household account are aware of and agree to these terms.
         </LegalText>
       </View>
 
