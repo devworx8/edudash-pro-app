@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
 import { NebulaSphereOrb } from '@/components/dash-orb/NebulaSphereOrb';
+import { PremiumCosmicOrb } from '@/components/dash-orb/PremiumCosmicOrb';
 import { assertSupabase } from '@/lib/supabase';
 import { getWelcomeMessage } from '@/lib/ai/constants';
 import { formatTranscript } from '@/lib/voice/formatTranscript';
@@ -341,8 +342,12 @@ export default function DashTutorVoiceChat() {
 
   // ── Enhanced Orb UI (starter/premium/enterprise) ──────────────────────────
   if (isEnhancedOrb) {
+    // PremiumCosmicOrb for premium/enterprise tiers with enhanced visual styling
     const OrbVisual = effectiveOrbTier === 'premium' || effectiveOrbTier === 'enterprise'
-      ? NebulaSphereOrb : CosmicOrb;
+      ? PremiumCosmicOrb 
+      : effectiveOrbTier === 'starter' 
+        ? NebulaSphereOrb 
+        : CosmicOrb;
     return (
       <View style={[orbStyles.safeArea, { paddingTop: insets.top }]}>
         {!isWeb && VoiceOrb && <View style={orbStyles.hiddenOrb}><VoiceOrb {...voiceOrbSharedProps} size={100} /></View>}
