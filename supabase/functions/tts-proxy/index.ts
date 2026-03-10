@@ -63,33 +63,34 @@ const LANG_TO_BCP47: Record<string, string> = {
 };
 
 const DEFAULT_VOICES: Record<string, string> = {
-  'en-ZA': 'en-ZA-LukeNeural',
-  'af-ZA': 'af-ZA-AdriNeural',
-  'zu-ZA': 'zu-ZA-ThandoNeural',
-  'xh-ZA': 'xh-ZA-NomalungaNeural',
-  'nso-ZA': 'nso-ZA-DidiNeural',
-  'st-ZA': 'en-ZA-LukeNeural', // Sesotho not available in Azure — fallback to en-ZA
-  'fr-FR': 'fr-FR-HenriNeural',
-  'pt-BR': 'pt-BR-AntonioNeural',
-  'es-ES': 'es-ES-AlvaroNeural',
-  'de-DE': 'de-DE-ConradNeural',
+  'en-ZA': 'en-US-AndrewMultilingualNeural',
+  'af-ZA': 'en-US-AndrewMultilingualNeural',
+  'zu-ZA': 'en-US-AndrewMultilingualNeural',
+  'xh-ZA': 'en-US-AndrewMultilingualNeural',
+  'nso-ZA': 'en-US-AndrewMultilingualNeural',
+  'st-ZA': 'en-US-AndrewMultilingualNeural',
+  'fr-FR': 'en-US-AndrewMultilingualNeural',
+  'pt-BR': 'en-US-AndrewMultilingualNeural',
+  'es-ES': 'en-US-AndrewMultilingualNeural',
+  'de-DE': 'en-US-AndrewMultilingualNeural',
 };
 
-/** Dash's primary voice */
-const DASH_VOICE = 'en-ZA-LukeNeural';
-const DASH_FALLBACK_VOICE = 'en-GB-RyanNeural';
-const GLOBAL_EN_FALLBACK_VOICE = 'en-US-GuyNeural';
+/** Dash's primary voice — multilingual, handles all SA languages natively */
+const DASH_VOICE = 'en-US-AndrewMultilingualNeural';
+const DASH_MULTILINGUAL_FEMALE = 'en-US-AvaMultilingualNeural';
+const DASH_FALLBACK_VOICE = 'en-ZA-LukeNeural';
+const GLOBAL_EN_FALLBACK_VOICE = 'en-GB-RyanNeural';
 
-const EN_MALE_FALLBACK_VOICES = ['en-GB-RyanNeural', 'en-US-GuyNeural'];
-const EN_FEMALE_FALLBACK_VOICES = ['en-ZA-LeahNeural', 'en-US-JennyNeural'];
+const EN_MALE_FALLBACK_VOICES = ['en-ZA-LukeNeural', 'en-GB-RyanNeural', 'en-US-GuyNeural'];
+const EN_FEMALE_FALLBACK_VOICES = ['en-US-AvaMultilingualNeural', 'en-ZA-LeahNeural', 'en-US-JennyNeural'];
 
 const FALLBACK_VOICES_BY_LANG: Record<string, string[]> = {
   'en-ZA': EN_MALE_FALLBACK_VOICES,
-  'af-ZA': ['af-ZA-AdriNeural', DASH_FALLBACK_VOICE],
-  'zu-ZA': ['zu-ZA-ThandoNeural', DASH_FALLBACK_VOICE],
-  'xh-ZA': ['xh-ZA-NomalungaNeural', DASH_FALLBACK_VOICE],
-  'nso-ZA': ['nso-ZA-DidiNeural', DASH_FALLBACK_VOICE],
-  'st-ZA': [DASH_VOICE, DASH_FALLBACK_VOICE], // Sesotho — no native Azure voice
+  'af-ZA': ['af-ZA-WillemNeural', 'af-ZA-AdriNeural', DASH_FALLBACK_VOICE],
+  'zu-ZA': ['zu-ZA-ThembaNeural', 'zu-ZA-ThandoNeural', DASH_FALLBACK_VOICE],
+  'xh-ZA': ['xh-ZA-LungeloNeural', 'xh-ZA-NomalungaNeural', DASH_FALLBACK_VOICE],
+  'nso-ZA': ['nso-ZA-OupaNeural', 'nso-ZA-DidiNeural', DASH_FALLBACK_VOICE],
+  'st-ZA': [DASH_FALLBACK_VOICE, GLOBAL_EN_FALLBACK_VOICE], // Sesotho — no native Azure voice
   'fr-FR': ['fr-FR-HenriNeural', 'fr-FR-DeniseNeural'],
   'pt-BR': ['pt-BR-AntonioNeural', 'pt-BR-FranciscaNeural'],
   'es-ES': ['es-ES-AlvaroNeural', 'es-ES-ElviraNeural'],
