@@ -19,6 +19,7 @@ import {
   createEmptyTeacherData,
 } from '@/lib/dashboard/utils';
 import { fetchTodayRoutine } from '@/lib/dashboard/fetchTeacherTodayRoutine';
+import { dedupeRequest, createRequestKey } from '@/lib/dashboard/requestDeduplication';
 
 interface ResolvedTeacherProfile {
   id: string;
@@ -321,10 +322,27 @@ async function fetchEvents(schoolId: string) {
  *
  * Resolves teacher profile first, then parallelizes independent queries.
  * Returns fully-composed `TeacherDashboardData`.
+ * Uses request deduplication to prevent redundant concurrent fetches.
  *
  * @throws Error if user is not authenticated or profile resolution fails
  */
 export async function fetchTeacherDashboardData(
+  userId: string
+): Promise<TeacherDashboardData> {
+  // Use request deduplication to prevent concurrent duplicate fetches
+  return dedupeRequest<TeacherDashboardData>(
+    createRequestKey('teacher-dashboard', userId),
+    async () => {
+      return await fetchTeacherDashboardDataInternal(userId);
+    }
+  );
+}
+
+/**
+ * Internal implementation of teacher dashboard data fetching.
+ * Separated for deduplication wrapper.
+ */
+async function fetchTeacherDashboardDataInternal(
   userId: string
 ): Promise<TeacherDashboardData> {
   const supabase = assertSupabase();
