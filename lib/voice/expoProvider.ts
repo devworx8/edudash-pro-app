@@ -74,7 +74,7 @@ class ExpoSpeechSession implements VoiceSession {
     // case we keep the raw candidate chain and let runtime fallback handle it.
     if (Platform.OS !== 'web') {
       try {
-        const supported = await ExpoSpeechRecognitionModule.getSupportedLocales();
+        const supported = await ExpoSpeechRecognitionModule.getSupportedLocales({});
         const available = Array.isArray(supported?.locales)
           ? supported.locales.map((locale) => normalizeLocale(locale))
           : [];
