@@ -83,7 +83,10 @@ export default function DashTutorVoiceChat() {
   const normalizedRole = String(profile?.role || 'parent').toLowerCase();
   const isStudent = ['student', 'learner'].includes(normalizedRole);
   // Tier-based orb: students always get at least starter orb UI
+  // For testing: treat all non-free tiers as premium for orb display
   const effectiveOrbTier = isStudent && capabilityTier === 'free' ? 'starter' : capabilityTier;
+  // Check if user should see premium orb (premium, pro, or enterprise)
+  const isPremiumOrb = ['premium', 'pro', 'enterprise'].includes(effectiveOrbTier);
   const isEnhancedOrb = effectiveOrbTier !== 'free';
   const aiScope = useMemo(() => resolveAIProxyScopeFromRole(normalizedRole), [normalizedRole]);
   const orgType = getOrganizationType(profile);
@@ -342,8 +345,8 @@ export default function DashTutorVoiceChat() {
 
   // ── Enhanced Orb UI (starter/premium/enterprise) ──────────────────────────
   if (isEnhancedOrb) {
-    // PremiumCosmicOrb for premium/enterprise tiers with enhanced visual styling
-    const OrbVisual = effectiveOrbTier === 'premium' || effectiveOrbTier === 'enterprise'
+    // PremiumCosmicOrb for premium/pro/enterprise tiers with enhanced visual styling
+    const OrbVisual = isPremiumOrb
       ? PremiumCosmicOrb 
       : effectiveOrbTier === 'starter' 
         ? NebulaSphereOrb 

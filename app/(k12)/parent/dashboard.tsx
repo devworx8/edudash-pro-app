@@ -40,6 +40,7 @@ import { useK12ParentDashboard, toUuidOrUndefined } from '@/domains/k12/hooks/us
 import { MobileNavDrawer } from '@/components/navigation/MobileNavDrawer';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
+import { PremiumCosmicOrb } from '@/components/dash-orb/PremiumCosmicOrb';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import {
   K12_PARENT_ACTIONS,
@@ -260,7 +261,12 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
             {Platform.OS === 'web' ? (
               <Ionicons name="menu" size={28} color={theme.text} />
             ) : (
-              <CosmicOrb size={30} isProcessing={false} isSpeaking={false} />
+              (() => {
+                const OrbComponent = tierForCaps === 'premium' || tierForCaps === 'enterprise' 
+                  ? PremiumCosmicOrb 
+                  : CosmicOrb;
+                return <OrbComponent size={30} isProcessing={false} isSpeaking={false} />;
+              })()
             )}
           </Pressable>
           <View style={styles.headerTitleWrapper}>

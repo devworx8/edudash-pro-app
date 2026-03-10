@@ -1,12 +1,20 @@
 /**
  * PremiumCosmicOrb - Premium/Enterprise Tier Orb Visual
- * Matches the design reference with luminous spherical orb styling
+ * 
+ * Matches the design reference with:
+ * - Glowing spherical orb with cosmic nebula effect
+ * - Gradient from deep blue/purple at edges to bright cyan/white at center
+ * - Multiple concentric animated rings
+ * - Particle/star effects inside the orb
+ * - Luminous, pulsing animation
  */
 
 import React, { useEffect, useRef, useMemo } from 'react';
-import { View, Animated, Easing } from 'react-native';
+import { View, Animated, Easing, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { sparkles, rings, generateNebulaSparkles, styles } from './PremiumCosmicOrb.styles';
+import Svg, { Defs, RadialGradient, Stop, Circle, G } from 'react-native-svg';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 interface PremiumCosmicOrbProps {
   size: number;
@@ -14,118 +22,463 @@ interface PremiumCosmicOrbProps {
   isSpeaking: boolean;
 }
 
-export const PremiumCosmicOrb: React.FC<PremiumCosmicOrbProps> = ({ size, isProcessing, isSpeaking }) => {
-  const breathe = useRef(new Animated.Value(1)).current;
-  const ringRotation = useRef(new Animated.Value(0)).current;
-  const glowPulse = useRef(new Animated.Value(0.7)).current;
-  const sparkleAnim = useRef(new Animated.Value(0.3)).current;
-  const coreScale = useRef(new Animated.Value(1)).current;
-  const ringPulse = useRef(new Animated.Value(1)).current;
+// Generate star particles for cosmic effect
+const generateStars = (count: number) => {
+  return Array.from({ length: count }, (_, i) => ({
+    id: i,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    size: Math.random() * 2 + 0.5,
+    opacity: Math.random() * 0.6 + 0.2,
+    delay: Math.random() * 2000,
+  }));
+};
 
+export const PremiumCosmicOrb: React.FC<PremiumCosmicOrbProps> = ({ 
+  size, 
+  isProcessing, 
+  isSpeaking 
+}) => {
+  // Animation values
+  const corePulse = useRef(new Animated.Value(1)).current;
+  const glowPulse = useRef(new Animated.Value(0.8)).current;
+  const ring1Rotation = useRef(new Animated.Value(0)).current;
+  const ring2Rotation = useRef(new Animated.Value(0)).current;
+  const ring3Rotation = useRef(new Animated.Value(0)).current;
+  const ring1Scale = useRef(new Animated.Value(1)).current;
+  const ring2Scale = useRef(new Animated.Value(1)).current;
+  const ring3Scale = useRef(new Animated.Value(1)).current;
+  const starOpacity = useRef(new Animated.Value(0.3)).current;
+  const innerGlow = useRef(new Animated.Value(0.6)).current;
+  const speakingPulse = useRef(new Animated.Value(1)).current;
+
+  // Generate stars once
+  const stars = useMemo(() => generateStars(25), []);
+
+  // Core breathing animation
   useEffect(() => {
-    const dur = isProcessing ? 800 : 2200;
-    const anim = Animated.loop(Animated.sequence([
-      Animated.timing(breathe, { toValue: 1.06, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(breathe, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-    ]));
+    const duration = isSpeaking ? 600 : isProcessing ? 1000 : 2000;
+    const toValue = isSpeaking ? 1.08 : isProcessing ? 1.05 : 1.04;
+    
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(corePulse, {
+          toValue,
+          duration,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(corePulse, {
+          toValue: 1,
+          duration,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
     anim.start();
     return () => anim.stop();
-  }, [isProcessing]);
+  }, [isProcessing, isSpeaking, corePulse]);
 
+  // Glow pulse animation
   useEffect(() => {
-    const speed = isSpeaking ? 3500 : isProcessing ? 4500 : 9000;
-    const anim = Animated.loop(Animated.timing(ringRotation, { toValue: 1, duration: speed, easing: Easing.linear, useNativeDriver: true }));
+    const hi = isSpeaking ? 1 : 0.95;
+    const lo = isSpeaking ? 0.7 : 0.5;
+    const dur = isSpeaking ? 400 : 1200;
+    
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowPulse, {
+          toValue: hi,
+          duration: dur,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowPulse, {
+          toValue: lo,
+          duration: dur,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
     anim.start();
     return () => anim.stop();
-  }, [isProcessing, isSpeaking]);
+  }, [isSpeaking, glowPulse]);
 
+  // Ring rotations
   useEffect(() => {
-    const hi = isSpeaking ? 1 : 0.85;
-    const dur = isSpeaking ? 400 : 1800;
-    const anim = Animated.loop(Animated.sequence([
-      Animated.timing(glowPulse, { toValue: hi, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(glowPulse, { toValue: 0.5, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-    ]));
+    const speed1 = isSpeaking ? 4000 : 12000;
+    const speed2 = isSpeaking ? 6000 : 18000;
+    const speed3 = isSpeaking ? 8000 : 24000;
+
+    const anim1 = Animated.loop(
+      Animated.timing(ring1Rotation, {
+        toValue: 1,
+        duration: speed1,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    const anim2 = Animated.loop(
+      Animated.timing(ring2Rotation, {
+        toValue: 1,
+        duration: speed2,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    const anim3 = Animated.loop(
+      Animated.timing(ring3Rotation, {
+        toValue: 1,
+        duration: speed3,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+
+    anim1.start();
+    anim2.start();
+    anim3.start();
+
+    return () => {
+      anim1.stop();
+      anim2.stop();
+      anim3.stop();
+    };
+  }, [isSpeaking, ring1Rotation, ring2Rotation, ring3Rotation]);
+
+  // Ring pulse animations
+  useEffect(() => {
+    const dur = isSpeaking ? 800 : 1500;
+    
+    const anim1 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ring1Scale, { toValue: 1.03, duration: dur, useNativeDriver: true }),
+        Animated.timing(ring1Scale, { toValue: 1, duration: dur, useNativeDriver: true }),
+      ])
+    );
+    const anim2 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ring2Scale, { toValue: 1.02, duration: dur + 200, useNativeDriver: true }),
+        Animated.timing(ring2Scale, { toValue: 1, duration: dur + 200, useNativeDriver: true }),
+      ])
+    );
+    const anim3 = Animated.loop(
+      Animated.sequence([
+        Animated.timing(ring3Scale, { toValue: 1.015, duration: dur + 400, useNativeDriver: true }),
+        Animated.timing(ring3Scale, { toValue: 1, duration: dur + 400, useNativeDriver: true }),
+      ])
+    );
+
+    anim1.start();
+    anim2.start();
+    anim3.start();
+
+    return () => {
+      anim1.stop();
+      anim2.stop();
+      anim3.stop();
+    };
+  }, [isSpeaking, ring1Scale, ring2Scale, ring3Scale]);
+
+  // Star twinkle animation
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(starOpacity, { toValue: 0.8, duration: 1000, useNativeDriver: true }),
+        Animated.timing(starOpacity, { toValue: 0.2, duration: 1000, useNativeDriver: true }),
+      ])
+    );
     anim.start();
     return () => anim.stop();
-  }, [isSpeaking]);
+  }, [starOpacity]);
 
+  // Inner glow animation
   useEffect(() => {
-    const anim = Animated.loop(Animated.sequence([
-      Animated.timing(sparkleAnim, { toValue: 0.9, duration: 1200, useNativeDriver: true }),
-      Animated.timing(sparkleAnim, { toValue: 0.2, duration: 1200, useNativeDriver: true }),
-    ]));
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(innerGlow, { toValue: 0.85, duration: 800, useNativeDriver: true }),
+        Animated.timing(innerGlow, { toValue: 0.5, duration: 800, useNativeDriver: true }),
+      ])
+    );
     anim.start();
     return () => anim.stop();
-  }, []);
+  }, [innerGlow]);
 
+  // Speaking pulse
   useEffect(() => {
-    Animated.timing(coreScale, { toValue: isSpeaking ? 1.08 : 1, duration: 250, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
-  }, [isSpeaking]);
+    Animated.timing(speakingPulse, {
+      toValue: isSpeaking ? 1.1 : 1,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+  }, [isSpeaking, speakingPulse]);
 
-  useEffect(() => {
-    const dur = isSpeaking ? 600 : 1500;
-    const anim = Animated.loop(Animated.sequence([
-      Animated.timing(ringPulse, { toValue: 1.02, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      Animated.timing(ringPulse, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-    ]));
-    anim.start();
-    return () => anim.stop();
-  }, [isSpeaking]);
+  // Interpolations
+  const ring1Rotate = ring1Rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+  const ring2Rotate = ring2Rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '-360deg'],
+  });
+  const ring3Rotate = ring3Rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
 
-  const ringDeg = ringRotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const sphereSize = size * 0.52;
-  const innerGlowSize = size * 0.88;
-  const outerGlowSize = size * 1.12;
-  const nebulaSparkles = useMemo(() => generateNebulaSparkles(38), []);
+  // Sizes
+  const orbSize = size * 0.5;
+  const ring1Size = size * 0.7;
+  const ring2Size = size * 0.85;
+  const ring3Size = size * 1.0;
+  const glowSize = size * 1.15;
 
   return (
-    <View style={{ width: size, height: size, ...styles.container }}>
-      {sparkles.map((sp, i) => (
-        <Animated.View key={`sp-${i}`} style={{ position: 'absolute', width: sp.size, height: sp.size, borderRadius: sp.size, backgroundColor: sp.color, left: `${sp.x}%`, top: `${sp.y}%`, opacity: sparkleAnim }} />
-      ))}
-
-      <Animated.View style={{ position: 'absolute', width: outerGlowSize, height: outerGlowSize, borderRadius: outerGlowSize / 2, opacity: glowPulse, transform: [{ scale: breathe }] }}>
-        <LinearGradient colors={['rgba(57,22,161,0.28)', 'rgba(197,71,255,0.20)', 'rgba(16,108,157,0.20)', 'transparent']} style={{ width: outerGlowSize, height: outerGlowSize, borderRadius: outerGlowSize / 2 }} start={{ x: 0.42, y: 0.22 }} end={{ x: 0.65, y: 0.88 }} />
+    <View style={[styles.container, { width: size, height: size }]}>
+      {/* Outer glow */}
+      <Animated.View 
+        style={[
+          styles.outerGlow,
+          {
+            width: glowSize,
+            height: glowSize,
+            borderRadius: glowSize / 2,
+            opacity: glowPulse,
+            transform: [{ scale: corePulse }],
+          }
+        ]}
+      >
+        <LinearGradient
+          colors={['rgba(139, 92, 246, 0.3)', 'rgba(59, 130, 246, 0.2)', 'rgba(6, 182, 212, 0.1)', 'transparent']}
+          start={{ x: 0.3, y: 0.3 }}
+          end={{ x: 0.7, y: 0.7 }}
+          style={{ flex: 1, borderRadius: glowSize / 2 }}
+        />
       </Animated.View>
 
-      <Animated.View style={{ position: 'absolute', width: innerGlowSize, height: innerGlowSize, borderRadius: innerGlowSize / 2, transform: [{ scale: breathe }] }}>
-        <LinearGradient colors={['rgba(105,39,217,0.14)', 'rgba(229,94,255,0.32)', 'rgba(56,189,248,0.26)', 'transparent']} style={{ width: innerGlowSize, height: innerGlowSize, borderRadius: innerGlowSize / 2 }} start={{ x: 0.25, y: 0.24 }} end={{ x: 0.78, y: 0.84 }} />
+      {/* Ring 3 - Outermost */}
+      <Animated.View 
+        style={[
+          styles.ring,
+          {
+            width: ring3Size,
+            height: ring3Size,
+            borderRadius: ring3Size / 2,
+            transform: [{ rotate: ring3Rotate }, { scale: ring3Scale }],
+          }
+        ]}
+      >
+        <View style={[styles.ringBorder, { borderRadius: ring3Size / 2, borderWidth: 1.5, borderColor: 'rgba(139, 92, 246, 0.4)' }]} />
       </Animated.View>
 
-      {rings.map((ring, i) => {
-        const d = ring.radius * size;
-        return <Animated.View key={`ring-${i}`} style={{ position: 'absolute', width: d, height: d, borderRadius: d / 2, borderWidth: ring.width, borderColor: ring.color, opacity: i < 3 ? 1 : 0.9, transform: [{ rotate: ringDeg }, { scale: ringPulse }] }} />;
-      })}
+      {/* Ring 2 - Middle */}
+      <Animated.View 
+        style={[
+          styles.ring,
+          {
+            width: ring2Size,
+            height: ring2Size,
+            borderRadius: ring2Size / 2,
+            transform: [{ rotate: ring2Rotate }, { scale: ring2Scale }],
+          }
+        ]}
+      >
+        <View style={[styles.ringBorder, { borderRadius: ring2Size / 2, borderWidth: 2, borderColor: 'rgba(59, 130, 246, 0.5)' }]} />
+      </Animated.View>
 
-      {[0.78, 0.96, 1.14].map((radius, i) => {
-        const orbit = radius * size;
+      {/* Ring 1 - Inner */}
+      <Animated.View 
+        style={[
+          styles.ring,
+          {
+            width: ring1Size,
+            height: ring1Size,
+            borderRadius: ring1Size / 2,
+            transform: [{ rotate: ring1Rotate }, { scale: ring1Scale }],
+          }
+        ]}
+      >
+        <View style={[styles.ringBorder, { borderRadius: ring1Size / 2, borderWidth: 2.5, borderColor: 'rgba(6, 182, 212, 0.6)' }]} />
+      </Animated.View>
+
+      {/* Main orb */}
+      <Animated.View 
+        style={[
+          styles.orb,
+          {
+            width: orbSize,
+            height: orbSize,
+            borderRadius: orbSize / 2,
+            transform: [{ scale: speakingPulse }],
+          }
+        ]}
+      >
+        {/* Base gradient - deep blue/purple to cyan center */}
+        <LinearGradient
+          colors={['#0a0a1a', '#1e1b4b', '#312e81', '#4338ca', '#6366f1']}
+          locations={[0, 0.3, 0.5, 0.75, 1]}
+          start={{ x: 0.5, y: 1 }}
+          end={{ x: 0.5, y: 0 }}
+          style={{ flex: 1, borderRadius: orbSize / 2 }}
+        />
+
+        {/* Center bright glow */}
+        <Animated.View 
+          style={[
+            styles.centerGlow,
+            {
+              width: orbSize * 0.5,
+              height: orbSize * 0.5,
+              borderRadius: orbSize * 0.25,
+              opacity: innerGlow,
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={['#ffffff', '#67e8f9', '#22d3ee', 'transparent']}
+            locations={[0, 0.3, 0.6, 1]}
+            start={{ x: 0.5, y: 0.5 }}
+            end={{ x: 1, y: 1 }}
+            style={{ flex: 1, borderRadius: orbSize * 0.25 }}
+          />
+        </Animated.View>
+
+        {/* Secondary glow spot */}
+        <View 
+          style={[
+            styles.secondaryGlow,
+            {
+              width: orbSize * 0.25,
+              height: orbSize * 0.25,
+              borderRadius: orbSize * 0.125,
+              top: orbSize * 0.1,
+              right: orbSize * 0.15,
+            }
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(217, 70, 239, 0.8)', 'rgba(168, 85, 247, 0.4)', 'transparent']}
+            style={{ flex: 1, borderRadius: orbSize * 0.125 }}
+          />
+        </View>
+
+        {/* Star particles */}
+        {stars.map((star) => (
+          <Animated.View
+            key={star.id}
+            style={{
+              position: 'absolute',
+              width: star.size,
+              height: star.size,
+              borderRadius: star.size / 2,
+              backgroundColor: star.id % 3 === 0 ? '#67e8f9' : star.id % 3 === 1 ? '#a78bfa' : '#ffffff',
+              left: `${star.x}%`,
+              top: `${star.y}%`,
+              opacity: starOpacity,
+              shadowColor: '#67e8f9',
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.8,
+              shadowRadius: 3,
+            }}
+          />
+        ))}
+
+        {/* Orb border glow */}
+        <View 
+          style={[
+            styles.orbBorder,
+            {
+              borderRadius: orbSize / 2,
+              borderWidth: 2,
+              borderColor: 'rgba(103, 232, 249, 0.8)',
+            }
+          ]}
+        />
+
+        {/* Inner highlight */}
+        <View 
+          style={{
+            position: 'absolute',
+            width: orbSize * 0.15,
+            height: orbSize * 0.08,
+            borderRadius: orbSize * 0.1,
+            backgroundColor: 'rgba(255, 255, 255, 0.4)',
+            top: orbSize * 0.2,
+            left: orbSize * 0.35,
+          }}
+        />
+      </Animated.View>
+
+      {/* Orbiting particles */}
+      {[0, 1, 2].map((i) => {
+        const orbitRadius = ring1Size * 0.5;
+        const angle = (i * 120) * Math.PI / 180;
+        const x = size / 2 + Math.cos(angle) * orbitRadius - 3;
+        const y = size / 2 + Math.sin(angle) * orbitRadius - 3;
+        
         return (
-          <Animated.View key={`glint-${i}`} style={{ position: 'absolute', width: orbit, height: orbit, transform: [{ rotate: ringDeg }] }}>
-            <View style={{ position: 'absolute', top: orbit * 0.48, left: -2, width: 22, height: 3.5, borderRadius: 999, backgroundColor: i === 1 ? 'rgba(255,255,255,0.94)' : 'rgba(245,215,255,0.96)', shadowColor: '#d946ef', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 14 }} />
-          </Animated.View>
+          <Animated.View
+            key={i}
+            style={{
+              position: 'absolute',
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: i === 0 ? '#67e8f9' : i === 1 ? '#a78bfa' : '#f472b6',
+              left: x,
+              top: y,
+              shadowColor: i === 0 ? '#67e8f9' : i === 1 ? '#a78bfa' : '#f472b6',
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 1,
+              shadowRadius: 6,
+              transform: [{ rotate: ring1Rotate }],
+            }}
+          />
         );
       })}
-
-      <Animated.View style={{ width: sphereSize, height: sphereSize, borderRadius: sphereSize / 2, ...styles.sphere, transform: [{ scale: coreScale }] }}>
-        <LinearGradient colors={['#040a1c', '#08162f', '#0f347f', '#4d1db3']} locations={[0, 0.22, 0.62, 1]} style={{ width: sphereSize, height: sphereSize, borderRadius: sphereSize / 2 }} />
-        <LinearGradient colors={['rgba(6,12,30,0.20)', 'transparent', 'transparent', 'rgba(7,10,25,0.45)']} locations={[0, 0.22, 0.62, 1]} style={{ position: 'absolute', width: sphereSize, height: sphereSize, borderRadius: sphereSize / 2 }} />
-        <LinearGradient colors={['rgba(194,250,255,0.98)', 'rgba(94,232,255,0.85)', 'rgba(84,168,255,0.50)', 'rgba(230,115,255,0.38)', 'transparent']} locations={[0, 0.12, 0.4, 0.7, 1]} style={{ position: 'absolute', width: sphereSize, height: sphereSize, borderRadius: sphereSize / 2 }} />
-        <View style={{ position: 'absolute', width: sphereSize * 0.40, height: sphereSize * 0.40, borderRadius: 999, left: sphereSize * 0.30, top: sphereSize * 0.18, backgroundColor: 'rgba(158,248,255,0.98)', shadowColor: '#67e8f9', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 28 }} />
-        <View style={{ position: 'absolute', width: sphereSize * 0.07, height: sphereSize * 0.07, borderRadius: 999, left: sphereSize * 0.465, top: sphereSize * 0.42, backgroundColor: 'rgba(245,255,255,0.99)', shadowColor: '#9df6ff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 14 }} />
-        <View style={{ position: 'absolute', width: sphereSize * 0.34, height: sphereSize * 0.34, borderRadius: 999, left: sphereSize * 0.50, top: sphereSize * 0.06, backgroundColor: 'rgba(120,235,255,0.28)', shadowColor: '#67e8f9', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.82, shadowRadius: 22 }} />
-        <View style={{ position: 'absolute', width: sphereSize * 0.26, height: sphereSize * 0.26, borderRadius: 999, right: sphereSize * 0.04, top: sphereSize * 0.10, backgroundColor: 'rgba(255,170,248,0.72)', shadowColor: '#f0abfc', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 24 }} />
-        <LinearGradient colors={['transparent', 'rgba(146,85,255,0.16)', 'rgba(223,121,255,0.30)']} locations={[0, 0.56, 1]} style={{ position: 'absolute', width: sphereSize, height: sphereSize, borderRadius: sphereSize / 2 }} />
-        {nebulaSparkles.map((dot, i) => <View key={`ns-${i}`} style={{ position: 'absolute', width: dot.r * 2, height: dot.r * 2, borderRadius: dot.r, backgroundColor: dot.c, left: `${dot.x}%`, top: `${dot.y}%` }} />)}
-        <LinearGradient colors={['rgba(255,255,255,0.12)', 'rgba(145,214,255,0.06)', 'transparent']} locations={[0, 0.38, 1]} style={{ position: 'absolute', width: sphereSize, height: sphereSize, borderRadius: sphereSize / 2 }} />
-        <View style={{ position: 'absolute', inset: 0, borderRadius: sphereSize / 2, borderWidth: 2.2, borderColor: 'rgba(255,209,252,0.90)' }} />
-        <View style={{ position: 'absolute', inset: 3, borderRadius: sphereSize / 2, borderWidth: 1.2, borderColor: 'rgba(117,234,255,0.48)' }} />
-      </Animated.View>
-
-      <View style={{ position: 'absolute', width: sphereSize * 0.30, height: sphereSize * 0.12, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.22)', top: size / 2 - sphereSize * 0.22, left: size / 2 - sphereSize * 0.14 }} />
-      <View style={{ position: 'absolute', width: sphereSize * 0.14, height: sphereSize * 0.05, borderRadius: 999, backgroundColor: 'rgba(118,211,255,0.16)', top: size / 2 + sphereSize * 0.20 }} />
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  outerGlow: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ring: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  ringBorder: {
+    flex: 1,
+  },
+  orb: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  centerGlow: {
+    position: 'absolute',
+    alignSelf: 'center',
+    top: '25%',
+  },
+  secondaryGlow: {
+    position: 'absolute',
+  },
+  orbBorder: {
+    position: 'absolute',
+    inset: 0,
+  },
+});
 
 export default PremiumCosmicOrb;
