@@ -18,10 +18,10 @@ interface NebulaSphereOrbProps {
   isSpeaking: boolean;
 }
 
-const SPARKLES = Array.from({ length: 34 }, (_, i) => ({
+const SPARKLES = Array.from({ length: 48 }, (_, i) => ({
   x: (i * 19 + 7) % 96,
   y: (i * 29 + 13) % 96,
-  s: i % 6 === 0 ? 2.6 : i % 3 === 0 ? 2 : 1.4,
+  s: i % 8 === 0 ? 3 : i % 5 === 0 ? 2.3 : i % 3 === 0 ? 1.9 : 1.2,
   color: i % 5 === 0
     ? 'rgba(244,208,255,0.92)'
     : i % 3 === 0
@@ -30,12 +30,12 @@ const SPARKLES = Array.from({ length: 34 }, (_, i) => ({
 }));
 
 const RINGS = [
-  { r: 0.88, w: 2.6, color: 'rgba(205,118,255,0.62)' },
-  { r: 0.96, w: 2.2, color: 'rgba(178,101,255,0.56)' },
-  { r: 1.04, w: 2.0, color: 'rgba(161,91,255,0.46)' },
-  { r: 1.12, w: 1.7, color: 'rgba(155,80,255,0.34)' },
-  { r: 1.20, w: 1.4, color: 'rgba(184,106,255,0.24)' },
-  { r: 1.28, w: 1.1, color: 'rgba(184,106,255,0.14)' },
+  { r: 0.92, w: 2.05, color: 'rgba(234,122,255,0.68)' },
+  { r: 1.0, w: 1.8, color: 'rgba(208,104,255,0.58)' },
+  { r: 1.08, w: 1.55, color: 'rgba(186,92,255,0.46)' },
+  { r: 1.16, w: 1.35, color: 'rgba(166,86,255,0.34)' },
+  { r: 1.24, w: 1.15, color: 'rgba(164,96,255,0.22)' },
+  { r: 1.32, w: 0.95, color: 'rgba(164,96,255,0.14)' },
 ];
 
 export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProcessing, isSpeaking }) => {
@@ -106,23 +106,29 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
 
   const ringDeg = ringRotation.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
 
-  const sphereSize = size * 0.54;
-  const innerGlowSize = size * 0.9;
-  const outerGlowSize = size * 1.18;
+  const sphereSize = size * 0.55;
+  const innerGlowSize = size * 0.92;
+  const outerGlowSize = size * 1.16;
 
   // Internal nebula sparkle dots inside the sphere
   const nebulaSparkles = useMemo(() => {
     const dots: { x: number; y: number; r: number; c: string }[] = [];
-    for (let i = 0; i < 18; i++) {
+    for (let i = 0; i < 34; i++) {
       const angle = (i * 137.5 * Math.PI) / 180; // golden angle distribution
-      const dist = ((i * 7 + 3) % 40) / 100; // 0-0.40 from center
+      const dist = ((i * 9 + 4) % 44) / 100; // 0-0.44 from center
       const cx = 50 + Math.cos(angle) * dist * 100;
       const cy = 50 + Math.sin(angle) * dist * 100;
       dots.push({
         x: Math.max(8, Math.min(92, cx)),
         y: Math.max(8, Math.min(92, cy)),
-        r: i % 4 === 0 ? 2 : 1.2,
-        c: i % 3 === 0 ? 'rgba(255,255,255,0.7)' : i % 2 === 0 ? 'rgba(147,197,253,0.6)' : 'rgba(196,181,253,0.5)',
+        r: i % 8 === 0 ? 2.5 : i % 3 === 0 ? 1.6 : 0.95,
+        c: i % 4 === 0
+          ? 'rgba(255,255,255,0.92)'
+          : i % 3 === 0
+            ? 'rgba(125,241,255,0.82)'
+            : i % 2 === 0
+              ? 'rgba(147,197,253,0.68)'
+              : 'rgba(225,190,255,0.56)',
       });
     }
     return dots;
@@ -160,9 +166,9 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
       >
         <LinearGradient
           colors={[
-            'rgba(46,18,110,0.18)',
-            'rgba(109,40,217,0.14)',
-            'rgba(9,62,102,0.1)',
+            'rgba(57,22,161,0.26)',
+            'rgba(197,71,255,0.18)',
+            'rgba(16,108,157,0.18)',
             'transparent',
           ]}
           style={{ width: outerGlowSize, height: outerGlowSize, borderRadius: outerGlowSize / 2 }}
@@ -183,9 +189,9 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
       >
         <LinearGradient
           colors={[
-            'rgba(126,34,206,0.22)',
-            'rgba(212,70,255,0.24)',
-            'rgba(59,130,246,0.18)',
+            'rgba(105,39,217,0.12)',
+            'rgba(229,94,255,0.3)',
+            'rgba(56,189,248,0.24)',
             'transparent',
           ]}
           style={{ width: innerGlowSize, height: innerGlowSize, borderRadius: innerGlowSize / 2 }}
@@ -207,9 +213,10 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
               borderRadius: d / 2,
               borderWidth: ring.w,
               borderColor: ring.color,
+              opacity: i < 3 ? 1 : 0.92,
               transform: [
                 { rotate: ringDeg },
-                { scale: i % 2 === 0 ? 1 : 1.012 },
+                { scale: i % 2 === 0 ? 1 : 1.006 },
               ],
             }}
           />
@@ -217,7 +224,7 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
       })}
 
       {/* Ring glints */}
-      {[0.78, 0.96, 1.1].map((radius, i) => {
+      {[0.82, 1, 1.18].map((radius, i) => {
         const orbit = radius * size;
         return (
           <Animated.View
@@ -234,10 +241,10 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
                 position: 'absolute',
                 top: orbit * 0.48,
                 left: -1,
-                width: 18,
-                height: 3.5,
+                width: 20,
+                height: 3,
                 borderRadius: 999,
-                backgroundColor: 'rgba(245,215,255,0.95)',
+                backgroundColor: i === 1 ? 'rgba(255,255,255,0.92)' : 'rgba(245,215,255,0.95)',
                 shadowColor: '#d946ef',
                 shadowOffset: { width: 0, height: 0 },
                 shadowOpacity: 0.9,
@@ -269,24 +276,43 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
       >
         {/* Deep-space base */}
         <LinearGradient
-          colors={['#071329', '#0c2041', '#203f9a', '#6127b8']}
-          locations={[0, 0.24, 0.66, 1]}
-          start={{ x: 0.78, y: 0.84 }}
-          end={{ x: 0.2, y: 0.08 }}
+          colors={['#040a1c', '#08162f', '#0f347f', '#4d1db3']}
+          locations={[0, 0.22, 0.62, 1]}
+          start={{ x: 0.82, y: 0.86 }}
+          end={{ x: 0.18, y: 0.08 }}
           style={{ width: sphereSize, height: sphereSize, borderRadius: sphereSize / 2 }}
+        />
+
+        {/* Internal dark vignette to keep the sphere deep rather than washed out */}
+        <LinearGradient
+          colors={[
+            'rgba(6,12,30,0.18)',
+            'transparent',
+            'transparent',
+            'rgba(7,10,25,0.42)',
+          ]}
+          locations={[0, 0.22, 0.62, 1]}
+          start={{ x: 0.1, y: 0.08 }}
+          end={{ x: 0.88, y: 0.92 }}
+          style={{
+            position: 'absolute',
+            width: sphereSize,
+            height: sphereSize,
+            borderRadius: sphereSize / 2,
+          }}
         />
 
         {/* Cyan/magenta nebula bloom */}
         <LinearGradient
           colors={[
-            'rgba(176,248,255,0.96)',
-            'rgba(98,229,255,0.74)',
-            'rgba(112,140,255,0.4)',
-            'rgba(241,130,255,0.28)',
+            'rgba(194,250,255,0.96)',
+            'rgba(94,232,255,0.82)',
+            'rgba(84,168,255,0.46)',
+            'rgba(230,115,255,0.34)',
             'transparent',
           ]}
-          locations={[0, 0.18, 0.5, 0.76, 1]}
-          start={{ x: 0.46, y: 0.36 }}
+          locations={[0, 0.12, 0.4, 0.7, 1]}
+          start={{ x: 0.52, y: 0.28 }}
           end={{ x: 0.93, y: 0.9 }}
           style={{
             position: 'absolute',
@@ -296,20 +322,54 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
           }}
         />
 
-        {/* Bright central glow */}
+        {/* Bright central cyan glow */}
         <View
           style={{
             position: 'absolute',
-            width: sphereSize * 0.44,
-            height: sphereSize * 0.44,
+            width: sphereSize * 0.38,
+            height: sphereSize * 0.38,
             borderRadius: 999,
-            left: sphereSize * 0.28,
-            top: sphereSize * 0.2,
-            backgroundColor: 'rgba(155,247,255,0.9)',
+            left: sphereSize * 0.31,
+            top: sphereSize * 0.19,
+            backgroundColor: 'rgba(158,248,255,0.96)',
             shadowColor: '#67e8f9',
             shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.95,
-            shadowRadius: 28,
+            shadowOpacity: 1,
+            shadowRadius: 26,
+          }}
+        />
+
+        {/* Hot center star */}
+        <View
+          style={{
+            position: 'absolute',
+            width: sphereSize * 0.065,
+            height: sphereSize * 0.065,
+            borderRadius: 999,
+            left: sphereSize * 0.467,
+            top: sphereSize * 0.42,
+            backgroundColor: 'rgba(245,255,255,0.98)',
+            shadowColor: '#9df6ff',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 1,
+            shadowRadius: 12,
+          }}
+        />
+
+        {/* Secondary cyan bloom */}
+        <View
+          style={{
+            position: 'absolute',
+            width: sphereSize * 0.32,
+            height: sphereSize * 0.32,
+            borderRadius: 999,
+            left: sphereSize * 0.48,
+            top: sphereSize * 0.08,
+            backgroundColor: 'rgba(120,235,255,0.26)',
+            shadowColor: '#67e8f9',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0.78,
+            shadowRadius: 20,
           }}
         />
 
@@ -317,16 +377,34 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
         <View
           style={{
             position: 'absolute',
-            width: sphereSize * 0.22,
-            height: sphereSize * 0.22,
+            width: sphereSize * 0.24,
+            height: sphereSize * 0.24,
             borderRadius: 999,
             right: sphereSize * 0.06,
             top: sphereSize * 0.12,
-            backgroundColor: 'rgba(255,190,252,0.58)',
+            backgroundColor: 'rgba(255,170,248,0.68)',
             shadowColor: '#f0abfc',
             shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.9,
-            shadowRadius: 18,
+            shadowOpacity: 1,
+            shadowRadius: 22,
+          }}
+        />
+
+        {/* Lower violet atmosphere */}
+        <LinearGradient
+          colors={[
+            'transparent',
+            'rgba(146,85,255,0.14)',
+            'rgba(223,121,255,0.28)',
+          ]}
+          locations={[0, 0.56, 1]}
+          start={{ x: 0.3, y: 0.28 }}
+          end={{ x: 0.7, y: 1 }}
+          style={{
+            position: 'absolute',
+            width: sphereSize,
+            height: sphereSize,
+            borderRadius: sphereSize / 2,
           }}
         />
 
@@ -346,14 +424,41 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
           />
         ))}
 
+        {/* Soft internal mist to blend the starfield */}
+        <LinearGradient
+          colors={[
+            'rgba(255,255,255,0.1)',
+            'rgba(145,214,255,0.05)',
+            'transparent',
+          ]}
+          locations={[0, 0.38, 1]}
+          start={{ x: 0.58, y: 0.1 }}
+          end={{ x: 0.42, y: 0.9 }}
+          style={{
+            position: 'absolute',
+            width: sphereSize,
+            height: sphereSize,
+            borderRadius: sphereSize / 2,
+          }}
+        />
+
         {/* Rim light */}
         <View
           style={{
             position: 'absolute',
             inset: 0,
             borderRadius: sphereSize / 2,
-            borderWidth: 2.2,
-            borderColor: 'rgba(251,213,255,0.72)',
+            borderWidth: 2.1,
+            borderColor: 'rgba(255,209,252,0.88)',
+          }}
+        />
+        <View
+          style={{
+            position: 'absolute',
+            inset: 3,
+            borderRadius: sphereSize / 2,
+            borderWidth: 1.15,
+            borderColor: 'rgba(117,234,255,0.44)',
           }}
         />
       </Animated.View>
@@ -362,12 +467,12 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
       <View
         style={{
           position: 'absolute',
-          width: sphereSize * 0.42,
-          height: sphereSize * 0.14,
+          width: sphereSize * 0.28,
+          height: sphereSize * 0.1,
           borderRadius: 999,
-          backgroundColor: 'rgba(255,255,255,0.5)',
+          backgroundColor: 'rgba(255,255,255,0.2)',
           top: size / 2 - sphereSize * 0.21,
-          left: size / 2 - sphereSize * 0.18,
+          left: size / 2 - sphereSize * 0.12,
         }}
       />
 
@@ -375,11 +480,11 @@ export const NebulaSphereOrb: React.FC<NebulaSphereOrbProps> = ({ size, isProces
       <View
         style={{
           position: 'absolute',
-          width: sphereSize * 0.18,
-          height: sphereSize * 0.065,
+          width: sphereSize * 0.12,
+          height: sphereSize * 0.042,
           borderRadius: 999,
-          backgroundColor: 'rgba(118,211,255,0.24)',
-          top: size / 2 + sphereSize * 0.16,
+          backgroundColor: 'rgba(118,211,255,0.14)',
+          top: size / 2 + sphereSize * 0.18,
         }}
       />
     </View>
