@@ -612,7 +612,9 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
               const nativeEvent = (e as any)?.nativeEvent || {};
               const key = nativeEvent.key;
               const shiftKey = nativeEvent.shiftKey;
-              if (key === 'Enter' && !shiftKey) {
+              const ctrlKey  = nativeEvent.ctrlKey || nativeEvent.metaKey;
+              // Enter = send, Ctrl/Cmd+Enter = send, Shift+Enter = new line
+              if (key === 'Enter' && (!shiftKey || ctrlKey)) {
                 (e as any).preventDefault?.();
                 handleSubmit();
               }

@@ -86,14 +86,14 @@ export function resolveSelectedVoiceId(options: {
   const preferenceVoice = String(options.preferenceVoiceId || '').trim();
   const preferenceLanguage = String(options.preferenceLanguage || '').trim();
 
-  if (isProviderVoiceId(requestedVoice)) {
-    return requestedVoice;
-  }
-
   if (isProviderVoiceId(preferenceVoice)) {
     if (!preferenceLanguage || toShortCode(preferenceLanguage) === short) {
       return preferenceVoice;
     }
+  }
+
+  if (isProviderVoiceId(requestedVoice)) {
+    return requestedVoice;
   }
 
   const requestedGender = requestedVoice === 'male' || requestedVoice === 'female'

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { assertSupabase } from '@/lib/supabase';
+import { shouldExcludeStudentFeeFromMonthScopedViews } from '@/lib/utils/studentFeeMonth';
 import { formatCurrency, pickSectionError } from '@/hooks/useFinanceControlCenter';
 import type { FinanceControlCenterBundle } from '@/types/finance';
 
@@ -36,7 +37,7 @@ export function FinanceReceivablesTab({
 
       const { data: students } = await supabase
         .from('students')
-        .select('id, first_name, last_name, class_id')
+        .select('id, first_name, last_name, class_id, enrollment_date')
         .or(`preschool_id.eq.${organizationId},organization_id.eq.${organizationId}`)
         .eq('is_active', true)
         .eq('status', 'active')
@@ -47,7 +48,7 @@ export function FinanceReceivablesTab({
       const studentIds = students.map((s: any) => s.id);
       const { data: fees } = await supabase
         .from('student_fees')
-        .select('student_id, status, final_amount, amount, amount_paid, amount_outstanding')
+        .select('student_id, status, final_amount, amount, amount_paid, amount_outstanding, due_date, billing_month')
         .eq('billing_month', monthIso)
         .in('student_id', studentIds);
 
@@ -71,7 +72,9 @@ export function FinanceReceivablesTab({
         : 0;
 
       const list = students.map((s: any) => {
-        const studentFees = feesByStudent.get(s.id) || [];
+        const studentFees = (feesByStudent.get(s.id) || []).filter((fee) =>
+          !shouldExcludeStudentFeeFromMonthScopedViews(fee, s.enrollment_date),
+        );
         const hasFees = studentFees.length > 0;
 
         let totalDue = 0;

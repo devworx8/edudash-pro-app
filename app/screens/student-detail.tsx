@@ -41,6 +41,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme, type ThemeColors } from '@/contexts/ThemeContext';
 import { AlertModal, type AlertButton } from '@/components/ui/AlertModal';
 import { normalizeRole } from '@/lib/rbac/profile-utils';
+import { getMonthStartISO } from '@/lib/utils/dateUtils';
 
 // Shared components
 import {
@@ -581,11 +582,12 @@ export default function StudentDetailScreen() {
   const handleCorrectFee = async (studentId: string, billingMonth: string) => {
     if (!user || !isPrincipal) throw new Error('Unauthorized');
     const supabase = assertSupabase();
+    const normalizedBillingMonth = getMonthStartISO(billingMonth || new Date());
 
     const { data, error } = await supabase
       .rpc('assign_correct_fee_for_student', {
         p_student_id: studentId,
-        p_billing_month: billingMonth,
+        p_billing_month: normalizedBillingMonth,
       });
 
     if (error) {

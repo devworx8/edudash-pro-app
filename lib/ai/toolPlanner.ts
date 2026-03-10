@@ -26,7 +26,7 @@ const KEYWORD_HINTS = [
   // Analytics & reports
   'stats', 'statistics', 'report', 'analytics', 'performance',
   // Documents & export
-  'export', 'document', 'open', 'link',
+  'export', 'document', 'open', 'link', 'pdf', 'printable', 'download',
   // Communication
   'message', 'email', 'compose', 'send', 'notify',
   // Support
@@ -39,6 +39,8 @@ const CAPS_SEARCH_PATTERN = /\b(caps|curriculum|south\s*afric(?:a|an)|dbe)\b/i;
 const SEARCH_ACTION_PATTERN = /\b(search|look\s*up|find|check|align|guideline|criteria)\b/i;
 const PLAN_MODE_PATTERN = /\b(please\s+implement\s+this\s+plan|implement\s+this\s+plan|implement\s+the\s+plan|execute\s+this\s+plan|execution\s+plan|implementation\s+plan|rollout\s+plan)\b/i;
 const PLAN_SUPPORT_PATTERN = /\b(plan|phases?|steps?|milestones?|hardening|rollout|implementation)\b/i;
+const PDF_REQUEST_PATTERN = /\b(pdf|printable|print[- ]?ready|downloadable)\b/i;
+const PDF_ACTION_PATTERN = /\b(create|generate|make|export|save|convert|turn|prepare|print)\b/i;
 
 const normalizeSpaces = (value: string): string =>
   String(value || '')
@@ -73,6 +75,29 @@ function resolveDeterministicToolPlan(message: string, tools: ToolPlannerCandida
       .map((tool) => String(tool?.name || '').trim())
       .filter(Boolean)
   );
+
+  if (
+    PDF_REQUEST_PATTERN.test(normalized) &&
+    (PDF_ACTION_PATTERN.test(normalized) || /\bpdf\b/i.test(normalized)) &&
+    availableTools.has('generate_pdf_from_prompt')
+  ) {
+    let documentType: string | undefined;
+    if (/\bworksheet\b/i.test(normalized)) documentType = 'worksheet';
+    else if (/\b(study\s*guide|revision)\b/i.test(normalized)) documentType = 'study_guide';
+    else if (/\b(report|progress)\b/i.test(normalized)) documentType = 'report';
+    else if (/\b(letter|email)\b/i.test(normalized)) documentType = 'letter';
+
+    return {
+      tool: 'generate_pdf_from_prompt',
+      parameters: {
+        prompt: normalized,
+        ...(documentType ? { document_type: documentType } : {}),
+      },
+      reason: 'deterministic_pdf_generation_intent',
+      intent: 'tool',
+      intent_confidence: 0.94,
+    };
+  }
 
   if (
     CAPS_SEARCH_PATTERN.test(normalized) &&

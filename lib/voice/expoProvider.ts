@@ -15,6 +15,7 @@ import { STT_CONTEXTUAL_STRINGS, applyPartialCorrections } from '@/lib/voice/stt
 import {
   ExpoSpeechRecognitionModule,
 } from 'expo-speech-recognition';
+import { Platform } from 'react-native';
 import type { VoiceProvider, VoiceSession, VoiceStartOptions } from './unifiedProvider';
 
 // Map app language codes to device locale codes
@@ -26,6 +27,20 @@ function mapLanguageToLocale(lang?: string): string {
   if (base.startsWith('nso')) return 'en-ZA'; // Sepedi not reliably supported on-device → fallback to en-ZA for ASR
   if (base.startsWith('en')) return 'en-ZA';
   return 'en-ZA'; // Default to English (South Africa)
+}
+
+function buildLocaleCandidates(lang?: string): string[] {
+  const primary = mapLanguageToLocale(lang);
+  const baseLanguage = primary.split('-')[0] || 'en';
+  const ordered = [primary, baseLanguage, 'en-ZA', 'en-GB', 'en-US', 'default'];
+  return ordered.filter((locale, index) => ordered.indexOf(locale) === index);
+}
+
+function normalizeLocale(locale?: string): string {
+  return String(locale || '')
+    .trim()
+    .replace(/_/g, '-')
+    .toLowerCase();
 }
 
 class ExpoSpeechSession implements VoiceSession {
@@ -46,6 +61,102 @@ class ExpoSpeechSession implements VoiceSession {
   /** Cap transient network retries to prevent runaway loops */
   private static readonly MAX_NETWORK_RETRIES = 6;
   private networkRetryCount = 0;
+  private localeCandidates: string[] = [];
+  private currentLocaleIndex = 0;
+  private currentLanguageKey = '';
+
+  private async resolveSupportedLocaleCandidates(candidates: string[]): Promise<string[]> {
+    if (candidates.length === 0) {
+      return ['en-US'];
+    }
+
+    // Android 12 and below may reject getSupportedLocales entirely. In that
+    // case we keep the raw candidate chain and let runtime fallback handle it.
+    if (Platform.OS !== 'web') {
+      try {
+        const supported = await ExpoSpeechRecognitionModule.getSupportedLocales();
+        const available = Array.isArray(supported?.locales)
+          ? supported.locales.map((locale) => normalizeLocale(locale))
+          : [];
+
+        if (available.length > 0) {
+          const matched = candidates.filter((locale) => {
+            if (locale === 'default') return true;
+            const normalized = normalizeLocale(locale);
+            return (
+              available.includes(normalized) ||
+              available.some((supportedLocale) => supportedLocale.startsWith(`${normalized}-`)) ||
+              normalized.startsWith('en-') && available.includes('en')
+            );
+          });
+          if (matched.length > 0) {
+            return matched;
+          }
+
+          const englishMatch = available.find((locale) => locale === 'en' || locale.startsWith('en-'));
+          if (englishMatch) {
+            return [englishMatch, 'default'];
+          }
+        }
+      } catch (error) {
+        if (__DEV__) {
+          console.warn('[ExpoProvider] Could not preflight supported locales, using fallback chain:', error);
+        }
+      }
+    }
+
+    return candidates;
+  }
+
+  private async startRecognitionForCurrentLocale(): Promise<void> {
+    const locale = this.localeCandidates[this.currentLocaleIndex] || 'default';
+
+    if (__DEV__) {
+      console.log('[ExpoProvider] Using locale:', locale);
+    }
+
+    await ExpoSpeechRecognitionModule.start({
+      ...(locale === 'default' ? {} : { lang: locale }),
+      interimResults: true,
+      maxAlternatives: 1,
+      continuous: true,
+      requiresOnDeviceRecognition: false,
+      addsPunctuation: true,
+      contextualStrings: STT_CONTEXTUAL_STRINGS,
+    });
+  }
+
+  private async retryWithNextLocale(reason: string): Promise<boolean> {
+    if (!this.currentOpts) return false;
+    if (this.currentLocaleIndex >= this.localeCandidates.length - 1) return false;
+
+    this.currentLocaleIndex += 1;
+    const nextLocale = this.localeCandidates[this.currentLocaleIndex];
+
+    if (__DEV__) {
+      console.warn(`[ExpoProvider] Retrying speech recognition with fallback locale ${nextLocale} after ${reason}`);
+    }
+
+    this.cleanupListeners();
+    if (this.autoRestartTimer) {
+      clearTimeout(this.autoRestartTimer);
+      this.autoRestartTimer = null;
+    }
+
+    try {
+      await ExpoSpeechRecognitionModule.stop();
+    } catch {
+      // Best-effort stop before restarting with the next locale.
+    }
+
+    try {
+      await this.start(this.currentOpts);
+      return true;
+    } catch (retryErr) {
+      console.error('[ExpoProvider] Locale fallback retry failed:', retryErr);
+      return false;
+    }
+  }
 
   async start(opts: VoiceStartOptions): Promise<boolean> {
     try {
@@ -53,6 +164,7 @@ class ExpoSpeechSession implements VoiceSession {
       
       this.currentOpts = opts;
       this.explicitlyStopped = false;
+      this.autoRestartCount = 0;
       
       // Request microphone permissions
       const { status } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -61,48 +173,29 @@ class ExpoSpeechSession implements VoiceSession {
         return false;
       }
       
-      // Get locale for recognition
-      const locale = mapLanguageToLocale(opts.language);
-      
-      if (__DEV__) {
-        console.log('[ExpoProvider] Using locale:', locale);
+      const languageKey = String(opts.language || '').toLowerCase();
+      if (this.currentLanguageKey !== languageKey || this.localeCandidates.length === 0) {
+        this.currentLanguageKey = languageKey;
+        this.localeCandidates = await this.resolveSupportedLocaleCandidates(
+          buildLocaleCandidates(opts.language)
+        );
+        this.currentLocaleIndex = 0;
       }
-      
+
       // Configure and start recognition
-      try {
-        await ExpoSpeechRecognitionModule.start({
-          lang: locale,
-          interimResults: true, // Enable partial results
-          maxAlternatives: 1,
-          continuous: true, // Keep listening
-          requiresOnDeviceRecognition: false, // Allow cloud if needed
-          addsPunctuation: true,
-          contextualStrings: STT_CONTEXTUAL_STRINGS,
-        });
-      } catch (startErr) {
-        // If locale unsupported, fallback to en-ZA then en-US
-        console.warn('[ExpoProvider] Start failed for locale', locale, startErr);
+      while (true) {
         try {
-          await ExpoSpeechRecognitionModule.start({
-            lang: 'en-ZA',
-            interimResults: true,
-            maxAlternatives: 1,
-            continuous: true,
-            requiresOnDeviceRecognition: false,
-            addsPunctuation: true,
-            contextualStrings: STT_CONTEXTUAL_STRINGS,
-          });
-        } catch (fallbackErr) {
-          console.warn('[ExpoProvider] Fallback start failed for en-ZA, trying en-US', fallbackErr);
-          await ExpoSpeechRecognitionModule.start({
-            lang: 'en-US',
-            interimResults: true,
-            maxAlternatives: 1,
-            continuous: true,
-            requiresOnDeviceRecognition: false,
-            addsPunctuation: true,
-            contextualStrings: STT_CONTEXTUAL_STRINGS,
-          });
+          await this.startRecognitionForCurrentLocale();
+          break;
+        } catch (startErr) {
+          const locale = this.localeCandidates[this.currentLocaleIndex] || 'unknown';
+          const normalizedError = String((startErr as any)?.message || startErr || '').toLowerCase();
+          const localeUnsupported = normalizedError.includes('language-not-supported');
+          console.warn('[ExpoProvider] Start failed for locale', locale, startErr);
+          if (!localeUnsupported || this.currentLocaleIndex >= this.localeCandidates.length - 1) {
+            throw startErr;
+          }
+          this.currentLocaleIndex += 1;
         }
       }
       
@@ -170,6 +263,19 @@ class ExpoSpeechSession implements VoiceSession {
             }, ExpoSpeechSession.NETWORK_RETRY_DELAY_MS);
             return;
           }
+        }
+
+        if (normalized.includes('language-not-supported')) {
+          this.active = false;
+          void this.retryWithNextLocale(errorText).then((recovered) => {
+            if (!recovered) {
+              console.error('[ExpoProvider] Recognition error:', errorText);
+              this.networkRetryCount = 0;
+              this.currentOpts?.onError?.(errorText);
+              this.stop().catch(() => {});
+            }
+          });
+          return;
         }
 
         console.error('[ExpoProvider] Recognition error:', errorText);

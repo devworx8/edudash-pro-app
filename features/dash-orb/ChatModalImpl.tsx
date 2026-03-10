@@ -3,7 +3,6 @@ import { View, Text, TouchableOpacity, Modal, TextInput, ScrollView, KeyboardAvo
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRealtimeTier } from '@/hooks/useRealtimeTier';
@@ -327,12 +326,13 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           <SafeAreaView edges={['top']} style={[styles.headerSafeArea, { backgroundColor: theme.surface }]}>
             <View style={[styles.chatHeader, { borderBottomColor: theme.border }]}>
               <View style={styles.headerLeft}>
-                <LinearGradient
-                  colors={[theme.accent, theme.primary]}
-                  style={styles.headerOrb}
-                >
-                  <Ionicons name="sparkles" size={20} color="#fff" />
-                </LinearGradient>
+                <View style={styles.headerOrb}>
+                  <CosmicOrb
+                    size={40}
+                    isProcessing={isProcessing || isListeningForCommand}
+                    isSpeaking={isSpeaking}
+                  />
+                </View>
                 <View style={styles.headerText}>
                   <Text style={[styles.headerTitle, { color: theme.text }]}>
                     {roleCopy.title}

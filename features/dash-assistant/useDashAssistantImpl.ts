@@ -186,6 +186,28 @@ type PendingDashRequest = {
   queuedAt: number;
 };
 
+const TOOL_ACTIVITY_LABELS: Record<string, string> = {
+  export_pdf: 'Generating PDF',
+  generate_pdf_from_prompt: 'Generating PDF',
+  search_caps_curriculum: 'Searching CAPS',
+  get_caps_documents: 'Opening CAPS documents',
+  get_assignments: 'Checking assignments',
+  get_schedule: 'Checking your schedule',
+  support_check_user_context: 'Checking support context',
+  support_create_ticket: 'Creating support ticket',
+};
+
+function formatDashToolActivityLabel(toolName: string, fallbackLabel?: string): string {
+  const normalized = String(toolName || '').trim().toLowerCase();
+  if (fallbackLabel) return fallbackLabel;
+  if (normalized && TOOL_ACTIVITY_LABELS[normalized]) {
+    return TOOL_ACTIVITY_LABELS[normalized];
+  }
+  return normalized
+    ? `Using ${normalized.replace(/_/g, ' ')}`
+    : 'Using a helper tool';
+}
+
 interface UseDashAssistantReturn {
   // State
   messages: DashMessage[];
@@ -193,6 +215,7 @@ interface UseDashAssistantReturn {
   setInputText: (text: string) => void;
   isLoading: boolean;
   hasActiveToolExecution: boolean;
+  activeToolLabel: string | null;
   loadingStatus: 'uploading' | 'analyzing' | 'thinking' | 'responding' | null;
   streamingMessageId: string | null;
   streamingContent: string;
@@ -248,7 +271,10 @@ interface UseDashAssistantReturn {
   sendTutorAnswer: (answer: string, sourceMessageId?: string) => Promise<void>;
   cancelGeneration: () => void;
   stopAllActivity: (reason?: string) => Promise<void>;
-  speakResponse: (message: DashMessage, options?: { preferFastStart?: boolean }) => Promise<void>;
+  speakResponse: (
+    message: DashMessage,
+    options?: { preferFastStart?: boolean; forceSpeak?: boolean }
+  ) => Promise<void>;
   stopSpeaking: () => Promise<void>;
   scrollToBottom: (opts?: { animated?: boolean; delay?: number; force?: boolean }) => void;
   handleAttachFile: () => Promise<void>;
@@ -361,7 +387,8 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       (tool.category === 'caps' && capsAllowedForRole) ||
       tool.category === 'data' ||
       tool.category === 'navigation' ||
-      (tool.category === 'communication' && tool.name === 'export_pdf')
+      (tool.category === 'communication' &&
+        (tool.name === 'export_pdf' || tool.name === 'generate_pdf_from_prompt'))
     );
   }, [toolShortcuts, profile?.role]);
 
@@ -382,6 +409,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   const [messages, setMessages] = useState<DashMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [activeToolLabel, setActiveToolLabel] = useState<string | null>(null);
   const [loadingStatus, setLoadingStatus] = useState<'uploading' | 'analyzing' | 'thinking' | 'responding' | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [, setStatusStartTime] = useState<number>(0);
@@ -572,6 +600,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     activeToolExecutionCountRef.current = Math.max(0, activeToolExecutionCountRef.current - 1);
     if (activeToolExecutionCountRef.current === 0) {
       setHasActiveToolExecution(false);
+      setActiveToolLabel(null);
     }
   }, []);
 
@@ -1180,7 +1209,11 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   }, [dashInstance]);
 
   // Speech functions
-  const speakResponse = useCallback(async (message: DashMessage, options?: { preferFastStart?: boolean }) => {
+  const speakResponse = useCallback(
+    async (
+      message: DashMessage,
+      options?: { preferFastStart?: boolean; forceSpeak?: boolean }
+    ) => {
     setSpeechChunkProgress(null);
     await speakDashResponse({
       message,
@@ -1207,23 +1240,26 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       setVoiceEnabled,
       stopSpeaking,
       preferFastStart: options?.preferFastStart,
+      forceSpeak: options?.forceSpeak,
       onSpeechChunkProgress: setSpeechChunkProgress,
     });
-  }, [
-    dashInstance,
-    speakingMessageId,
-    isSpeaking,
-    hasTTSAccess,
-    showAlert,
-    hideAlert,
-    voiceEnabled,
-    stopSpeaking,
-    isFreeTier,
-    consumeVoiceBudget,
-    sttFinalizeTimerRef,
-    sttTranscriptBufferRef,
-    setSpeechChunkProgress,
-  ]);
+    },
+    [
+      dashInstance,
+      speakingMessageId,
+      isSpeaking,
+      hasTTSAccess,
+      showAlert,
+      hideAlert,
+      voiceEnabled,
+      stopSpeaking,
+      isFreeTier,
+      consumeVoiceBudget,
+      sttFinalizeTimerRef,
+      sttTranscriptBufferRef,
+      setSpeechChunkProgress,
+    ]
+  );
 
   // Voice and speaking functions (custom gating + alerts)
 
@@ -1232,6 +1268,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     if (!dashInstance) return;
     const requestId = `dash_req_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     activeRequestIdRef.current = requestId;
+    setActiveToolLabel(null);
     responseLifecycleRef.current = {
       requestId,
       state: 'idle',
@@ -1528,6 +1565,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       const allowAutoToolPlanner = responseMode !== 'tutor_interactive';
       if (allowAutoToolPlanner && shouldAttemptToolPlan(outgoingText)) {
         try {
+          setActiveToolLabel('Deciding whether a tool can help');
           let supabaseClient: any = null;
           try {
             supabaseClient = assertSupabase();
@@ -1550,31 +1588,33 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
               plannerIntentConfidence = plan.intent_confidence;
             }
 
-	            if (plan?.tool) {
-	              const toolTraceId = `dash_assistant_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-	              beginToolExecution();
-	              const execution = await ToolRegistry.execute(plan.tool, plan.parameters || {}, {
-	                profile,
-	                user,
-	                supabase: supabaseClient,
-	                role: String(profile?.role || 'parent').toLowerCase(),
-	                tier: tier || 'free',
-	                organizationId: (profile as any)?.organization_id || (profile as any)?.preschool_id || null,
-	                hasOrganization: Boolean((profile as any)?.organization_id || (profile as any)?.preschool_id),
-	                isGuest: !user?.id,
-	                trace_id: toolTraceId,
-	                tool_plan: {
-	                  source: 'useDashAssistant.auto_planner',
-	                  tool: plan.tool,
-	                },
-	              }).finally(() => {
-	                endToolExecution();
-	              });
-	              if (!isCurrentRequest()) return;
-	              const label = autoToolShortcuts.find((tool) => tool.name === plan.tool)?.label || plan.tool;
-	              const executionPayload = (execution?.result && typeof execution.result === 'object')
-	                ? execution.result as Record<string, unknown>
-	                : null;
+            if (plan?.tool) {
+              const label =
+                autoToolShortcuts.find((tool) => tool.name === plan.tool)?.label || undefined;
+              setActiveToolLabel(formatDashToolActivityLabel(plan.tool, label));
+              const toolTraceId = `dash_assistant_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+              beginToolExecution();
+              const execution = await ToolRegistry.execute(plan.tool, plan.parameters || {}, {
+                profile,
+                user,
+                supabase: supabaseClient,
+                role: String(profile?.role || 'parent').toLowerCase(),
+                tier: tier || 'free',
+                organizationId: (profile as any)?.organization_id || (profile as any)?.preschool_id || null,
+                hasOrganization: Boolean((profile as any)?.organization_id || (profile as any)?.preschool_id),
+                isGuest: !user?.id,
+                trace_id: toolTraceId,
+                tool_plan: {
+                  source: 'useDashAssistant.auto_planner',
+                  tool: plan.tool,
+                },
+              }).finally(() => {
+                endToolExecution();
+              });
+              if (!isCurrentRequest()) return;
+              const executionPayload = (execution?.result && typeof execution.result === 'object')
+                ? execution.result as Record<string, unknown>
+                : null;
               const executionSummary = executionPayload
                 ? String(
                     executionPayload.summary
@@ -1583,46 +1623,50 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
                     || ''
                   ).trim()
                 : '';
-	              if (execution?.success !== false) {
-	                autoToolOutcome = {
-	                  status: 'success',
-	                  source: 'tool_registry',
-	                };
-	                const toolMessageContent = formatToolResultMessage(label, execution);
-	                autoToolContext = toolMessageContent;
-	                autoToolExecution = {
+              if (execution?.success !== false) {
+                autoToolOutcome = {
+                  status: 'success',
+                  source: 'tool_registry',
+                };
+                const toolMessageContent = formatToolResultMessage(label || plan.tool, execution);
+                autoToolContext = toolMessageContent;
+                autoToolExecution = {
                   toolName: plan.tool,
                   toolArgs: (plan.parameters || {}) as Record<string, unknown>,
                   execution,
                   summary: executionSummary || undefined,
                 };
-	              } else {
-	                autoToolOutcome = {
-	                  status: 'degraded',
-	                  source: 'tool_registry',
-	                  errorCode: String(execution?.error || 'tool_execution_failed'),
-	                  userSafeNote: 'A helper tool failed, but Dash will continue with the current response.',
-	                  details: {
-	                    toolName: plan.tool,
-	                  },
-	                };
-	                logDashTrace('auto_tool_failed_skipped_context', {
-	                  tool: plan.tool,
-	                  error: execution?.error || 'tool_execution_failed',
-	                });
-	              }
+              } else {
+                autoToolOutcome = {
+                  status: 'degraded',
+                  source: 'tool_registry',
+                  errorCode: String(execution?.error || 'tool_execution_failed'),
+                  userSafeNote: 'A helper tool failed, but Dash will continue with the current response.',
+                  details: {
+                    toolName: plan.tool,
+                  },
+                };
+                logDashTrace('auto_tool_failed_skipped_context', {
+                  tool: plan.tool,
+                  error: execution?.error || 'tool_execution_failed',
+                });
+              }
             }
           }
-	        } catch (toolErr) {
-	          autoToolOutcome = {
-	            status: 'degraded',
-	            source: 'tool_registry',
-	            errorCode: toolErr instanceof Error ? toolErr.message : 'tool_execution_exception',
-	            userSafeNote: 'A helper tool failed, but Dash will continue with the current response.',
-	          };
-	          console.warn('[useDashAssistant] Auto tool failed:', toolErr);
-	        }
-	      }
+        } catch (toolErr) {
+          autoToolOutcome = {
+            status: 'degraded',
+            source: 'tool_registry',
+            errorCode: toolErr instanceof Error ? toolErr.message : 'tool_execution_exception',
+            userSafeNote: 'A helper tool failed, but Dash will continue with the current response.',
+          };
+          console.warn('[useDashAssistant] Auto tool failed:', toolErr);
+        } finally {
+          if (activeToolExecutionCountRef.current === 0) {
+            setActiveToolLabel(null);
+          }
+        }
+      }
 
       const guidedPlanModeActive = plannerIntent === 'plan_mode';
       if (guidedPlanModeActive) {
@@ -2805,6 +2849,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
         },
       };
 
+      setActiveToolLabel(formatDashToolActivityLabel(toolName, label));
       beginToolExecution();
       const execution = await ToolRegistry.execute(toolName, params, context).finally(() => {
         endToolExecution();
@@ -3272,6 +3317,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     setInputText,
     isLoading,
     hasActiveToolExecution,
+    activeToolLabel,
     loadingStatus,
     streamingMessageId,
     streamingContent,

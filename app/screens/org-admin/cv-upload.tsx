@@ -19,6 +19,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { normalizeRole } from '@/lib/rbac';
 import { ensureImageLibraryPermission } from '@/lib/utils/mediaLibrary';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
+import { clampPercent } from '@/lib/progress/clampPercent';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function CVUploadScreen() {
@@ -31,6 +32,7 @@ export default function CVUploadScreen() {
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const safeUploadProgress = clampPercent(uploadProgress, { source: 'org-admin/cv-upload.upload-progress' });
 
   const normalizedRole = profile?.role ? normalizeRole(profile.role) : null;
   const canUploadCVs =
@@ -299,7 +301,7 @@ export default function CVUploadScreen() {
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${uploadProgress}%`, backgroundColor: theme.primary },
+                    { width: `${safeUploadProgress}%`, backgroundColor: theme.primary },
                   ]}
                 />
               </View>
@@ -389,4 +391,3 @@ const createStyles = (theme: any) => StyleSheet.create({
   },
   noteText: { flex: 1, color: theme.textSecondary, fontSize: 13, lineHeight: 18 },
 });
-

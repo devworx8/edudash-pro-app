@@ -1,3 +1,5 @@
+import { shouldSuppressDashSpeechForStructuredContent } from './speechContentPolicy';
+
 const SPELLING_BLOCK_REGEX = /```spelling\s*[\s\S]*?```/i;
 
 export const isLearnerRole = (role?: string | null): boolean => {
@@ -28,6 +30,6 @@ export const shouldAutoSpeak = (params: {
   if (!params.voiceEnabled) return false;
   if (!params.autoSpeakEnabled) return false;
   if (containsSpellingBlock(params.responseText)) return false;
+  if (shouldSuppressDashSpeechForStructuredContent(params.responseText)) return false;
   return true;
 };
-

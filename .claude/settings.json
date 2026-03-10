@@ -34,7 +34,23 @@
       "Bash(grep -E \"\\\\.tsx?$\")",
       "Bash(curl -s \"http://localhost:8081/index.bundle?platform=web&dev=true&hot=false&lazy=true&transform.engine=hermes&transform.routerRoot=app&unstable_transformProfile=hermes-stable\")",
       "Bash(python3 -m json.tool)",
-      "Bash(npx expo install expo-media-library)"
+      "Bash(npx expo install expo-media-library)",
+      "Bash(ls /home/edp/Desktop/dashpro/components/ai/dash-assistant/DashMessageBubble.rich*)",
+      "Read(//home/edp/Downloads/SUPER_NINJA/PLAY_STORE_ASSETS/Assets/**)",
+      "Read(//tmp/dashpro-release-46-ota/**)",
+      "Bash(git -C /tmp/dashpro-release-46-ota branch --show-current)",
+      "Bash(cp /home/edp/Desktop/dashpro/app/screens/parent-my-exams.tsx /tmp/dashpro-release-46-ota/app/screens/parent-my-exams.tsx)",
+      "Bash(cp /home/edp/Desktop/dashpro/features/dash-assistant/DashInputBarImpl.tsx /tmp/dashpro-release-46-ota/features/dash-assistant/DashInputBarImpl.tsx)",
+      "Bash(cp /home/edp/Desktop/dashpro/components/ai/DashTutorWhiteboard.tsx /tmp/dashpro-release-46-ota/components/ai/DashTutorWhiteboard.tsx)",
+      "Bash(cp /home/edp/Desktop/dashpro/features/dash-ai/DashTutorVoiceChatImpl.tsx /tmp/dashpro-release-46-ota/features/dash-ai/DashTutorVoiceChatImpl.tsx)",
+      "Read(//home/edp/Desktop/dashpro-release-46-ota/**)",
+      "Bash(cp /home/edp/Desktop/dashpro/app/screens/parent-my-exams.tsx /home/edp/Desktop/dashpro-release-46-ota/app/screens/parent-my-exams.tsx)",
+      "Bash(cp /home/edp/Desktop/dashpro/features/dash-assistant/DashInputBarImpl.tsx /home/edp/Desktop/dashpro-release-46-ota/features/dash-assistant/DashInputBarImpl.tsx)",
+      "Bash(cp /home/edp/Desktop/dashpro/components/ai/DashTutorWhiteboard.tsx /home/edp/Desktop/dashpro-release-46-ota/components/ai/DashTutorWhiteboard.tsx)",
+      "Bash(cp /home/edp/Desktop/dashpro/features/dash-ai/DashTutorVoiceChatImpl.tsx /home/edp/Desktop/dashpro-release-46-ota/features/dash-ai/DashTutorVoiceChatImpl.tsx)",
+      "Bash(mkdir -p /home/edp/Desktop/dashpro/features/dash-ai/dash-assistant)",
+      "Bash(mkdir -p /home/edp/Desktop/dashpro/features/dash-ai/dash-tutor-voice-chat)",
+      "Bash(mkdir -p /home/edp/Desktop/dashpro/features/super-admin/voice-orb)"
     ],
     "additionalDirectories": [
       "/home/edp/.claude/projects/-home-edp-Desktop-dashpro"

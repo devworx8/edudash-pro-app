@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { ChildRegistrationData } from '@/types/auth-enhanced';
 
 const MAX_CHILDREN = 5;
@@ -82,6 +83,21 @@ export const ChildRegistrationStep: React.FC<ChildRegistrationStepProps> = ({
   const [draft, setDraft] = React.useState<ChildRegistrationData>(emptyChild());
   const [draftErrors, setDraftErrors] = React.useState<Record<string, string>>({});
   const [showGradePicker, setShowGradePicker] = React.useState(false);
+  const [showDatePicker, setShowDatePicker] = React.useState(false);
+
+  const formatDateString = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const parseDateString = (s: string): Date | null => {
+    const parts = s.split('-');
+    if (parts.length !== 3) return null;
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    return isNaN(d.getTime()) ? null : d;
+  };
 
   const validateDraft = (): boolean => {
     const errs: Record<string, string> = {};
@@ -221,25 +237,69 @@ export const ChildRegistrationStep: React.FC<ChildRegistrationStepProps> = ({
 
           <View style={styles.fieldContainer}>
             <Text style={[styles.label, { color: theme.colors.onSurface }]}>Date of Birth *</Text>
-            <TextInput
+            <TouchableOpacity
               style={[
                 styles.input,
                 {
                   backgroundColor: theme.colors.surface,
                   borderColor: draftErrors.dateOfBirth ? theme.colors.error : theme.colors.outline,
-                  color: theme.colors.onSurface,
+                  justifyContent: 'center',
                 },
               ]}
-              value={draft.dateOfBirth}
-              onChangeText={v => handleDraftChange('dateOfBirth', v)}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor={theme.colors.onSurfaceVariant}
-              keyboardType={Platform.OS === 'ios' ? 'numbers-and-punctuation' : 'default'}
-              editable={!loading}
-            />
+              onPress={() => setShowDatePicker(true)}
+              disabled={loading}
+            >
+              <Text
+                style={{
+                  color: draft.dateOfBirth ? theme.colors.onSurface : theme.colors.onSurfaceVariant,
+                  fontSize: 16,
+                }}
+              >
+                {draft.dateOfBirth || 'Select date of birth'}
+              </Text>
+            </TouchableOpacity>
             {draftErrors.dateOfBirth ? (
               <Text style={[styles.errorText, { color: theme.colors.error }]}>{draftErrors.dateOfBirth}</Text>
             ) : null}
+
+            {showDatePicker && Platform.OS !== 'web' && (
+              <DateTimePicker
+                value={parseDateString(draft.dateOfBirth) || new Date()}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                maximumDate={new Date()}
+                minimumDate={new Date(1990, 0, 1)}
+                onChange={(_event, selectedDate) => {
+                  setShowDatePicker(Platform.OS === 'ios');
+                  if (selectedDate) {
+                    handleDraftChange('dateOfBirth', formatDateString(selectedDate));
+                  }
+                }}
+              />
+            )}
+            {showDatePicker && Platform.OS === 'web' && (
+              <TextInput
+                style={[
+                  styles.input,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.primary,
+                    color: theme.colors.onSurface,
+                    marginTop: 8,
+                  },
+                ]}
+                value={draft.dateOfBirth}
+                onChangeText={(v) => {
+                  handleDraftChange('dateOfBirth', v);
+                }}
+                onBlur={() => setShowDatePicker(false)}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor={theme.colors.onSurfaceVariant}
+                autoFocus
+                // @ts-ignore — web-only prop for HTML input type
+                type="date"
+              />
+            )}
           </View>
 
           <View style={styles.fieldContainer}>

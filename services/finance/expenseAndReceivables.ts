@@ -12,6 +12,11 @@ import type {
   FinanceReceivableStudentRow,
   FinanceReceivablesSummary,
 } from '@/types/finance';
+import { getMonthStartISO } from '@/lib/utils/dateUtils';
+import {
+  getStudentFeeMonthInfo,
+  shouldExcludeStudentFeeFromMonthScopedViews,
+} from '@/lib/utils/studentFeeMonth';
 import { withFinanceTenant } from './tenantUtils';
 import { normalizeMonthIso, nextMonthIso } from './dateHelpers';
 import { normalizePurposeLabel } from './resolvers';
@@ -193,6 +198,7 @@ export async function getReceivablesSnapshot(
   let pendingAmount = 0;
   let overdueCount = 0;
   let pendingCount = 0;
+  let excludedFutureEnrollmentStudents = 0;
 
   for (const fee of feesData) {
     const status = String(fee?.status || '').toLowerCase();
@@ -204,25 +210,15 @@ export async function getReceivablesSnapshot(
     if (!isStudentActiveForReceivables(studentData)) continue;
 
     const enrollmentDateValue = String(studentData?.enrollment_date || '').trim();
-    if (enrollmentDateValue) {
-      const enrollmentDate = new Date(enrollmentDateValue);
-      if (!Number.isNaN(enrollmentDate.getTime())) {
-        const enrollmentMonthStart = new Date(
-          enrollmentDate.getFullYear(),
-          enrollmentDate.getMonth(),
-          1,
-        );
-        const feeMonthValue = String(fee?.billing_month || fee?.due_date || '').trim();
-        if (feeMonthValue) {
-          const feeMonthDate = new Date(feeMonthValue);
-          if (!Number.isNaN(feeMonthDate.getTime())) {
-            const feeMonthStart = new Date(feeMonthDate.getFullYear(), feeMonthDate.getMonth(), 1);
-            if (feeMonthStart < enrollmentMonthStart) {
-              continue;
-            }
-          }
-        }
+    if (shouldExcludeStudentFeeFromMonthScopedViews(fee, enrollmentDateValue || null)) {
+      const enrollmentMonthIso = enrollmentDateValue
+        ? getMonthStartISO(enrollmentDateValue, { recoverUtcMonthBoundary: true })
+        : null;
+      const { effectiveMonthIso, hasBillingMonthDrift } = getStudentFeeMonthInfo(fee);
+      if (!hasBillingMonthDrift && effectiveMonthIso && enrollmentMonthIso && effectiveMonthIso < enrollmentMonthIso) {
+        excludedFutureEnrollmentStudents += 1;
       }
+      continue;
     }
 
     const amount = getOutstandingAmountForFee(fee);
@@ -290,6 +286,7 @@ export async function getReceivablesSnapshot(
       overdue_students: overdueStudents.size,
       outstanding_students: totalUnpaidStudents,
       outstanding_amount: Number((pendingAmount + overdueAmount).toFixed(2)),
+      excluded_future_enrollment_students: excludedFutureEnrollmentStudents,
       // Expose when the displayed list has been capped so the UI can warn
       students_display_cap: ROW_CAP,
       students_total_unpaid: totalUnpaidStudents,

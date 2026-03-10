@@ -14,6 +14,7 @@
 
 import { Linking } from 'react-native';
 import { assertSupabase } from '@/lib/supabase';
+import { getDateOnlyISO, getMonthStartISO } from '@/lib/utils/dateUtils';
 import { selectFeeStructureForChild } from '@/lib/utils/feeStructureSelector';
 import { isTuitionFee } from '@/lib/utils/feeUtils';
 import {
@@ -144,8 +145,10 @@ export async function bootstrapFeesIfMissing(
       fee_structure_id: selectedFee.id,
       amount: selectedFee.amount,
       final_amount: selectedFee.amount,
-      due_date: date.toISOString().split('T')[0],
+      due_date: getDateOnlyISO(date),
+      billing_month: getMonthStartISO(date),
       status: 'pending',
+      category_code: 'tuition',
       amount_outstanding: selectedFee.amount,
     }));
 

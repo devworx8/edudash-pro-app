@@ -13,6 +13,7 @@
 
 import { useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { getDateOnlyISO, getMonthStartISO } from '@/lib/utils/dateUtils';
 import { assertSupabase } from '@/lib/supabase';
 import {
   buildRegistrationPaymentReference,
@@ -492,8 +493,8 @@ export function useStudentFeeActions(params: StudentFeeActionsParams): StudentFe
     if (!profile?.id || !student || processingFeeId) return;
 
     const normalizedDueDate = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate());
-    const dueDateIso = normalizedDueDate.toISOString().split('T')[0];
-    const billingMonthIso = new Date(dueDate.getFullYear(), dueDate.getMonth(), 1).toISOString().split('T')[0];
+    const dueDateIso = getDateOnlyISO(normalizedDueDate);
+    const billingMonthIso = getMonthStartISO(normalizedDueDate);
     const nowIso = new Date().toISOString();
 
     const amountPaid = Number(fee.amount_paid || 0);

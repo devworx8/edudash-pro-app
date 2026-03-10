@@ -156,7 +156,7 @@ export const SecuritySetupStep: React.FC<SecuritySetupStepProps> = ({
       <View style={styles.fieldsContainer}>
         {renderPasswordField('password', 'Password', true)}
         
-        {formState.password && (
+        {!!formState.password && (
           <PasswordStrengthIndicator
             password={formState.password}
             userInfo={userInfo}

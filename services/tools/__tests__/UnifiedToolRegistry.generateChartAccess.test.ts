@@ -1,12 +1,14 @@
 import { unifiedToolRegistry } from '@/services/tools/UnifiedToolRegistry';
 
 describe('UnifiedToolRegistry generate_chart access', () => {
-  it('keeps export_pdf disabled across roles', () => {
-    const teacherTools = unifiedToolRegistry.list('teacher', 'enterprise').map((tool) => tool.name);
-    const parentTools = unifiedToolRegistry.list('parent', 'enterprise').map((tool) => tool.name);
+  it('exposes PDF generation tools for supported roles', () => {
+    const teacherTools = unifiedToolRegistry.list('teacher', 'free').map((tool) => tool.name);
+    const parentTools = unifiedToolRegistry.list('parent', 'free').map((tool) => tool.name);
 
-    expect(teacherTools).not.toContain('export_pdf');
-    expect(parentTools).not.toContain('export_pdf');
+    expect(teacherTools).toContain('export_pdf');
+    expect(teacherTools).toContain('generate_pdf_from_prompt');
+    expect(parentTools).toContain('export_pdf');
+    expect(parentTools).toContain('generate_pdf_from_prompt');
   });
 
   it('keeps generate_chart disabled across roles', () => {

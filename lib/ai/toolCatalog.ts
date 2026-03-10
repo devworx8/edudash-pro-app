@@ -74,6 +74,14 @@ export const DASH_TOOL_SHORTCUTS: DashToolShortcut[] = [
     params: { subject: '', body: '', recipient: 'parent' },
   },
   {
+    name: 'generate_pdf_from_prompt',
+    label: 'Create PDF',
+    description: 'Generate a printable PDF from a natural-language request.',
+    roles: ['parent', 'student', 'teacher', 'principal', 'principal_admin', 'super_admin'],
+    category: 'communication',
+    params: { prompt: '', document_type: 'general' },
+  },
+  {
     name: 'open_document',
     label: 'Open Link',
     description: 'Open a URL, document ID, or screen route.',

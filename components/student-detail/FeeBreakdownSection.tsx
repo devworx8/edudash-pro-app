@@ -18,6 +18,7 @@ import { StudentDetail, StudentFee, formatCurrency } from './types';
 import { formatAge } from './types';
 import type { ThemeColors } from '@/contexts/ThemeContext';
 import { ModalLayer } from '@/components/ui/ModalLayer';
+import { getDateOnlyISO, getMonthStartISO } from '@/lib/utils/dateUtils';
 
 interface FeeBreakdownSectionProps {
   student: StudentDetail;
@@ -75,7 +76,7 @@ export const FeeBreakdownSection: React.FC<FeeBreakdownSectionProps> = ({
       setSaving(true);
       await onUpdateFee(editingFee.id, {
         amount: newAmount,
-        due_date: editDueDate.toISOString().split('T')[0],
+        due_date: getDateOnlyISO(editDueDate),
       });
       setEditingFee(null);
     } catch {
@@ -87,11 +88,9 @@ export const FeeBreakdownSection: React.FC<FeeBreakdownSectionProps> = ({
 
   const handleCorrectFee = useCallback(async () => {
     if (!onCorrectFee || !student.id) return;
-    const billingMonth = new Date();
-    const monthStart = new Date(billingMonth.getFullYear(), billingMonth.getMonth(), 1);
     try {
       setSaving(true);
-      await onCorrectFee(student.id, monthStart.toISOString().split('T')[0]);
+      await onCorrectFee(student.id, getMonthStartISO(new Date()));
     } finally {
       setSaving(false);
     }

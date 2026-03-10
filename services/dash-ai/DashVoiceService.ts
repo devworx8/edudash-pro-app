@@ -772,8 +772,6 @@ export class DashVoiceService {
         return;
       }
 
-      const detectedLang = this.detectLanguageFromText(normalizedText);
-
       // Short language code for Edge Function (af, zu, xh, nso, en)
       let shortLang: SupportedLanguage = 'en';
       const requestedLang = options?.language || voiceSettings.language || 'en';
@@ -782,12 +780,6 @@ export class DashVoiceService {
         const { normalizeLanguageCode } = await import('@/lib/ai/dashSettings');
         const ui = getCurrentLanguage?.();
         shortLang = normalizeLanguageCode(requestedLang || ui || voiceSettings.language) as SupportedLanguage;
-
-        // If no explicit language was provided (or it defaults to English),
-        // and the content clearly matches another language, switch to that.
-        if (shortLang === 'en' && detectedLang !== 'en' && this.isTTSSupported(detectedLang)) {
-          shortLang = detectedLang;
-        }
 
         // Check if TTS is supported for this language
         if (!this.isTTSSupported(shortLang)) {

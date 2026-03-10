@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSubscription } from '@/contexts/SubscriptionContext'
 import { getCapabilityTier, normalizeTierName } from '@/lib/tiers'
 import { 
@@ -76,19 +76,19 @@ export function useAIModelSelection(
   }, [tier, ready, initialModel, selectedModel])
 
   // Check if user can access a specific model
-  const canSelectModel = (modelId: AIModelId): boolean => {
+  const canSelectModel = useCallback((modelId: AIModelId): boolean => {
     return canAccessModel(tier, modelId)
-  }
+  }, [tier])
 
   // Safe model setter that respects tier limits
-  const setSelectedModel = (modelId: AIModelId) => {
+  const setSelectedModel = useCallback((modelId: AIModelId) => {
     if (canSelectModel(modelId)) {
       setSelectedModelState(modelId)
     } else {
       logger.warn(`Model ${modelId} not available for tier ${tier}, using default`)
       setSelectedModelState(getDefaultModelForTier(tier))
     }
-  }
+  }, [canSelectModel, tier])
 
   return {
     availableModels,
