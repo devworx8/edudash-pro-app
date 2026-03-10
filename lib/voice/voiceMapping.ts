@@ -101,8 +101,8 @@ export function isProviderVoiceId(value?: string | null): boolean {
   );
 }
 
-export function getDefaultVoiceGenderForLanguage(lang: string): VoiceGender {
-  return toShortCode(lang) === 'en' ? 'male' : 'female';
+export function getDefaultVoiceGenderForLanguage(_lang: string): VoiceGender {
+  return 'male';
 }
 
 export function resolveSelectedVoiceId(options: {

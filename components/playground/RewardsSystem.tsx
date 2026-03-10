@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { ratioToPercent } from '../../lib/progress/clampPercent';
 
 interface Reward {
   id: string;
@@ -369,7 +370,7 @@ export const RewardsSystem: React.FC<RewardsSystemProps> = ({
                     <View
                       style={[
                         styles.progressFill,
-                        { width: `${(achievement.progress / achievement.target) * 100}%` },
+                        { width: ratioToPercent(achievement.progress, achievement.target) },
                       ]}
                     />
                   </View>

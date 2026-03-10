@@ -166,26 +166,31 @@ export class TeacherApprovalService {
       throw new ApprovalError('Failed to fetch pending teachers', 'UNKNOWN_ERROR', { originalError: error.message });
     }
 
-    return (approvals || []).map(approval => ({
-      id: approval.id,
-      user_id: approval.teacher_id,
-      preschool_id: approval.preschool_id,
-      email: approval.profiles?.email || '',
-      first_name: approval.profiles?.first_name || '',
-      last_name: approval.profiles?.last_name || '',
-      phone: approval.profiles?.phone,
-      invite_id: approval.invite_id,
-      status: approval.status,
-      requested_at: approval.requested_at,
-      notes: approval.notes,
-      version: approval.version,
-      school_name: approval.preschools?.name,
-      profile: {
-        id: approval.profiles?.id,
-        full_name: approval.profiles?.full_name,
-        avatar_url: approval.profiles?.avatar_url,
-      },
-    })) as PendingTeacher[];
+    return (approvals || []).map(approval => {
+      const profile = Array.isArray(approval.profiles) ? approval.profiles[0] : approval.profiles;
+      const preschool = Array.isArray(approval.preschools) ? approval.preschools[0] : approval.preschools;
+
+      return {
+        id: approval.id,
+        user_id: approval.teacher_id,
+        preschool_id: approval.preschool_id,
+        email: profile?.email || '',
+        first_name: profile?.first_name || '',
+        last_name: profile?.last_name || '',
+        phone: profile?.phone,
+        invite_id: approval.invite_id,
+        status: approval.status,
+        requested_at: approval.requested_at,
+        notes: approval.notes,
+        version: approval.version,
+        school_name: preschool?.name,
+        profile: {
+          id: profile?.id,
+          full_name: profile?.full_name,
+          avatar_url: profile?.avatar_url,
+        },
+      };
+    }) as PendingTeacher[];
   }
 
   /**

@@ -4,7 +4,12 @@
  */
 
 import * as Speech from 'expo-speech';
-import { getVoiceIdForLanguage } from '@/lib/voice/voiceMapping';
+import { getVoiceIdForLanguage, MULTILINGUAL_VOICES } from '@/lib/voice/voiceMapping';
+
+const MULTILINGUAL_VOICE_IDS = new Set([
+  MULTILINGUAL_VOICES.male,
+  MULTILINGUAL_VOICES.female,
+]);
 import {
   AZURE_RATE_NORMAL,
   AZURE_RATE_PHONICS,
@@ -40,7 +45,7 @@ export const DEVICE_PHONICS_SOUND_MAP: Record<string, string> = {
 // ── Voice helpers ─────────────────────────────────────────────────────────────
 
 export const normalizeVoiceGender = (value: unknown): 'male' | 'female' =>
-  String(value || '').toLowerCase() === 'male' ? 'male' : 'female';
+  String(value || '').toLowerCase() === 'female' ? 'female' : 'male';
 
 export const normalizeLanguageBase = (language: string): string =>
   String(language || 'en').toLowerCase().split('-')[0].trim() || 'en';
@@ -54,6 +59,7 @@ export const isVoiceId = (value: unknown): boolean =>
   typeof value === 'string' && VOICE_ID_PATTERN.test(String(value || '').trim());
 
 export const voiceIdMatchesLanguage = (voiceId: string, language: string): boolean => {
+  if (MULTILINGUAL_VOICE_IDS.has(voiceId)) return true;
   const prefix = String(voiceId || '').split('-')[0]?.toLowerCase() || '';
   return prefix === normalizeLanguageBase(language);
 };

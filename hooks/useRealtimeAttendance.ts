@@ -50,6 +50,21 @@ interface AttendanceUpdateEvent {
   type: 'INSERT' | 'UPDATE' | 'DELETE';
 }
 
+function isAttendanceNewRecord(
+  value: unknown
+): value is AttendancePayload['new'] {
+  return !!value && typeof value === 'object'
+    && 'student_id' in value
+    && 'attendance_date' in value
+    && 'status' in value;
+}
+
+function isAttendanceOldRecord(
+  value: unknown
+): value is AttendancePayload['old'] {
+  return !!value && typeof value === 'object' && 'student_id' in value;
+}
+
 /**
  * Hook for subscribing to real-time attendance updates.
  * Automatically updates the React Query cache when attendance changes.
@@ -164,11 +179,18 @@ export function useRealtimeAttendance(options: UseRealtimeAttendanceOptions) {
           },
           (payload) => {
             const { eventType, new: newRecord, old } = payload;
+            const safeNewRecord = isAttendanceNewRecord(newRecord) ? newRecord : null;
+            const safeOldRecord = isAttendanceOldRecord(old) ? old : null;
+            const studentId = safeNewRecord?.student_id || safeOldRecord?.student_id;
+
+            if (!studentId) {
+              return;
+            }
 
             queueUpdate({
-              studentId: newRecord?.student_id || old?.student_id,
-              date: newRecord?.attendance_date || '',
-              status: newRecord?.status || '',
+              studentId,
+              date: safeNewRecord?.attendance_date || '',
+              status: safeNewRecord?.status || '',
               type: eventType,
             });
           }
