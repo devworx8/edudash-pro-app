@@ -12,8 +12,8 @@
 // ── Azure Speech Rates ──────────────────────────────────────────────
 // Azure SSML <prosody rate="X%"> where 0 = normal, negative = slower.
 
-/** Normal speech rate (0% = Azure default) */
-export const AZURE_RATE_NORMAL = 0;
+/** Normal speech rate — slightly faster than Azure default for snappier responses */
+export const AZURE_RATE_NORMAL = 8;
 
 /** Phonics sentence-level rate: keep full sentence delivery at normal pace */
 export const AZURE_RATE_PHONICS = 0;
@@ -24,8 +24,8 @@ export const AZURE_RATE_PHONEME = -18;
 // ── Device TTS Rates ────────────────────────────────────────────────
 // expo-speech rate: 1.0 = normal.
 
-/** Device TTS normal rate */
-export const DEVICE_RATE_NORMAL = 1.0;
+/** Device TTS normal rate — matches Azure 8% bump */
+export const DEVICE_RATE_NORMAL = 1.08;
 
 /** Device TTS phonics rate: keep sentence-level pacing natural */
 export const DEVICE_RATE_PHONICS = 1.0;
