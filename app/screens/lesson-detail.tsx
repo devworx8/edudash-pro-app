@@ -14,6 +14,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Lesson, LessonProgress } from '@/types/lessons';
 import LessonsService from '@/services/LessonsService';
+import { clampPercent } from '@/lib/progress/clampPercent';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 // Conditional import for markdown rendering
@@ -56,6 +57,9 @@ export default function LessonDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const lessonsService = LessonsService;
+  const safeLessonProgressPercent = clampPercent(progress?.progress_percentage || 0, {
+    source: 'lesson-detail.progress-bar',
+  });
 
   // Markdown styles for AI-generated content - with null safety
   const markdownStyles = useMemo(() => ({
@@ -368,7 +372,7 @@ export default function LessonDetailScreen() {
               <View 
                 style={[
                   styles.progressFill, 
-                  { backgroundColor: theme.primary, width: `${progress.progress_percentage || 0}%` }
+                  { backgroundColor: theme.primary, width: `${safeLessonProgressPercent}%` }
                 ]} 
               />
             </View>

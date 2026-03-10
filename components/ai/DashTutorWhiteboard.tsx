@@ -31,6 +31,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, {
   Line,
+  Rect,
   Text as SvgText,
   G,
 } from 'react-native-svg';
@@ -288,6 +289,229 @@ function LongDivisionDiagram({
   );
 }
 
+// ─── Lattice Multiplication ───────────────────────────────────────────────────
+interface LatticeData {
+  multiplicand: number;
+  multiplier: number;
+  product: number;
+  multiplicandStr: string;
+  multiplierStr: string;
+  numCols: number;
+  numRows: number;
+  cells: Array<Array<{ tens: number; units: number }>>;
+  diagDigits: number[];
+}
+
+function performLattice(multiplicand: number, multiplier: number): LatticeData {
+  const multiplicandStr = String(multiplicand);
+  const multiplierStr   = String(multiplier);
+  const numCols = multiplicandStr.length;
+  const numRows = multiplierStr.length;
+  const cells: Array<Array<{ tens: number; units: number }>> = [];
+  for (let r = 0; r < numRows; r++) {
+    const row: Array<{ tens: number; units: number }> = [];
+    for (let c = 0; c < numCols; c++) {
+      const prod = parseInt(multiplicandStr[c], 10) * parseInt(multiplierStr[r], 10);
+      row.push({ tens: Math.floor(prod / 10), units: prod % 10 });
+    }
+    cells.push(row);
+  }
+  // Raw diagonal sums — d=0 is bottom-right
+  const rawDiags: number[] = Array(numCols + numRows).fill(0);
+  for (let r = 0; r < numRows; r++) {
+    for (let c = 0; c < numCols; c++) {
+      const d = (numCols - 1 - c) + (numRows - 1 - r);
+      rawDiags[d]     += cells[r][c].units;
+      rawDiags[d + 1] += cells[r][c].tens;
+    }
+  }
+  // Carry
+  for (let d = 0; d < rawDiags.length - 1; d++) {
+    rawDiags[d + 1] += Math.floor(rawDiags[d] / 10);
+    rawDiags[d]      = rawDiags[d] % 10;
+  }
+  return { multiplicand, multiplier, product: multiplicand * multiplier,
+    multiplicandStr, multiplierStr, numCols, numRows, cells, diagDigits: rawDiags };
+}
+
+// Any character that can represent multiplication in AI output
+const MUL_RE = /(\d+)\s*(?:[×✕⨉\u00D7xX*·\u22C5]|\bby\b|\btimes\b)\s*(\d+)/i;
+
+// Context clues that identify lattice multiplication content even without the word "lattice"
+const LATTICE_CONTEXT_RE = /lattice|grid\s*method|diagonal.*cell|cell.*diagonal|ones\s*place|top.left.*cell|bottom.right.*cell|reads.*outside|outside.*grid|write.*above.*below|above.*below.*diagonal/i;
+
+function parseLatticeMultiplication(lines: string[]): LatticeData | null {
+  const joined = lines.join(' ');
+  if (!LATTICE_CONTEXT_RE.test(joined)) return null;
+
+  // Collect all candidate multiplication pairs, preferring the largest numbers
+  // (the main problem, not the sub-product descriptions like "3 × 5 = 15")
+  const candidates: Array<{ a: number; b: number }> = [];
+  for (const l of lines) {
+    let m: RegExpExecArray | null;
+    const re = new RegExp(MUL_RE.source, MUL_RE.flags);
+    while ((m = re.exec(l)) !== null) {
+      const a = parseInt(m[1], 10);
+      const b = parseInt(m[2], 10);
+      if (a && b && a <= 9999 && b <= 9999 && a > 9 && b > 9) {
+        candidates.push({ a, b });
+      }
+    }
+  }
+
+  // Prefer the pair where both numbers are multi-digit (the original problem)
+  if (candidates.length > 0) {
+    // Sort by digit count descending to prefer the main problem over sub-products
+    candidates.sort((x, y) => (String(y.a).length + String(y.b).length) - (String(x.a).length + String(x.b).length));
+    return performLattice(candidates[0].a, candidates[0].b);
+  }
+
+  // Fallback: any multiplication pair (including single-digit × single-digit)
+  const fm = MUL_RE.exec(joined);
+  if (fm) {
+    const a = parseInt(fm[1], 10);
+    const b = parseInt(fm[2], 10);
+    if (a && b && a <= 9999 && b <= 9999) return performLattice(a, b);
+  }
+  return null;
+}
+
+const LAT_CELL    = 54;
+const LAT_TOP     = 40;
+const LAT_RIGHT   = 44;
+const LAT_LEFT_X  = 42;  // space for left-side diagonal labels
+const LAT_GUTTER  = 10;
+const LAT_BOT     = 90;  // space for diagonal sums + answer
+
+function LatticeDiagram({ data, revealed }: { data: LatticeData; revealed: number }) {
+  const { multiplicandStr, multiplierStr, numCols, numRows, cells, diagDigits } = data;
+  const totalCells = numCols * numRows;
+  const showDiags  = revealed > totalCells;
+  const showAnswer = revealed > totalCells + 1;
+
+  const gx = LAT_GUTTER + LAT_LEFT_X;
+  const gy = LAT_TOP;
+  const gw = numCols * LAT_CELL;
+  const gh = numRows * LAT_CELL;
+  const svgW = gx + gw + LAT_RIGHT;
+  const svgH = gy + gh + LAT_BOT;
+
+  return (
+    <Svg width={svgW} height={svgH}>
+      {/* Grid outline */}
+      <Rect x={gx} y={gy} width={gw} height={gh}
+        fill="none" stroke={C.white} strokeWidth={1.5} rx={2} />
+
+      {/* Interior grid lines */}
+      {Array.from({ length: numCols - 1 }, (_, i) => i + 1).map(c => (
+        <Line key={`vl${c}`} x1={gx + c * LAT_CELL} y1={gy}
+          x2={gx + c * LAT_CELL} y2={gy + gh} stroke={C.white} strokeWidth={1} opacity={0.4} />
+      ))}
+      {Array.from({ length: numRows - 1 }, (_, i) => i + 1).map(r => (
+        <Line key={`hl${r}`} x1={gx} y1={gy + r * LAT_CELL}
+          x2={gx + gw} y2={gy + r * LAT_CELL} stroke={C.white} strokeWidth={1} opacity={0.4} />
+      ))}
+
+      {/* Cells — diagonal + digits */}
+      {cells.map((row, r) => row.map((cell, c) => {
+        const cx = gx + c * LAT_CELL;
+        const cy = gy + r * LAT_CELL;
+        const cellVisible = revealed >= r * numCols + c + 1;
+        return (
+          <G key={`cell-${r}-${c}`}>
+            {/* Diagonal line top-right → bottom-left */}
+            <Line x1={cx + LAT_CELL} y1={cy} x2={cx} y2={cy + LAT_CELL}
+              stroke={C.dim} strokeWidth={1} />
+            {/* Tens (upper-left triangle) */}
+            {cellVisible && (
+              <SvgText x={cx + LAT_CELL * 0.28} y={cy + LAT_CELL * 0.44}
+                textAnchor="middle" fill={C.cyan} fontSize={17} fontFamily={MONO}>
+                {cell.tens}
+              </SvgText>
+            )}
+            {/* Units (lower-right triangle) */}
+            {cellVisible && (
+              <SvgText x={cx + LAT_CELL * 0.72} y={cy + LAT_CELL * 0.82}
+                textAnchor="middle" fill={C.white} fontSize={17} fontFamily={MONO}>
+                {cell.units}
+              </SvgText>
+            )}
+          </G>
+        );
+      }))}
+
+      {/* Multiplicand digits — top */}
+      {multiplicandStr.split('').map((d, c) => (
+        <SvgText key={`col${c}`}
+          x={gx + c * LAT_CELL + LAT_CELL / 2} y={gy - 14}
+          textAnchor="middle" fill={C.yellow} fontSize={20} fontFamily={MONO} fontWeight="bold">
+          {d}
+        </SvgText>
+      ))}
+
+      {/* Multiplier digits — right */}
+      {multiplierStr.split('').map((d, r) => (
+        <SvgText key={`row${r}`}
+          x={gx + gw + 22} y={gy + r * LAT_CELL + LAT_CELL / 2 + 7}
+          textAnchor="middle" fill={C.yellow} fontSize={20} fontFamily={MONO} fontWeight="bold">
+          {d}
+        </SvgText>
+      ))}
+
+      {/* Diagonal separator lines extending into the left + bottom areas */}
+      {Array.from({ length: numCols + 1 }, (_, c) => {
+        const x1 = gx + c * LAT_CELL;
+        const ext = Math.min(c * LAT_CELL, gx - LAT_GUTTER);
+        if (ext <= 0) return null;
+        return <Line key={`bsep${c}`} x1={x1} y1={gy + gh}
+          x2={x1 - ext} y2={gy + gh + ext} stroke={C.dim} strokeWidth={1} opacity={0.6} />;
+      })}
+      {Array.from({ length: numRows + 1 }, (_, r) => {
+        const y1 = gy + r * LAT_CELL;
+        const ext = Math.min((numRows - r) * LAT_CELL, gx - LAT_GUTTER);
+        if (ext <= 0) return null;
+        return <Line key={`lsep${r}`} x1={gx} y1={y1}
+          x2={gx - ext} y2={y1 + ext} stroke={C.dim} strokeWidth={1} opacity={0.6} />;
+      })}
+
+      {/* Diagonal sums — bottom (d=0..numCols-1) */}
+      {showDiags && diagDigits.slice(0, numCols).map((digit, d) => (
+        <SvgText key={`bd${d}`}
+          x={gx + (numCols - 1 - d) * LAT_CELL + LAT_CELL / 2}
+          y={gy + gh + 30}
+          textAnchor="middle"
+          fill={C.green} fontSize={20} fontFamily={MONO} fontWeight="bold">
+          {digit}
+        </SvgText>
+      ))}
+
+      {/* Diagonal sums — left side (d=numCols..numCols+numRows-1) */}
+      {showDiags && diagDigits.slice(numCols, numCols + numRows).map((digit, i) => {
+        const r = numRows - 1 - i;
+        return (
+          <SvgText key={`ld${i}`}
+            x={LAT_GUTTER + LAT_LEFT_X / 2}
+            y={gy + r * LAT_CELL + LAT_CELL / 2 + 7}
+            textAnchor="middle"
+            fill={C.green} fontSize={20} fontFamily={MONO} fontWeight="bold">
+            {digit}
+          </SvgText>
+        );
+      })}
+
+      {/* Final answer */}
+      {showAnswer && (
+        <SvgText
+          x={svgW / 2} y={gy + gh + 64}
+          textAnchor="middle"
+          fill={C.green} fontSize={15} fontFamily={MONO} fontWeight="bold">
+          {data.multiplicand} × {data.multiplier} = {data.product}  ✓
+        </SvgText>
+      )}
+    </Svg>
+  );
+}
+
 // ─── Markdown stripper ────────────────────────────────────────────────────────
 function stripMarkdown(text: string): string {
   return text
@@ -463,28 +687,31 @@ export interface DashTutorWhiteboardProps {
 }
 
 export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTutorWhiteboardProps) {
-  // Detect diagram type
-  const divData = parseLongDivision(content.lines);
-  const hasDiagram = !!divData;
+  // Detect diagram type — lattice takes priority over long division
+  const latticeData = parseLatticeMultiplication(content.lines);
+  const divData     = latticeData ? null : parseLongDivision(content.lines);
+  const hasDiagram  = !!latticeData || !!divData;
 
   // Total "pages": diagram steps + text lines
-  const diagramSteps = divData ? divData.steps.length : 0;
+  const diagramSteps = latticeData
+    ? latticeData.numCols * latticeData.numRows + 2   // cells + diags + answer
+    : divData ? divData.steps.length : 0;
   const textLines    = content.lines;
   const totalSteps   = hasDiagram
-    ? diagramSteps + textLines.length   // diagram first, then text explanation
+    ? diagramSteps + textLines.length
     : textLines.length;
 
-  const [step, setStep]       = useState(0);
-  const [paused, setPaused]   = useState(false);
+  const [step, setStep]         = useState(0);
+  const [paused, setPaused]     = useState(false);
   const [finished, setFinished] = useState(false);
-  const scrollRef             = useRef<ScrollView>(null);
+  const scrollRef               = useRef<ScrollView>(null);
 
-  const AUTOPLAY_MS = hasDiagram ? 1800 : 2200;
+  const AUTOPLAY_MS = hasDiagram ? 1600 : 2200;
 
   const diagramRevealed = hasDiagram ? Math.min(step, diagramSteps) : 0;
   const textRevealed    = hasDiagram
     ? Math.max(0, step - diagramSteps)
-    : step + 1;   // text-only: reveal from step 0 (show line 0 immediately)
+    : step + 1;
 
   const allDone = step >= totalSteps - (hasDiagram ? 0 : 1);
 
@@ -572,6 +799,14 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
           showsVerticalScrollIndicator={false}>
 
           {/* ── SVG Diagram ── */}
+          {hasDiagram && latticeData && (
+            <View style={styles.diagramWrap}>
+              <Text style={styles.diagramLabel}>
+                {latticeData.multiplicand} × {latticeData.multiplier}
+              </Text>
+              <LatticeDiagram data={latticeData} revealed={diagramRevealed} />
+            </View>
+          )}
           {hasDiagram && divData && (
             <View style={styles.diagramWrap}>
               {/* Problem label */}
@@ -579,7 +814,6 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
                 {divData.dividend} ÷ {divData.divisor}
               </Text>
               <LongDivisionDiagram data={divData} revealed={diagramRevealed} />
-              {/* Answer callout once all diagram steps are revealed */}
               {diagramRevealed >= diagramSteps && (
                 <Animated.View entering={FadeIn.duration(300)} style={styles.answerBubble}>
                   <Text style={styles.answerText}>
@@ -628,7 +862,9 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
           <View style={styles.footerCenter}>
             <Text style={styles.footerHint}>
               {hasDiagram && step < diagramSteps
-                ? `Step ${step + 1} of ${diagramSteps}`
+                ? latticeData
+                  ? step === 0 ? 'Building grid…' : step <= latticeData.numCols * latticeData.numRows ? `Cell ${step} of ${latticeData.numCols * latticeData.numRows}` : 'Diagonal sums'
+                  : `Step ${step + 1} of ${diagramSteps}`
                 : allDone
                   ? 'All done!'
                   : `${textRevealed} / ${textLines.length}`}

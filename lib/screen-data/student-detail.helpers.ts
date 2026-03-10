@@ -12,8 +12,41 @@ import {
   Transaction,
   calculateAge,
 } from '@/components/student-detail';
+import {
+  getStudentFeeMonthInfo,
+  shouldExcludeStudentFeeFromMonthScopedViews,
+} from '@/lib/utils/studentFeeMonth';
 
 const TAG = 'StudentDetail';
+
+const STUDENT_FEE_STATUS_PRIORITY: Record<string, number> = {
+  paid: 0,
+  partially_paid: 1,
+  partial: 1,
+  waived: 2,
+  pending_verification: 3,
+  pending: 4,
+  overdue: 5,
+};
+
+function normalizeStudentFeeStatus(status: string | null | undefined): StudentFee['status'] {
+  if (status === 'partially_paid') return 'partial';
+  if (status === 'paid' || status === 'pending' || status === 'overdue' || status === 'waived') {
+    return status;
+  }
+  return 'pending';
+}
+
+function shouldReplaceStudentFeeRow(nextFee: StudentFee, currentFee: StudentFee): boolean {
+  const nextPriority = STUDENT_FEE_STATUS_PRIORITY[nextFee.status] ?? 99;
+  const currentPriority = STUDENT_FEE_STATUS_PRIORITY[currentFee.status] ?? 99;
+  if (nextPriority !== currentPriority) return nextPriority < currentPriority;
+  if (nextFee.amount_paid !== currentFee.amount_paid) return nextFee.amount_paid > currentFee.amount_paid;
+  if (nextFee.amount_outstanding !== currentFee.amount_outstanding) {
+    return nextFee.amount_outstanding < currentFee.amount_outstanding;
+  }
+  return nextFee.id > currentFee.id;
+}
 
 interface FetchStudentParams {
   studentId: string;
@@ -270,7 +303,9 @@ export async function fetchStudentData(params: FetchStudentParams): Promise<Fetc
     // Detailed fees with fee structure info
     const { data: feeData, error: feeError } = await supabase
       .from('student_fees')
-      .select('id, fee_structure_id, amount, final_amount, amount_paid, amount_outstanding, status, billing_month, due_date, category_code, fee_structures(name)')
+      .select(
+        'id, fee_structure_id, amount, final_amount, amount_paid, amount_outstanding, status, billing_month, due_date, category_code, created_at, updated_at, fee_structures(name)',
+      )
       .eq('student_id', studentId)
       .order('billing_month', { ascending: false });
 
@@ -278,19 +313,49 @@ export async function fetchStudentData(params: FetchStudentParams): Promise<Fetc
       logger.error(TAG, 'Error loading student fees:', feeError);
     }
 
-    studentFees = (feeData || []).map((f: any) => ({
-      id: f.id,
-      fee_structure_id: f.fee_structure_id,
-      fee_name: f.fee_structures?.name || 'Monthly Fee',
-      amount: f.amount ?? 0,
-      final_amount: f.final_amount ?? f.amount ?? 0,
-      amount_paid: f.amount_paid ?? 0,
-      amount_outstanding: f.amount_outstanding ?? 0,
-      status: f.status || 'pending',
-      billing_month: f.billing_month || f.due_date || '',
-      due_date: f.due_date || f.billing_month || '',
-      category_code: f.category_code || 'tuition',
-    }));
+    const normalizedTuitionFees = new Map<string, StudentFee>();
+    const otherFeesList: StudentFee[] = [];
+
+    for (const feeRow of feeData || []) {
+      const monthInfo = getStudentFeeMonthInfo(feeRow);
+      const feeStructureData = Array.isArray(feeRow.fee_structures)
+        ? feeRow.fee_structures[0]
+        : feeRow.fee_structures;
+      const normalizedFee: StudentFee = {
+        id: feeRow.id,
+        fee_structure_id: feeRow.fee_structure_id,
+        fee_name: feeStructureData?.name || 'Monthly Fee',
+        amount: feeRow.amount ?? 0,
+        final_amount: feeRow.final_amount ?? feeRow.amount ?? 0,
+        amount_paid: feeRow.amount_paid ?? 0,
+        amount_outstanding: feeRow.amount_outstanding ?? 0,
+        status: normalizeStudentFeeStatus(feeRow.status),
+        billing_month: monthInfo.effectiveMonthIso || feeRow.billing_month || feeRow.due_date || '',
+        due_date: feeRow.due_date || feeRow.billing_month || '',
+        category_code: feeRow.category_code || 'tuition',
+      };
+
+      if (normalizedFee.category_code !== 'tuition') {
+        otherFeesList.push(normalizedFee);
+        continue;
+      }
+
+      if (shouldExcludeStudentFeeFromMonthScopedViews(feeRow, studentData.enrollment_date)) {
+        continue;
+      }
+
+      const tuitionMonthKey = monthInfo.effectiveMonthIso || normalizedFee.billing_month || normalizedFee.id;
+      const existingFee = normalizedTuitionFees.get(tuitionMonthKey);
+      if (!existingFee || shouldReplaceStudentFeeRow(normalizedFee, existingFee)) {
+        normalizedTuitionFees.set(tuitionMonthKey, normalizedFee);
+      }
+    }
+
+    const tuitionFees = Array.from(normalizedTuitionFees.values()).sort((a, b) =>
+      String(b.billing_month || '').localeCompare(String(a.billing_month || '')),
+    );
+
+    studentFees = [...tuitionFees, ...otherFeesList];
 
     outstandingFees = studentFees.reduce((sum, fee) => sum + (fee.amount_outstanding ?? 0), 0);
 

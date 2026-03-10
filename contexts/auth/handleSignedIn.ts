@@ -256,6 +256,9 @@ export async function handleSignedIn(
   // ── Background operations ─────────────────
   void updateLastLogin();
   void registerPush(s.user);
+
+  // Process any pending children from signup metadata (fire-and-forget)
+  void processPendingRegistration(userId);
 }
 
 // ── Private helpers ─────────────────────────────
@@ -320,6 +323,15 @@ function scheduleOrgNameRefresh(userId: string, s: Session, deps: SignedInDeps):
       logger.warn('[handleSignedIn] Forced org-name refresh failed', err);
     }
   }, 1500);
+}
+
+async function processPendingRegistration(userId: string): Promise<void> {
+  try {
+    await assertSupabase().rpc('process_pending_registration', { p_user_id: userId });
+    debugLog('Pending registration processed for', userId);
+  } catch (err) {
+    logger.warn('[handleSignedIn] Pending registration processing failed', err);
+  }
 }
 
 function identifyInMonitoring(user: User, profile: EnhancedUserProfile | null): void {

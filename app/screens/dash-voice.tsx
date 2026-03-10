@@ -35,6 +35,7 @@ import { resolveAIProxyScopeFromRole } from '@/lib/ai/aiProxyScope';
 import { shouldGreetToday, buildDynamicGreeting } from '@/lib/ai/greetingManager';
 import { getCapabilityTier, normalizeTierName } from '@/lib/tiers';
 import { useRealtimeTier } from '@/hooks/useRealtimeTier';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import HomeworkScanner from '@/components/ai/HomeworkScanner';
 import { LanguageDropdown, getLanguageLabel } from '@/components/dash-orb/LanguageDropdown';
 import { formatTranscript } from '@/lib/voice/formatTranscript';
@@ -149,8 +150,10 @@ export default function DashVoiceScreen() {
     () => String((profile as any)?.subscription_tier || (profile as any)?.tier || (profile as any)?.current_tier || 'free').toLowerCase(),
     [profile]
   );
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const normalizedToolTier = useMemo(() => getCapabilityTier(normalizeTierName(activeTier || 'free')), [activeTier]);
+  const capabilityTierFromProfile = useMemo(() => getCapabilityTier(normalizeTierName(activeTier || 'free')), [activeTier]);
+  const { capabilityTier: capabilityTierFromSub } = useSubscription();
+  // Prefer SubscriptionContext (robust resolution via RevenueCat/DB), fall back to profile-derived
+  const capabilityTier = capabilityTierFromSub || capabilityTierFromProfile;
   const { tierStatus } = useRealtimeTier();
 
   const refreshAutoScanBudget = useCallback(async () => {
@@ -357,6 +360,7 @@ export default function DashVoiceScreen() {
               orgType={orgType}
               preferredLanguage={preferredLanguage}
               theme={theme}
+              orbTier={capabilityTier}
               onStopListening={() => setIsListening(false)}
               onStartListening={() => setIsListening(true)}
               onPartialTranscript={(text) => setLiveUserTranscript(text)}
@@ -433,14 +437,16 @@ export default function DashVoiceScreen() {
             paddingBottom={Math.max(insets.bottom, 10) + 6}
             inputRef={inputRef}
             onChangeText={handleComposerTextChange}
-            onContentSizeChange={(e) =>
+            onContentSizeChange={(e) => {
+              const height = e?.nativeEvent?.contentSize?.height;
+              if (height == null) return;
               setInputHeight((prev) => {
-                const measuredHeight = e.nativeEvent.contentSize.height + 16;
+                const measuredHeight = height + 16;
                 const nextHeight = measuredHeight <= VOICE_COMPOSER_GROW_THRESHOLD
                   ? VOICE_COMPOSER_COMPACT_HEIGHT : Math.min(measuredHeight, VOICE_COMPOSER_MAX_HEIGHT);
                 return prev === nextHeight ? prev : nextHeight;
-              })
-            }
+              });
+            }}
             onFocus={handleInputFocus}
             onSubmit={handleSubmit}
             onPickMedia={pickMedia}

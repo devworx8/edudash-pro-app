@@ -93,4 +93,24 @@ describe('useDashChatModelPreference', () => {
       expect(mockSetPreferredModel).toHaveBeenCalledWith('claude-3-haiku-20240307', 'chat_message');
     });
   });
+
+  it('waits for model availability before hydrating the stored preference', async () => {
+    mockGetPreferredModel.mockResolvedValue('claude-3-5-sonnet-20241022');
+    isLoading = true;
+
+    const { rerender } = renderHook(() => useDashChatModelPreference());
+
+    expect(mockGetPreferredModel).not.toHaveBeenCalled();
+
+    isLoading = false;
+    rerender({});
+
+    await waitFor(() => {
+      expect(mockGetPreferredModel).toHaveBeenCalledWith('chat_message');
+    });
+
+    await waitFor(() => {
+      expect(mockSetSelectedModel).toHaveBeenCalledWith('claude-3-5-sonnet-20241022');
+    });
+  });
 });

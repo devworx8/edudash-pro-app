@@ -17,6 +17,7 @@ import {
   getStreamingPlaceholder,
 } from '@/lib/dash-voice-utils';
 import { shouldUsePhonicsMode } from '@/lib/dash-ai/phonicsDetection';
+import { evaluateDashSpeechContent } from './speechContentPolicy';
 
 type VoiceRefs = {
   voiceSessionRef: React.MutableRefObject<VoiceSession | null>;
@@ -230,6 +231,7 @@ export async function speakDashResponse(params: {
   setVoiceEnabled: (value: boolean) => void;
   stopSpeaking: () => Promise<void>;
   preferFastStart?: boolean;
+  forceSpeak?: boolean;
   onSpeechChunkProgress?: (progress: SpeechChunkProgress) => void;
 }) {
   const {
@@ -249,6 +251,7 @@ export async function speakDashResponse(params: {
     setVoiceEnabled,
     stopSpeaking,
     preferFastStart = false,
+    forceSpeak = false,
     onSpeechChunkProgress,
   } = params;
 
@@ -310,6 +313,19 @@ export async function speakDashResponse(params: {
       return;
     }
     const normalizedSpeechInput = normalizeUrlHeavyMarkdownForSpeech(rawSpeechInput || '');
+    const speechPolicy = evaluateDashSpeechContent(normalizedSpeechInput || rawSpeechInput || '');
+    if (!forceSpeak && speechPolicy.shouldSuppress) {
+      onSpeechChunkProgress?.({
+        messageId: message.id,
+        chunkIndex: 0,
+        chunkCount: 0,
+        isPlaying: false,
+        isComplete: true,
+      });
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+      return;
+    }
     const isPhonics = shouldUsePhonicsMode(rawSpeechInput || '');
     const cleaned = cleanForTTS(normalizedSpeechInput || '', { phonicsMode: isPhonics });
     const chunks = splitForTTSWithFastStart(cleaned, {

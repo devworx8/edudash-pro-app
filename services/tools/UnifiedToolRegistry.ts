@@ -57,7 +57,7 @@ const TOOL_ACCESS_RULES: Record<string, { roles?: ToolRole[]; minTier?: ToolTier
   generate_image: { roles: ['teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
   generate_worksheet: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
   generate_chart: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
-  generate_pdf_from_prompt: { roles: ['teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
+  generate_pdf_from_prompt: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
   send_email: { roles: ['teacher', 'principal_admin', 'super_admin'], minTier: 'premium' },
   open_document: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
   get_screen_context: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
@@ -97,9 +97,7 @@ const TOOL_ACCESS_RULES: Record<string, { roles?: ToolRole[]; minTier?: ToolTier
 };
 
 const DISABLED_TOOL_NAMES = new Set<string>([
-  // Dash PDF generation is intentionally disabled in assistant/orb flows.
-  'export_pdf',
-  'generate_pdf_from_prompt',
+  // Complex structured content generators remain gated in assistant/orb flows.
   'generate_worksheet',
   'generate_chart',
 ]);
