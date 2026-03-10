@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 
 interface ScheduleConflict {
   id: string;
@@ -64,7 +65,9 @@ export const ConflictResolver: React.FC<ConflictResolverProps> = ({
     [conflicts]
   );
 
-  const getConflictIcon = (type: ScheduleConflict['type']): string => {
+  const getConflictIcon = (
+    type: ScheduleConflict['type']
+  ): ComponentProps<typeof Ionicons>['name'] => {
     switch (type) {
       case 'overlap':
         return 'time-outline';

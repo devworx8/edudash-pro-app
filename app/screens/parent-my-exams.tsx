@@ -23,6 +23,7 @@ import { assertSupabase } from '@/lib/supabase';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { formatDistanceToNow } from 'date-fns';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
+import { clampPercent } from '@/lib/progress/clampPercent';
 
 interface SavedExam {
   id: string;
@@ -123,7 +124,7 @@ function ExamCard({
               styles.progressFill,
               {
                 backgroundColor: done ? getScoreColor(latest!.percentage) : meta.colors[0],
-                width: `${done ? latest!.percentage : 0}%`,
+                width: clampPercent(done ? latest!.percentage : 0),
               },
             ]}
           />

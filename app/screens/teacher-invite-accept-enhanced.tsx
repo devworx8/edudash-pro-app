@@ -319,7 +319,7 @@ export default function TeacherInviteAcceptScreenEnhanced() {
             onChangeText={handleLinkInputChange}
             autoCapitalize="none"
             placeholder="Paste full link – we'll extract your invite details"
-            placeholderTextColor={theme.textMuted}
+            placeholderTextColor={theme.textSecondary}
           />
         </View>
 
@@ -339,7 +339,7 @@ export default function TeacherInviteAcceptScreenEnhanced() {
             autoCapitalize="none"
             autoCorrect={false}
             placeholder="Invite token"
-            placeholderTextColor={theme.textMuted}
+            placeholderTextColor={theme.textSecondary}
           />
         </View>
 
@@ -353,7 +353,7 @@ export default function TeacherInviteAcceptScreenEnhanced() {
             keyboardType="email-address"
             autoCorrect={false}
             placeholder="you@example.com"
-            placeholderTextColor={theme.textMuted}
+            placeholderTextColor={theme.textSecondary}
           />
         </View>
 
@@ -419,7 +419,7 @@ export default function TeacherInviteAcceptScreenEnhanced() {
 
         {retryCount > 0 && (
           <TouchableOpacity style={styles.retryHint} onPress={onAccept}>
-            <Ionicons name="refresh-outline" size={16} color={theme.textMuted} />
+            <Ionicons name="refresh-outline" size={16} color={theme.textSecondary} />
             <Text style={styles.retryText}>Tap to try again</Text>
           </TouchableOpacity>
         )}

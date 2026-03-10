@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Modal,
   TextInput,
@@ -12,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import { ratioToPercent } from '../../lib/progress/clampPercent';
 
 interface RoutineTemplate {
   id: string;
@@ -223,7 +225,7 @@ export const TemplateLibrary: React.FC<TemplateLibraryProps> = ({
               <View
                 style={[
                   styles.capsFill,
-                  { width: `${(caps.achieved / caps.target) * 100}%` },
+                  { width: ratioToPercent(caps.achieved, caps.target) },
                 ]}
               />
             </View>

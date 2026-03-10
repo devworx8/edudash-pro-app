@@ -10,10 +10,10 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, Platform, Animated, Dimensions,
-  KeyboardAvoidingView, TextInput, ScrollView,
+  KeyboardAvoidingView, TextInput, ScrollView, Keyboard,
 } from 'react-native';
 import { router } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
@@ -77,6 +77,8 @@ export default function DashTutorVoiceChat() {
   const { theme } = useTheme();
   const { profile } = useAuth();
   const { capabilityTier } = useSubscription();
+  const insets = useSafeAreaInsets();
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
   const normalizedRole = String(profile?.role || 'parent').toLowerCase();
   const isStudent = ['student', 'learner'].includes(normalizedRole);
   // Tier-based orb: students always get at least starter orb UI
@@ -112,6 +114,14 @@ export default function DashTutorVoiceChat() {
   const welcomeMessage: ChatMessageData = useMemo(() => ({
     id: 'welcome', role: 'assistant', content: getWelcomeMessage(normalizedRole), timestamp: new Date(),
   }), [normalizedRole]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
 
   useEffect(() => { isVoiceModeRef.current = isVoiceMode; }, [isVoiceMode]);
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
@@ -334,7 +344,7 @@ export default function DashTutorVoiceChat() {
     const OrbVisual = effectiveOrbTier === 'premium' || effectiveOrbTier === 'enterprise'
       ? NebulaSphereOrb : CosmicOrb;
     return (
-      <SafeAreaView style={orbStyles.safeArea}>
+      <View style={[orbStyles.safeArea, { paddingTop: insets.top }]}>
         {!isWeb && VoiceOrb && <View style={orbStyles.hiddenOrb}><VoiceOrb {...voiceOrbSharedProps} size={100} /></View>}
         <View style={orbStyles.header}>
           <TouchableOpacity onPress={() => router.back()} style={orbStyles.headerBtn}>
@@ -372,7 +382,7 @@ export default function DashTutorVoiceChat() {
           )}
         </View>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          <View style={orbStyles.inputRow}>
+          <View style={[orbStyles.inputRow, !keyboardVisible && { paddingBottom: Math.max(insets.bottom, 8) }]}>
             <TextInput
               style={orbStyles.textInput} placeholder="Ask me anything..." placeholderTextColor="rgba(255,255,255,0.35)"
               value={inputText} onChangeText={setInputText} onSubmitEditing={() => sendMessage(inputText)}
@@ -386,13 +396,13 @@ export default function DashTutorVoiceChat() {
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
-      </SafeAreaView>
+      </View>
     );
   }
 
   // ── Standard UI ───────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+    <View style={[styles.container, { backgroundColor: theme.background, paddingTop: insets.top }]}>
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity onPress={clearChat} style={styles.headerButton}>
           <Ionicons name="refresh" size={22} color={theme.textSecondary} />
@@ -446,7 +456,9 @@ export default function DashTutorVoiceChat() {
           <VoiceOrb {...voiceOrbSharedProps} size={118} />
         </View>
       )}
-      <ChatInput inputText={inputText} setInputText={setInputText} onSend={() => sendMessage(inputText)} isProcessing={isProcessing} isVoiceMode={isVoiceMode} onToggleVoiceMode={() => setIsVoiceMode(!isVoiceMode)} />
-    </SafeAreaView>
+      <View style={!keyboardVisible ? { paddingBottom: insets.bottom } : undefined}>
+        <ChatInput inputText={inputText} setInputText={setInputText} onSend={() => sendMessage(inputText)} isProcessing={isProcessing} isVoiceMode={isVoiceMode} onToggleVoiceMode={() => setIsVoiceMode(!isVoiceMode)} />
+      </View>
+    </View>
   );
 }

@@ -215,7 +215,6 @@ function TeachTodaySuggestionImpl({
   return (
     <View
       style={styles.card}
-      accessibilityRole="region"
       accessibilityLabel={t('teacher.teach_today_accessibility_label', {
         defaultValue: "Today's teaching focus suggestions"
       })}

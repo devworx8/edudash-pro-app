@@ -9,7 +9,15 @@ import {
   PanResponder,
   Animated,
 } from 'react-native';
-import { RoutineBlock, TimeSlot } from '../../lib/types/routine';
+import { ratioToPercent } from '../../lib/progress/clampPercent';
+
+interface RoutineBlock {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  subject?: string | null;
+}
 
 interface VisualTimelineProps {
   blocks: RoutineBlock[];
@@ -197,7 +205,7 @@ export const VisualTimeline: React.FC<VisualTimelineProps> = ({
             <View 
               style={[
                 styles.capsProgressFill,
-                { width: `${(caps.achieved / caps.target) * 100}%` }
+                { width: ratioToPercent(caps.achieved, caps.target) }
               ]} 
             />
           </View>

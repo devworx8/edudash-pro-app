@@ -16,7 +16,7 @@ export {
   type TeacherInviteAcceptResult,
   type CreateInviteParams,
   type AcceptInviteParams,
-} from './teacherInviteService.enhanced';
+} from '../teacherInviteService.enhanced';
 
 // Teacher Approval
 export {
@@ -28,7 +28,7 @@ export {
   type ApprovalErrorCode,
   type BatchApprovalResult,
   type TeacherApprovalStats,
-} from './teacherApprovalService.enhanced';
+} from '../teacherApprovalService.enhanced';
 
 // Routine Sharing
 export {
@@ -38,8 +38,8 @@ export {
   type RoutineShareRecipient,
   type ShareRoutineParams,
   type RoutineChangeNotification,
-} from './routineSharingService';
+} from '../routineSharingService';
 
 // Legacy compatibility
-export { getPendingTeachers, approveTeacher, rejectTeacher, getApprovalStats } from './teacherApprovalService.enhanced';
-export { shareRoutine, getSharedRoutinesForTeacher, getSharedRoutinesForParent } from './routineSharingService';
+export { getPendingTeachers, approveTeacher, rejectTeacher, getApprovalStats } from '../teacherApprovalService.enhanced';
+export { shareRoutine, getSharedRoutinesForTeacher, getSharedRoutinesForParent } from '../routineSharingService';

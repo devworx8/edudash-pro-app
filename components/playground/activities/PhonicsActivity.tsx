@@ -9,7 +9,8 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useKidVoice } from '../../../lib/hooks/useKidVoice';
+import { useKidVoice } from '../../../hooks/useKidVoice';
+import { ratioToPercent } from '../../../lib/progress/clampPercent';
 import { AdaptiveDifficultyEngine, DifficultyParameters } from '../AdaptiveDifficultyEngine';
 
 const { width } = Dimensions.get('window');
@@ -250,7 +251,7 @@ export const PhonicsActivity: React.FC<PhonicsActivityProps> = ({
             <View
               style={[
                 styles.progressFill,
-                { width: `${((questionIndex + 1) / difficulty.questionCount) * 100}%` },
+                { width: ratioToPercent(questionIndex + 1, difficulty.questionCount) },
               ]}
             />
           </View>

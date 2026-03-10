@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart, ProgressChart } from 'react-native-chart-kit';
+import { ratioToPercent } from '../../lib/progress/clampPercent';
 
 interface ProgressDashboardProps {
   capsCoverage: CAPSCoverage[];
@@ -111,12 +112,12 @@ export const ProgressDashboard: React.FC<ProgressDashboardProps> = ({
             <View style={styles.capsBar}>
               <View
                 style={[
-                  styles.capsBarFill,
-                  {
-                    width: `${(caps.achieved / caps.target) * 100}%`,
-                    backgroundColor: caps.color,
-                  },
-                ]}
+                styles.capsBarFill,
+                {
+                  width: ratioToPercent(caps.achieved, caps.target),
+                  backgroundColor: caps.color,
+                },
+              ]}
               />
             </View>
             <Text style={styles.capsDetail}>
