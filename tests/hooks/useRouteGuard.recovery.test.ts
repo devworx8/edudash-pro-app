@@ -3,6 +3,7 @@ import { useAuthGuard } from '@/hooks/useRouteGuard';
 
 let mockPathname = '/';
 let mockSearchParams: Record<string, string | string[] | undefined> = {};
+let mockRootNavigationState: { key?: string } | undefined = { key: 'root-ready' };
 
 const mockReplace = jest.fn();
 const mockUseAuth = jest.fn();
@@ -15,6 +16,7 @@ jest.mock('expo-router', () => ({
   usePathname: () => mockPathname,
   useLocalSearchParams: () => mockSearchParams,
   useGlobalSearchParams: () => mockSearchParams,
+  useRootNavigationState: () => mockRootNavigationState,
   router: { replace: (...args: unknown[]) => mockReplace(...args) },
 }));
 
@@ -68,6 +70,7 @@ describe('useAuthGuard recovery routing behavior', () => {
     jest.clearAllMocks();
     mockPathname = '/';
     mockSearchParams = {};
+    mockRootNavigationState = { key: 'root-ready' };
     mockUseAuth.mockReturnValue(authenticatedState);
     mockIsSigningOut.mockReturnValue(false);
     mockIsAccountSwitchInProgress.mockReturnValue(false);
@@ -103,6 +106,24 @@ describe('useAuthGuard recovery routing behavior', () => {
 
     await waitFor(() => {
       expect(mockReplace).not.toHaveBeenCalled();
+    });
+  });
+
+  it('waits for root navigation readiness before redirecting from auth routes', async () => {
+    mockPathname = '/(auth)/sign-in';
+    mockRootNavigationState = undefined;
+
+    const { rerender } = renderHook(() => useAuthGuard());
+
+    await waitFor(() => {
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
+
+    mockRootNavigationState = { key: 'root-ready' };
+    rerender({} as never);
+
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith('/screens/parent-dashboard');
     });
   });
 });

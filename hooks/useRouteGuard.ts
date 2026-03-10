@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
-import { useGlobalSearchParams, usePathname, router } from 'expo-router';
+import { useGlobalSearchParams, usePathname, useRootNavigationState, router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   isSignOutInProgress,
@@ -43,6 +43,7 @@ export const useMobileWebGuard = () => { useEffect(() => {}, []); };
 /** Auth guard - handles redirect based on authentication state */
 export const useAuthGuard = () => {
   const pathname = usePathname();
+  const rootNavigationState = useRootNavigationState();
   const searchParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const { user, loading, profile, profileLoading } = useAuth();
   const hasNavigated = useRef(false);
@@ -54,6 +55,7 @@ export const useAuthGuard = () => {
   const authRouteSeenAt = useRef<number | null>(null);
   const signingOut = isSignOutInProgress();
   const accountSwitchInProgress = isAccountSwitchInProgress();
+  const isRootNavigationReady = Boolean(rootNavigationState?.key);
 
   const safeReplace = useCallback((to: string, reason: string) => {
     const from = typeof pathname === 'string' ? pathname : '';
@@ -68,12 +70,39 @@ export const useAuthGuard = () => {
       return false;
     }
 
+    if (!isRootNavigationReady) {
+      authDebug('guard.redirect_deferred', { from, to, reason, navigationReady: false });
+      return false;
+    }
+
     lastRedirectKey.current = key;
     lastRedirectAt.current = now;
     authDebug('guard.redirect', { from, to, reason });
-    router.replace(to as any);
-    return true;
-  }, [pathname]);
+    try {
+      router.replace(to as any);
+      return true;
+    } catch (error) {
+      authDebug('guard.redirect_error', { from, to, reason, error });
+      return false;
+    }
+  }, [isRootNavigationReady, pathname]);
+
+  const commitRedirect = useCallback(
+    (to: string, reason: string, options?: { markAttempt?: boolean }) => {
+      const didNavigate = safeReplace(to, reason);
+      if (!didNavigate) {
+        return false;
+      }
+
+      hasNavigated.current = true;
+      if (options?.markAttempt) {
+        lastAttemptAt.current = Date.now();
+      }
+
+      return true;
+    },
+    [safeReplace]
+  );
   
   useEffect(() => {
     // Reset navigation attempt when the authenticated user changes
@@ -90,6 +119,7 @@ export const useAuthGuard = () => {
     if (signingOut && user) { hasNavigated.current = false; return; }
     // Don't redirect while auth is loading
     if (loading) { return; }
+    if (!isRootNavigationReady) { return; }
     
     // Determine if current route is an auth route
     const isAuthRoute = classifyAuthRoute(pathname);
@@ -104,8 +134,7 @@ export const useAuthGuard = () => {
       authRouteSeenAt.current = null;
       if (!isAuthRoute && !isOnboarding && !hasNavigated.current) {
         console.log('[AuthGuard] No user, redirecting to welcome from:', pathname);
-        hasNavigated.current = true;
-        safeReplace('/(auth)/welcome', 'no_user');
+        commitRedirect('/(auth)/welcome', 'no_user');
       }
       return;
     }
@@ -121,8 +150,7 @@ export const useAuthGuard = () => {
       !accountSwitchInProgress
     ) {
       console.log('[AuthGuard] Missing profile, redirecting to profiles-gate from:', pathname);
-      hasNavigated.current = true;
-      safeReplace('/profiles-gate', 'missing_profile_protected_route');
+      commitRedirect('/profiles-gate', 'missing_profile_protected_route');
       return;
     }
     
@@ -151,8 +179,7 @@ export const useAuthGuard = () => {
         const elapsed = Date.now() - (authRouteSeenAt.current || Date.now());
         if (elapsed < AUTH_ROUTE_PROFILE_GRACE_MS) return;
         if (!isProfilesGate && !hasNavigated.current) {
-          hasNavigated.current = true;
-          safeReplace('/profiles-gate', 'missing_profile_after_auth_grace');
+          commitRedirect('/profiles-gate', 'missing_profile_after_auth_grace');
         }
         return;
       }
@@ -164,11 +191,9 @@ export const useAuthGuard = () => {
       const now = Date.now();
       if (hasNavigated.current && now - lastAttemptAt.current < 1500) return;
 
-      hasNavigated.current = true;
-      lastAttemptAt.current = now;
       const dashInfo = resolveDashboard(user, profile);
       trackResolution(user, dashInfo, 'useAuthGuard.auth-route');
-      safeReplace(dashInfo.targetDashboard, 'authenticated_auth_route');
+      commitRedirect(dashInfo.targetDashboard, 'authenticated_auth_route', { markAttempt: true });
       return;
     }
 
@@ -177,9 +202,7 @@ export const useAuthGuard = () => {
       if (isOrgAdminFamily) {
         const schoolDashboard = resolveSchoolGuardDashboard(profile, user);
         if (schoolDashboard && pathname !== schoolDashboard && !hasNavigated.current) {
-          hasNavigated.current = true;
-          lastAttemptAt.current = Date.now();
-          safeReplace(schoolDashboard, 'school_dashboard_guard');
+          commitRedirect(schoolDashboard, 'school_dashboard_guard', { markAttempt: true });
           return;
         }
       }
@@ -206,7 +229,8 @@ export const useAuthGuard = () => {
     (profile as any)?.organization_type,
     profileLoading,
     accountSwitchInProgress,
+    isRootNavigationReady,
     signingOut,
-    safeReplace,
+    commitRedirect,
   ]);
 };
