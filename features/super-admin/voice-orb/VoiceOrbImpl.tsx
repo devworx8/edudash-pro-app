@@ -255,7 +255,6 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     isParentProcessing,
     restartBlocked,
     restartBlockedRef,
-    autoStartListening,
     autoRestartAfterTTS,
     speak,
     stopSpeaking,

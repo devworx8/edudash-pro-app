@@ -21,7 +21,6 @@ interface TTSHandlerParams {
   isParentProcessing: boolean;
   restartBlocked: boolean;
   restartBlockedRef: React.MutableRefObject<boolean>;
-  autoStartListening: boolean;
   autoRestartAfterTTS: boolean;
   speak: (text: string, language?: SupportedLanguage, options?: TTSOptions) => Promise<void>;
   stopSpeaking: () => Promise<void>;
@@ -52,7 +51,6 @@ export function useVoiceOrbTTSHandlers({
   isParentProcessing,
   restartBlocked,
   restartBlockedRef,
-  autoStartListening,
   autoRestartAfterTTS,
   speak,
   stopSpeaking,
