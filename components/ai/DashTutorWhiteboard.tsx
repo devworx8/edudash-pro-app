@@ -37,6 +37,7 @@ import Svg, {
 } from 'react-native-svg';
 import { clampPercent } from '@/lib/progress/clampPercent';
 import MathRenderer from '../ai/dash-assistant/MathRenderer';
+import { stripContentForTTS } from './DashBoardContent';
 
 // ─── Regex helpers ────────────────────────────────────────────────────────────
 function whiteboardRegex(): RegExp {
@@ -66,6 +67,16 @@ export function stripWhiteboardFromDisplay(text: string): string {
     .replace(orphanTagRegex(), '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/**
+ * Get TTS-friendly content from whiteboard content
+ * This ensures Dash reads from the Dash Board content, not captions
+ */
+export function getWhiteboardTTSContent(content: WhiteboardContent): string {
+  // Strip markdown and math delimiters for natural TTS reading
+  const cleanLines = content.lines.map(line => stripContentForTTS(line));
+  return cleanLines.join(' ').trim();
 }
 
 // ─── Design palette ───────────────────────────────────────────────────────────
