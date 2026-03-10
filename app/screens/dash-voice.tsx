@@ -341,7 +341,7 @@ export default function DashVoiceScreen() {
           onOpenLangMenu={() => setShowLangMenu(true)}
         />
 
-        <KeyboardAvoidingView style={s.content} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={insets.top + 50}>
+        <KeyboardAvoidingView style={s.content} behavior="padding" keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top + 50 : 0}>
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={[s.greeting, { color: theme.text }]}>{greeting}</Text>
             <Text style={[s.subtitle, { color: theme.textSecondary }]}>Your AI assistant</Text>

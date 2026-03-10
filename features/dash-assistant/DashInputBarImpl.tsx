@@ -586,7 +586,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
                 ? undefined
                 : (e) =>
                     setInputHeight((prev) => {
-                      const measuredHeight = e.nativeEvent.contentSize.height + 16;
+                      const measuredHeight = (e?.nativeEvent?.contentSize?.height ?? 0) + 16;
                       const nextHeight = measuredHeight <= FULL_CHAT_GROW_THRESHOLD
                         ? FULL_CHAT_COMPACT_HEIGHT
                         : Math.min(measuredHeight, FULL_CHAT_MAX_HEIGHT);

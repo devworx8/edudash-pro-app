@@ -120,7 +120,7 @@ export function ComposerTextEntry({
               if (Platform.OS === 'web') {
                 return;
               }
-              const nextHeight = Math.min(76, Math.max(22, event.nativeEvent.contentSize.height));
+              const nextHeight = Math.min(76, Math.max(22, event?.nativeEvent?.contentSize?.height ?? 22));
               setInputHeight(nextHeight);
             }}
             scrollEnabled={inputHeight >= 82}
