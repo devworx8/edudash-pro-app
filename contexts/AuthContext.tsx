@@ -203,8 +203,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             else if (qEvent !== 'SIGNED_OUT') await syncSessionFromSupabase(qS ?? null);
           } catch { /* noop */ }
 
-          // Single-session: when this device signs in, revoke all other sessions (other devices log out)
-          const singleSessionEnabled = process.env.EXPO_PUBLIC_SINGLE_SESSION_ENABLED !== 'false';
+          // Single-session revocation is opt-in. Defaulting it on caused
+          // users to get signed out on phone/web unexpectedly.
+          const singleSessionEnabled = process.env.EXPO_PUBLIC_SINGLE_SESSION_ENABLED === 'true';
           if (qEvent === 'SIGNED_IN' && qS?.user?.id && singleSessionEnabled) {
             assertSupabase()
               .auth.signOut({ scope: 'others' } as { scope: 'others' })
