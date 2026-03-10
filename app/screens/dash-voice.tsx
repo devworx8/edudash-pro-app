@@ -49,6 +49,7 @@ import {
   DashVoiceComposer,
   DashVoiceOrbSection,
 } from '@/components/dash-voice';
+import type { VoiceOrbRef } from '@/features/super-admin/voice-orb/types';
 import {
   useDashVoiceTTS,
   useDashVoiceSendMessage,
@@ -80,14 +81,6 @@ if (!isWeb) {
   VoiceOrb = mod.VoiceOrb;
 }
 
-type VoiceOrbRef = {
-  speakText: (text: string, language?: SupportedLanguage, options?: { phonicsMode?: boolean }) => Promise<void>;
-  stopSpeaking: () => Promise<void>;
-  startListening?: () => Promise<void>;
-  stopListening?: () => Promise<void>;
-  toggleListening?: () => Promise<void>;
-  isSpeaking: boolean;
-};
 type OrbPdfArtifact = { url: string; title: string; filename?: string | null };
 type DashVoiceDictationProbe = {
   run_id?: string; platform: 'mobile' | 'web'; source: string;
