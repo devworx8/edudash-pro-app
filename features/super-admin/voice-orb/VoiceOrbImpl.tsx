@@ -102,6 +102,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   const restartBlockedRef = useRef(restartBlocked);
   const skipNextAutoRestartRef = useRef(false);
   const handleStartRecordingRef = useRef<(() => Promise<void>) | null>(null);
+  const handlePrimaryActionRef = useRef<(() => Promise<void>) | null>(null);
   const scheduleLiveFallbackRef = useRef<(() => void) | null>(null);
 
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
@@ -263,6 +264,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     onTTSStart,
     onTTSEnd,
     handleStartRecordingRef,
+    handlePrimaryActionRef,
     skipNextAutoRestartRef,
   });
 
@@ -383,6 +385,10 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       handleStartRecording();
     }
   };
+
+  useEffect(() => {
+    handlePrimaryActionRef.current = handlePress;
+  }, [handlePress]);
 
   // Handle long press
   const handleLongPress = () => {

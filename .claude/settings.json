@@ -50,10 +50,14 @@
       "Bash(cp /home/edp/Desktop/dashpro/features/dash-ai/DashTutorVoiceChatImpl.tsx /home/edp/Desktop/dashpro-release-46-ota/features/dash-ai/DashTutorVoiceChatImpl.tsx)",
       "Bash(mkdir -p /home/edp/Desktop/dashpro/features/dash-ai/dash-assistant)",
       "Bash(mkdir -p /home/edp/Desktop/dashpro/features/dash-ai/dash-tutor-voice-chat)",
-      "Bash(mkdir -p /home/edp/Desktop/dashpro/features/super-admin/voice-orb)"
+      "Bash(mkdir -p /home/edp/Desktop/dashpro/features/super-admin/voice-orb)",
+      "Bash(npx tsc --noEmit --project tsconfig.json)",
+      "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
+      "Bash(grep -l \"homework\\\\|exam\\\\|grading\\\\|submission\" /home/edp/Desktop/dashpro/app/screens/*.tsx)"
     ],
     "additionalDirectories": [
-      "/home/edp/.claude/projects/-home-edp-Desktop-dashpro"
+      "/home/edp/.claude/projects/-home-edp-Desktop-dashpro",
+      "/home/edp/Desktop/dashpro/components/super-admin/voice-orb"
     ]
   }
 }

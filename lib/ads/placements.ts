@@ -143,8 +143,8 @@ export const AD_PLACEMENTS: Record<string, AdPlacement> = {
     position: 'perk_unlock',
     adUnitEnvVar: 'EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_AI_PREVIEW',
     frequencyPolicy: {
-      minInterval: 600, // 10 minutes between AI preview rewards
-      dailyLimit: 6,
+      minInterval: 300, // 5 minutes between AI preview rewards
+      dailyLimit: 5,
       userInitiated: true,
       minSessionsBeforeFirst: 1,
     },
@@ -242,6 +242,48 @@ export const AD_PLACEMENTS: Record<string, AdPlacement> = {
     enabled: true,
   },
 
+  // Banner ad for K-12 parent dashboard
+  banner_k12_parent_dashboard: {
+    key: 'banner_k12_parent_dashboard',
+    type: 'banner',
+    screen: 'k12_parent_dashboard',
+    position: 'dashboard_bottom',
+    adUnitEnvVar: 'EXPO_PUBLIC_ADMOB_ADUNIT_BANNER_K12_PARENT_DASHBOARD',
+    frequencyPolicy: {
+      minInterval: 0,
+      dailyLimit: 1000,
+      minSessionsBeforeFirst: 1,
+    },
+    keywords: [
+      'education', 'parenting', 'k12', 'school', 'learning', 'tutoring',
+      'homework help', 'study tools', 'exam preparation',
+    ],
+    contentRating: 'parental',
+    description: 'Bottom banner on K-12 parent dashboard',
+    enabled: true,
+  },
+
+  // Interstitial ad for K-12 parent dashboard entry
+  interstitial_k12_parent_dashboard_enter: {
+    key: 'interstitial_k12_parent_dashboard_enter',
+    type: 'interstitial',
+    screen: 'k12_parent_dashboard',
+    position: 'navigation_break',
+    adUnitEnvVar: 'EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_K12_PARENT_DASHBOARD',
+    frequencyPolicy: {
+      minInterval: 300,
+      dailyLimit: 3,
+      minSessionsBeforeFirst: 2,
+    },
+    keywords: [
+      'education', 'parenting', 'k12', 'school', 'learning resources',
+      'tutoring', 'educational services',
+    ],
+    contentRating: 'parental',
+    description: 'Interstitial shown when entering K-12 parent dashboard',
+    enabled: true,
+  },
+
   // Interstitial ad for learner dashboard navigation
   interstitial_learner_dashboard_enter: {
     key: 'interstitial_learner_dashboard_enter',
@@ -314,6 +356,9 @@ export const PLACEMENT_KEYS = {
   REWARDED_AI_PREVIEW: 'rewarded_ai_preview',
   BANNER_MEMBERSHIP_DASHBOARD: 'banner_membership_dashboard',
   INTERSTITIAL_MEMBERSHIP_DASHBOARD_ENTER: 'interstitial_membership_dashboard_enter',
+  // K-12 parent placements
+  BANNER_K12_PARENT_DASHBOARD: 'banner_k12_parent_dashboard',
+  INTERSTITIAL_K12_PARENT_DASHBOARD_ENTER: 'interstitial_k12_parent_dashboard_enter',
   // Learner/student placements
   BANNER_LEARNER_DASHBOARD: 'banner_learner_dashboard',
   INTERSTITIAL_LEARNER_DASHBOARD_ENTER: 'interstitial_learner_dashboard_enter',

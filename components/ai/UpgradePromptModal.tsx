@@ -5,11 +5,13 @@
  * Displays required tier, feature benefits, and upgrade CTA
  */
 
-import React from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useState } from 'react';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { TierBadge } from '@/components/ui/TierBadge';
 import { getTierInfo, getExclusiveCapabilities, type Tier, type DashCapability } from '@/lib/ai/capabilities';
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
+import { useAds } from '@/contexts/AdsContext';
 
 export interface UpgradePromptModalProps {
   visible: boolean;
@@ -18,6 +20,8 @@ export interface UpgradePromptModalProps {
   requiredTier: Tier;
   capability: DashCapability;
   featureName?: string;
+  /** If provided, enables a "Watch Ad for Free Trial" button on Android free tier */
+  onRewardedUnlock?: () => void;
 }
 
 export function UpgradePromptModal({
@@ -27,7 +31,9 @@ export function UpgradePromptModal({
   requiredTier,
   capability,
   featureName,
+  onRewardedUnlock,
 }: UpgradePromptModalProps) {
+  const [adLoading, setAdLoading] = useState(false);
   const requiredTierInfo = getTierInfo(requiredTier);
   const exclusiveFeatures = getExclusiveCapabilities(requiredTier);
   
@@ -39,6 +45,16 @@ export function UpgradePromptModal({
       source: 'upgrade_modal',
       reason: 'feature_needed',
     });
+  };
+
+  const handleWatchAd = async () => {
+    if (!onRewardedUnlock) return;
+    setAdLoading(true);
+    try {
+      onRewardedUnlock();
+    } finally {
+      setAdLoading(false);
+    }
   };
 
   return (
@@ -87,6 +103,22 @@ export function UpgradePromptModal({
 
           {/* Footer */}
           <View style={styles.footer}>
+            {onRewardedUnlock && Platform.OS !== 'web' && (
+              <TouchableOpacity
+                style={[styles.upgradeButton, { backgroundColor: '#10B981' }]}
+                onPress={handleWatchAd}
+                disabled={adLoading}
+              >
+                {adLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="play-circle" size={20} color="#fff" />
+                    <Text style={styles.upgradeButtonText}>Watch Ad for 30-min Trial</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
             <TouchableOpacity style={styles.upgradeButton} onPress={handleUpgrade}>
               <Text style={styles.upgradeButtonText}>
                 Upgrade to {requiredTierInfo.name}

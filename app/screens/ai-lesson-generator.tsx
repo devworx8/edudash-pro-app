@@ -35,6 +35,7 @@ import {
   summarizeQuickLessonContext,
   type QuickLessonThemeContext,
 } from '@/lib/lesson-planning/quickLessonThemeContext';
+import { useRewardedFeature } from '@/contexts/AdsContext';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 type LanguageCode = 'en' | 'es' | 'fr' | 'pt' | 'de' | 'af' | 'zu' | 'st';
 type LessonSectionCard = {
@@ -110,6 +111,7 @@ export default function AILessonGeneratorScreen() {
   const { generated, setGenerated, pending, progress, progressPhase, progressMessage, errorMsg, lastPayload, usage, quotaStatus, isQuotaExhausted, onGenerate, onCancel, refreshUsage } = useAILessonGeneration();
   const { availableModels, selectedModel, setSelectedModel, isLoading: modelsLoading } = useLessonGeneratorModels();
   const { tierInfo } = useTierInfo();
+  const { isUnlocked: isLessonUnlocked, offerRewardedUnlock: offerLessonUnlock, canShowRewardedAd } = useRewardedFeature('lesson_generation');
   const generatedContentText = useMemo(() => {
     if (typeof generated?.content === 'string' && generated.content.trim()) {
       return generated.content.trim();
@@ -226,8 +228,15 @@ export default function AILessonGeneratorScreen() {
     try { await EducationalPDFService.generateTextPDF(`${subject}: ${topic}`, content); toast.success('PDF generated'); }
     catch { toast.error('Failed to generate PDF'); }
   }, [subject, topic, generatedContentText]);
-  const handleGenerate = useCallback(() => {
-    if (isQuotaExhausted) { navigateToUpgrade({ source: 'lesson_generator' }); return; }
+  const handleGenerate = useCallback(async () => {
+    if (isQuotaExhausted && !isLessonUnlocked) {
+      if (canShowRewardedAd) {
+        const unlocked = await offerLessonUnlock();
+        if (!unlocked) { navigateToUpgrade({ source: 'lesson_generator' }); return; }
+      } else {
+        navigateToUpgrade({ source: 'lesson_generator' }); return;
+      }
+    }
     if (lessonFullscreenEnabled) {
       setShowFullscreenLesson(true);
     }
@@ -248,6 +257,9 @@ export default function AILessonGeneratorScreen() {
     });
   }, [
     isQuotaExhausted,
+    isLessonUnlocked,
+    canShowRewardedAd,
+    offerLessonUnlock,
     onGenerate,
     topic,
     subject,

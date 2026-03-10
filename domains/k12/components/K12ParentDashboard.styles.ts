@@ -89,8 +89,8 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
   },
   scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 14,
+    paddingHorizontal: 8,
+    paddingTop: 0,
   },
   heroSummaryCard: {
     borderRadius: 18,
@@ -370,7 +370,7 @@ export const styles = StyleSheet.create({
     fontWeight: '700',
   },
   section: {
-    marginBottom: 28,
+    marginBottom: 12,
   },
   sectionHeaderCard: {
     width: '100%',

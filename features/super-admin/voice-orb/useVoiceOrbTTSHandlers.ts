@@ -30,6 +30,7 @@ interface TTSHandlerParams {
   onTTSStart?: () => void;
   onTTSEnd?: () => void;
   handleStartRecordingRef: React.MutableRefObject<(() => Promise<void>) | null>;
+  handlePrimaryActionRef: React.MutableRefObject<(() => Promise<void>) | null>;
   skipNextAutoRestartRef: React.MutableRefObject<boolean>;
 }
 
@@ -60,6 +61,7 @@ export function useVoiceOrbTTSHandlers({
   onTTSStart,
   onTTSEnd,
   handleStartRecordingRef,
+  handlePrimaryActionRef,
   skipNextAutoRestartRef,
 }: TTSHandlerParams) {
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,6 +103,9 @@ export function useVoiceOrbTTSHandlers({
     stopSpeaking: async () => {
       await stopSpeaking();
     },
+    startListening: async () => {
+      await handleStartRecordingRef.current?.();
+    },
     stopListening: async () => {
       console.log('[VoiceOrb] stopListening reason=external_stop');
       if (recorderState.isRecording) {
@@ -114,8 +119,11 @@ export function useVoiceOrbTTSHandlers({
       onStopListening();
       setStatusText('Listening...');
     },
+    toggleListening: async () => {
+      await handlePrimaryActionRef.current?.();
+    },
     get isSpeaking() { return ttsIsSpeaking; },
-  }), [speak, stopSpeaking, ttsIsSpeaking, selectedLanguage, onTTSStart, onTTSEnd, suspendListeningForTTS, recorderState.isRecording, recorderActions, cancelLiveListening, clearLiveTimers, onStopListening, lastDetectedLanguage, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
+  }), [speak, stopSpeaking, ttsIsSpeaking, selectedLanguage, onTTSStart, onTTSEnd, suspendListeningForTTS, handlePrimaryActionRef, handleStartRecordingRef, recorderState.isRecording, recorderActions, cancelLiveListening, clearLiveTimers, onStopListening, lastDetectedLanguage, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
 
   // CRITICAL: Stop recording when TTS starts to prevent feedback loop
   useEffect(() => {

@@ -7,8 +7,12 @@ export interface VoiceOrbRef {
   speakText: (text: string, language?: SupportedLanguage, options?: TTSOptions) => Promise<void>;
   /** Stop TTS playback */
   stopSpeaking: () => Promise<void>;
+  /** Start a new listening session if idle */
+  startListening: () => Promise<void>;
   /** Stop any active listening/recording session */
   stopListening: () => Promise<void>;
+  /** Execute the primary orb action (start or stop/transcribe) */
+  toggleListening: () => Promise<void>;
   /** Get current speaking state */
   isSpeaking: boolean;
 }
