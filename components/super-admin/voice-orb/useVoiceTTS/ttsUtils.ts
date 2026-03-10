@@ -6,7 +6,7 @@
 import * as Speech from 'expo-speech';
 import { getVoiceIdForLanguage, MULTILINGUAL_VOICES } from '@/lib/voice/voiceMapping';
 
-const MULTILINGUAL_VOICE_IDS = new Set([
+const MULTILINGUAL_VOICE_IDS = new Set<string>([
   MULTILINGUAL_VOICES.male,
   MULTILINGUAL_VOICES.female,
 ]);
