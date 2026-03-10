@@ -49,6 +49,7 @@ import {
   DEVICE_RATE_NORMAL,
   DEVICE_RATE_PHONICS,
 } from '@/lib/dash-ai/ttsConstants';
+import { getCachedToken, setCachedToken } from '@/lib/voice/sessionTokenCache';
 
 /** Normal speech rate — imported from ttsConstants SSOT */
 const DEFAULT_AZURE_RATE = AZURE_RATE_NORMAL;
@@ -60,9 +61,11 @@ const DEFAULT_DEVICE_RATE = DEVICE_RATE_NORMAL;
 const DEFAULT_PHONICS_DEVICE_RATE = DEVICE_RATE_PHONICS;
 const ALLOW_DEVICE_FALLBACK_IN_PHONICS =
   process.env.EXPO_PUBLIC_ALLOW_DEVICE_FALLBACK_IN_PHONICS === 'true';
-const TTS_FAST_START_FIRST_CHUNK_MAX_CHARS = 260;
+const TTS_FAST_START_FIRST_CHUNK_MAX_CHARS = 200;
 const TTS_FAST_START_FIRST_CHUNK_MAX_SENTENCES = 1;
-const TTS_PROXY_TIMEOUT_DEFAULT_MS = 4200;
+const TTS_PROXY_TIMEOUT_DEFAULT_MS = 3200;
+const TTS_PREFETCH_ENABLED = true;
+const TTS_PARALLEL_PREFETCH_THRESHOLD_MS = 800;
 
 const DEVICE_PHONICS_SOUND_MAP: Record<string, string> = {
   a: 'ah',
@@ -301,149 +304,21 @@ const pickDeviceVoiceIdentifier = async (
 
 const prepareDevicePhonicsText = (text: string): string => {
   let next = String(text || '');
-  // /s/ -> sss, /sh/ -> shhh, [m] -> mmm, etc.
-  next = next.replace(/\/([a-z]{1,8})\//gi, (_m, token: string) => {
-    const key = String(token || '').toLowerCase();
-    return DEVICE_PHONICS_SOUND_MAP[key] || key;
-  });
-  next = next.replace(/\[([a-z]{1,8})\]/gi, (_m, token: string) => {
-    const key = String(token || '').toLowerCase();
-    return DEVICE_PHONICS_SOUND_MAP[key] || key;
-  });
-  // c-a-t -> kuh . ah . tuh (short pause to keep pace natural for young learners)
-  next = next.replace(/\b([a-z](?:-[a-z]){1,7})\b/gi, (token) => {
-    const letters = token.split('-').map((v) => v.trim().toLowerCase()).filter(Boolean);
-    if (letters.some((v) => v.length !== 1)) return token;
-    return letters.map((l) => DEVICE_PHONICS_SOUND_MAP[l] || l).join(' . ');
-  });
-  // Ensure marker punctuation is never spoken literally.
-  next = next.replace(/[\/[\]]/g, ' ');
-  return next;
-};
-
-export const categorizeTTSError = (error: unknown): TTSErrorCategory => {
-  const message = error instanceof Error ? error.message : String(error || '');
-  const normalized = message.toLowerCase();
-
-  if (
-    normalized.includes('free_quota_exhausted') ||
-    normalized.includes('premium voice quota')
-  ) {
-    return 'quota_exhausted';
-  }
-
-  if (
-    normalized.includes('auth_missing') ||
-    normalized.includes('no session') ||
-    normalized.includes('401') ||
-    normalized.includes('403')
-  ) {
-    return 'auth_missing';
-  }
-
-  if (
-    normalized.includes('phonics_requires_azure') ||
-    normalized.includes('phonics mode requires azure') ||
-    normalized.includes('phonics_needs_azure')
-  ) {
-    return 'phonics_requires_azure';
-  }
-
-  if (
-    normalized.includes('tts_throttled') ||
-    normalized.includes('too many requests') ||
-    normalized.includes('429')
-  ) {
-    return 'throttled';
-  }
-
-  if (
-    normalized.includes('service_unconfigured') ||
-    normalized.includes('service_unavailable') ||
-    normalized.includes('tts unavailable') ||
-    normalized.includes('supabase_url') ||
-    normalized.includes('fallback') ||
-    normalized.includes('not configured')
-  ) {
-    return 'service_unconfigured';
-  }
-
-  if (
-    normalized.includes('audio_player') ||
-    normalized.includes('playback') ||
-    normalized.includes('device_tts_failed')
-  ) {
-    return 'playback_error';
-  }
-
-  if (
-    normalized.includes('network') ||
-    normalized.includes('fetch') ||
-    normalized.includes('timeout') ||
-    normalized.includes('econn') ||
-    normalized.includes('enotfound')
-  ) {
-    return 'network_error';
-  }
-
-  return 'unknown';
-};
-
-export const getTTSErrorMessage = (category: TTSErrorCategory): string => {
-  switch (category) {
-    case 'quota_exhausted':
-      return 'Premium voice limit reached. Using standard voice until reset.';
-    case 'auth_missing':
-      return 'Voice needs an active login session.';
-    case 'throttled':
-      return 'Voice is busy right now. Retrying shortly.';
-    case 'phonics_requires_azure':
-      return 'Phonics voice needs cloud TTS. Please check connection and retry.';
-    case 'service_unconfigured':
-      return 'Voice service is unavailable. Using device voice.';
-    case 'network_error':
-      return 'Network issue detected. Using device voice.';
-    case 'playback_error':
-      return 'Audio playback failed. Using device voice.';
-    default:
-      return 'Voice is temporarily unavailable.';
-  }
-};
-
-export function useVoiceTTS(): UseVoiceTTSReturn {
-  const { user, profile } = useAuth();
-  const { tier } = useSubscription();
-  const VOICE_TRACE_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_DASH_VOICE_TRACE === 'true';
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const playerRef = useRef<AudioPlayer | null>(null);
-  const stopRequestedRef = useRef(false);
-  const reportedErrorCategoriesRef = useRef<Set<TTSErrorCategory>>(new Set());
-  const playbackIdRef = useRef(0);
-  const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const playbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioModeConfiguredRef = useRef(false);
-  const cachedVoicePreferenceRef = useRef<VoicePreference | null | undefined>(undefined);
-  const cachedAISettingsVoiceRef = useRef<string | null | undefined>(undefined);
-  const lastAppliedVoiceSignatureRef = useRef<string | null>(null);
-
-  const logVoiceTrace = useCallback((event: string, payload?: Record<string, unknown>) => {
-    if (!VOICE_TRACE_ENABLED) return;
-    console.log(`[VoiceTTSTrace] ${event}`, payload || {});
-  }, [VOICE_TRACE_ENABLED]);
-
-  // ── Session cache: avoid getSession() on every TTS chunk ──────────
-  const sessionCacheRef = useRef<{ token: string; expiresAt: number } | null>(null);
+  // ─── Session cache: shared with STT for consistent token management ────────────
   const getSessionTokenCached = useCallback(async (): Promise<string> => {
-    const now = Date.now();
-    if (sessionCacheRef.current && sessionCacheRef.current.expiresAt > now) {
-      return sessionCacheRef.current.token;
+    // First check shared cache (also used by STT)
+    const cached = getCachedToken();
+    if (cached) {
+      return cached;
     }
+    
+    // Fetch fresh token
     const supabase = assertSupabase();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('AUTH_MISSING');
-    // Cache for 4 minutes (tokens typically valid 1 hour)
-    sessionCacheRef.current = { token: session.access_token, expiresAt: now + 4 * 60 * 1000 };
+    
+    // Store in shared cache for STT/TTS cross-module efficiency
+    setCachedToken(session.access_token);
     return session.access_token;
   }, []);
 
