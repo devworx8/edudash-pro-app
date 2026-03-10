@@ -18,7 +18,7 @@ export interface BottomTabBarStyleOptions {
 export function createBottomTabBarStyles(options: BottomTabBarStyleOptions) {
   const containerPaddingTop = options.isK12ParentNextGenNav ? (options.isCompact ? 2 : 4) : (options.isCompact ? 6 : 8);
   const tabMinHeight = options.isK12ParentNextGenNav ? (options.isCompact ? 44 : 48) : (options.isCompact ? 48 : 54);
-  const centerOrbMarginTop = options.isK12ParentNextGenNav ? (options.isCompact ? -8 : -12) : (options.isCompact ? -22 : -28);
+  const centerOrbMarginTop = options.isK12ParentNextGenNav ? (options.isCompact ? -3 : -5) : (options.isCompact ? -22 : -28);
 
   return StyleSheet.create({
     shell: {
@@ -88,7 +88,7 @@ export function createBottomTabBarStyles(options: BottomTabBarStyleOptions) {
       minHeight: tabMinHeight,
       alignItems: 'center',
       justifyContent: 'flex-end',
-      paddingBottom: options.isCompact ? 2 : 4,
+      paddingBottom: 0,
     },
     centerOrbWrapper: {
       width: options.isCompact ? 52 : 58,
@@ -111,7 +111,8 @@ export function createBottomTabBarStyles(options: BottomTabBarStyleOptions) {
       shadowOpacity: 0.46,
     },
     centerLabel: {
-      marginTop: options.isCompact ? 1 : 2,
+      marginTop: options.isCompact ? 6 : 8,
+      marginBottom: -10,
       fontSize: options.isCompact ? 9 : 10,
       fontWeight: '700',
       color: options.navInactiveColor,

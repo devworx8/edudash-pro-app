@@ -21,6 +21,7 @@ import { useHomeworkHelperModels } from '@/hooks/useAIModelSelection'
 import { useTheme } from '@/contexts/ThemeContext'
 import { FeatureQuotaBar } from '@/components/ai/FeatureQuotaBar'
 import { useAuth } from '@/contexts/AuthContext'
+import { useRewardedFeature } from '@/contexts/AdsContext'
 import { resolveHomeworkPipelineFromProfile } from '@/lib/homework/pipelineResolver'
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
@@ -28,6 +29,7 @@ export default function AIHomeworkHelperScreen() {
   const { profile } = useAuth()
   const { theme } = useTheme()
   const { showAlert, alertProps } = useAlertModal()
+  const { isUnlocked: isHomeworkUnlocked, offerRewardedUnlock: offerHomeworkUnlock, canShowRewardedAd } = useRewardedFeature('homework_help')
   const [question, setQuestion] = useState('Explain how to solve long division: 156 ÷ 12 step by step for a Grade 4 learner.')
   const [subject, setSubject] = useState('Mathematics')
   const { loading, generate, result } = useHomeworkGenerator()
@@ -98,20 +100,39 @@ export default function AIHomeworkHelperScreen() {
 
     // Enforce quota before making a request
     const gate = await canUseFeature('homework_help', 1)
-    if (!gate.allowed) {
-      const status = await getQuotaStatus('homework_help')
-      setQuotaStatus(status)
-      showAlert({
-        title: 'Monthly limit reached',
-        message: `You have used ${status.used} of ${status.limit} homework help sessions this month. ${gate.requiresPrepay ? 'Please upgrade or purchase more to continue.' : ''}`,
-        type: 'warning',
-        buttons: [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'See plans', onPress: () => router.push('/pricing') },
-        ]
-      })
-      setPending(false)
-      return
+    if (!gate.allowed && !isHomeworkUnlocked) {
+      if (canShowRewardedAd) {
+        const unlocked = await offerHomeworkUnlock()
+        if (!unlocked) {
+          const status = await getQuotaStatus('homework_help')
+          setQuotaStatus(status)
+          showAlert({
+            title: 'Monthly limit reached',
+            message: `You have used ${status.used} of ${status.limit} homework help sessions this month. ${gate.requiresPrepay ? 'Please upgrade or purchase more to continue.' : ''}`,
+            type: 'warning',
+            buttons: [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'See plans', onPress: () => router.push('/pricing') },
+            ]
+          })
+          setPending(false)
+          return
+        }
+      } else {
+        const status = await getQuotaStatus('homework_help')
+        setQuotaStatus(status)
+        showAlert({
+          title: 'Monthly limit reached',
+          message: `You have used ${status.used} of ${status.limit} homework help sessions this month. ${gate.requiresPrepay ? 'Please upgrade or purchase more to continue.' : ''}`,
+          type: 'warning',
+          buttons: [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'See plans', onPress: () => router.push('/pricing') },
+          ]
+        })
+        setPending(false)
+        return
+      }
     }
 
     try {

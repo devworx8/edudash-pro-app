@@ -39,7 +39,9 @@ export const createParentDashboardStyles = (
     scrollContent: {
       paddingTop: layout.isSmallScreen ? 8 : 12,
       paddingHorizontal: layout.cardPadding,
-      paddingBottom: Math.max(bottomInset, 34) + 120,
+      // The bottom dock already consumes the safe-area inset internally.
+      // Keep only a small content buffer so cards don't float above the nav.
+      paddingBottom: Math.max(bottomInset, 8) + 6,
     },
     loadingContainer: {
       flex: 1,

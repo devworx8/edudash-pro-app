@@ -15,6 +15,7 @@ import { useCapability } from '@/hooks/useCapability';
 import type { DashAttachment } from '@/services/dash-ai/types';
 import type { VoiceState } from '@/hooks/useVoiceController';
 import { UpgradePromptModal } from './UpgradePromptModal';
+import { useRewardedFeature } from '@/contexts/AdsContext';
 import { pickDocuments } from '@/services/AttachmentService';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadImage } from '@/lib/ai/simple-image-upload';
@@ -44,6 +45,8 @@ export function EnhancedInputArea({ placeholder = 'Message Dash...', sending = f
 
   const canImages = can('multimodal.vision');
   const canDocs = can('multimodal.documents');
+  const rewardedFeatureKey = !canImages ? 'multimodal_vision' : 'multimodal_documents';
+  const { offerRewardedUnlock, canShowRewardedAd } = useRewardedFeature(rewardedFeatureKey);
   
   const hasContent = text.trim().length > 0;
   
@@ -401,6 +404,10 @@ export function EnhancedInputArea({ placeholder = 'Message Dash...', sending = f
         currentTier={tier}
         requiredTier={'starter'}
         capability={!canImages ? 'multimodal.vision' : 'multimodal.documents'}
+        onRewardedUnlock={canShowRewardedAd ? async () => {
+          const unlocked = await offerRewardedUnlock();
+          if (unlocked) setShowUpgrade(false);
+        } : undefined}
       />
     </View>
   );

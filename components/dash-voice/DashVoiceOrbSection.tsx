@@ -16,6 +16,7 @@ import { DashOrb } from '@/components/dash-orb/DashOrb';
 import { s } from '@/app/screens/dash-voice.styles';
 import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
 import type { CapabilityTier } from '@/lib/tiers';
+import type { VoiceOrbRef } from '@/features/super-admin/voice-orb/types';
 
 type DashVoiceDictationProbe = {
   run_id?: string;
@@ -29,7 +30,7 @@ type DashVoiceDictationProbe = {
 
 interface DashVoiceOrbSectionProps {
   VoiceOrb: React.ForwardRefExoticComponent<any> | null;
-  voiceOrbRef: React.Ref<any>;
+  voiceOrbRef: React.RefObject<VoiceOrbRef | null>;
   voiceDictationProbeRef: React.MutableRefObject<DashVoiceDictationProbe | null>;
   isListening: boolean;
   isSpeaking: boolean;
@@ -87,6 +88,9 @@ export function DashVoiceOrbSection({
   onTTSEnd,
   onLanguageChange,
 }: DashVoiceOrbSectionProps) {
+  const handleVisibleOrbPress = React.useCallback(() => {
+    void voiceOrbRef.current?.toggleListening?.();
+  }, [voiceOrbRef]);
 
   const voiceOrbElement = VoiceOrb ? (
     <VoiceOrb
@@ -146,17 +150,23 @@ export function DashVoiceOrbSection({
         {showFreeOrb ? (
           <>
             {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
-            <DashOrb size={orbRenderSize} state={dashOrbState} />
+            <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
+              <DashOrb size={orbRenderSize} state={dashOrbState} />
+            </TouchableOpacity>
           </>
         ) : showStarterOrb ? (
           <>
             {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
-            <CosmicOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
+            <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
+              <CosmicOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
+            </TouchableOpacity>
           </>
         ) : showPremiumOrb ? (
           <>
             {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
-            <NebulaSphereOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
+            <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
+              <NebulaSphereOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
+            </TouchableOpacity>
           </>
         ) : (
           voiceOrbElement ?? <DashOrb size={orbRenderSize} state={dashOrbState} />
@@ -168,7 +178,7 @@ export function DashVoiceOrbSection({
         <View style={{ alignItems: 'center' }}>
           <TouchableOpacity
             style={[hiddenOrbStyle.micBtn, { borderColor: isListening ? theme.primary : 'rgba(255,255,255,0.2)' }]}
-            onPress={isListening ? onStopListening : onStartListening}
+            onPress={handleVisibleOrbPress}
             activeOpacity={0.7}
           >
             <Ionicons name={isListening ? 'mic' : 'mic-outline'} size={22} color={isListening ? theme.primary : 'rgba(255,255,255,0.6)'} />
