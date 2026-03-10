@@ -79,14 +79,29 @@ export async function streamAI(
   assistantId: string,
   cbs: AICallbacks,
 ): Promise<void> {
-  const response = await fetch(
-    `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/ai-proxy`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ ...payloadBase, stream: true }),
-    },
-  );
+  // Add timeout for faster failure detection
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for AI
+  
+  let response: Response;
+  try {
+    response = await fetch(
+      `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/ai-proxy`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ...payloadBase, stream: true }),
+        signal: controller.signal,
+      },
+    );
+  } catch (fetchError) {
+    clearTimeout(timeoutId);
+    if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+      throw new Error('AI request timed out');
+    }
+    throw fetchError;
+  }
+  clearTimeout(timeoutId);
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
@@ -114,6 +129,7 @@ export async function streamAI(
   let fullResponse = '';
   let sentenceBuffer = '';
   let pendingFlush: ReturnType<typeof setTimeout> | null = null;
+  const FLUSH_INTERVAL_MS = 35; // Reduced from 50 for smoother streaming
 
   const scheduleFlush = () => {
     if (pendingFlush) return;
@@ -123,7 +139,7 @@ export async function streamAI(
       cbs.setMessages((prev) =>
         prev.map((m) => (m.id === assistantId ? { ...m, content: c, isStreaming: false } : m)),
       );
-    }, 50);
+    }, FLUSH_INTERVAL_MS);
   };
 
   try {
