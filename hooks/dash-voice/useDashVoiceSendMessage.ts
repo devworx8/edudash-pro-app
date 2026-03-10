@@ -31,11 +31,10 @@ export function useDashVoiceSendMessage({
   setWhiteboardContent, setConversationHistory, setLatestPdfArtifact,
   setRestartBlocked, setAttachedImage,
   conversationHistoryRef, conversationIdRef, activeRequestRef,
-  speechQueueRef, streamedPrefixQueuedRef,
+  speechQueueRef,
   attachedImage, role, orgType, aiScope, preferredLanguage,
-  profile, user, dashPolicy, activeTier, autoScanUserId, streamingTTSEnabled,
-  enqueueSpeech, maybeEnqueueStreamingSpeech, resetStreamingSpeech,
-  longestCommonPrefixLen, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
+  profile, user, dashPolicy, activeTier, autoScanUserId,
+  enqueueSpeech, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
 }: UseDashVoiceSendMessageParams) {
   const persistOrbMessages = useCallback(async (msgs: ConversationEntry[]) => {
     try {
@@ -47,11 +46,10 @@ export function useDashVoiceSendMessage({
   }, [profile?.id, user?.id, conversationIdRef]);
 
   const { runStreamingRequest, exportPdfFromVoiceResponse } = useDashVoiceStreaming({
-    role, profile, user, activeTier, streamingTTSEnabled,
+    role, profile, user, activeTier,
     setWhiteboardContent, setLastResponse, setStreamingText, setIsProcessing,
     setLatestPdfArtifact, conversationHistoryRef, activeRequestRef,
-    streamedPrefixQueuedRef, enqueueSpeech, maybeEnqueueStreamingSpeech,
-    resetStreamingSpeech, longestCommonPrefixLen, logDashTrace,
+    enqueueSpeech, logDashTrace,
     persistOrbMessages, setConversationHistory,
   });
 
@@ -85,7 +83,6 @@ export function useDashVoiceSendMessage({
     track('dash.turn.started', turnTelemetryBase);
     logDashTrace('turn_started', { turnId, role, orgType, language: preferredLanguage, inputChars: trimmed.length, inputPreview: trimmed.slice(0, 140), hasImage: !!attachedImage?.base64, autoPdfIntent: shouldAutoExportPdf });
     activeRequestRef.current?.abort();
-    resetStreamingSpeech();
     speechQueueRef.current = [];
     setIsProcessing(true);
     setLastResponse('');
@@ -142,7 +139,7 @@ export function useDashVoiceSendMessage({
       }
       runStreamingRequest({ url, accessToken: session.access_token, body, trimmed, shouldAutoExportPdf, turnId, turnStartedAt, turnTelemetryBase, updatedHistory, applyCriteriaGuardrails });
     } catch (error) {
-      resetStreamingSpeech();
+      speechQueueRef.current = [];
       const msg = error instanceof Error ? error.message : 'Something went wrong';
       logDashTrace('turn_error', { turnId: '', latencyMs: 0, message: msg });
       setLastResponse(`Sorry, ${msg}. Please try again.`);
@@ -152,7 +149,7 @@ export function useDashVoiceSendMessage({
     }
   }, [
     isProcessing, orgType, role, aiScope, preferredLanguage, attachedImage,
-    enqueueSpeech, resetStreamingSpeech, logDashTrace, persistOrbMessages,
+    enqueueSpeech, logDashTrace, persistOrbMessages,
     exportPdfFromVoiceResponse, runStreamingRequest, runOCRRequest,
     profile, activeTier, dashPolicy.defaultMode, dashPolicy.systemPromptAddendum,
     setIsProcessing, setLastResponse, setStreamingText, setWhiteboardContent,

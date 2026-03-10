@@ -13,6 +13,7 @@ import { cleanRawJSON } from '@/lib/dash-voice-utils';
 import {
   extractWhiteboardContent,
   stripWhiteboardFromDisplay,
+  getWhiteboardTTSContent,
 } from '@/components/ai/DashTutorWhiteboard';
 import { consumeAutoScanBudget } from '@/lib/dash-ai/imageBudget';
 import type { ConversationEntry, OrbPdfArtifact } from './types';
@@ -121,7 +122,9 @@ export function useDashVoiceOCR({
       conversationHistoryRef.current = withResponse;
       setConversationHistory(withResponse);
       persistOrbMessages(withResponse);
-      enqueueSpeech(resolvedSpeechText);
+      // When Dash Board is shown, read the board content; otherwise read the response
+      const ttsText = wb ? getWhiteboardTTSContent(wb) : resolvedSpeechText;
+      if (ttsText) enqueueSpeech(ttsText);
     }
     if (shouldConsumeScannerQuota) {
       const consumeResult = await consumeAutoScanBudget(activeTier || 'free', 1, autoScanUserId);

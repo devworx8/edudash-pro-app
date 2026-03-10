@@ -4,6 +4,9 @@
  * Handles createStreamingRequest, response finalisation, criteria-guardrail
  * rewrite for SSE mode, and the exportPdfFromVoiceResponse helper.
  * Called by useDashVoiceSendMessage for all non-OCR turns.
+ *
+ * Speech: when Dash Board (whiteboard) content is detected, TTS reads the
+ * board content instead of the plain response text — one source of truth.
  */
 
 import { useCallback } from 'react';
@@ -15,6 +18,7 @@ import { cleanRawJSON, createStreamingRequest } from '@/lib/dash-voice-utils';
 import {
   extractWhiteboardContent,
   stripWhiteboardFromDisplay,
+  getWhiteboardTTSContent,
   type WhiteboardContent,
 } from '@/components/ai/DashTutorWhiteboard';
 import { assertSupabase } from '@/lib/supabase';
@@ -25,7 +29,6 @@ interface UseDashVoiceStreamingParams {
   profile: any;
   user: any;
   activeTier: string;
-  streamingTTSEnabled: boolean;
   setWhiteboardContent: (v: WhiteboardContent | null) => void;
   setLastResponse: (v: string) => void;
   setStreamingText: (v: string) => void;
@@ -33,11 +36,7 @@ interface UseDashVoiceStreamingParams {
   setLatestPdfArtifact: (v: OrbPdfArtifact | null) => void;
   conversationHistoryRef: React.MutableRefObject<ConversationEntry[]>;
   activeRequestRef: React.MutableRefObject<{ abort: () => void } | null>;
-  streamedPrefixQueuedRef: React.MutableRefObject<string>;
   enqueueSpeech: (text: string) => void;
-  maybeEnqueueStreamingSpeech: (accumulated: string) => void;
-  resetStreamingSpeech: () => void;
-  longestCommonPrefixLen: (a: string, b: string) => number;
   logDashTrace: (event: string, payload?: Record<string, unknown>) => void;
   persistOrbMessages: (msgs: ConversationEntry[]) => Promise<void>;
   setConversationHistory: (v: ConversationEntry[]) => void;
@@ -57,11 +56,10 @@ export interface StreamingRequestParams {
 }
 
 export function useDashVoiceStreaming({
-  role, profile, user, activeTier, streamingTTSEnabled,
+  role, profile, user, activeTier,
   setWhiteboardContent, setLastResponse, setStreamingText, setIsProcessing,
   setLatestPdfArtifact, conversationHistoryRef, activeRequestRef,
-  streamedPrefixQueuedRef, enqueueSpeech, maybeEnqueueStreamingSpeech,
-  resetStreamingSpeech, longestCommonPrefixLen, logDashTrace,
+  enqueueSpeech, logDashTrace,
   persistOrbMessages, setConversationHistory,
 }: UseDashVoiceStreamingParams) {
   const normalizedToolTier = getCapabilityTier(normalizeTierName(activeTier || 'free'));
@@ -115,7 +113,10 @@ export function useDashVoiceStreaming({
         if (firstChunkAt === null) { firstChunkAt = Date.now(); logDashTrace('stream_first_chunk', { turnId, firstTokenLatencyMs: firstChunkAt - turnStartedAt }); }
         const now = Date.now();
         if (now - lastProgressLogAt > 900) { lastProgressLogAt = now; logDashTrace('stream_progress', { turnId, chars: accumulated.length, elapsedMs: now - turnStartedAt }); }
-        if (accumulated && !/^\s*data:\s*(\[DONE\])?\s*$/i.test(accumulated)) { setStreamingText(stripWhiteboardFromDisplay(accumulated)); maybeEnqueueStreamingSpeech(accumulated); }
+        // Update display text immediately as tokens stream in — no streaming TTS
+        if (accumulated && !/^\s*data:\s*(\[DONE\])?\s*$/i.test(accumulated)) {
+          setStreamingText(stripWhiteboardFromDisplay(accumulated));
+        }
       },
       (finalText) => {
         void (async () => {
@@ -141,8 +142,9 @@ export function useDashVoiceStreaming({
             conversationHistoryRef.current = withResponse;
             setConversationHistory(withResponse);
             persistOrbMessages(withResponse);
-            if (streamingTTSEnabled) { const lcp = longestCommonPrefixLen(resolvedSpeechText, streamedPrefixQueuedRef.current); const remaining = resolvedSpeechText.slice(lcp).trim(); if (remaining) enqueueSpeech(remaining); }
-            else { enqueueSpeech(resolvedSpeechText); }
+            // When Dash Board is shown, read the board content; otherwise read the response
+            const ttsText = wb2 ? getWhiteboardTTSContent(wb2) : resolvedSpeechText;
+            if (ttsText) enqueueSpeech(ttsText);
           }
           track('dash.turn.completed', buildDashTurnTelemetry({ ...turnTelemetryBase, latencyMs: Date.now() - turnStartedAt }));
           activeRequestRef.current = null;
@@ -157,7 +159,6 @@ export function useDashVoiceStreaming({
       },
       (error) => {
         logDashTrace('stream_error', { turnId, latencyMs: Date.now() - turnStartedAt, message: error.message });
-        resetStreamingSpeech();
         setLastResponse(`Sorry, ${error.message}. Please try again.`);
         setStreamingText('');
         setIsProcessing(false);
@@ -167,10 +168,10 @@ export function useDashVoiceStreaming({
     );
     activeRequestRef.current = req;
   }, [
-    exportPdfFromVoiceResponse, logDashTrace, maybeEnqueueStreamingSpeech, resetStreamingSpeech,
+    exportPdfFromVoiceResponse, logDashTrace,
     setStreamingText, setWhiteboardContent, setLastResponse, setIsProcessing, setConversationHistory,
-    conversationHistoryRef, activeRequestRef, streamedPrefixQueuedRef,
-    enqueueSpeech, longestCommonPrefixLen, persistOrbMessages, streamingTTSEnabled,
+    conversationHistoryRef, activeRequestRef,
+    enqueueSpeech, persistOrbMessages,
   ]);
 
   return { runStreamingRequest, exportPdfFromVoiceResponse };

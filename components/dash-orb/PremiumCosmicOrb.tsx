@@ -413,33 +413,67 @@ export const PremiumCosmicOrb: React.FC<PremiumCosmicOrbProps> = ({
         />
       </Animated.View>
 
-      {/* Orbiting particles */}
-      {[0, 1, 2].map((i) => {
-        const orbitRadius = ring1Size * 0.5;
-        const angle = (i * 120) * Math.PI / 180;
-        const x = size / 2 + Math.cos(angle) * orbitRadius - 3;
-        const y = size / 2 + Math.sin(angle) * orbitRadius - 3;
-        
-        return (
-          <Animated.View
-            key={i}
-            style={{
-              position: 'absolute',
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: i === 0 ? '#67e8f9' : i === 1 ? '#a78bfa' : '#f472b6',
-              left: x,
-              top: y,
-              shadowColor: i === 0 ? '#67e8f9' : i === 1 ? '#a78bfa' : '#f472b6',
-              shadowOffset: { width: 0, height: 0 },
-              shadowOpacity: 1,
-              shadowRadius: 6,
-              transform: [{ rotate: ring1Rotate }],
-            }}
-          />
-        );
-      })}
+      {/* Orbiting particles — single rotating container gives true orbital motion */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: size,
+          height: size,
+          transform: [{ rotate: ring1Rotate }],
+        }}
+      >
+        {[0, 1, 2].map((i) => {
+          const dotSize = Math.max(10, Math.round(size * 0.18));
+          const orbitRadius = ring1Size * 0.52;
+          const angle = (i * 120) * Math.PI / 180;
+          const x = size / 2 + Math.cos(angle) * orbitRadius - dotSize / 2;
+          const y = size / 2 + Math.sin(angle) * orbitRadius - dotSize / 2;
+          // Base, light (highlight), dark (shadow) per dot colour
+          const baseColors  = ['#67e8f9', '#a78bfa', '#f472b6'];
+          const lightColors = ['#cffafe', '#ede9fe', '#fce7f3'];
+          const darkColors  = ['#0891b2', '#7c3aed', '#be185d'];
+          const color = baseColors[i];
+
+          return (
+            <View
+              key={i}
+              style={{
+                position: 'absolute',
+                width: dotSize,
+                height: dotSize,
+                borderRadius: dotSize / 2,
+                overflow: 'hidden',
+                left: x,
+                top: y,
+                shadowColor: color,
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.9,
+                shadowRadius: 14,
+              }}
+            >
+              {/* Sphere gradient — light top-left → base → dark bottom-right */}
+              <LinearGradient
+                colors={[lightColors[i], color, darkColors[i]]}
+                start={{ x: 0.2, y: 0.1 }}
+                end={{ x: 0.85, y: 0.9 }}
+                style={{ flex: 1, borderRadius: dotSize / 2 }}
+              />
+              {/* Specular highlight — small bright spot top-left */}
+              <View
+                style={{
+                  position: 'absolute',
+                  width: dotSize * 0.38,
+                  height: dotSize * 0.38,
+                  borderRadius: dotSize * 0.19,
+                  backgroundColor: 'rgba(255,255,255,0.6)',
+                  top: dotSize * 0.1,
+                  left: dotSize * 0.13,
+                }}
+              />
+            </View>
+          );
+        })}
+      </Animated.View>
     </View>
   );
 };
