@@ -36,7 +36,6 @@ export interface UseDashVoiceSendMessageParams {
   conversationIdRef: React.MutableRefObject<string>;
   activeRequestRef: React.MutableRefObject<{ abort: () => void } | null>;
   speechQueueRef: React.MutableRefObject<string[]>;
-  streamedPrefixQueuedRef: React.MutableRefObject<string>;
   attachedImage: AttachedImage;
   role: string;
   orgType: string;
@@ -47,11 +46,7 @@ export interface UseDashVoiceSendMessageParams {
   dashPolicy: ResolvedDashPolicy;
   activeTier: string;
   autoScanUserId: string | null;
-  streamingTTSEnabled: boolean;
   enqueueSpeech: (text: string) => void;
-  maybeEnqueueStreamingSpeech: (accumulated: string) => void;
-  resetStreamingSpeech: () => void;
-  longestCommonPrefixLen: (a: string, b: string) => number;
   logDashTrace: (event: string, payload?: Record<string, unknown>) => void;
   refreshAutoScanBudget: () => Promise<void>;
   voiceOrbRef: React.RefObject<any>;

@@ -20,6 +20,24 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import MathRenderer from './dash-assistant/MathRenderer';
 
+// ── Inline math segment splitter (shared with DashTutorWhiteboard) ───────────
+// Splits a string like "The area is $A = \pi r^2$ here" into
+// [{type:'text', content:'The area is '}, {type:'inlineMath', content:'A = \pi r^2'}, ...]
+type InlineSeg = { type: 'text' | 'inlineMath'; content: string };
+function splitInlineMathSegs(text: string): InlineSeg[] {
+  const segs: InlineSeg[] = [];
+  const re = /\$([^$\n]+?)\$/g;
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > cursor) segs.push({ type: 'text', content: text.slice(cursor, m.index) });
+    segs.push({ type: 'inlineMath', content: m[1] });
+    cursor = m.index + m[0].length;
+  }
+  if (cursor < text.length) segs.push({ type: 'text', content: text.slice(cursor) });
+  return segs;
+}
+
 // Color palette matching design reference
 const C = {
   white: '#f1f5f9',
@@ -217,13 +235,21 @@ function renderSegment(segment: ContentSegment) {
         </View>
       );
 
-    case 'math':
-      // Line with inline math - extract and render
+    case 'math': {
+      // Line with mixed text + inline math — render each segment with proper KaTeX
+      const mathSegs = splitInlineMathSegs(segment.content);
       return (
-        <View style={styles.textContainer}>
-          <MathRenderer expression={segment.content.replace(/\$/g, '')} displayMode={false} />
+        <View style={[styles.textContainer, styles.inlineMathRow]}>
+          {mathSegs.map((seg, i) =>
+            seg.type === 'text' ? (
+              <Text key={i} style={styles.textStyle}>{seg.content}</Text>
+            ) : (
+              <MathRenderer key={i} expression={seg.content} displayMode={false} />
+            )
+          )}
         </View>
       );
+    }
 
     case 'text':
     default:
@@ -296,6 +322,12 @@ const styles = StyleSheet.create({
   },
   textContainer: {
     paddingVertical: 2,
+  },
+  inlineMathRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 2,
   },
   textStyle: {
     color: C.white,

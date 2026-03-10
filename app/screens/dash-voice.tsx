@@ -134,7 +134,6 @@ export default function DashVoiceScreen() {
   const activeRequestRef = useRef<{ abort: () => void } | null>(null);
 
   const DASH_TRACE_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_DASH_VOICE_TRACE === 'true';
-  const STREAMING_TTS_ENABLED = process.env.EXPO_PUBLIC_DASH_VOICE_STREAMING_TTS === 'true';
 
   const logDashTrace = useCallback((event: string, payload?: Record<string, unknown>) => {
     if (!DASH_TRACE_ENABLED) return;
@@ -158,12 +157,11 @@ export default function DashVoiceScreen() {
 
   useEffect(() => { void refreshAutoScanBudget(); }, [refreshAutoScanBudget]);
 
-  // ── TTS hook ──────────────────────────────────────────────────────
+  // ── TTS hook ────────────────────────────────────────────────────
   const {
     isSpeaking, setIsSpeaking, isSpeakingRef, speechQueueRef,
-    enqueueSpeech, resetStreamingSpeech, maybeEnqueueStreamingSpeech,
-    longestCommonPrefixLen, streamedPrefixQueuedRef,
-  } = useDashVoiceTTS({ voiceOrbRef, preferredLanguage, orgType, streamingTTSEnabled: STREAMING_TTS_ENABLED });
+    enqueueSpeech,
+  } = useDashVoiceTTS({ voiceOrbRef, preferredLanguage, orgType });
 
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking, isSpeakingRef]);
 
@@ -200,18 +198,16 @@ export default function DashVoiceScreen() {
     setAttachedImage, setScannerVisible, refreshAutoScanBudget,
   });
 
-  // ── Send message hook ─────────────────────────────────────────────
+  // ── Send message hook ───────────────────────────────────────────────
   const { sendMessage, persistOrbMessages } = useDashVoiceSendMessage({
     isProcessing, setIsProcessing, setLastResponse, setStreamingText,
     setWhiteboardContent, setConversationHistory, setLatestPdfArtifact,
     setRestartBlocked, setAttachedImage,
     conversationHistoryRef, conversationIdRef, activeRequestRef,
-    speechQueueRef, streamedPrefixQueuedRef,
+    speechQueueRef,
     attachedImage, role, orgType, aiScope, preferredLanguage, profile, user,
     dashPolicy, activeTier, autoScanUserId,
-    streamingTTSEnabled: STREAMING_TTS_ENABLED,
-    enqueueSpeech, maybeEnqueueStreamingSpeech, resetStreamingSpeech,
-    longestCommonPrefixLen, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
+    enqueueSpeech, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
   });
 
   // ── Stop Dash activity ────────────────────────────────────────────
@@ -221,7 +217,6 @@ export default function DashVoiceScreen() {
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
     speechQueueRef.current = [];
-    resetStreamingSpeech();
     isSpeakingRef.current = false;
     setIsSpeaking(false);
     setIsListening(false);
@@ -229,7 +224,7 @@ export default function DashVoiceScreen() {
     setStreamingText('');
     voiceOrbRef.current?.stopSpeaking?.().catch(() => {});
     voiceOrbRef.current?.stopListening?.().catch(() => {});
-  }, [logDashTrace, resetStreamingSpeech, isSpeakingRef, setIsSpeaking, speechQueueRef]);
+  }, [logDashTrace, isSpeakingRef, setIsSpeaking, speechQueueRef]);
 
   useFocusEffect(useCallback(() => {
     setRestartBlocked(false);

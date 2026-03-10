@@ -523,6 +523,131 @@ function LatticeDiagram({ data, revealed }: { data: LatticeData; revealed: numbe
   );
 }
 
+// ─── Number Line ─────────────────────────────────────────────────────────────
+interface NumberLineData { start: number; end: number; step: number; }
+
+const NUMBER_LINE_RE = /number\s*line/i;
+function parseNumberLine(lines: string[]): NumberLineData | null {
+  const joined = lines.join(' ');
+  if (!NUMBER_LINE_RE.test(joined)) return null;
+  const m = /\b(\d+)\s+to\s+(\d+)\b/i.exec(joined);
+  if (m) {
+    const start = parseInt(m[1], 10);
+    const end   = parseInt(m[2], 10);
+    if (end > start && end - start <= 30) {
+      const range = end - start;
+      return { start, end, step: range <= 10 ? 1 : range <= 20 ? 2 : 5 };
+    }
+  }
+  return { start: 0, end: 10, step: 1 };
+}
+
+const NL_TICK   = 28;
+const NL_PAD    = 32;
+const NL_LINE_Y = 44;
+
+function NumberLineDiagram({ data, revealed }: { data: NumberLineData; revealed: number }) {
+  const { start, end, step } = data;
+  const MONO  = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+  const range = end - start;
+  const svgW  = range * NL_TICK + NL_PAD * 2;
+  const svgH  = 76;
+  const px = (n: number) => NL_PAD + (n - start) * NL_TICK;
+
+  return (
+    <Svg width={svgW} height={svgH}>
+      {/* Axis */}
+      <Line x1={NL_PAD - 12} y1={NL_LINE_Y} x2={svgW - NL_PAD + 12} y2={NL_LINE_Y}
+        stroke={C.white} strokeWidth={2} />
+      {/* Left arrowhead */}
+      <Line x1={NL_PAD - 12} y1={NL_LINE_Y} x2={NL_PAD - 5} y2={NL_LINE_Y - 5}
+        stroke={C.white} strokeWidth={1.5} />
+      <Line x1={NL_PAD - 12} y1={NL_LINE_Y} x2={NL_PAD - 5} y2={NL_LINE_Y + 5}
+        stroke={C.white} strokeWidth={1.5} />
+      {/* Right arrowhead */}
+      <Line x1={svgW - NL_PAD + 12} y1={NL_LINE_Y} x2={svgW - NL_PAD + 5} y2={NL_LINE_Y - 5}
+        stroke={C.white} strokeWidth={1.5} />
+      <Line x1={svgW - NL_PAD + 12} y1={NL_LINE_Y} x2={svgW - NL_PAD + 5} y2={NL_LINE_Y + 5}
+        stroke={C.white} strokeWidth={1.5} />
+      {/* Ticks — revealed progressively */}
+      {Array.from({ length: range + 1 }, (_, i) => {
+        if (i > revealed) return null;
+        const n = start + i;
+        const isMajor = n % step === 0 || n === start || n === end;
+        const x = px(n);
+        return (
+          <G key={`t${n}`}>
+            <Line x1={x} y1={NL_LINE_Y - (isMajor ? 10 : 5)}
+              x2={x} y2={NL_LINE_Y + (isMajor ? 10 : 5)}
+              stroke={isMajor ? C.cyan : C.dim} strokeWidth={isMajor ? 2 : 1} />
+            {isMajor && (
+              <SvgText x={x} y={NL_LINE_Y + 26} textAnchor="middle"
+                fill={C.white} fontSize={13} fontFamily={MONO}>{n}</SvgText>
+            )}
+          </G>
+        );
+      })}
+    </Svg>
+  );
+}
+
+// ─── Fraction Bar ─────────────────────────────────────────────────────────────
+interface FractionBarData { numerator: number; denominator: number; }
+
+const FRACTION_CONTEXT_RE = /\bfraction|numerator|denominator|one[\s-]half|one[\s-]quarter|one[\s-]third\b/i;
+function parseFractionBar(lines: string[]): FractionBarData | null {
+  const joined = lines.join(' ');
+  if (!FRACTION_CONTEXT_RE.test(joined)) return null;
+  const re = /\b([1-9]\d*)\s*\/\s*([1-9]\d*)\b/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(joined)) !== null) {
+    const num = parseInt(m[1], 10);
+    const den = parseInt(m[2], 10);
+    if (den > 1 && den <= 12 && num < den) return { numerator: num, denominator: den };
+  }
+  if (/one[\s-]half|½/i.test(joined))    return { numerator: 1, denominator: 2 };
+  if (/one[\s-]quarter|¼/i.test(joined)) return { numerator: 1, denominator: 4 };
+  if (/one[\s-]third|⅓/i.test(joined))   return { numerator: 1, denominator: 3 };
+  return null;
+}
+
+const FB_W = 260, FB_H = 40, FB_PX = 18, FB_PY = 16;
+function FractionBarDiagram({ data, revealed }: { data: FractionBarData; revealed: number }) {
+  const { numerator, denominator } = data;
+  const MONO   = Platform.OS === 'ios' ? 'Courier New' : 'monospace';
+  const cellW  = FB_W / denominator;
+  const svgW   = FB_W + FB_PX * 2;
+  const svgH   = FB_H + FB_PY + 42;
+  const shaded = Math.min(numerator, revealed);
+
+  return (
+    <Svg width={svgW} height={svgH}>
+      {/* Shaded (filled) cells */}
+      {Array.from({ length: shaded }, (_, i) => (
+        <Rect key={`sh${i}`}
+          x={FB_PX + i * cellW} y={FB_PY} width={cellW} height={FB_H}
+          fill="rgba(99,102,241,0.5)" />
+      ))}
+      {/* Bar outline */}
+      <Rect x={FB_PX} y={FB_PY} width={FB_W} height={FB_H}
+        fill="none" stroke={C.white} strokeWidth={1.5} rx={4} />
+      {/* Cell dividers */}
+      {Array.from({ length: denominator - 1 }, (_, i) => (
+        <Line key={`dv${i}`}
+          x1={FB_PX + (i + 1) * cellW} y1={FB_PY}
+          x2={FB_PX + (i + 1) * cellW} y2={FB_PY + FB_H}
+          stroke={C.white} strokeWidth={1} opacity={0.45} />
+      ))}
+      {/* Fraction label */}
+      <SvgText x={svgW / 2} y={FB_PY + FB_H + 28}
+        textAnchor="middle"
+        fill={C.cyan} fontSize={18} fontFamily={MONO} fontWeight="bold">
+        {shaded}/{denominator}
+      </SvgText>
+    </Svg>
+  );
+}
+
 // ─── Markdown stripper ────────────────────────────────────────────────────────
 function stripMarkdown(text: string): string {
   return text
@@ -639,21 +764,16 @@ function ChalkLine({ line, index }: { line: string; index: number }) {
             <Text style={[styles.stepNum, { color }]}>{stepNum}</Text>
           </View>
         ) : null}
-        <Text style={[chalkTextStyle, { flex: 1 }]}>
+        {/* Flex row: Text for plain segments, MathRenderer for math — proper KaTeX */}
+        <View style={styles.inlineMathRow}>
           {segments.map((seg, i) =>
             seg.type === 'text' ? (
-              <Text key={i}>{seg.content}</Text>
+              <Text key={i} style={chalkTextStyle}>{seg.content}</Text>
             ) : (
-              // Inline math: render as italic cyan monospace — avoids block-div layout issues
-              <Text key={i} style={{
-                color: C.cyan,
-                fontFamily: MONO,
-                fontStyle: 'italic',
-                fontWeight: '600',
-              }}>{seg.content}</Text>
+              <MathRenderer key={i} expression={seg.content} displayMode={false} />
             )
           )}
-        </Text>
+        </View>
       </Animated.View>
     );
   }
@@ -698,15 +818,20 @@ export interface DashTutorWhiteboardProps {
 }
 
 export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTutorWhiteboardProps) {
-  // Detect diagram type — lattice takes priority over long division
-  const latticeData = parseLatticeMultiplication(content.lines);
-  const divData     = latticeData ? null : parseLongDivision(content.lines);
-  const hasDiagram  = !!latticeData || !!divData;
+  // Detect diagram type — evaluated in priority order
+  const latticeData    = parseLatticeMultiplication(content.lines);
+  const divData        = latticeData ? null : parseLongDivision(content.lines);
+  const numberLineData = (!latticeData && !divData) ? parseNumberLine(content.lines) : null;
+  const fractionData   = (!latticeData && !divData && !numberLineData) ? parseFractionBar(content.lines) : null;
+  const hasDiagram     = !!latticeData || !!divData || !!numberLineData || !!fractionData;
 
-  // Total "pages": diagram steps + text lines
+  // Total reveal steps: one per diagram element
   const diagramSteps = latticeData
-    ? latticeData.numCols * latticeData.numRows + 2   // cells + diags + answer
-    : divData ? divData.steps.length : 0;
+    ? latticeData.numCols * latticeData.numRows + 2
+    : divData        ? divData.steps.length
+    : numberLineData ? (numberLineData.end - numberLineData.start)
+    : fractionData   ? (fractionData.numerator + 1)
+    : 0;
   const textLines    = content.lines;
   const totalSteps   = hasDiagram
     ? diagramSteps + textLines.length
@@ -820,7 +945,6 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
           )}
           {hasDiagram && divData && (
             <View style={styles.diagramWrap}>
-              {/* Problem label */}
               <Text style={styles.diagramLabel}>
                 {divData.dividend} ÷ {divData.divisor}
               </Text>
@@ -832,6 +956,24 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
                   </Text>
                 </Animated.View>
               )}
+            </View>
+          )}
+
+          {hasDiagram && numberLineData && (
+            <View style={styles.diagramWrap}>
+              <Text style={styles.diagramLabel}>
+                Number Line: {numberLineData.start} – {numberLineData.end}
+              </Text>
+              <NumberLineDiagram data={numberLineData} revealed={diagramRevealed} />
+            </View>
+          )}
+
+          {hasDiagram && fractionData && (
+            <View style={styles.diagramWrap}>
+              <Text style={styles.diagramLabel}>
+                Fraction: {fractionData.numerator}/{fractionData.denominator}
+              </Text>
+              <FractionBarDiagram data={fractionData} revealed={diagramRevealed} />
             </View>
           )}
 
@@ -875,6 +1017,10 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
               {hasDiagram && step < diagramSteps
                 ? latticeData
                   ? step === 0 ? 'Building grid…' : step <= latticeData.numCols * latticeData.numRows ? `Cell ${step} of ${latticeData.numCols * latticeData.numRows}` : 'Diagonal sums'
+                : numberLineData
+                  ? `Tick ${Math.min(diagramRevealed, diagramSteps)} of ${diagramSteps}`
+                  : fractionData
+                  ? `${Math.min(diagramRevealed, fractionData.numerator)} of ${fractionData.denominator} parts`
                   : `Step ${step + 1} of ${diagramSteps}`
                 : allDone
                   ? 'All done!'
@@ -972,6 +1118,9 @@ const styles = StyleSheet.create({
   // Chalk lines
   lineRow: {
     flexDirection: 'row', alignItems: 'center', marginBottom: 9, gap: 8,
+  },
+  inlineMathRow: {
+    flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 2,
   },
   headingRow: {
     borderBottomWidth: 1, borderBottomColor: 'rgba(253,230,138,0.2)',
