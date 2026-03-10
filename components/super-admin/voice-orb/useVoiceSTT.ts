@@ -7,8 +7,9 @@
  * @module components/super-admin/voice-orb/useVoiceSTT
  */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import { assertSupabase } from '../../../lib/supabase';
+import { getCachedToken, setCachedToken } from '@/lib/voice/sessionTokenCache';
 
 // Azure Speech Services supported South African languages
 export const SUPPORTED_LANGUAGES = [
@@ -65,23 +66,35 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
     
     try {
       const supabase = assertSupabase();
-      const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
+      // Use cached token for faster response
+      let accessToken = getCachedToken();
+      let session: any = null;
+      
+      if (!accessToken) {
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        session = freshSession;
+        if (!session?.access_token) {
+          throw new Error('Not authenticated');
+        }
+        accessToken = session.access_token;
+        setCachedToken(accessToken);
       }
       
       const resolveTenantId = async (): Promise<string | null> => {
         if (hookOptions?.preschoolId) return hookOptions.preschoolId;
-        const userMeta = (session.user?.user_metadata || {}) as Record<string, any>;
-        const appMeta = (session.user?.app_metadata || {}) as Record<string, any>;
-        const metaCandidate =
-          userMeta.organization_id ||
-          userMeta.preschool_id ||
-          appMeta.organization_id ||
-          appMeta.preschool_id ||
-          null;
-        if (metaCandidate) return metaCandidate;
+        // If we have session from fresh fetch, use it
+        if (session?.user) {
+          const userMeta = (session.user?.user_metadata || {}) as Record<string, any>;
+          const appMeta = (session.user?.app_metadata || {}) as Record<string, any>;
+          const metaCandidate =
+            userMeta.organization_id ||
+            userMeta.preschool_id ||
+            appMeta.organization_id ||
+            appMeta.preschool_id ||
+            null;
+          if (metaCandidate) return metaCandidate;
+        }
 
         try {
           const { data } = await supabase
@@ -123,7 +136,7 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
               audio_base64: base64,

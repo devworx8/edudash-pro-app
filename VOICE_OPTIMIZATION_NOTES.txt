@@ -1,0 +1,113 @@
+# Dash ORB/Voice Optimization Plan
+
+## Executive Summary
+
+This document outlines identified improvements for the TTS/STT (Text-to-Speech/Speech-to-Text) systems in the Dash ORB/Voice feature, focusing on response time optimization and user experience enhancements.
+
+## Identified Issues & Improvement Areas
+
+### 1. TTS Response Time Bottlenecks
+
+#### 1.1 Sequential TTS Chunk Processing
+**Current State**: TTS chunks are processed sequentially with wait-between-chunks
+**Impact**: Each chunk requires an HTTP round-trip to the TTS proxy, adding latency
+**Location**: `useVoiceTTS.ts` - `speak()` function
+
+#### 1.2 No Audio Prefetching for First Chunk
+**Current State**: First chunk fetch only starts after AI response completes
+**Impact**: Users wait for AI + TTS fetch before hearing any audio
+**Location**: `dashTutorAIService.ts` - `streamAI()` function
+
+#### 1.3 TTS Proxy Timeout Configuration
+**Current State**: Default 4200ms timeout may be too conservative
+**Impact**: Faster networks still wait for full timeout on errors
+**Location**: `useVoiceTTS.ts` - `TTS_PROXY_TIMEOUT_DEFAULT_MS`
+
+### 2. STT (Speech-to-Text) Latency
+
+#### 2.1 Session Token Fetching on Every Request
+**Current State**: `getSession()` called for each STT request
+**Impact**: Unnecessary auth round-trips for active sessions
+**Location**: `useVoiceSTT.ts` - `transcribe()` function
+
+#### 2.2 Audio Base64 Encoding Overhead
+**Current State**: Full audio blob converted to base64 synchronously
+**Impact**: Blocks main thread during encoding, especially for longer recordings
+**Location**: `useVoiceSTT.ts` - `transcribe()` function
+
+### 3. AI Response Streaming
+
+#### 3.1 Sentence Buffer Flush Timing
+**Current State**: 50ms flush interval may cause micro-stutters
+**Impact**: UI updates can feel choppy during streaming
+**Location**: `dashTutorAIService.ts` - `scheduleFlush()`
+
+#### 3.2 TTS Enqueue Timing
+**Current State**: TTS starts only after sentence boundary detected
+**Impact**: First audio delayed until full sentence received
+**Location**: `dashTutorAIService.ts` - `streamAI()`
+
+### 4. Voice Recorder
+
+#### 4.1 Metering Interval
+**Current State**: 150ms metering interval
+**Impact**: Silence detection delayed by up to 150ms
+**Location**: `useVoiceRecorder.ts` - `useAudioRecorderState()`
+
+#### 4.2 No Early Voice Activity Detection
+**Current State**: Speech threshold check only after recording starts
+**Impact**: No pre-roll buffer for catching speech start
+**Location**: `useVoiceRecorder.ts`
+
+### 5. Caching & Memoization
+
+#### 5.1 Voice Preference Lookups
+**Current State**: Voice prefs fetched per-TTS-session (cached within session)
+**Impact**: Minor but unnecessary async calls
+**Location**: `useVoiceTTS.ts` - `getCachedVoicePreference()`
+
+#### 5.2 No TTS Audio Caching
+**Current State**: Same phrases re-fetched every time
+**Impact**: Repeated phrases (e.g., "Great job!") always hit the network
+**Location**: `useVoiceTTS.ts`
+
+## Proposed Optimizations
+
+### Priority 1: TTS Fast-Start with Prefetching
+- Implement aggressive first-chunk prefetching
+- Start TTS fetch in parallel with AI stream start
+- Use smaller first chunk for faster audio start
+
+### Priority 2: Session Token Caching
+- Cache session tokens with proper TTL (4 minutes)
+- Reuse tokens across STT/TTS calls
+- Implement proactive refresh before expiry
+
+### Priority 3: Parallel TTS Chunk Fetching
+- Fetch next audio chunk while current one plays
+- Implement chunk queue with lookahead
+- Graceful fallback on network issues
+
+### Priority 4: Audio Caching for Common Phrases
+- Cache frequently used phrases (praise, transitions)
+- Use LRU cache with size limits
+- Invalidate on language/voice changes
+
+### Priority 5: Reduced Metering Interval
+- Lower metering interval to 100ms for faster silence detection
+- Balance battery impact vs responsiveness
+
+## Implementation Order
+
+1. Session token caching (low risk, high impact)
+2. TTS prefetching and parallel chunk fetch
+3. Metering interval optimization
+4. Phrase caching (optional, requires storage)
+
+## Metrics to Track
+
+- Time to first audio byte (TTFAB)
+- Total TTS latency per turn
+- STT transcription latency
+- Silence detection accuracy
+- User perceived responsiveness rating
