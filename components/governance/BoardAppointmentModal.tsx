@@ -3,7 +3,7 @@
  * Allows president/admin to appoint members to board positions
  */
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppointableMember } from '@/hooks/membership/useBoardPositions';
 
@@ -153,13 +153,16 @@ export function BoardAppointmentModal({
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={filteredMembers}
-              keyExtractor={(item) => item.id}
-              renderItem={renderMemberItem}
+            <ScrollView
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
-            />
+            >
+              {filteredMembers.map(item => (
+                <React.Fragment key={item.id}>
+                  {renderMemberItem({ item } as any)}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           )}
 
           {/* Actions */}

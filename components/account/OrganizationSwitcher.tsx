@@ -6,7 +6,7 @@
  * Updates the user's active organization and navigates to the appropriate dashboard.
  */
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, Modal, TouchableOpacity, FlatList, StyleSheet, Image } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -392,14 +392,18 @@ export function OrganizationSwitcher({
               </Text>
             </View>
           ) : (
-            <FlatList
-              data={organizations}
-              keyExtractor={(item) => item.id}
-              renderItem={renderOrganization}
+            <ScrollView
               contentContainerStyle={styles.listContent}
-              ListEmptyComponent={renderEmpty}
               showsVerticalScrollIndicator={false}
-            />
+            >
+              {organizations.length === 0
+                ? renderEmpty()
+                : organizations.map(item => (
+                    <React.Fragment key={item.id}>
+                      {renderOrganization({ item } as any)}
+                    </React.Fragment>
+                  ))}
+            </ScrollView>
           )}
 
           {/* Footer info */}

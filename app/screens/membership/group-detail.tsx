@@ -3,7 +3,7 @@
  * View and manage a specific group - add/remove members, edit details
  */
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, RefreshControl } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -511,37 +511,37 @@ export default function GroupDetailScreen() {
                 />
               </View>
             ) : (
-              <FlatList
-                data={filteredAvailableMembers}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.availableMemberRow}
-                    onPress={() => {
-                      addMemberMutation.mutate(item.id);
-                    }}
-                  >
-                    <View style={styles.memberAvatar}>
-                      <Text style={styles.avatarText}>
-                        {item.first_name?.[0]?.toUpperCase() || '?'}
-                        {item.last_name?.[0]?.toUpperCase() || ''}
-                      </Text>
-                    </View>
-                    <View style={styles.memberInfo}>
-                      <Text style={styles.memberName}>
-                        {item.first_name} {item.last_name}
-                      </Text>
-                      {item.email && (
-                        <Text style={styles.memberEmail}>{item.email}</Text>
-                      )}
-                    </View>
-                    <Ionicons name="add-circle" size={28} color={theme.primary} />
-                  </TouchableOpacity>
-                )}
-                ItemSeparatorComponent={() => (
-                  <View style={{ height: 1, backgroundColor: theme.border, marginLeft: 60 }} />
-                )}
-              />
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {filteredAvailableMembers.map((item, index) => (
+                  <React.Fragment key={item.id}>
+                    {index > 0 && (
+                      <View style={{ height: 1, backgroundColor: theme.border, marginLeft: 60 }} />
+                    )}
+                    <TouchableOpacity
+                      style={styles.availableMemberRow}
+                      onPress={() => {
+                        addMemberMutation.mutate(item.id);
+                      }}
+                    >
+                      <View style={styles.memberAvatar}>
+                        <Text style={styles.avatarText}>
+                          {item.first_name?.[0]?.toUpperCase() || '?'}
+                          {item.last_name?.[0]?.toUpperCase() || ''}
+                        </Text>
+                      </View>
+                      <View style={styles.memberInfo}>
+                        <Text style={styles.memberName}>
+                          {item.first_name} {item.last_name}
+                        </Text>
+                        {item.email && (
+                          <Text style={styles.memberEmail}>{item.email}</Text>
+                        )}
+                      </View>
+                      <Ionicons name="add-circle" size={28} color={theme.primary} />
+                    </TouchableOpacity>
+                  </React.Fragment>
+                ))}
+              </ScrollView>
             )}
           </View>
         </SafeAreaView>
