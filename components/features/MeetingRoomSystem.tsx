@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 // DateTimePicker removed for better cross-platform compatibility
 import { useAuth } from '@/contexts/AuthContext';
@@ -488,25 +488,31 @@ const MeetingRoomSystem: React.FC<MeetingRoomSystemProps> = ({ onClose, schoolId
         {/* Content */}
         <View style={styles.content}>
           {activeTab === 'meetings' && (
-            <FlatList
-              data={meetings}
-              renderItem={renderMeetingItem}
-              keyExtractor={item => item.id}
+            <ScrollView
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContainer}
-            />
+            >
+              {meetings.map(item => (
+                <React.Fragment key={item.id}>
+                  {renderMeetingItem({ item } as any)}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           )}
 
           {activeTab === 'rooms' && (
-            <FlatList
-              data={meetingRooms}
-              renderItem={renderRoomItem}
-              keyExtractor={item => item.id}
+            <ScrollView
               refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.listContainer}
-            />
+            >
+              {meetingRooms.map(item => (
+                <React.Fragment key={item.id}>
+                  {renderRoomItem({ item } as any)}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           )}
 
           {activeTab === 'schedule' && (

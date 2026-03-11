@@ -5,7 +5,7 @@
  * Uses EnhancedBiometricAuth for multi-account storage and session restoration.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, FlatList, StyleSheet, Platform } from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -661,14 +661,17 @@ export function ProfileSwitcher({
             ) : accounts.length === 0 ? (
               renderEmptyState()
             ) : (
-              <FlatList
-                data={accounts}
-                renderItem={renderAccountItem}
-                keyExtractor={item => item.userId}
+              <ScrollView
                 style={styles.list}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
-              />
+              >
+                {accounts.map(item => (
+                  <React.Fragment key={item.userId}>
+                    {renderAccountItem({ item } as any)}
+                  </React.Fragment>
+                ))}
+              </ScrollView>
             )}
           </View>
 

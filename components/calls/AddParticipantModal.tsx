@@ -6,8 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, Modal, StyleSheet, TextInput, TouchableOpacity, Image, Platform } from 'react-native';
-import { FlashList } from '@shopify/flash-list';
+import { View, Text, Modal, StyleSheet, TextInput, TouchableOpacity, ScrollView, Image, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
@@ -357,14 +356,16 @@ export function AddParticipantModal({
               </Text>
             </View>
           ) : (
-            <FlashList
-              data={filteredUsers}
-              keyExtractor={(item) => item.id}
-              renderItem={renderUser}
-              showsVerticalScrollIndicator={false}
+            <ScrollView
               contentContainerStyle={styles.listContent}
-              estimatedItemSize={60}
-            />
+              showsVerticalScrollIndicator={false}
+            >
+              {filteredUsers.map(item => (
+                <React.Fragment key={item.id}>
+                  {renderUser({ item } as any)}
+                </React.Fragment>
+              ))}
+            </ScrollView>
           )}
         </View>
       </View>
