@@ -871,17 +871,15 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           </View>
         </CollapsibleSection>
 
-        {/* Birthday Donations — only shown when there are birthdays this month */}
-        {hasBirthdaysThisMonth && (
-          <CollapsibleSection
-            title={t('dashboard.birthday_donations.title', { defaultValue: 'Birthday Donations' })}
-            sectionId="teacher-birthday-donations"
-            icon="gift"
-            hint={t('dashboard.hints.teacher_birthdays', { defaultValue: 'Track donations and class birthday contributions.' })}
-          >
-            <BirthdayDonationRegister organizationId={organizationId} />
-          </CollapsibleSection>
-        )}
+        {/* Birthday Donations — always visible */}
+        <CollapsibleSection
+          title={t('dashboard.birthday_donations.title', { defaultValue: 'Birthday Donations' })}
+          sectionId="teacher-birthday-donations"
+          icon="gift"
+          hint={t('dashboard.hints.teacher_birthdays', { defaultValue: 'Track donations and class birthday contributions.' })}
+        >
+          <BirthdayDonationRegister organizationId={organizationId} />
+        </CollapsibleSection>
 
         {/* My Students */}
         <CollapsibleSection

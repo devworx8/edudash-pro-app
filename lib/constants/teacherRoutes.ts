@@ -375,6 +375,14 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     roles: ['teacher', 'principal_admin'],
     location: 'Teacher > Classroom',
   },
+  birthday_donations: {
+    path: '/screens/birthday-donation-reminders' as Href,
+    title: 'Birthday Donations',
+    titleKey: 'teacher.birthday_donations',
+    icon: 'gift',
+    color: '#E91E63',
+    category: 'classroom',
+  },
 
   // === SA-SPECIFIC ===
   cptd_logger: {
@@ -466,6 +474,7 @@ export const TEACHER_QUICK_ACTIONS: (keyof typeof TEACHER_ROUTES)[] = [
   'view_timetable',
   'activity_samples',
   'birthday_chart',
+  'birthday_donations',
   'messages',
   'manage_groups',
   'request_petty_cash',
