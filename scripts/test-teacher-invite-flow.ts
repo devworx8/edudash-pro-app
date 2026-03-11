@@ -18,13 +18,40 @@ dotenv.config();
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseServiceRoleKey =
+  process.env.SERVER_SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  '';
+const allowLiveAuthTests = process.env.ALLOW_LIVE_AUTH_TESTS === 'true';
+const allowProductionAuthTests =
+  process.env.ALLOW_PRODUCTION_AUTH_TESTS === 'true';
+const isProductionSupabase = supabaseUrl.includes(
+  'lvvvjywrmpcqrpvuptdi.supabase.co'
+);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('❌ Missing Supabase credentials in .env');
   process.exit(1);
 }
 
+if (!allowLiveAuthTests) {
+  console.error(
+    '❌ Refusing to run live teacher invite flow without ALLOW_LIVE_AUTH_TESTS=true'
+  );
+  process.exit(1);
+}
+
+if (isProductionSupabase && !allowProductionAuthTests) {
+  console.error(
+    '❌ Refusing to run against production Supabase without ALLOW_PRODUCTION_AUTH_TESTS=true'
+  );
+  process.exit(1);
+}
+
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseAdmin = supabaseServiceRoleKey
+  ? createClient(supabaseUrl, supabaseServiceRoleKey)
+  : null;
 
 interface TestResult {
   step: string;
@@ -216,7 +243,13 @@ async function testInviteFlow() {
   await supabase.from('organization_members').delete().eq('user_id', authData.user.id);
   await supabase.from('profiles').delete().eq('id', authData.user.id);
   await supabase.from('teacher_invites').delete().eq('id', invite.id);
-  await supabase.auth.admin.deleteUser(authData.user.id);
+  if (supabaseAdmin) {
+    await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+  } else {
+    console.warn(
+      '⚠️ Skipping auth user cleanup because no service-role key was provided'
+    );
+  }
   console.log('✅ Cleanup complete');
 
   // Summary

@@ -143,7 +143,8 @@ export async function fetchTodayRoutine(
   });
 
   if (candidates.length === 0) {
-    return EMPTY_ROUTINE_BUNDLE;
+    // Fallback: try the most recently published routine for this school
+    return fetchLatestRoutineFallback(supabase, schoolId, classIds, dayOfWeek);
   }
 
   candidates.sort(compareRoutineRows);
@@ -206,4 +207,90 @@ export async function fetchTodayRoutine(
     schoolWideRoutine,
     classRoutines,
   };
+}
+
+/**
+ * Fallback: when no current-week routine exists, fetch the most recently
+ * published/approved routine so teachers always have something to view.
+ */
+async function fetchLatestRoutineFallback(
+  supabase: ReturnType<typeof assertSupabase>,
+  schoolId: string,
+  classIds: string[],
+  dayOfWeek: number,
+): Promise<TeacherRoutineBundle> {
+  const { data: fallbackRows, error } = await supabase
+    .from('weekly_programs')
+    .select(
+      'id, class_id, term_id, theme_id, title, summary, week_start_date, week_end_date, status, published_at, created_at, updated_at'
+    )
+    .eq('preschool_id', schoolId)
+    .in('status', ['published', 'approved'])
+    .order('week_start_date', { ascending: false })
+    .limit(5);
+
+  if (error || !fallbackRows?.length) {
+    return EMPTY_ROUTINE_BUNDLE;
+  }
+
+  // Pick candidates matching teacher's classes or school-wide
+  const candidates = (fallbackRows as Array<Record<string, unknown>>).filter((row) => {
+    const classId = row.class_id ? String(row.class_id) : null;
+    return !classId || classIds.includes(classId);
+  });
+
+  if (candidates.length === 0) {
+    return EMPTY_ROUTINE_BUNDLE;
+  }
+
+  candidates.sort(compareRoutineRows);
+  const candidateIds = candidates.map((row) => String(row.id || '')).filter(Boolean);
+
+  const { data: blockRows } = await supabase
+    .from('daily_program_blocks')
+    .select('id, weekly_program_id, title, block_type, start_time, end_time, day_of_week, block_order')
+    .in('weekly_program_id', candidateIds)
+    .eq('day_of_week', dayOfWeek)
+    .order('block_order', { ascending: true });
+
+  const blocksByProgramId = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of (blockRows || []) as Array<Record<string, unknown>>) {
+    const programId = String(row.weekly_program_id || '');
+    if (!programId) continue;
+    const list = blocksByProgramId.get(programId) || [];
+    list.push(row);
+    blocksByProgramId.set(programId, list);
+  }
+
+  const routineByProgramId = new Map<string, TeacherRoutineSnapshot>();
+  for (const row of candidates) {
+    const programId = String(row.id || '');
+    if (!programId) continue;
+    const dayBlocks = (blocksByProgramId.get(programId) || [])
+      .slice()
+      .sort((a, b) => Number(a.block_order || 0) - Number(b.block_order || 0));
+    routineByProgramId.set(programId, mapRoutineRowToSnapshot(row, dayOfWeek, dayBlocks));
+  }
+
+  const classRoutineRows = candidates.filter((row) => {
+    const classId = row.class_id ? String(row.class_id) : null;
+    return !!classId && classIds.includes(classId);
+  });
+  const schoolWideRow = candidates.find((row) => !row.class_id) || null;
+
+  const classRoutines = classRoutineRows
+    .map((row) => routineByProgramId.get(String(row.id || '')))
+    .filter(Boolean) as TeacherRoutineSnapshot[];
+
+  const schoolWideRoutine = schoolWideRow
+    ? routineByProgramId.get(String(schoolWideRow.id || '')) || null
+    : null;
+
+  const todayRoutine =
+    classRoutines[0] ||
+    schoolWideRoutine ||
+    routineByProgramId.get(String(candidates[0]?.id || '')) ||
+    null;
+
+  return { todayRoutine, schoolWideRoutine, classRoutines };
 }

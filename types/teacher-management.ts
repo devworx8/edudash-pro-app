@@ -19,14 +19,19 @@ export interface Teacher {
   phone: string;
   address: string;
   idNumber: string;
+  dateOfBirth?: string;
+  gender?: string;
   status: TeacherStatus;
   contractType: ContractType;
+  positionTitle?: string;
+  department?: string;
   classes: string[];
   subjects: string[];
   qualifications: string[];
   studentCount?: number;
   hireDate: string;
   contractEndDate?: string;
+  notes?: string;
   emergencyContact: EmergencyContact;
   salary: SalaryInfo;
   performance: PerformanceInfo;
@@ -35,9 +40,9 @@ export interface Teacher {
   workload: WorkloadInfo;
 }
 
-export type TeacherStatus = 'active' | 'inactive' | 'pending' | 'probation' | 'suspended';
+export type TeacherStatus = 'active' | 'inactive' | 'pending' | 'probation' | 'suspended' | 'on_leave' | 'terminated';
 
-export type ContractType = 'permanent' | 'temporary' | 'substitute' | 'probationary';
+export type ContractType = 'permanent' | 'temporary' | 'substitute' | 'probationary' | 'intern' | 'volunteer';
 
 export type TeacherManagementView = 'overview' | 'hiring' | 'applications' | 'performance' | 'payroll' | 'profile';
 
@@ -127,6 +132,8 @@ export const getStatusColor = (status: string): string => {
     case 'pending': return '#EA580C';
     case 'probation': return '#F59E0B';
     case 'suspended': return '#DC2626';
+    case 'on_leave': return '#8B5CF6';
+    case 'terminated': return '#991B1B';
     default: return '#6B7280';
   }
 };

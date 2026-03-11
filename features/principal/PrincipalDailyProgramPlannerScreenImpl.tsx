@@ -30,6 +30,7 @@ import { canUseFeature, getQuotaStatus, type QuotaStatus } from '@/lib/ai/limits
 import { incrementUsage } from '@/lib/ai/usage';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useAlertModal } from '@/components/ui/AlertModal';
+import { ShareTargetPickerModal } from '@/components/planner/ShareTargetPickerModal';
 import { fetchThemeForWeek } from '@/lib/services/curriculumThemeService';
 import { getRoutineBlockTypePresentation } from '@/lib/routines/blockTypePresentation';
 import {
@@ -635,6 +636,8 @@ export default function PrincipalDailyProgramPlannerScreen() {
   const [programs, setPrograms] = useState<WeeklyProgramDraft[]>([]);
   const [draftViewMode, setDraftViewMode] = useState<'edit' | 'cards'>('edit');
   const [programToRegenerateAfterLoad, setProgramToRegenerateAfterLoad] = useState<WeeklyProgramDraft | null>(null);
+  const [showSharePicker, setShowSharePicker] = useState(false);
+  const [sharePickerTarget, setSharePickerTarget] = useState<WeeklyProgramDraft | null>(null);
 
   const plannerPreferenceKey = useMemo(() => {
     if (!organizationId || !userId) return null;
@@ -1353,8 +1356,22 @@ export default function PrincipalDailyProgramPlannerScreen() {
     }
   }, [draft, loadPrograms, organizationId, rules, saveDraft, userId, showAlert]);
 
-  const shareWithTeachers = useCallback(async (programOverride?: WeeklyProgramDraft) => {
-    const activeProgram = programOverride || draft;
+  const openSharePicker = useCallback((programOverride?: WeeklyProgramDraft) => {
+    const target = programOverride || draft;
+    if (!target) {
+      showAlert({ title: 'No program', message: 'Generate or load a program before sharing with teachers.', type: 'warning' });
+      return;
+    }
+    if (!organizationId || !userId) {
+      showAlert({ title: 'Missing profile', message: 'Please sign in again to continue.', type: 'warning' });
+      return;
+    }
+    setSharePickerTarget(target);
+    setShowSharePicker(true);
+  }, [draft, organizationId, userId, showAlert]);
+
+  const shareWithTeachers = useCallback(async (teacherUserIds?: string[], programOverride?: WeeklyProgramDraft) => {
+    const activeProgram = programOverride || sharePickerTarget || draft;
     if (!activeProgram) {
       showAlert({
         title: 'No program',
@@ -1376,6 +1393,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     }
 
     setSharingTeachers(true);
+    setShowSharePicker(false);
     try {
       let programToShare = activeProgram;
       if (!programToShare.id) {
@@ -1386,26 +1404,22 @@ export default function PrincipalDailyProgramPlannerScreen() {
         }
         programToShare = saved;
       }
-      const targetClassId = programToShare.class_id
-        ? String(programToShare.class_id)
-        : null;
-      const targetClassOption = classOptions.find((option) => option.id === targetClassId) || null;
 
       await WeeklyProgramService.shareWeeklyProgramWithTeachers({
         weeklyProgramId: programToShare.id,
         preschoolId: organizationId,
         sharedBy: userId,
         rules: normalized,
-        teacherUserIds: targetClassOption?.teacherId ? [targetClassOption.teacherId] : undefined,
+        teacherUserIds,
       });
 
       await loadPrograms();
-      const classLabel = targetClassOption ? formatClassLabel(targetClassOption) : null;
+      const count = teacherUserIds?.length;
       showAlert({
         title: 'Shared with Teachers',
-        message: classLabel
-          ? `Routine brief shared with ${classLabel}${targetClassOption?.teacherId ? ' teacher(s)' : ''}. Dashboards and in-app notifications are now updated.`
-          : 'Routine brief shared with all teachers. Dashboards and in-app notifications are now updated.',
+        message: count
+          ? `Routine shared with ${count} teacher${count !== 1 ? 's' : ''}. Dashboards and in-app notifications are now updated.`
+          : 'Routine shared with all teachers. Dashboards and in-app notifications are now updated.',
         type: 'success',
       });
     } catch (error: unknown) {
@@ -1416,8 +1430,9 @@ export default function PrincipalDailyProgramPlannerScreen() {
       });
     } finally {
       setSharingTeachers(false);
+      setSharePickerTarget(null);
     }
-  }, [classOptions, draft, loadPrograms, organizationId, rules, saveDraft, userId, showAlert]);
+  }, [draft, sharePickerTarget, loadPrograms, organizationId, rules, saveDraft, userId, showAlert]);
 
   const deleteSavedProgram = useCallback(
     (program: WeeklyProgramDraft) => {
@@ -2730,16 +2745,12 @@ export default function PrincipalDailyProgramPlannerScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.teacherShareBtn, styles.halfButton, (sharingTeachers || !draft) && styles.buttonDisabled]}
-              onPress={() => void shareWithTeachers()}
+              onPress={() => openSharePicker()}
               disabled={sharingTeachers || !draft}
             >
               {sharingTeachers ? <EduDashSpinner size="small" color="#fff" /> : <Ionicons name="people-outline" size={16} color="#fff" />}
               <Text style={styles.successBtnText}>
-                {sharingTeachers
-                  ? 'Sharing...'
-                  : selectedClassOption
-                    ? 'Share with Class Teacher'
-                    : 'Share with Teachers'}
+                {sharingTeachers ? 'Sharing...' : 'Share with Teachers'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -3097,7 +3108,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
                     <Ionicons name="refresh-outline" size={14} color={theme.primary} />
                     <Text style={styles.inlineBtnText}>Regenerate</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.inlineBtn} onPress={() => void shareWithTeachers(program)}>
+                  <TouchableOpacity style={styles.inlineBtn} onPress={() => openSharePicker(program)}>
                     <Ionicons name="people-outline" size={14} color={theme.primary} />
                     <Text style={styles.inlineBtnText}>Share Teachers</Text>
                   </TouchableOpacity>
@@ -3126,6 +3137,17 @@ export default function PrincipalDailyProgramPlannerScreen() {
         </View>
       </ScrollView>
       <AlertModalComponent />
+      {organizationId ? (
+        <ShareTargetPickerModal
+          visible={showSharePicker}
+          organizationId={organizationId}
+          classOptions={classOptions}
+          ageGroup={ageGroup}
+          theme={theme}
+          onClose={() => { setShowSharePicker(false); setSharePickerTarget(null); }}
+          onShare={(ids) => void shareWithTeachers(ids)}
+        />
+      ) : null}
     </DesktopLayout>
   );
 }
