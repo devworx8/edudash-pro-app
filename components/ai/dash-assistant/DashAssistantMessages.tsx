@@ -188,11 +188,11 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
       forceAlignTimersRef.current = [];
     }
 
-    scrollToBottom({ animated: false, delay: 0, force: true });
+    scrollToBottom({ animated: false, delay: 0 });
 
     [60, 220, 480].forEach((timeoutMs) => {
       const timer = setTimeout(() => {
-        scrollToBottom({ animated: false, delay: 0, force: true });
+        scrollToBottom({ animated: false, delay: 0 });
       }, timeoutMs);
       forceAlignTimersRef.current.push(timer);
     });
