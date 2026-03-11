@@ -1,7 +1,7 @@
 /**
  * Integration Tests: Authentication Flow
  *
- * Tests critical authentication paths against live Supabase:
+ * Tests critical authentication paths against a live Supabase project:
  * - Sign up with role assignment
  * - Login with correct / incorrect credentials
  * - Session persistence
@@ -9,8 +9,13 @@
  * - Profile fetching from database
  * - Multi-tenant RLS isolation
  *
- * Requires EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY
- * to be set as environment variables. Skips gracefully when missing.
+ * These tests can create real auth users and trigger confirmation emails.
+ *
+ * Required opt-in:
+ * - ALLOW_LIVE_AUTH_TESTS=true
+ *
+ * Additional required opt-in when pointed at the production Supabase project:
+ * - ALLOW_PRODUCTION_AUTH_TESTS=true
  */
 
 // Use createClient directly — lib/supabase.ts pulls in React-Native
@@ -21,7 +26,17 @@ const { createClient } = require('@supabase/supabase-js');
 // ---------- env guard ----------
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-const SKIP = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+const ALLOW_LIVE_AUTH_TESTS = process.env.ALLOW_LIVE_AUTH_TESTS === 'true';
+const ALLOW_PRODUCTION_AUTH_TESTS =
+  process.env.ALLOW_PRODUCTION_AUTH_TESTS === 'true';
+const IS_PRODUCTION_SUPABASE = SUPABASE_URL.includes(
+  'lvvvjywrmpcqrpvuptdi.supabase.co'
+);
+const SKIP =
+  !SUPABASE_URL ||
+  !SUPABASE_ANON_KEY ||
+  !ALLOW_LIVE_AUTH_TESTS ||
+  (IS_PRODUCTION_SUPABASE && !ALLOW_PRODUCTION_AUTH_TESTS);
 const describeIfEnv = SKIP ? describe.skip : describe;
 
 // ---------- helpers ----------

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -66,6 +66,18 @@ const formatRange = (start?: string | null, end?: string | null) => {
   if (start && end) return `${start} - ${end}`;
   return start || end || 'Time not set';
 };
+
+function normalizeTimeForDisplay(value: unknown): string | null {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  const match = raw.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -210,8 +222,18 @@ export default function TeacherDailyProgramPlannerScreen() {
     if (!routine.classId) return 'School-wide routine';
     return classLabelById.get(routine.classId) || 'Class routine';
   }, [classLabelById, routine]);
+  const isRoutineFromPastWeek = useMemo(() => {
+    if (!routine?.weekEndDate) return false;
+    const today = new Date().toISOString().split('T')[0];
+    return routine.weekEndDate < today;
+  }, [routine?.weekEndDate]);
   const styles = React.useMemo(() => createStyles(theme), [theme]);
   const isCompact = width < 760;
+  const todayDayOfWeek = useMemo(() => toWeekdayMondayFirst(new Date()), []);
+  const [selectedDay, setSelectedDay] = useState<number>(todayDayOfWeek);
+  const [weekBlocks, setWeekBlocks] = useState<Record<number, Array<{ id: string; title: string; blockType: string; startTime: string | null; endTime: string | null }>>>({});
+  const [loadingWeekBlocks, setLoadingWeekBlocks] = useState(false);
+  const lastFetchedProgramId = useRef<string | null>(null);
   const [reminderSoundEnabled, setReminderSoundEnabled] = useState(true);
   const [weeklyGenerationPending, setWeeklyGenerationPending] = useState(false);
   const resolvedSchoolType = useMemo(() => resolveSchoolTypeFromProfile(profile), [profile]);
@@ -240,16 +262,74 @@ export default function TeacherDailyProgramPlannerScreen() {
     };
   }, [resolvedSchoolType, routine]);
 
+  // Fetch all week blocks for the selected routine
+  useEffect(() => {
+    const programId = routine?.weeklyProgramId;
+    if (!programId || programId === lastFetchedProgramId.current) return;
+    let active = true;
+    const load = async () => {
+      setLoadingWeekBlocks(true);
+      try {
+        const supabase = assertSupabase();
+        const { data: rows } = await supabase
+          .from('daily_program_blocks')
+          .select('id, title, block_type, start_time, end_time, day_of_week, block_order')
+          .eq('weekly_program_id', programId)
+          .in('day_of_week', [1, 2, 3, 4, 5])
+          .order('day_of_week', { ascending: true })
+          .order('block_order', { ascending: true });
+        if (!active) return;
+        lastFetchedProgramId.current = programId;
+        const grouped: Record<number, Array<{ id: string; title: string; blockType: string; startTime: string | null; endTime: string | null }>> = {};
+        for (const row of (rows || []) as Array<Record<string, unknown>>) {
+          const day = Number(row.day_of_week || 0);
+          if (day < 1 || day > 5) continue;
+          if (!grouped[day]) grouped[day] = [];
+          grouped[day].push({
+            id: String(row.id || ''),
+            title: String(row.title || 'Routine block'),
+            blockType: String(row.block_type || 'learning'),
+            startTime: normalizeTimeForDisplay(row.start_time),
+            endTime: normalizeTimeForDisplay(row.end_time),
+          });
+        }
+        setWeekBlocks(grouped);
+      } finally {
+        if (active) setLoadingWeekBlocks(false);
+      }
+    };
+    void load();
+    return () => { active = false; };
+  }, [routine?.weeklyProgramId]);
+
+  const blocksForSelectedDay = useMemo(() => {
+    if (selectedDay === todayDayOfWeek && routine?.blocks?.length) {
+      return routine.blocks;
+    }
+    return (weekBlocks[selectedDay] || []);
+  }, [selectedDay, todayDayOfWeek, routine?.blocks, weekBlocks]);
+
+  const dayBlockCounts = useMemo(() => {
+    const counts: Record<number, number> = {};
+    for (const day of [1, 2, 3, 4, 5]) {
+      counts[day] = (weekBlocks[day] || []).length;
+    }
+    // Override today with live routine blocks if available
+    if (routine?.blocks?.length) {
+      counts[todayDayOfWeek] = routine.blocks.length;
+    }
+    return counts;
+  }, [weekBlocks, routine?.blocks, todayDayOfWeek]);
+
   const reminderBlocksByDay = useMemo(() => {
     if (!routine?.blocks?.length) return {};
-    const todayDay = toWeekdayMondayFirst(new Date());
     const blocks = routine.blocks.map((b) => ({
       id: b.id,
       title: b.title,
       start_time: b.startTime ?? null,
     }));
-    return { [todayDay]: blocks };
-  }, [routine?.blocks]);
+    return { [todayDayOfWeek]: blocks };
+  }, [routine?.blocks, todayDayOfWeek]);
 
   const reminderEvents = useMemo(
     () => buildReminderEventsFromBlocks(reminderBlocksByDay),
@@ -567,6 +647,14 @@ export default function TeacherDailyProgramPlannerScreen() {
             <>
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>{routine.title || 'Published school routine'}</Text>
+                {isRoutineFromPastWeek && (
+                  <View style={styles.pastWeekBanner}>
+                    <Ionicons name="time-outline" size={14} color={theme.warning || '#f59e0b'} />
+                    <Text style={styles.pastWeekBannerText}>
+                      Showing last published routine — no routine published for this week yet.
+                    </Text>
+                  </View>
+                )}
                 <Text style={styles.cardMeta}>
                   {formatDate(routine.weekStartDate)} - {formatDate(routine.weekEndDate)} • {routineScopeLabel} • {routine.blockCount} blocks
                 </Text>
@@ -626,26 +714,73 @@ export default function TeacherDailyProgramPlannerScreen() {
               </View>
 
               <View style={styles.blockListCard}>
-                <Text style={styles.sectionTitle}>Today's blocks</Text>
-                {routine.blocks.map((block, index) => {
-                  const blockType = getRoutineBlockTypePresentation(block.blockType);
-                  return (
-                    <View key={block.id} style={[styles.blockRow, { borderLeftColor: blockType.textColor }]}>
-                      <View style={styles.blockIndex}>
-                        <Text style={styles.blockIndexText}>{index + 1}</Text>
-                      </View>
-                      <View style={styles.blockBody}>
-                        <Text style={styles.blockTitle}>{block.title}</Text>
-                        <View style={styles.blockMetaRow}>
-                          <Text style={styles.blockTimeText}>{formatRange(block.startTime, block.endTime)}</Text>
-                          <View style={[styles.blockTypeChip, { backgroundColor: blockType.backgroundColor, borderColor: blockType.borderColor }]}>
-                            <Text style={[styles.blockTypeChipText, { color: blockType.textColor }]}>{blockType.label}</Text>
+                {/* Day tabs - Mon to Fri */}
+                <View style={styles.dayTabRow}>
+                  {([1, 2, 3, 4, 5] as const).map((day) => {
+                    const isActive = day === selectedDay;
+                    const isToday = day === todayDayOfWeek;
+                    const count = dayBlockCounts[day] || 0;
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        style={[styles.dayTab, isActive && styles.dayTabActive, isToday && !isActive && styles.dayTabToday]}
+                        onPress={() => setSelectedDay(day)}
+                      >
+                        <Text style={[styles.dayTabLabel, isActive && styles.dayTabLabelActive]}>
+                          {WEEKDAY_LABELS[day]?.slice(0, 3)}
+                        </Text>
+                        {isToday && (
+                          <View style={[styles.todayDot, isActive && styles.todayDotActive]} />
+                        )}
+                        {count > 0 && (
+                          <Text style={[styles.dayTabCount, isActive && styles.dayTabCountActive]}>
+                            {count}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.sectionTitle}>
+                  {selectedDay === todayDayOfWeek
+                    ? "Today's blocks"
+                    : `${WEEKDAY_LABELS[selectedDay] || 'Day'} blocks`}
+                </Text>
+
+                {loadingWeekBlocks && selectedDay !== todayDayOfWeek ? (
+                  <View style={styles.dayLoadingWrap}>
+                    <ActivityIndicator color={theme.primary} size="small" />
+                    <Text style={styles.dayLoadingText}>Loading week blocks...</Text>
+                  </View>
+                ) : blocksForSelectedDay.length === 0 ? (
+                  <View style={styles.emptyDayWrap}>
+                    <Ionicons name="calendar-outline" size={28} color={theme.textSecondary} />
+                    <Text style={styles.emptyDayText}>
+                      No blocks scheduled for {WEEKDAY_LABELS[selectedDay] || 'this day'}.
+                    </Text>
+                  </View>
+                ) : (
+                  blocksForSelectedDay.map((block, index) => {
+                    const blockType = getRoutineBlockTypePresentation(block.blockType);
+                    return (
+                      <View key={block.id || `block-${index}`} style={[styles.blockRow, { borderLeftColor: blockType.textColor }]}>
+                        <View style={styles.blockIndex}>
+                          <Text style={styles.blockIndexText}>{index + 1}</Text>
+                        </View>
+                        <View style={styles.blockBody}>
+                          <Text style={styles.blockTitle}>{block.title}</Text>
+                          <View style={styles.blockMetaRow}>
+                            <Text style={styles.blockTimeText}>{formatRange(block.startTime, block.endTime)}</Text>
+                            <View style={[styles.blockTypeChip, { backgroundColor: blockType.backgroundColor, borderColor: blockType.borderColor }]}>
+                              <Text style={[styles.blockTypeChipText, { color: blockType.textColor }]}>{blockType.label}</Text>
+                            </View>
                           </View>
                         </View>
                       </View>
-                    </View>
-                  );
-                })}
+                    );
+                  })
+                )}
               </View>
             </>
           ) : (
@@ -806,6 +941,24 @@ const createStyles = (theme: any) =>
       fontSize: 13,
       lineHeight: 19,
     },
+    pastWeekBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      backgroundColor: (theme.warning || '#f59e0b') + '18',
+      borderWidth: 1,
+      borderColor: (theme.warning || '#f59e0b') + '40',
+      borderRadius: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    pastWeekBannerText: {
+      flex: 1,
+      fontSize: 12,
+      fontWeight: '600',
+      color: theme.warning || '#f59e0b',
+      lineHeight: 17,
+    },
     routineSwitchRow: {
       marginTop: 4,
       flexDirection: 'row',
@@ -932,6 +1085,76 @@ const createStyles = (theme: any) =>
       borderColor: theme.border,
       padding: 14,
       gap: 10,
+    },
+    dayTabRow: {
+      flexDirection: 'row',
+      gap: 6,
+      marginBottom: 8,
+    },
+    dayTab: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.background,
+      gap: 3,
+    },
+    dayTabActive: {
+      backgroundColor: theme.primary,
+      borderColor: theme.primary,
+    },
+    dayTabToday: {
+      borderColor: theme.primary,
+      borderWidth: 1.5,
+    },
+    dayTabLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: theme.textSecondary,
+    },
+    dayTabLabelActive: {
+      color: '#fff',
+    },
+    dayTabCount: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: theme.textSecondary,
+    },
+    dayTabCountActive: {
+      color: 'rgba(255,255,255,0.8)',
+    },
+    todayDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: theme.primary,
+    },
+    todayDotActive: {
+      backgroundColor: '#fff',
+    },
+    dayLoadingWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    dayLoadingText: {
+      fontSize: 13,
+      color: theme.textSecondary,
+    },
+    emptyDayWrap: {
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 24,
+    },
+    emptyDayText: {
+      fontSize: 13,
+      color: theme.textSecondary,
+      textAlign: 'center',
     },
     sectionTitle: {
       color: theme.text,

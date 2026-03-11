@@ -81,7 +81,7 @@ class ConfigManager {
       admobAndroidAppId: this.getOptional('EXPO_PUBLIC_ADMOB_ANDROID_APP_ID', ''),
       admobIosAppId: this.getOptional('EXPO_PUBLIC_ADMOB_IOS_APP_ID', ''),
       enableFreeAds: this.getBoolean('EXPO_PUBLIC_ENABLE_FREE_TIER_ADS', false),
-      admobTestIdsOnly: this.getBoolean('EXPO_PUBLIC_ADMOB_TEST_IDS_ONLY', true),
+      admobTestIdsOnly: this.getBoolean('EXPO_PUBLIC_ADMOB_TEST_IDS_ONLY', false),
 
       // RevenueCat
       revenuecatAndroidKey: this.getOptional('EXPO_PUBLIC_REVENUECAT_ANDROID_SDK_KEY', ''),

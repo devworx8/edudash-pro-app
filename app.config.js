@@ -48,6 +48,13 @@ module.exports = ({ config }) => {
   const appVariant = process.env.APP_VARIANT || '';
   const isDevBuild = profile === 'development' || appVariant === 'development';
   const isWeb = process.env.EXPO_PUBLIC_PLATFORM === 'web';
+  const productionProfiles = new Set([
+    'production',
+    'playstore',
+    'playstore-apk',
+    'playstore-internal',
+  ]);
+  const isProductionLikeProfile = productionProfiles.has(profile);
   
   // Get dynamic EAS project config (ID and owner)
   const easConfig = getEasProjectConfig();
@@ -56,9 +63,13 @@ module.exports = ({ config }) => {
   const googleServicesFile = process.env.GOOGLE_SERVICES_JSON || './google-services.json';
   const iosGoogleServicesFile = process.env.GOOGLE_SERVICE_INFO_PLIST || config.ios?.googleServicesFile;
 
-  // Get AdMob IDs from environment (fallback to test IDs)
-  const androidAdMobId = process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID || 'ca-app-pub-3940256099942544~3347511713';
-  const iosAdMobId = process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID || 'ca-app-pub-3940256099942544~1458002511';
+  // Fail closed in production-like profiles instead of silently using Google test IDs.
+  const androidAdMobId =
+    process.env.EXPO_PUBLIC_ADMOB_ANDROID_APP_ID ||
+    (isProductionLikeProfile ? '' : 'ca-app-pub-3940256099942544~3347511713');
+  const iosAdMobId =
+    process.env.EXPO_PUBLIC_ADMOB_IOS_APP_ID ||
+    (isProductionLikeProfile ? '' : 'ca-app-pub-3940256099942544~1458002511');
 
   // Build plugins array with dynamic AdMob config
   const plugins = config.plugins.map((plugin) => {

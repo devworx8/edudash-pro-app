@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { track } from '@/lib/analytics';
+import { areTestIdsOnly } from '@/lib/ads/gating';
 
 // Dynamically import SecureStore to avoid web issues
 let SecureStore: any = null;
@@ -99,6 +100,9 @@ export type InterstitialPlacement = 'homework_submitted' | 'lesson_saved_assigne
 function isAndroid() { return Platform.OS === 'android'; }
 function adsEnabled() { return process.env.EXPO_PUBLIC_ENABLE_ADS !== '0'; }
 function isWeb() { return Platform.OS === 'web'; }
+function canUseLegacyTestInterstitials() {
+  return __DEV__ || areTestIdsOnly();
+}
 
 const DAILY_LIMIT = 5;
 const MIN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -144,6 +148,7 @@ class Manager {
   preload(placement: InterstitialPlacement) {
     if (isWeb() || !isAndroid() || !adsEnabled()) return;
     if (this.loaders.has(placement)) return;
+    if (!canUseLegacyTestInterstitials()) return;
     
     try {
       const { InterstitialAd, TestIds } = require('react-native-google-mobile-ads');
@@ -158,6 +163,15 @@ class Manager {
   async showIfEligible(placement: InterstitialPlacement, role?: string, tier?: 'free'|'pro'|'enterprise') {
     if (tier && tier !== 'free') return false;
     if (!(await canShow(placement))) return false;
+    if (!canUseLegacyTestInterstitials()) {
+      track('ad_interstitial_blocked', {
+        placement,
+        role,
+        reason: 'legacy_manager_disabled_in_production',
+        tier,
+      });
+      return false;
+    }
 
     try {
       const { InterstitialAd, AdEventType, TestIds } = require('react-native-google-mobile-ads');

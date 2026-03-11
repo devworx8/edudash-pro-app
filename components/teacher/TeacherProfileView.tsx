@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { TeacherDocumentsService, TeacherDocument } from '@/lib/services/TeacherDocumentsService';
+import { EditTeacherModal, type TeacherUpdatePayload } from './EditTeacherModal';
 import type { Teacher } from '@/types/teacher-management';
 import type { ThemeColors } from '@/contexts/ThemeContext';
 
@@ -36,6 +37,7 @@ interface TeacherProfileViewProps {
   onAssignSeat: (teacherUserId: string, teacherName: string) => void;
   onRevokeSeat: (teacherUserId: string, teacherName: string) => void;
   onAttachDocument: () => void;
+  onEditTeacher?: (teacherId: string, payload: TeacherUpdatePayload) => Promise<void>;
   onDeleteTeacher?: (teacher: Teacher) => void;
 }
 
@@ -53,9 +55,11 @@ export function TeacherProfileView({
   onAssignSeat,
   onRevokeSeat,
   onAttachDocument,
+  onEditTeacher,
   onDeleteTeacher,
 }: TeacherProfileViewProps) {
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const [editModalVisible, setEditModalVisible] = React.useState(false);
   const fullName = `${teacher.firstName} ${teacher.lastName}`;
 
   const handleOpenDocument = async (docKey: string) => {
@@ -101,16 +105,39 @@ export function TeacherProfileView({
           <Text style={styles.headerTitle}>{fullName}</Text>
           <Text style={styles.headerSubtitle}>{teacher.email}</Text>
         </View>
+        {onEditTeacher && (
+          <TouchableOpacity onPress={() => setEditModalVisible(true)} style={styles.editButton}>
+            <Ionicons name="create-outline" size={20} color={theme?.primary || '#6366f1'} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Profile Card */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Profile</Text>
-        <Text style={styles.cardText}>Phone: {teacher.phone}</Text>
-        <Text style={styles.cardText}>Employee ID: {teacher.employeeId}</Text>
+        <Text style={styles.cardText}>Phone: {teacher.phone || '—'}</Text>
+        <Text style={styles.cardText}>Employee ID: {teacher.employeeId || '—'}</Text>
         <Text style={styles.cardText}>Status: {teacher.status}</Text>
         <Text style={styles.cardText}>Contract: {teacher.contractType}</Text>
-        <Text style={styles.cardText}>Hire Date: {teacher.hireDate}</Text>
+        <Text style={styles.cardText}>Hire Date: {teacher.hireDate || '—'}</Text>
+        {!!teacher.positionTitle && (
+          <Text style={styles.cardText}>Position: {teacher.positionTitle}</Text>
+        )}
+        {!!teacher.department && (
+          <Text style={styles.cardText}>Department: {teacher.department}</Text>
+        )}
+        {!!teacher.contractEndDate && (
+          <Text style={styles.cardText}>Contract End: {teacher.contractEndDate}</Text>
+        )}
+        {!!teacher.gender && (
+          <Text style={styles.cardText}>Gender: {teacher.gender}</Text>
+        )}
+        {!!teacher.idNumber && (
+          <Text style={styles.cardText}>ID Number: {teacher.idNumber}</Text>
+        )}
+        {!!teacher.address && (
+          <Text style={styles.cardText}>Address: {teacher.address}</Text>
+        )}
 
         <View style={styles.actionRow}>
           <TouchableOpacity style={[styles.actionButton, styles.messageButton]} onPress={onMessage}>
@@ -325,6 +352,40 @@ export function TeacherProfileView({
           </>
         )}
       </View>
+
+      {/* Emergency Contact Card */}
+      {(teacher.emergencyContact?.name || teacher.emergencyContact?.phone) && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Emergency Contact</Text>
+          {!!teacher.emergencyContact.name && (
+            <Text style={styles.cardText}>Name: {teacher.emergencyContact.name}</Text>
+          )}
+          {!!teacher.emergencyContact.phone && (
+            <Text style={styles.cardText}>Phone: {teacher.emergencyContact.phone}</Text>
+          )}
+          {!!teacher.emergencyContact.relationship && (
+            <Text style={styles.cardText}>Relationship: {teacher.emergencyContact.relationship}</Text>
+          )}
+        </View>
+      )}
+
+      {/* Admin Notes Card */}
+      {!!teacher.notes && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Admin Notes</Text>
+          <Text style={styles.cardText}>{teacher.notes}</Text>
+        </View>
+      )}
+
+      {/* Edit Modal */}
+      {onEditTeacher && (
+        <EditTeacherModal
+          visible={editModalVisible}
+          teacher={teacher}
+          onClose={() => setEditModalVisible(false)}
+          onSave={onEditTeacher}
+        />
+      )}
     </ScrollView>
   );
 }
@@ -350,6 +411,10 @@ const createStyles = (theme?: ThemeColors) =>
     backButton: {
       paddingRight: 12,
       paddingVertical: 4,
+    },
+    editButton: {
+      padding: 8,
+      marginLeft: 8,
     },
     headerInfo: {
       flex: 1,
