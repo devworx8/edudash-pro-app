@@ -15,6 +15,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { LearningHubPathBoard } from './LearningHubPathBoard';
 import type { ActivityCard, ActivityStep, StepOption } from '@/lib/activities/preschoolLearningHub.data';
 import type { StepFeedback } from '@/hooks/useLearningHubActivity';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface LearningHubActivityModalProps {
   activity: ActivityCard | null;
@@ -65,7 +66,7 @@ export const LearningHubActivityModal = memo(function LearningHubActivityModal({
                 <View
                   style={[
                     styles.progressFill,
-                    { backgroundColor: theme.primary, width: `${Math.round(((stepIndex + 1) / Math.max(activity.steps.length, 1)) * 100)}%` },
+                    { backgroundColor: theme.primary, width: percentWidth(Math.round(((stepIndex + 1) / Math.max(activity.steps.length, 1)) * 100)) },
                   ]}
                 />
               </View>

@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuiz } from '@/hooks/useQuiz';
+import { percentWidth } from '@/lib/progress/clampPercent';
 import type {
   QuizConfig,
   QuizQuestion,
@@ -370,7 +371,7 @@ export function QuizMode({
           {/* Progress bar */}
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
+              <View style={[styles.progressFill, { width: percentWidth(progress * 100) }]} />
             </View>
             <Text style={styles.progressText}>
               {currentIndex + 1} / {sessionData.totalQuestions}

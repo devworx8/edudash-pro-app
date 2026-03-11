@@ -9,6 +9,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { DesignSystem } from '@/constants/DesignSystem';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 // Type definitions for wireframe props
 type Role = 'superadmin' | 'principal' | 'teacher' | 'parent';
@@ -302,7 +303,7 @@ export const WireframeProgress: React.FC<WireframeProgressProps> = ({
           <View
             style={[
               styles.progressBar,
-              { width: `${percentage}%`, backgroundColor: color }
+              { width: percentWidth(percentage), backgroundColor: color }
             ]}
           />
         </View>

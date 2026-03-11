@@ -22,7 +22,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { K12_GAMES_BY_ID } from '@/lib/activities/k12Games.data';
 import type { K12Game, K12Subject, K12GradeRange } from '@/lib/activities/k12Activities.types';
 import { SUBJECT_LABELS, GRADE_RANGE_LABELS } from '@/lib/activities/k12Activities.types';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import type { AssignmentWithStats, AssignGamePayload } from '@/hooks/k12/useTeacherGameControl';
 import {
   useFilteredGames,
@@ -113,7 +113,7 @@ function AssignmentRow({
             style={[
               styles.progressFill,
               {
-                width: `${progressPercent}%`,
+                width: percentWidth(progressPercent),
                 backgroundColor: progressPercent === 100 ? '#16A34A' : '#4F46E5',
               },
             ]}

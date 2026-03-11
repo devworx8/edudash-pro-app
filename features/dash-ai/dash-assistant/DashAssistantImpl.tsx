@@ -82,6 +82,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
     loadingStatus, streamingMessageId, isSpeaking, speakingMessageId, dashInstance,
     isInitialized, enterToSend, voiceEnabled, selectedAttachments,
     isUploading, attachmentProgress, isNearBottom, setIsNearBottom, unreadCount, setUnreadCount,
+    bottomScrollRequestId,
     isRecording, recordingVoiceActivity, partialTranscript, speechChunkProgress,
     voiceAutoSendCountdownActive, voiceAutoSendCountdownMs, tutorSession, alertState, hideAlert,
     flashListRef, inputRef, sendMessage, speakResponse, stopSpeaking, stopAllActivity,
@@ -256,6 +257,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
               styles={{ ...layoutStyles, ...messageStyles, ...inputStyles }}
               theme={theme} isLoading={isTypingActive} isNearBottom={isNearBottom}
               setIsNearBottom={setIsNearBottom} unreadCount={unreadCount} setUnreadCount={setUnreadCount}
+              bottomScrollRequestId={bottomScrollRequestId}
               scrollToBottom={scrollToBottom} renderSuggestedActions={() => null}
               onSendMessage={(text) => sendMessage(text)} bottomInset={0}
               keyboardVisible={keyboardVisible} compactBottomPadding

@@ -529,6 +529,17 @@ export const FUNCTION_SEARCH_INDEX: FunctionSearchItem[] = [
     roles: ['parent'],
     priority: 68,
   },
+  {
+    id: 'birthday-donations',
+    title: 'Birthday Donations',
+    description: 'Mark and track birthday collection payments for your class or school.',
+    icon: 'gift',
+    route: '/screens/birthday-donation-reminders',
+    roles: ['teacher', 'principal', 'principal_admin', 'super_admin'],
+    section: 'Classroom',
+    keywords: ['birthday', 'donation', 'collection', 'fee', 'register', 'contribution'],
+    priority: 65,
+  },
 ];
 
 const FEATURE_ROLE_MAP: Record<string, FunctionSearchRole> = {

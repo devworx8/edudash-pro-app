@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { TierBadge } from '@/components/ui/TierBadge';
 import { useTheme } from '@/contexts/ThemeContext';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 type Theme = ReturnType<typeof useTheme>['theme'];
 
@@ -112,7 +113,7 @@ export const DashHeader: React.FC<DashHeaderProps> = ({
                   style={[
                     styles.tutorTrackFill,
                     {
-                      width: `${Math.min(100, (tutorSession.totalQuestions / tutorSession.maxQuestions) * 100)}%`,
+                      width: percentWidth(Math.min(100, (tutorSession.totalQuestions / tutorSession.maxQuestions) * 100)),
                       backgroundColor: theme.primary,
                     },
                   ]}

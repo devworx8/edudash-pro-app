@@ -35,7 +35,7 @@ import Svg, {
   Text as SvgText,
   G,
 } from 'react-native-svg';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import MathRenderer from '../ai/dash-assistant/MathRenderer';
 import { stripContentForTTS } from './DashBoardContent';
 
@@ -996,7 +996,7 @@ export function DashTutorWhiteboard({ content, onDismiss, onUnderstood }: DashTu
 
         {/* Progress bar */}
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progressWidth}%` as any }]} />
+          <View style={[styles.progressFill, { width: percentWidth(progressWidth) as any }]} />
         </View>
 
         {/* Footer */}

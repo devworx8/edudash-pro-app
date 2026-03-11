@@ -50,7 +50,7 @@ import { formatAIGatewayErrorMessage, invokeAIGatewayWithRetry } from '@/lib/ai-
 import { parseLessonPlanResponse } from '@/lib/ai/parseLessonPlan';
 import type { LessonPlanV2 } from '@/lib/ai/lessonPlanSchema';
 import { LessonGenerationFullscreen } from '@/components/ai-lesson-generator';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import {
   buildQuickLessonThemeHint,
   loadQuickLessonThemeContext,
@@ -1066,7 +1066,7 @@ Schema:
             </View>
             <Text style={{ color: palette.textSec, fontSize: 13 }}>{progressMessage}</Text>
             <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${safeProgress}%` }]} />
+              <View style={[styles.progressFill, { width: percentWidth(safeProgress) }]} />
             </View>
             <Text style={[styles.progressPercent, { color: palette.textSec }]}>
               {Math.round(safeProgress)}% • {progressPhase.replace('_', ' ')}

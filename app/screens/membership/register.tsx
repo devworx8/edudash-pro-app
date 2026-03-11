@@ -31,7 +31,7 @@ import {
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { logger } from '@/lib/logger';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 // Default organization ID (Soil Of Africa) - used as fallback if no org selected
 const DEFAULT_ORG_ID = '63b6139a-e21f-447c-b322-376fb0828992';
 
@@ -691,7 +691,7 @@ export default function MemberRegistrationScreen() {
           {/* Progress Bar */}
             <View style={styles.progressContainer}>
               <View style={[styles.progressBg, { backgroundColor: theme.border }]}>
-              <View style={[styles.progressFill, { backgroundColor: theme.primary, width: `${safeProgress}%` }]} />
+              <View style={[styles.progressFill, { backgroundColor: theme.primary, width: percentWidth(safeProgress) }]} />
               </View>
             <Text style={[styles.progressText, { color: theme.textSecondary }]}>
               Step {currentStepIndex + 1} of {REGISTRATION_STEPS.length}

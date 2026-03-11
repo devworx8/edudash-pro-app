@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import {
   useFinancialSummary, 
   useRecentPayments, 
@@ -244,7 +244,7 @@ export default function FinanceScreen() {
                         styles.progressFill, 
                         { 
                           backgroundColor: safePercentage >= 80 ? '#10B981' : safePercentage >= 50 ? '#F59E0B' : '#EF4444',
-                          width: `${safePercentage}%` 
+                          width: percentWidth(safePercentage) 
                         }
                       ]} 
                     />

@@ -104,7 +104,22 @@ export const ChildRegistrationStep: React.FC<ChildRegistrationStepProps> = ({
     if (!draft.firstName.trim()) errs.firstName = 'First name is required';
     if (!draft.lastName.trim()) errs.lastName = 'Last name is required';
     if (!draft.grade) errs.grade = 'Please select a grade';
-    if (!draft.dateOfBirth) errs.dateOfBirth = 'Date of birth is required';
+    if (!draft.dateOfBirth) {
+      errs.dateOfBirth = 'Date of birth is required';
+    } else {
+      // Preschool age validation: 6 months to 6 years
+      const now = new Date();
+      const dob = new Date(draft.dateOfBirth);
+      const minDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+      const maxDate = new Date(now.getFullYear() - 6, now.getMonth(), now.getDate());
+      if (dob > now) {
+        errs.dateOfBirth = 'Date of birth cannot be in the future';
+      } else if (dob > minDate) {
+        errs.dateOfBirth = 'Child must be at least 6 months old';
+      } else if (dob < maxDate) {
+        errs.dateOfBirth = 'Child must be younger than 6 years for preschool';
+      }
+    }
     setDraftErrors(errs);
     return Object.keys(errs).length === 0;
   };

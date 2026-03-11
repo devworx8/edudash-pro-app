@@ -19,7 +19,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { normalizeRole } from '@/lib/rbac';
 import { ensureImageLibraryPermission } from '@/lib/utils/mediaLibrary';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function CVUploadScreen() {
@@ -301,7 +301,7 @@ export default function CVUploadScreen() {
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${safeUploadProgress}%`, backgroundColor: theme.primary },
+                    { width: percentWidth(safeUploadProgress), backgroundColor: theme.primary },
                   ]}
                 />
               </View>

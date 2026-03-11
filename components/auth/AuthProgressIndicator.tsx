@@ -5,7 +5,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AuthFlowStep } from '../../types/auth-enhanced';
-import { ratioToPercent } from '@/lib/progress/clampPercent';
+import { ratioToPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 interface AuthProgressStep {
   key: AuthFlowStep;
@@ -324,7 +324,7 @@ export const AuthProgressSummary: React.FC<ProgressSummaryProps> = ({
           stepStyles.progressBarFill,
           { 
             backgroundColor: theme.colors.primary,
-            width: `${progressPercent}%`
+            width: percentWidth(progressPercent)
           }
         ]} />
       </View>

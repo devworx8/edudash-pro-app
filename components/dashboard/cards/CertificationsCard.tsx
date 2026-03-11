@@ -2,6 +2,7 @@ import React from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { DashboardCard } from './DashboardCard';
 import { useTheme } from '@/contexts/ThemeContext';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 export function CertificationsCard() {
   const { theme } = useTheme();
@@ -56,7 +57,7 @@ export function CertificationsCard() {
                 style={[
                   styles.progressFill,
                   {
-                    width: `${item.progress}%`,
+                    width: percentWidth(item.progress),
                     backgroundColor: getStatusColor(item.status),
                   },
                 ]}

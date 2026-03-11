@@ -15,6 +15,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { ImageConfirmModal } from '@/components/ui/ImageConfirmModal';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { useDocumentUpload, DOCUMENTS, type DocumentInfo } from '@/hooks/useDocumentUpload';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 export default function ParentDocumentUploadScreen() {
   const { theme } = useTheme();
@@ -46,7 +47,7 @@ export default function ParentDocumentUploadScreen() {
           </View>
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${(h.uploadedDocs.length / DOCUMENTS.length) * 100}%`, backgroundColor: h.allDocsUploaded ? '#10B981' : theme.primary }]} />
+              <View style={[styles.progressFill, { width: percentWidth((h.uploadedDocs.length / DOCUMENTS.length) * 100), backgroundColor: h.allDocsUploaded ? '#10B981' : theme.primary }]} />
             </View>
             <Text style={[styles.progressText, { color: theme.textSecondary }]}>
               {h.uploadedDocs.length} of {DOCUMENTS.length} documents uploaded
@@ -135,7 +136,7 @@ const DocumentCard: React.FC<DocCardProps> = ({ doc, theme, styles, uploaded, is
             <EduDashSpinner color={theme.primary} size="small" />
             <Text style={[styles.uploadProgressText, { color: theme.textSecondary }]}>{uploadProgress}%</Text>
             <View style={styles.uploadProgressBarContainer}>
-              <View style={[styles.uploadProgressBar, { width: `${uploadProgress}%`, backgroundColor: theme.primary }]} />
+              <View style={[styles.uploadProgressBar, { width: percentWidth(uploadProgress), backgroundColor: theme.primary }]} />
             </View>
           </View>
         ) : uploaded ? (

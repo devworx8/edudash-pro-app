@@ -30,6 +30,8 @@ export interface TeacherRoute {
   roles?: ('teacher' | 'principal_admin')[];
   /** Category for grouping */
   category: 'lessons' | 'classroom' | 'communication' | 'ai' | 'reports';
+  /** Location indicator for search index */
+  location?: string;
 }
 
 /**
@@ -47,6 +49,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'albums',
     color: '#6366F1',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   create_lesson: {
     path: '/screens/preschool-lesson-generator' as Href,
@@ -55,6 +59,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'book',
     color: 'primary',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   quick_lesson: {
     path: '/screens/preschool-lesson-generator?mode=quick' as Href,
@@ -63,6 +69,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'flash',
     color: '#22C55E',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   create_activity: {
     path: '/screens/teacher-activity-builder' as Href,
@@ -71,6 +79,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'color-wand',
     color: '#F97316',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   edit_lesson: {
     path: '/screens/lesson-edit' as Href,
@@ -79,6 +89,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'create',
     color: '#F59E0B',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   assign_lesson: {
     path: '/screens/assign-lesson' as Href,
@@ -87,6 +99,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'checkmark-circle',
     color: 'success',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   assign_playground_activity: {
     path: '/screens/assign-lesson?mode=activity-only' as Href,
@@ -95,6 +109,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'game-controller',
     color: '#EC4899',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   assign_homework: {
     path: '/screens/assign-homework' as Href,
@@ -103,6 +119,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'document-text',
     color: '#6366F1',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   
   // === CLASSROOM ===
@@ -113,6 +131,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'videocam',
     color: '#ec4899',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   my_class: {
     path: '/screens/my-class' as Href,
@@ -121,6 +141,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'school',
     color: 'secondary',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   daily_program: {
     path: '/screens/teacher-daily-program-planner' as Href,
@@ -129,6 +151,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'time',
     color: '#14B8A6',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   cleaning_tasks: {
     path: '/screens/teacher-cleaning-tasks' as Href,
@@ -137,6 +161,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'sparkles-outline',
     color: '#0EA5E9',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   year_plan: {
     path: '/screens/teacher-year-plan-view' as Href,
@@ -145,6 +171,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'calendar',
     color: '#3B82F6',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   view_timetable: {
     path: '/screens/teacher-timetable' as Href,
@@ -153,6 +181,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'calendar',
     color: '#0EA5E9',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   school_calendar: {
     path: '/screens/teacher-school-calendar' as Href,
@@ -161,6 +191,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'calendar-outline',
     color: '#10B981',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   activity_samples: {
     path: '/screens/activity-sample-library' as Href,
@@ -169,6 +201,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'book',
     color: '#8B5CF6',
     category: 'lessons',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Lessons',
   },
   room_display_connect: {
     path: '/screens/room-display-connect' as Href,
@@ -177,6 +211,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'tv',
     color: '#8B5CF6',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   
   // === COMMUNICATION ===
@@ -187,6 +223,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'chatbubbles',
     color: 'info',
     category: 'communication',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Communication',
   },
   manage_groups: {
     path: '/screens/group-management' as Href,
@@ -195,6 +233,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'people',
     color: '#06B6D4',
     category: 'communication',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Communication',
   },
   call_parent: {
     path: '/screens/calls' as Href,
@@ -203,6 +243,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'call',
     color: '#10B981',
     category: 'communication',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Communication',
   },
   
   // === AI FEATURES ===
@@ -214,6 +256,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     color: 'accent',
     requiresPremium: true,
     category: 'ai',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > AI',
   },
   homework_grader: {
     path: '/screens/ai-homework-grader-live' as Href,
@@ -222,6 +266,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'checkmark-circle',
     color: '#059669',
     category: 'ai',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > AI',
   },
   homework_helper: {
     path: '/screens/ai-homework-helper' as Href,
@@ -230,6 +276,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'help-circle',
     color: '#2563EB',
     category: 'ai',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > AI',
   },
   progress_analysis: {
     path: '/screens/ai-progress-analysis' as Href,
@@ -238,6 +286,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'analytics',
     color: '#7C3AED',
     category: 'ai',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > AI',
   },
   generate_image: {
     path: '/screens/dash-image-studio' as Href,
@@ -246,6 +296,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'image-outline',
     color: '#2563EB',
     category: 'ai',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > AI',
   },
   
   // === ATTENDANCE ===
@@ -256,6 +308,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'checkbox',
     color: '#10B981',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
   
   // === REPORTS ===
@@ -267,6 +321,7 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     color: '#14B8A6',
     category: 'reports',
     roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Reports',
   },
   student_reports: {
     path: '/screens/teacher-reports' as Href,
@@ -275,6 +330,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'bar-chart',
     color: 'warning',
     category: 'reports',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Reports',
   },
   tutor_analytics: {
     path: '/screens/teacher-tutor-analytics' as Href,
@@ -283,6 +340,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'analytics',
     color: '#8B5CF6',
     category: 'reports',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Reports',
   },
   family_activity_review: {
     path: '/screens/family-activity-review' as Href,
@@ -292,6 +351,7 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     color: '#14B8A6',
     category: 'reports',
     roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Reports',
   },
   reputation: {
     path: '/screens/teacher-references' as Href,
@@ -300,6 +360,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'star',
     color: '#F59E0B',
     category: 'reports',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Reports',
   },
   
   // === BIRTHDAYS ===
@@ -310,6 +372,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'gift',
     color: '#E91E63',
     category: 'classroom',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Classroom',
   },
 
   // === SA-SPECIFIC ===
@@ -320,6 +384,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'ribbon',
     color: '#7C3AED',
     category: 'reports',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Reports',
   },
   nsnp_reporting: {
     path: '/screens/nsnp-reporting' as Href,
@@ -328,6 +394,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'nutrition',
     color: '#F59200',
     category: 'reports',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Reports',
   },
   class_story: {
     path: '/screens/class-story' as Href,
@@ -336,6 +404,8 @@ export const TEACHER_ROUTES: Record<string, TeacherRoute> = {
     icon: 'camera',
     color: '#EC4899',
     category: 'communication',
+    roles: ['teacher', 'principal_admin'],
+    location: 'Teacher > Communication',
   },
 } as const;
 

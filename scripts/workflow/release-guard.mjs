@@ -8,32 +8,38 @@ const modes = {
   ota: {
     label: 'production OTA publish',
     requireClean: true,
-    allowedBranches: ['development'],
+    allowedBranches: ['main'],
     strictBranch: true,
   },
   'prod-build': {
     label: 'production Android build',
     requireClean: true,
-    allowedBranches: ['development'],
+    allowedBranches: ['main'],
     strictBranch: true,
   },
   'playstore-build': {
     label: 'Play Store AAB build',
     requireClean: true,
-    allowedBranches: ['development'],
+    allowedBranches: ['main'],
+    strictBranch: true,
+  },
+  'preview-ota': {
+    label: 'preview OTA publish',
+    requireClean: true,
+    allowedBranches: ['preview'],
     strictBranch: true,
   },
   'preview-build': {
     label: 'preview Android build',
     requireClean: true,
-    allowedBranches: ['development'],
-    strictBranch: false,
+    allowedBranches: ['preview'],
+    strictBranch: true,
   },
   'dev-build': {
     label: 'development Android build',
     requireClean: true,
     allowedBranches: ['development'],
-    strictBranch: false,
+    strictBranch: true,
   },
 };
 

@@ -48,14 +48,14 @@ export function DashVoiceHeader({
         <Ionicons name="arrow-back" size={24} color={theme.text} />
       </TouchableOpacity>
       <View style={s.headerCenter}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={s.headerTitleRow}>
           <Text style={[s.headerTitle, { color: theme.text }]}>Dash</Text>
-          {tierStatus && tierStatus.quotaLimit > 0 && tierStatus.quotaUsed > 0 && (
+          {tierStatus && tierStatus.quotaLimit > 0 && (
             <CircularQuotaRing
               used={tierStatus.quotaUsed}
               limit={tierStatus.quotaLimit}
-              size={28}
-              strokeWidth={3}
+              size={50}
+              strokeWidth={5}
               percentageMode="used"
             />
           )}

@@ -7,6 +7,8 @@ export interface VoiceOrbRef {
   speakText: (text: string, language?: SupportedLanguage, options?: TTSOptions) => Promise<void>;
   /** Stop TTS playback */
   stopSpeaking: () => Promise<void>;
+  /** Toggle barge-in protection while Dash is speaking */
+  setMuted: (muted: boolean) => Promise<void>;
   /** Start a new listening session if idle */
   startListening: () => Promise<void>;
   /** Stop any active listening/recording session */
@@ -15,6 +17,8 @@ export interface VoiceOrbRef {
   toggleListening: () => Promise<void>;
   /** Get current speaking state */
   isSpeaking: boolean;
+  /** Get current barge-in protection state */
+  isMuted: boolean;
 }
 
 export interface VoiceTranscriptMeta {
@@ -42,6 +46,8 @@ export interface VoiceOrbProps {
   onTTSEnd?: () => void;
   /** Called when voice capture/transcription fails */
   onVoiceError?: (message: string) => void;
+  /** Called when barge-in protection / listening mute state changes */
+  onMuteChange?: (muted: boolean) => void;
   /** Called when user changes language */
   onLanguageChange?: (lang: SupportedLanguage) => void;
   /** Externally set language (from parent language dropdown) */

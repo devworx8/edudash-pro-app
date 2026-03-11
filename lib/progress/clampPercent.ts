@@ -60,3 +60,23 @@ export function ratioToPercent(
   return clampPercent((numerator / denominator) * 100, options);
 }
 
+/**
+ * Convert an arbitrary value to a safe CSS/RN percent width string.
+ */
+export function percentWidth(
+  rawValue: unknown,
+  options: ClampPercentOptions = {},
+): `${number}%` {
+  return `${clampPercent(rawValue, options)}%` as `${number}%`;
+}
+
+/**
+ * Convert a ratio directly to a safe CSS/RN percent width string.
+ */
+export function ratioWidth(
+  numerator: number,
+  denominator: number,
+  options: ClampPercentOptions = {},
+): `${number}%` {
+  return `${ratioToPercent(numerator, denominator, options)}%` as `${number}%`;
+}

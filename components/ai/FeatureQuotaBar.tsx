@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/contexts/ThemeContext';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import { track } from '@/lib/analytics';
 
 export type FeatureQuotaBarProps = {
@@ -110,7 +110,7 @@ export function FeatureQuotaBar({
         accessibilityRole="progressbar"
         accessibilityValue={{ min: 0, max: 100, now: Math.round(percent) }}
       >
-        <View style={[styles.fill, { width: `${percent}%`, backgroundColor: color }]} />
+        <View style={[styles.fill, { width: percentWidth(percent), backgroundColor: color }]} />
       </View>
 
       <View style={styles.metaRow}>

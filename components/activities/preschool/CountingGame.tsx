@@ -18,6 +18,7 @@ import {
 import { useTheme } from '../../../contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '../../../lib/supabase';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 // ====================================================================
 // TYPES
@@ -222,7 +223,7 @@ export function CountingGame({
                 styles.progressFill, 
                 { 
                   backgroundColor: colors.primary,
-                  width: `${((currentIndex) / items.length) * 100}%` 
+                  width: percentWidth(((currentIndex) / items.length) * 100) 
                 }
               ]} 
             />

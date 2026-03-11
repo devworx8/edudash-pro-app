@@ -14,7 +14,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Lesson, LessonProgress } from '@/types/lessons';
 import LessonsService from '@/services/LessonsService';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 // Conditional import for markdown rendering
@@ -372,7 +372,7 @@ export default function LessonDetailScreen() {
               <View 
                 style={[
                   styles.progressFill, 
-                  { backgroundColor: theme.primary, width: `${safeLessonProgressPercent}%` }
+                  { backgroundColor: theme.primary, width: percentWidth(safeLessonProgressPercent) }
                 ]} 
               />
             </View>

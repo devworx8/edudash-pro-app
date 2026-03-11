@@ -1,3 +1,4 @@
+import { percentWidth } from '@/lib/progress/clampPercent';
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -35,7 +36,7 @@ export const EnhancedStat: React.FC<EnhancedStatProps> = ({
             style={[
               styles.progressFill, 
               { 
-                width: `${percentage}%`,
+                width: percentWidth(percentage),
                 backgroundColor: percentage > 80 ? '#EF4444' : percentage > 60 ? '#F59E0B' : '#10B981'
               }
             ]} 

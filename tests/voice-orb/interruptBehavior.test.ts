@@ -12,7 +12,7 @@ describe('voice orb interrupt restart behavior', () => {
     })).toBe(true);
   });
 
-  it('blocks restart while speaking/recording/muted', () => {
+  it('does not treat barge-in mute as a hard stop', () => {
     expect(canAutoRestartAfterInterrupt({
       isMuted: true,
       isProcessing: false,
@@ -20,8 +20,10 @@ describe('voice orb interrupt restart behavior', () => {
       usingLiveSTT: false,
       isSpeaking: false,
       ttsIsSpeaking: false,
-    })).toBe(false);
+    })).toBe(true);
+  });
 
+  it('blocks restart while speaking, recording, processing, or live stt is active', () => {
     expect(canAutoRestartAfterInterrupt({
       isMuted: false,
       isProcessing: false,

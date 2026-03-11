@@ -7,6 +7,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import type { AIQuotaSettings } from './types';
 import { getUsagePercentage, getUsageColor, getPlanColor, formatNumber, formatCurrency } from './utils';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface SchoolQuotaCardProps {
   school: AIQuotaSettings;
@@ -65,7 +66,7 @@ export function SchoolQuotaCard({ school, onPress }: SchoolQuotaCardProps) {
             style={[
               styles.progressFill,
               { 
-                width: `${Math.min(usagePercentage, 100)}%`,
+                width: percentWidth(Math.min(usagePercentage, 100)),
                 backgroundColor: getUsageColor(usagePercentage)
               }
             ]} 
@@ -75,7 +76,7 @@ export function SchoolQuotaCard({ school, onPress }: SchoolQuotaCardProps) {
               style={[
                 styles.overageFill,
                 { 
-                  width: `${Math.min(((school.current_usage - school.monthly_limit) / school.monthly_limit) * 100, 100)}%`
+                  width: percentWidth(Math.min(((school.current_usage - school.monthly_limit) / school.monthly_limit) * 100, 100))
                 }
               ]} 
             />

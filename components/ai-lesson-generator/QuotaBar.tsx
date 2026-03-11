@@ -8,6 +8,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { QuotaBarProps } from './types';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 /**
  * Get bar color based on usage percentage
@@ -101,7 +102,7 @@ export function QuotaBar({
         <View
           style={[
             styles.barFill,
-            { width: `${percentage}%`, backgroundColor: barColor },
+            { width: percentWidth(percentage), backgroundColor: barColor },
           ]}
         />
       </View>

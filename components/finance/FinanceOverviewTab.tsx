@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatCurrency, pickSectionError } from '@/hooks/useFinanceControlCenter';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import type { FinanceControlCenterBundle } from '@/types/finance';
 
 interface FinanceOverviewTabProps {
@@ -100,7 +100,7 @@ export function FinanceOverviewTab({
         <View style={{ height: 10, backgroundColor: theme.border, borderRadius: 6, overflow: 'hidden', marginTop: 2 }}>
           <View
             style={{
-              width: `${collectionPercent}%`,
+              width: percentWidth(collectionPercent),
               height: '100%',
               backgroundColor:
                 collectionPercent >= 80
