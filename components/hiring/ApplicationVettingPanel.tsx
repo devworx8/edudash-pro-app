@@ -6,6 +6,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { percentWidth } from '@/lib/progress/clampPercent';
 import AIVettingService, {
   type VettingChecklist,
   type VettingScore,
@@ -44,7 +45,7 @@ export default function ApplicationVettingPanel({
             </View>
           </View>
           <View style={styles.scoreBarOuter}>
-            <View style={[styles.scoreBarInner, { width: `${vettingScore.overall}%`, backgroundColor: AIVettingService.getRiskColor(vettingScore.riskLevel) }]} />
+            <View style={[styles.scoreBarInner, { width: percentWidth(vettingScore.overall), backgroundColor: AIVettingService.getRiskColor(vettingScore.riskLevel) }]} />
           </View>
           <Text style={styles.scoreLabel}>{vettingScore.overall}/100 — {AIVettingService.getVettingStatusText(vettingScore)}</Text>
           <View style={styles.breakdownGrid}>

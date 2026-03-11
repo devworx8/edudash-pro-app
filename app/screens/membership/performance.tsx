@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -146,7 +147,7 @@ export default function PerformanceScreen() {
           </View>
           
           <View style={styles.scoreBar}>
-            <View style={[styles.scoreBarFill, { width: `${overallScore}%` }]} />
+            <View style={[styles.scoreBarFill, { width: percentWidth(overallScore) }]} />
           </View>
           
           <Text style={styles.scoreStatus}>
@@ -188,7 +189,7 @@ export default function PerformanceScreen() {
                         styles.kpiProgressFill, 
                         { 
                           backgroundColor: progress >= 90 ? '#10B981' : progress >= 70 ? '#F59E0B' : '#EF4444',
-                          width: `${Math.min(progress, 100)}%` 
+                          width: percentWidth(Math.min(progress, 100)) 
                         }
                       ]} 
                     />
@@ -233,7 +234,7 @@ export default function PerformanceScreen() {
                   <View 
                     style={[
                       styles.regionScoreFill, 
-                      { backgroundColor: getScoreColor(region.score), width: `${region.score}%` }
+                      { backgroundColor: getScoreColor(region.score), width: percentWidth(region.score) }
                     ]} 
                   />
                 </View>

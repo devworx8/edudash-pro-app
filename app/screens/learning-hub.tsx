@@ -30,6 +30,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { LearningHubActivityModal } from '@/components/learning-hub/LearningHubActivityModal';
 import { createLearningHubStyles } from '@/components/learning-hub/LearningHub.styles';
 import { useLearningHubActivity } from '@/hooks/useLearningHubActivity';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -171,7 +172,7 @@ export default function LearningHubScreen() {
             <Text style={styles.usageValue}>{usage.lessonsUsed}/{formatLimit(limits.lessons)}</Text>
           </View>
           <View style={styles.usageBar}>
-            <View style={[styles.usageFill, { width: `${calculateUsagePercent(usage.lessonsUsed, limits.lessons)}%` }]} />
+            <View style={[styles.usageFill, { width: percentWidth(calculateUsagePercent(usage.lessonsUsed, limits.lessons)) }]} />
           </View>
 
           <View style={styles.usageRow}>
@@ -179,7 +180,7 @@ export default function LearningHubScreen() {
             <Text style={styles.usageValue}>{usage.activitiesUsed}/{formatLimit(limits.activities)}</Text>
           </View>
           <View style={styles.usageBar}>
-            <View style={[styles.usageFill, { width: `${calculateUsagePercent(usage.activitiesUsed, limits.activities)}%` }]} />
+            <View style={[styles.usageFill, { width: percentWidth(calculateUsagePercent(usage.activitiesUsed, limits.activities)) }]} />
           </View>
 
           <View style={styles.usageRow}>
@@ -187,7 +188,7 @@ export default function LearningHubScreen() {
             <Text style={styles.usageValue}>{usage.aiHintsUsed}/{formatLimit(limits.aiHints)}</Text>
           </View>
           <View style={styles.usageBar}>
-            <View style={[styles.usageFill, { width: `${calculateUsagePercent(usage.aiHintsUsed, limits.aiHints)}%` }]} />
+            <View style={[styles.usageFill, { width: percentWidth(calculateUsagePercent(usage.aiHintsUsed, limits.aiHints)) }]} />
           </View>
         </View>
 

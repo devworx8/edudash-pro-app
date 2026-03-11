@@ -237,6 +237,7 @@ interface UseDashAssistantReturn {
   setIsNearBottom: (value: boolean) => void;
   unreadCount: number;
   setUnreadCount: (value: number | ((prev: number) => number)) => void;
+  bottomScrollRequestId: number;
 
   // Model selection
   availableModels: AIModelInfo[];
@@ -439,6 +440,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   const [streamingEnabledPref, setStreamingEnabledPref] = useState(true);
   const [isNearBottom, setIsNearBottom] = useState(true);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [bottomScrollRequestId, setBottomScrollRequestId] = useState(0);
   const [tutorSession, setTutorSession] = useState<TutorSession | null>(null);
   const { availableModels, selectedModel, setSelectedModel } = useDashChatModelPreference();
 
@@ -498,6 +500,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollFollowUpTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const lastAutoScrollAtRef = useRef<number>(0);
+  const forcedBottomUntilRef = useRef<number>(0);
   const requestQueueRef = useRef<PendingDashRequest[]>([]);
   const isProcessingRef = useRef(false);
   const prevLengthRef = useRef<number>(0);
@@ -911,6 +914,11 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     const force = opts?.force ?? false;
     const now = Date.now();
 
+    if (force) {
+      forcedBottomUntilRef.current = now + 1800;
+      setBottomScrollRequestId((prev) => prev + 1);
+    }
+
     // Prevent competing scroll loops while still allowing explicit user-triggered jumps.
     if (!force && now - lastAutoScrollAtRef.current < (animated ? 180 : 120)) {
       return;
@@ -973,7 +981,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
         console.debug('[useDashAssistant] scrollToOffset failed:', e);
       }
       try {
-        if (Platform.OS !== 'web' && typeof list.scrollToIndex === 'function') {
+        if (typeof list.scrollToIndex === 'function') {
           list.scrollToIndex({ index: lastIndex, animated: false, viewPosition: 1 });
           didScroll = true;
         }
@@ -1001,6 +1009,10 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
       });
       queueFollowUpScroll(force ? 90 : 140);
       queueFollowUpScroll(force ? 240 : 320);
+      if (force) {
+        queueFollowUpScroll(520);
+        queueFollowUpScroll(900);
+      }
       return;
     }
 
@@ -3339,6 +3351,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     setIsNearBottom,
     unreadCount,
     setUnreadCount,
+    bottomScrollRequestId,
     availableModels,
     selectedModel,
     setSelectedModel,

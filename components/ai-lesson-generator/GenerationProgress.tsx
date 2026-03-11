@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 
 import type { GenerationProgressProps } from './types';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 /**
  * Get progress message based on progress percentage
@@ -114,7 +115,7 @@ export function GenerationProgress({
       <View style={styles.progressBarContainer}>
         <View style={styles.progressBarBackground}>
           <View
-            style={[styles.progressBarFill, { width: `${displayProgress}%` }]}
+            style={[styles.progressBarFill, { width: percentWidth(displayProgress) }]}
           />
         </View>
         <Text style={styles.progressPercentage}>{displayProgress}%</Text>

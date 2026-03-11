@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -339,7 +340,7 @@ export default function EventsScreen() {
                       styles.attendeesFill, 
                       { 
                         backgroundColor: config.color,
-                        width: `${Math.min((event.current_attendees / event.max_attendees) * 100, 100)}%`
+                        width: percentWidth(Math.min((event.current_attendees / event.max_attendees) * 100, 100))
                       }
                     ]} 
                   />

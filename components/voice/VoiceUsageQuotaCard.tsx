@@ -12,7 +12,7 @@ import { useVoiceUsageLimits } from '@/lib/voice/useVoiceUsageLimits';
 import { useTheme } from '@/contexts/ThemeContext';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface VoiceUsageQuotaCardProps {
@@ -127,7 +127,7 @@ export function VoiceUsageQuotaCard({ onUpgradePress }: VoiceUsageQuotaCardProps
             style={[
               styles.progressBarFill, 
               { 
-                width: `${dailySttUsagePercent}%`,
+                width: percentWidth(dailySttUsagePercent),
                 backgroundColor: showError ? theme.error : showWarning ? theme.warning : theme.success
               }
             ]} 
@@ -162,7 +162,7 @@ export function VoiceUsageQuotaCard({ onUpgradePress }: VoiceUsageQuotaCardProps
             style={[
               styles.progressBarFill, 
               { 
-                width: `${monthlySttUsagePercent}%`,
+                width: percentWidth(monthlySttUsagePercent),
                 backgroundColor: showError ? theme.error : showWarning ? theme.warning : theme.success
               }
             ]} 

@@ -22,6 +22,7 @@ import { track } from '@/lib/analytics';
 import type { AIQuotaFeature } from '@/lib/ai/limits';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { percentWidth } from '@/lib/progress/clampPercent';
 const { width: screenWidth } = Dimensions.get('window');
 
 export interface QuotaUsageAnalyticsProps {
@@ -85,7 +86,7 @@ const ProgressBar: React.FC<{
       colors={[color, color + '80']}
       start={{ x: 0, y: 0 }}
       end={{ x: 1, y: 0 }}
-      style={[styles.progressBarFill, { width: `${Math.min(percentage, 100)}%` }]}
+      style={[styles.progressBarFill, { width: percentWidth(Math.min(percentage, 100)) }]}
     />
   </View>
 );

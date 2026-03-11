@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useThemedStyles } from '@/hooks/useThemedStyles';
 import type { PDFProgressEvent } from '@/services/pdf/dashPdfAdapter';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface GenerationProgressProps {
   progress: PDFProgressEvent;
@@ -285,7 +286,7 @@ export function GenerationProgress({ progress, onCancel }: GenerationProgressPro
               style={[
                 styles.progressBar,
                 {
-                  width: `${progress.percentage}%`,
+                  width: percentWidth(progress.percentage),
                 },
               ]}
             />

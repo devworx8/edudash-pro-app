@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useLearnerEnrollments } from '@/hooks/useLearnerData';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { percentWidth } from '@/lib/progress/clampPercent';
 export default function LearnerProgramsScreen() {
   const { profile } = useAuth();
   const { theme } = useTheme();
@@ -70,7 +71,7 @@ export default function LearnerProgramsScreen() {
                   <View 
                     style={[
                       styles.progressBarFill, 
-                      { width: `${0}%`, backgroundColor: theme.primary } // TODO: Calculate progress from course modules
+                      { width: percentWidth(0), backgroundColor: theme.primary } // TODO: Calculate progress from course modules
                     ]} 
                   />
                 </View>

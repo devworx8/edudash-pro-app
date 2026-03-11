@@ -13,6 +13,7 @@ import { useYouthReports, MONTHLY_DATA, formatCurrency, formatNumber } from '@/h
 import { styles } from '@/components/membership/styles/reports.styles';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { percentWidth } from '@/lib/progress/clampPercent';
 type PeriodType = 'week' | 'month' | 'quarter' | 'year';
 const PERIODS: { key: PeriodType; label: string }[] = [
   { key: 'week', label: 'Week' }, { key: 'month', label: 'Month' }, { key: 'quarter', label: 'Quarter' }, { key: 'year', label: 'Year' },
@@ -102,7 +103,7 @@ export default function YouthReportsScreen() {
               <View style={styles.statItem}><Text style={[styles.statValue, { color: theme.text }]}>{reportData?.financialStats.utilizationRate || 0}%</Text><Text style={[styles.statLabel, { color: theme.textSecondary }]}>Utilization</Text></View>
             </View>
             <View style={styles.progressContainer}>
-              <View style={[styles.progressBar, { backgroundColor: theme.border }]}><View style={[styles.progressFill, { width: `${reportData?.financialStats.utilizationRate || 0}%`, backgroundColor: '#10B981' }]} /></View>
+              <View style={[styles.progressBar, { backgroundColor: theme.border }]}><View style={[styles.progressFill, { width: percentWidth(reportData?.financialStats.utilizationRate || 0), backgroundColor: '#10B981' }]} /></View>
               <Text style={[styles.progressText, { color: theme.textSecondary }]}>Budget Utilization</Text>
             </View>
           </View>

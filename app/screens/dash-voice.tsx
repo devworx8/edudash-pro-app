@@ -110,6 +110,7 @@ export default function DashVoiceScreen() {
   const [inputHeight, setInputHeight] = useState(VOICE_COMPOSER_COMPACT_HEIGHT);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isVoiceMuted, setIsVoiceMuted] = useState(false);
   const [restartBlocked, setRestartBlocked] = useState(false);
   const [voiceErrorBanner, setVoiceErrorBanner] = useState<string | null>(null);
   const [preferredLanguage, setPreferredLanguage] = useState<SupportedLanguage>('en-ZA');
@@ -132,8 +133,14 @@ export default function DashVoiceScreen() {
   const ccScrollRef = useRef<ScrollView>(null);
   const voiceDictationProbeRef = useRef<DashVoiceDictationProbe | null>(null);
   const activeRequestRef = useRef<{ abort: () => void } | null>(null);
+  const pendingVoiceTurnRef = useRef<{
+    text: string;
+    language?: SupportedLanguage;
+    dictationProbe?: DashVoiceDictationProbe;
+  } | null>(null);
 
   const DASH_TRACE_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_DASH_VOICE_TRACE === 'true';
+  const STREAMING_TTS_ENABLED = process.env.EXPO_PUBLIC_DASH_VOICE_STREAMING_TTS === 'true';
 
   const logDashTrace = useCallback((event: string, payload?: Record<string, unknown>) => {
     if (!DASH_TRACE_ENABLED) return;
@@ -157,22 +164,14 @@ export default function DashVoiceScreen() {
 
   useEffect(() => { void refreshAutoScanBudget(); }, [refreshAutoScanBudget]);
 
-  // ── TTS hook ────────────────────────────────────────────────────
+  // ── TTS hook ──────────────────────────────────────────────────────
   const {
     isSpeaking, setIsSpeaking, isSpeakingRef, speechQueueRef,
-    enqueueSpeech,
-  } = useDashVoiceTTS({ voiceOrbRef, preferredLanguage, orgType });
+    enqueueSpeech, resetStreamingSpeech, maybeEnqueueStreamingSpeech,
+    longestCommonPrefixLen, streamedPrefixQueuedRef,
+  } = useDashVoiceTTS({ voiceOrbRef, preferredLanguage, orgType, streamingTTSEnabled: STREAMING_TTS_ENABLED });
 
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking, isSpeakingRef]);
-
-  useEffect(() => {
-    if (isListening && isSpeaking && voiceOrbRef.current) {
-      voiceOrbRef.current.stopSpeaking();
-      setIsSpeaking(false);
-      isSpeakingRef.current = false;
-      speechQueueRef.current = [];
-    }
-  }, [isListening, isSpeaking, isSpeakingRef, setIsSpeaking, speechQueueRef]);
 
   // ── Greeting ──────────────────────────────────────────────────────
   const hasGreetedRef = useRef(false);
@@ -198,16 +197,18 @@ export default function DashVoiceScreen() {
     setAttachedImage, setScannerVisible, refreshAutoScanBudget,
   });
 
-  // ── Send message hook ───────────────────────────────────────────────
+  // ── Send message hook ─────────────────────────────────────────────
   const { sendMessage, persistOrbMessages } = useDashVoiceSendMessage({
     isProcessing, setIsProcessing, setLastResponse, setStreamingText,
     setWhiteboardContent, setConversationHistory, setLatestPdfArtifact,
     setRestartBlocked, setAttachedImage,
     conversationHistoryRef, conversationIdRef, activeRequestRef,
-    speechQueueRef,
+    speechQueueRef, streamedPrefixQueuedRef,
     attachedImage, role, orgType, aiScope, preferredLanguage, profile, user,
     dashPolicy, activeTier, autoScanUserId,
-    enqueueSpeech, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
+    streamingTTSEnabled: STREAMING_TTS_ENABLED,
+    enqueueSpeech, maybeEnqueueStreamingSpeech, resetStreamingSpeech,
+    longestCommonPrefixLen, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
   });
 
   // ── Stop Dash activity ────────────────────────────────────────────
@@ -217,6 +218,7 @@ export default function DashVoiceScreen() {
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
     speechQueueRef.current = [];
+    resetStreamingSpeech();
     isSpeakingRef.current = false;
     setIsSpeaking(false);
     setIsListening(false);
@@ -224,7 +226,7 @@ export default function DashVoiceScreen() {
     setStreamingText('');
     voiceOrbRef.current?.stopSpeaking?.().catch(() => {});
     voiceOrbRef.current?.stopListening?.().catch(() => {});
-  }, [logDashTrace, isSpeakingRef, setIsSpeaking, speechQueueRef]);
+  }, [logDashTrace, resetStreamingSpeech, isSpeakingRef, setIsSpeaking, speechQueueRef]);
 
   useFocusEffect(useCallback(() => {
     setRestartBlocked(false);
@@ -245,12 +247,9 @@ export default function DashVoiceScreen() {
   }, []);
 
   const handleVoiceInput = useCallback((transcript: string, language?: SupportedLanguage) => {
-    if (isSpeakingRef.current || isSpeaking || isProcessing) {
-      logDashTrace('voice_input_ignored', { reason: isSpeakingRef.current || isSpeaking ? 'speaking' : 'processing', language: language || preferredLanguage, preview: String(transcript || '').slice(0, 120) });
-      return;
-    }
+    const nextLanguage = language || preferredLanguage;
     const formatted = formatTranscript(transcript, language, { whisperFlow: true, summarize: false, preschoolMode: orgType === 'preschool', maxSummaryWords: orgType === 'preschool' ? 16 : 20 });
-    logDashTrace('voice_input_received', { language: language || preferredLanguage, rawChars: String(transcript || '').length, cleanChars: formatted.trim().length, rawPreview: String(transcript || '').slice(0, 120), cleanPreview: formatted.trim().slice(0, 120) });
+    logDashTrace('voice_input_received', { language: nextLanguage, rawChars: String(transcript || '').length, cleanChars: formatted.trim().length, rawPreview: String(transcript || '').slice(0, 120), cleanPreview: formatted.trim().slice(0, 120) });
     if (language) setPreferredLanguage(language);
     const cleaned = formatted.trim();
     if (!cleaned) return;
@@ -266,8 +265,57 @@ export default function DashVoiceScreen() {
     voiceDictationProbeRef.current = null;
     setLiveUserTranscript('');
     setLastUserTranscript(cleaned);
+    if (isProcessing) {
+      pendingVoiceTurnRef.current = {
+        text: cleaned,
+        language: nextLanguage,
+        dictationProbe,
+      };
+      logDashTrace('voice_input_queued', {
+        reason: 'processing',
+        language: nextLanguage,
+        preview: cleaned.slice(0, 120),
+      });
+      return;
+    }
     sendMessage(cleaned, { dictationProbe });
-  }, [isProcessing, isSpeaking, isSpeakingRef, logDashTrace, orgType, preferredLanguage, sendMessage]);
+  }, [isProcessing, logDashTrace, orgType, preferredLanguage, sendMessage]);
+
+  useEffect(() => {
+    if (isProcessing) return;
+    const pendingTurn = pendingVoiceTurnRef.current;
+    if (!pendingTurn) return;
+    pendingVoiceTurnRef.current = null;
+    if (pendingTurn.language && pendingTurn.language !== preferredLanguage) {
+      setPreferredLanguage(pendingTurn.language);
+    }
+    if (isSpeakingRef.current || isSpeaking) {
+      speechQueueRef.current = [];
+      resetStreamingSpeech();
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      voiceOrbRef.current?.stopSpeaking?.().catch(() => {});
+      logDashTrace('dash_stop', { reason: 'flush_pending_voice_turn' });
+    }
+    logDashTrace('voice_input_flushed', {
+      language: pendingTurn.language || preferredLanguage,
+      preview: pendingTurn.text.slice(0, 120),
+    });
+    sendMessage(
+      pendingTurn.text,
+      pendingTurn.dictationProbe ? { dictationProbe: pendingTurn.dictationProbe } : undefined,
+    );
+  }, [
+    isProcessing,
+    isSpeaking,
+    isSpeakingRef,
+    logDashTrace,
+    preferredLanguage,
+    resetStreamingSpeech,
+    sendMessage,
+    setIsSpeaking,
+    speechQueueRef,
+  ]);
 
   const handleComposerTextChange = useCallback((text: string) => {
     setInputText(text);
@@ -295,7 +343,13 @@ export default function DashVoiceScreen() {
     const tg = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
     return name ? `${tg}, ${name}` : tg;
   }, [profile]);
-  const statusLabel = isProcessing ? (streamingText ? 'Streaming...' : 'Thinking...') : isSpeaking ? 'Speaking...' : isListening ? 'Always listening' : 'Tap the orb or speak';
+  const statusLabel = isVoiceMuted
+    ? 'Listening muted'
+    : isProcessing
+      ? (streamingText ? 'Streaming...' : 'Thinking...')
+      : isSpeaking
+        ? 'Speaking...'
+        : 'Always listening';
   const orbRenderSize = showTranscript ? Math.round(ORB_SIZE * 0.56) : ORB_SIZE;
 
   // ── Render ────────────────────────────────────────────────────────
@@ -351,6 +405,7 @@ export default function DashVoiceScreen() {
               preferredLanguage={preferredLanguage}
               theme={theme}
               orbTier={capabilityTier}
+              onMuteChange={setIsVoiceMuted}
               onStopListening={() => setIsListening(false)}
               onStartListening={() => setIsListening(true)}
               onPartialTranscript={(text) => setLiveUserTranscript(text)}

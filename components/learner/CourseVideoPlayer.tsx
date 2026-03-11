@@ -19,6 +19,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { percentWidth } from '@/lib/progress/clampPercent';
 // Conditional imports for native video
 let useVideoPlayer: any = null;
 let VideoView: any = null;
@@ -287,7 +288,7 @@ function NativeVideoPlayer({
                 <View
                   style={[
                     styles.progressFill,
-                    { width: `${progress}%`, backgroundColor: theme.primary },
+                    { width: percentWidth(progress), backgroundColor: theme.primary },
                   ]}
                 />
               </View>

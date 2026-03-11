@@ -46,6 +46,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   onTTSStart,
   onTTSEnd,
   onVoiceError,
+  onMuteChange,
   language: externalLanguage,
   size = ORB_SIZE,
   autoStartListening = true,
@@ -73,14 +74,14 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     if (externalLanguage && externalLanguage !== selectedLanguage) {
       setSelectedLanguage(externalLanguage);
     }
-  }, [externalLanguage]);
+  }, [externalLanguage, selectedLanguage]);
 
   // Config constants
   const LIVE_TRANSCRIPTION_ENABLED = process.env.EXPO_PUBLIC_VOICE_LIVE_TRANSCRIPTION_ENABLED !== 'false';
   const VOICE_TRACE_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_DASH_VOICE_TRACE === 'true';
-  const defaultLiveSilenceMs = preschoolMode ? 2200 : 1400;
+  const defaultLiveSilenceMs = preschoolMode ? 3000 : 2400;
   const liveSilenceTimeoutRaw = Number.parseInt(process.env.EXPO_PUBLIC_VOICE_LIVE_SILENCE_TIMEOUT_MS || String(defaultLiveSilenceMs), 10);
-  const liveSilenceMin = preschoolMode ? 1800 : 900;
+  const liveSilenceMin = preschoolMode ? 2500 : 2000;
   const LIVE_SILENCE_TIMEOUT_MS = Number.isFinite(liveSilenceTimeoutRaw) ? Math.min(12000, Math.max(liveSilenceMin, liveSilenceTimeoutRaw)) : defaultLiveSilenceMs;
   const defaultFinalFallbackMs = preschoolMode ? 420 : 320;
   const liveFinalFallbackRaw = Number.parseInt(process.env.EXPO_PUBLIC_VOICE_LIVE_FINAL_FALLBACK_MS || String(defaultFinalFallbackMs), 10);
@@ -92,7 +93,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
 
   const [recorderState, recorderActions] = useVoiceRecorder(
     handleSilenceDetected,
-    preschoolMode ? { speechThreshold: -35, silenceDuration: 3000 } : { speechThreshold: -30, silenceDuration: 1400 },
+    preschoolMode ? { speechThreshold: -35, silenceDuration: 3000 } : { speechThreshold: -30, silenceDuration: 2400 },
   );
   const { transcribe, isTranscribing, error: sttError } = useVoiceSTT({ preschoolId: tenantId });
   const { speak, stop: stopSpeaking, isSpeaking: ttsIsSpeaking, error: ttsError } = useVoiceTTS();
@@ -104,10 +105,44 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   const handleStartRecordingRef = useRef<(() => Promise<void>) | null>(null);
   const handlePrimaryActionRef = useRef<(() => Promise<void>) | null>(null);
   const scheduleLiveFallbackRef = useRef<(() => void) | null>(null);
+  const ttsStartedAtRef = useRef<number | null>(null);
+  const bargeInTriggeredRef = useRef(false);
 
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
   useEffect(() => { ttsSpeakingRef.current = ttsIsSpeaking; }, [ttsIsSpeaking]);
   useEffect(() => { restartBlockedRef.current = restartBlocked; }, [restartBlocked]);
+
+  useEffect(() => {
+    if (isSpeaking || ttsIsSpeaking) {
+      if (ttsStartedAtRef.current == null) ttsStartedAtRef.current = Date.now();
+      bargeInTriggeredRef.current = false;
+      return;
+    }
+    ttsStartedAtRef.current = null;
+    bargeInTriggeredRef.current = false;
+  }, [isSpeaking, ttsIsSpeaking]);
+
+  const shouldTriggerBargeIn = useCallback((text: string) => {
+    const spoken = String(text || '').trim();
+    if (isMuted || !spoken) return false;
+    if (!(isSpeakingRef.current || ttsSpeakingRef.current)) return false;
+    if (bargeInTriggeredRef.current) return false;
+    const ttsStartedAt = ttsStartedAtRef.current;
+    if (ttsStartedAt != null && Date.now() - ttsStartedAt < 700) return false;
+    return spoken.length >= 4;
+  }, [isMuted]);
+
+  const triggerBargeIn = useCallback(async (text: string) => {
+    if (!shouldTriggerBargeIn(text)) return;
+    bargeInTriggeredRef.current = true;
+    console.log('[VoiceOrb] 🎙️ Auto barge-in detected - stopping TTS');
+    try {
+      await stopSpeaking();
+    } catch (stopError) {
+      console.warn('[VoiceOrb] Failed to stop TTS during auto barge-in:', stopError);
+    }
+    setStatusText('Listening...');
+  }, [setStatusText, shouldTriggerBargeIn, stopSpeaking]);
 
   // Error effects
   useEffect(() => {
@@ -177,6 +212,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     language: selectedLanguage,
     onPartialResult: (text) => {
       if (!usingLiveSTTRef.current) return;
+      void triggerBargeIn(text);
       lastPartialRef.current = text;
       liveLastPartialAtRef.current = Date.now();
       setLiveTranscript(text);
@@ -186,6 +222,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     },
     onFinalResult: (text) => {
       if (!usingLiveSTTRef.current) return;
+      void triggerBargeIn(text);
       logVoiceTrace('stt_final_event', { sessionId: liveSessionRef.current, chars: text.length, preview: text.slice(0, 80) });
       finalizeLiveRef.current?.(text);
     },
@@ -236,8 +273,75 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
 
   useEffect(() => { transcribeRef.current = handleStopAndTranscribe; }, [handleStopAndTranscribe]);
 
+  const applyMuteState = useCallback(async (nextMuted: boolean) => {
+    setIsMuted(nextMuted);
+    onMuteChange?.(nextMuted);
+
+    if (nextMuted) {
+      if (recorderState.isRecording) {
+        try {
+          await recorderActions.stopRecording();
+        } catch (stopError) {
+          console.warn('[VoiceOrb] Failed to stop recorder while muting:', stopError);
+        }
+      }
+      if (usingLiveSTTRef.current) {
+        try {
+          await cancelLiveListening();
+        } catch (stopError) {
+          console.warn('[VoiceOrb] Failed to stop live STT while muting:', stopError);
+        }
+        clearLiveTimers();
+        setUsingLiveSTT(false);
+      }
+      onStopListening();
+      setStatusText('Barge-in off');
+      return;
+    }
+
+    if (!restartBlockedRef.current && !isProcessing && !isParentProcessing) {
+      setTimeout(() => {
+        if (!restartBlockedRef.current && !isSpeakingRef.current && !ttsSpeakingRef.current) {
+          handleStartRecordingRef.current?.();
+        }
+      }, 120);
+    }
+
+    if (isParentProcessing) {
+      setStatusText('Thinking...');
+      return;
+    }
+
+    if (isSpeaking || ttsIsSpeaking) {
+      setStatusText('Speaking...');
+      return;
+    }
+
+    if (isProcessing) {
+      setStatusText('Transcribing...');
+      return;
+    }
+
+    setStatusText('Listening...');
+  }, [
+    cancelLiveListening,
+    clearLiveTimers,
+    isParentProcessing,
+    isProcessing,
+    isSpeaking,
+    onMuteChange,
+    onStopListening,
+    recorderActions,
+    recorderState.isRecording,
+    restartBlockedRef,
+    setUsingLiveSTT,
+    setStatusText,
+    ttsIsSpeaking,
+    usingLiveSTTRef,
+  ]);
+
   // TTS handlers + auto-restart (imperative handle, feedback prevention, auto-restart effects)
-  useVoiceOrbTTSHandlers({
+  const { cancelAutoRestart } = useVoiceOrbTTSHandlers({
     ref,
     recorderState,
     recorderActions,
@@ -265,6 +369,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     handleStartRecordingRef,
     handlePrimaryActionRef,
     skipNextAutoRestartRef,
+    setMuted: applyMuteState,
   });
 
   // Derived sizes
@@ -281,7 +386,6 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     isParentProcessing,
     recorderState,
     usingLiveSTT,
-    isMuted,
     liveTranscript,
     orbSize,
     innerSize,
@@ -289,19 +393,20 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
 
   // handleStartRecording
   const handleStartRecording = useCallback(async () => {
-    if (isSpeaking || ttsIsSpeaking) {
-      console.log('[VoiceOrb] 🚫 Blocking record start - TTS is playing (prevent feedback)');
+    const allowBargeInStart = (isSpeaking || ttsIsSpeaking) && !isMuted && LIVE_TRANSCRIPTION_ENABLED && liveAvailable;
+    if ((isSpeaking || ttsIsSpeaking) && !allowBargeInStart) {
+      console.log('[VoiceOrb] 🚫 Blocking record start - TTS is playing and barge-in listening is unavailable');
       return;
     }
     if (restartBlockedRef.current) {
       console.log('[VoiceOrb] 🚫 Blocking record start - restart blocked by parent transition');
       return;
     }
-    if (isMuted || isProcessing || isListening || recorderState.isRecording || usingLiveSTTRef.current) {
-      console.log('[VoiceOrb] Skipping start - muted:', isMuted, 'processing:', isProcessing, 'recording:', recorderState.isRecording);
+    if (isProcessing || isListening || recorderState.isRecording || usingLiveSTTRef.current) {
+      console.log('[VoiceOrb] Skipping start - processing:', isProcessing, 'recording:', recorderState.isRecording);
       return;
     }
-    console.log('[VoiceOrb] 🎤 Starting recording (TTS confirmed not playing)');
+    console.log('[VoiceOrb] 🎤 Starting recording', allowBargeInStart ? '(barge-in monitor)' : '(normal)');
 
     if (LIVE_TRANSCRIPTION_ENABLED && liveAvailable) {
       liveSessionRef.current += 1;
@@ -336,19 +441,19 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       setTimeout(() => setStatusText('Listening...'), 2000);
     }
   }, [
-    isMuted, isProcessing, isListening, recorderState.isRecording, recorderActions,
+    isProcessing, isListening, recorderState.isRecording, recorderActions,
     onStartListening, isSpeaking, ttsIsSpeaking, liveAvailable, startLiveListening,
     clearLiveResults, clearLiveTimers, onVoiceError, logVoiceTrace, selectedLanguage,
     LIVE_SILENCE_TIMEOUT_MS, LIVE_FINAL_FALLBACK_MS, usingLiveSTTRef, liveSessionRef,
     liveFinalizedRef, lastPartialRef, liveSessionStartedAtRef, liveLastPartialAtRef,
-    restartBlockedRef,
+    restartBlockedRef, LIVE_TRANSCRIPTION_ENABLED, isMuted,
   ]);
 
   useEffect(() => { handleStartRecordingRef.current = handleStartRecording; }, [handleStartRecording]);
 
   // Auto-start on mount
   useEffect(() => {
-    if (autoStartListening && !hasAutoStarted.current && !isMuted && !isSpeaking && !ttsIsSpeaking && !restartBlocked) {
+    if (autoStartListening && !hasAutoStarted.current && !isSpeaking && !ttsIsSpeaking && !restartBlocked) {
       hasAutoStarted.current = true;
       console.log('[VoiceOrb] Auto-starting listening on mount...');
       const timer = setTimeout(() => {
@@ -356,11 +461,38 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [autoStartListening, isMuted, isSpeaking, ttsIsSpeaking, restartBlocked]);
+  }, [autoStartListening, isSpeaking, ttsIsSpeaking, restartBlocked]);
+
+  useEffect(() => {
+    if (isMuted || restartBlocked || isProcessing || isParentProcessing) return;
+    if (!(isSpeaking || ttsIsSpeaking)) return;
+    if (recorderState.isRecording || usingLiveSTTRef.current || isListening) return;
+    const timer = setTimeout(() => {
+      if (!restartBlockedRef.current && !isMuted) {
+        handleStartRecordingRef.current?.();
+      }
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [
+    isListening,
+    isMuted,
+    isParentProcessing,
+    isProcessing,
+    isSpeaking,
+    recorderState.isRecording,
+    restartBlocked,
+    restartBlockedRef,
+    ttsIsSpeaking,
+    usingLiveSTTRef,
+  ]);
 
   // Handle orb press
-  const handlePress = async () => {
+  const handlePress = useCallback(async () => {
     if (isSpeaking || ttsIsSpeaking) {
+      if (isMuted) {
+        setStatusText('Barge-in off');
+        return;
+      }
       console.log('[VoiceOrb] 🛑 User interrupted TTS - stopping speech');
       await stopSpeaking();
       setStatusText('Interrupted');
@@ -373,17 +505,24 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       }, INTERRUPT_RESTART_DELAY_MS);
       return;
     }
-    if (isMuted) {
-      setStatusText('Unmute to speak');
-      setTimeout(() => setStatusText('Listening...'), 1500);
-      return;
-    }
     if (isListening || recorderState.isRecording || usingLiveSTTRef.current) {
       handleStopAndTranscribe();
     } else if (!isSpeaking && !ttsIsSpeaking) {
       handleStartRecording();
     }
-  };
+  }, [
+    handleStartRecording,
+    handleStopAndTranscribe,
+    isListening,
+    isMuted,
+    isProcessing,
+    isSpeaking,
+    recorderState.isRecording,
+    restartBlockedRef,
+    stopSpeaking,
+    ttsIsSpeaking,
+    usingLiveSTTRef,
+  ]);
 
   useEffect(() => {
     handlePrimaryActionRef.current = handlePress;
@@ -447,8 +586,8 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       </TouchableOpacity>
 
       {(isMuted || isTranscribing || statusText === 'No speech detected' || statusText === 'Microphone permission denied') ? (
-        <Text style={[styles.statusText, { color: isMuted ? '#ef4444' : theme.textSecondary }]}>
-          {isMuted ? 'Muted' : isTranscribing ? 'Transcribing...' : statusText}
+        <Text style={[styles.statusText, { color: isMuted ? '#f59e0b' : theme.textSecondary }]}>
+          {isMuted ? 'Barge-in off' : isTranscribing ? 'Transcribing...' : statusText}
         </Text>
       ) : null}
 
@@ -461,10 +600,13 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       )}
 
       <TouchableOpacity
-        onPress={() => setIsMuted(!isMuted)}
-        style={[styles.muteButton, { borderColor: isMuted ? '#ef4444' : theme.border, backgroundColor: isMuted ? '#ef444420' : 'transparent', marginTop: 16 }]}
+        onPress={() => {
+          cancelAutoRestart();
+          void applyMuteState(!isMuted);
+        }}
+        style={[styles.muteButton, { borderColor: isMuted ? '#f59e0b' : theme.border, backgroundColor: isMuted ? '#f59e0b20' : 'transparent', marginTop: 16 }]}
       >
-        <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={22} color={isMuted ? '#ef4444' : theme.textSecondary} />
+        <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={22} color={isMuted ? '#f59e0b' : theme.textSecondary} />
       </TouchableOpacity>
     </View>
   );

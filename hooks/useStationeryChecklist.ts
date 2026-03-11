@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { assertSupabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import { retrySupabaseRead } from '@/lib/supabaseErrors';
 
 export interface StationeryChecklistItemState {
   itemId: string;
@@ -62,6 +63,12 @@ interface UpsertItemInput {
   quantityBought?: number;
   evidenceUrl?: string | null;
 }
+
+type StationeryNoteRow = {
+  student_id: string;
+  note_text?: string | null;
+  expected_completion_date?: string | null;
+};
 
 function getCurrentAcademicYear(): number {
   try {
@@ -261,7 +268,7 @@ export function useStationeryChecklist(children: ChildRow[]) {
 
       const studentIds = filteredChildren.map((child) => child.id);
 
-      const [{ data: listsData }, { data: overridesData }, { data: notesData }] = await Promise.all([
+      const [{ data: listsData, error: listsError }, { data: overridesData, error: overridesError }] = await Promise.all([
         supabase
           .from('stationery_lists')
           .select('id, school_id, age_group_label, age_min, age_max, sort_order')
@@ -274,12 +281,28 @@ export function useStationeryChecklist(children: ChildRow[]) {
           .select('student_id, list_id')
           .in('student_id', studentIds)
           .eq('academic_year', academicYear),
-        supabase
-          .from('stationery_parent_notes')
-          .select('student_id, note_text, expected_completion_date')
-          .in('student_id', studentIds)
-          .eq('academic_year', academicYear),
       ]);
+
+      if (listsError) throw listsError;
+      if (overridesError) throw overridesError;
+
+      const { data: notesData, error: notesError } = studentIds.length
+        ? await retrySupabaseRead<StationeryNoteRow[]>(() =>
+            supabase
+              .from('stationery_parent_notes')
+              .select('student_id, note_text, expected_completion_date')
+              .in('student_id', studentIds)
+              .eq('academic_year', academicYear)
+          )
+        : { data: [] as StationeryNoteRow[], error: null };
+
+      if (notesError) {
+        logger.warn('[Stationery] parent notes read failed; continuing without notes', {
+          academicYear,
+          studentCount: studentIds.length,
+          notesError,
+        });
+      }
 
       const lists = Array.isArray(listsData) ? listsData : [];
       const listIds = lists.map((row: any) => row.id).filter(Boolean);
@@ -337,7 +360,7 @@ export function useStationeryChecklist(children: ChildRow[]) {
       });
 
       const notesMap = new Map<string, { note_text?: string | null; expected_completion_date?: string | null }>();
-      (notesData || []).forEach((row: any) => {
+      (notesData || []).forEach((row) => {
         if (!row?.student_id) return;
         notesMap.set(String(row.student_id), row);
       });

@@ -4,14 +4,14 @@
  * Tier-based orb visuals:
  * - free: DashOrb (shared glass-ring orb across web/native)
  * - starter: CosmicOrb (purple/teal concentric rings, purple core)
- * - premium/enterprise: PremiumCosmicOrb (cosmic nebula with orbital rings, matches hamburger)
+ * - premium/enterprise: NebulaSphereOrb (glowing nebula sphere, orbital rings)
  */
 
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
-import { PremiumCosmicOrb } from '@/components/dash-orb/PremiumCosmicOrb';
+import { NebulaSphereOrb } from '@/components/dash-orb/NebulaSphereOrb';
 import { DashOrb } from '@/components/dash-orb/DashOrb';
 import { s } from '@/app/screens/dash-voice.styles';
 import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
@@ -49,6 +49,7 @@ interface DashVoiceOrbSectionProps {
   onPartialTranscript: (text: string) => void;
   onTranscript: (transcript: string, language?: SupportedLanguage) => void;
   onVoiceError: (message: string) => void;
+  onMuteChange: (muted: boolean) => void;
   onTTSStart: () => void;
   onTTSEnd: () => void;
   onLanguageChange: (lang: SupportedLanguage) => void;
@@ -84,6 +85,7 @@ export function DashVoiceOrbSection({
   onPartialTranscript,
   onTranscript,
   onVoiceError,
+  onMuteChange,
   onTTSStart,
   onTTSEnd,
   onLanguageChange,
@@ -118,6 +120,7 @@ export function DashVoiceOrbSection({
       }}
       onTranscript={onTranscript}
       onVoiceError={onVoiceError}
+      onMuteChange={onMuteChange}
       onTTSStart={onTTSStart}
       onTTSEnd={onTTSEnd}
       onLanguageChange={onLanguageChange}
@@ -165,7 +168,7 @@ export function DashVoiceOrbSection({
           <>
             {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
             <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
-              <PremiumCosmicOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
+              <NebulaSphereOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
             </TouchableOpacity>
           </>
         ) : (

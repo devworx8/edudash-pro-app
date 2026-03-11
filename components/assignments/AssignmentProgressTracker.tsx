@@ -7,6 +7,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface AssignmentProgressTrackerProps {
   total: number;
@@ -40,19 +41,19 @@ export function AssignmentProgressTracker({
         <View
           style={[
             styles.progressSegment,
-            { width: `${completedPercent}%`, backgroundColor: '#10b981' },
+            { width: percentWidth(completedPercent), backgroundColor: '#10b981' },
           ]}
         />
         <View
           style={[
             styles.progressSegment,
-            { width: `${inProgressPercent}%`, backgroundColor: '#3b82f6' },
+            { width: percentWidth(inProgressPercent), backgroundColor: '#3b82f6' },
           ]}
         />
         <View
           style={[
             styles.progressSegment,
-            { width: `${notStartedPercent}%`, backgroundColor: '#e5e7eb' },
+            { width: percentWidth(notStartedPercent), backgroundColor: '#e5e7eb' },
           ]}
         />
       </View>

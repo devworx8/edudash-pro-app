@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useParentDashboard } from '@/hooks/useDashboardData';
 import { useParentGrades } from '@/hooks/useParentGrades';
 import SkeletonLoader from '@/components/ui/SkeletonLoader';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 const { width } = Dimensions.get('window');
 
@@ -133,7 +134,7 @@ const GradeCard: React.FC<GradeCardProps> = ({ subject, grade, trend, recentScor
             <View 
               style={[
                 gradeStyles.progressFill, 
-                { backgroundColor: getGradeColor(grade), width: `${grade}%` }
+                { backgroundColor: getGradeColor(grade), width: percentWidth(grade) }
               ]} 
             />
           </View>

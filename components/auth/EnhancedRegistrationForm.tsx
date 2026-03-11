@@ -100,8 +100,8 @@ export const EnhancedRegistrationForm: React.FC<EnhancedRegistrationFormProps> =
       child_registration: {
         title: 'Step 4: Register your child',
         description: 'Add your child so you can track their progress from day one. You can always add more children later.',
-        nextAction: 'Your dashboard is ready!',
-        ctaLabel: 'Complete Setup',
+        nextAction: 'Review and confirm your details.',
+        ctaLabel: 'Continue',
       },
     }),
     []
@@ -131,7 +131,6 @@ export const EnhancedRegistrationForm: React.FC<EnhancedRegistrationFormProps> =
             onFieldBlur={handleFieldBlur}
           />
         );
-        
       case 'organization_setup':
         return (
           <OrganizationSetup
@@ -144,7 +143,6 @@ export const EnhancedRegistrationForm: React.FC<EnhancedRegistrationFormProps> =
             loading={loading}
           />
         );
-        
       case 'organization_selection':
         return (
           <OrganizationSelectionStep
@@ -159,7 +157,6 @@ export const EnhancedRegistrationForm: React.FC<EnhancedRegistrationFormProps> =
             onFieldChange={handleFieldChange}
           />
         );
-        
       case 'security_setup':
         return (
           <SecuritySetupStep
@@ -178,7 +175,6 @@ export const EnhancedRegistrationForm: React.FC<EnhancedRegistrationFormProps> =
             onPasswordValidationChange={setPasswordValidation}
           />
         );
-
       case 'child_registration':
         return (
           <ChildRegistrationStep
@@ -192,7 +188,6 @@ export const EnhancedRegistrationForm: React.FC<EnhancedRegistrationFormProps> =
             onContinue={handleNextStep}
           />
         );
-        
       default:
         return null;
     }

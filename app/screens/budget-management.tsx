@@ -25,6 +25,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { usePettyCashDashboard } from '@/hooks/usePettyCashDashboard';
 import { formatCurrencyCompact } from '@/lib/utils/payment-utils';
 import { logger } from '@/lib/logger';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface BudgetItem {
   id: string;
@@ -185,7 +186,7 @@ export default function BudgetManagementScreen() {
                   <Text style={[styles.budgetUtil, { color: barColor }]}>{util}%</Text>
                 </View>
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${Math.min(util, 100)}%`, backgroundColor: barColor }]} />
+                  <View style={[styles.progressFill, { width: percentWidth(Math.min(util, 100)), backgroundColor: barColor }]} />
                 </View>
                 <View style={styles.budgetMeta}>
                   <Text style={styles.budgetMetaText}>

@@ -8,7 +8,7 @@ import { AnimatedEmojiGrid } from './animated/AnimatedEmojiGrid';
 import { AnimatedOptions } from './animated/AnimatedOptions';
 import { CountdownTimer } from './animated/CountdownTimer';
 import { MemoryFlipGrid } from './animated/MemoryFlipGrid';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 interface ActivityPlayerViewProps {
   activity: PreschoolActivity;
@@ -98,7 +98,7 @@ export function ActivityPlayerView({
           </TouchableOpacity>
         </View>
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${safeProgressPercent}%` }]} />
+          <View style={[styles.progressFill, { width: percentWidth(safeProgressPercent) }]} />
         </View>
       </LinearGradient>
 

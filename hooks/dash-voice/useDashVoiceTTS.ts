@@ -24,18 +24,30 @@ interface UseDashVoiceTTSParams {
   voiceOrbRef: React.RefObject<VoiceOrbRef | null>;
   preferredLanguage: SupportedLanguage;
   orgType: ReturnType<typeof getOrganizationType>;
+  streamingTTSEnabled?: boolean;
 }
+
+const longestCommonPrefixLen = (a: string, b: string): number => {
+  const left = String(a || '');
+  const right = String(b || '');
+  const max = Math.min(left.length, right.length);
+  let i = 0;
+  while (i < max && left[i] === right[i]) i += 1;
+  return i;
+};
 
 export function useDashVoiceTTS({
   voiceOrbRef,
   preferredLanguage,
   orgType,
+  streamingTTSEnabled = false,
 }: UseDashVoiceTTSParams) {
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const speechQueueRef = useRef<string[]>([]);
   const speechMutexRef = useRef(false);
   const isSpeakingRef = useRef(false);
+  const streamedPrefixQueuedRef = useRef('');
 
   const speakResponse = useCallback(async (text: string) => {
     if (!voiceOrbRef.current) return;
@@ -74,6 +86,24 @@ export function useDashVoiceTTS({
     processSpeechQueue();
   }, [processSpeechQueue]);
 
+  const resetStreamingSpeech = useCallback(() => {
+    streamedPrefixQueuedRef.current = '';
+  }, []);
+
+  const maybeEnqueueStreamingSpeech = useCallback((nextText: string) => {
+    if (!streamingTTSEnabled) return;
+    const fullText = String(nextText || '').trim();
+    if (!fullText) return;
+
+    const alreadyQueuedPrefix = streamedPrefixQueuedRef.current;
+    const sharedPrefixLen = longestCommonPrefixLen(alreadyQueuedPrefix, fullText);
+    const delta = fullText.slice(sharedPrefixLen).trim();
+    if (!delta) return;
+
+    streamedPrefixQueuedRef.current = fullText;
+    enqueueSpeech(delta);
+  }, [enqueueSpeech, streamingTTSEnabled]);
+
   return {
     isSpeaking,
     setIsSpeaking,
@@ -82,5 +112,9 @@ export function useDashVoiceTTS({
     speakResponse,
     processSpeechQueue,
     enqueueSpeech,
+    resetStreamingSpeech,
+    maybeEnqueueStreamingSpeech,
+    longestCommonPrefixLen,
+    streamedPrefixQueuedRef,
   };
 }

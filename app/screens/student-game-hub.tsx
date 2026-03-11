@@ -22,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { K12_GAMES, K12_GAMES_BY_ID } from '@/lib/activities/k12Games.data';
 import type { K12Subject, K12Game } from '@/lib/activities/k12Activities.types';
 import { SUBJECT_LABELS, GRADE_RANGE_LABELS, xpForNextLevel } from '@/lib/activities/k12Activities.types';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import {
   useMyAssignments,
   useMyXP,
@@ -114,7 +114,7 @@ export default function StudentGameHubScreen() {
                 <View
                   style={[
                     s.xpBarInner,
-                    { width: `${progressPercent}%` },
+                    { width: percentWidth(progressPercent) },
                   ]}
                 />
               </View>

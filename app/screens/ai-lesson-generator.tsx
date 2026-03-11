@@ -28,7 +28,7 @@ import { ModelInUseIndicator } from '@/components/ai/ModelInUseIndicator';
 import { ModelSelectorChips } from '@/components/ai/ModelSelectorChips';
 import { parseLessonPlanResponse } from '@/lib/ai/parseLessonPlan';
 import type { LessonPlanV2 } from '@/lib/ai/lessonPlanSchema';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import {
   buildQuickLessonThemeHint,
   loadQuickLessonThemeContext,
@@ -410,7 +410,7 @@ export default function AILessonGeneratorScreen() {
               <TouchableOpacity style={{ backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }} onPress={onCancel}><Text style={{ color: '#FFF', fontSize: 12 }}>Cancel</Text></TouchableOpacity>
             </View>
             <Text style={{ color: palette.textSec, fontSize: 13 }}>{progressMessage || 'Generating lesson...'}</Text>
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', marginTop: 8 }}><View style={{ width: `${safeProgress}%`, height: 6, borderRadius: 3, backgroundColor: theme.primary }} /></View>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', marginTop: 8 }}><View style={{ width: percentWidth(safeProgress), height: 6, borderRadius: 3, backgroundColor: theme.primary }} /></View>
             <Text style={{ color: palette.textSec, fontSize: 11, textAlign: 'center', marginTop: 4 }}>{Math.round(safeProgress)}% • {progressPhase.replace('_', ' ')}</Text>
           </View>
         )}

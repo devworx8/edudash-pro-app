@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '@/components/ui/Card';
 import { useTheme, type ThemeColors } from '@/contexts/ThemeContext';
 import type { LearnerEnrollment } from '@/hooks/useLearnerData';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 export interface ProgramProgressCardProps {
   enrollment: LearnerEnrollment;
@@ -41,7 +42,7 @@ export function ProgramProgressCard({ enrollment, onPress }: ProgramProgressCard
         </View>
 
         <View style={styles.progressBar}>
-          <View style={[styles.progressBarFill, { width: `${progress}%`, backgroundColor: theme.primary }]} />
+          <View style={[styles.progressBarFill, { width: percentWidth(progress), backgroundColor: theme.primary }]} />
         </View>
       </Card>
     </TouchableOpacity>

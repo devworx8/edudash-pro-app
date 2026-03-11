@@ -7,7 +7,7 @@ import { router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAgeBandsForOrgType, normalizeSchoolType } from '@/lib/tenant/compat';
 import { getTutorChallengePlan } from '@/features/dash-assistant/tutorChallengePolicy';
-import { ratioToPercent } from '@/lib/progress/clampPercent';
+import { ratioToPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 interface TutorHomeProps {
   styles: any;
@@ -494,7 +494,7 @@ export const TutorHome: React.FC<TutorHomeProps> = ({
               <View
                 style={[
                   localStyles.progressBarFill,
-                  { width: `${dailyProgressPercent}%`, backgroundColor: theme.primary },
+                  { width: percentWidth(dailyProgressPercent), backgroundColor: theme.primary },
                 ]}
               />
             </View>

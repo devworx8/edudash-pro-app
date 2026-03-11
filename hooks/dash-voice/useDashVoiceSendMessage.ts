@@ -23,6 +23,7 @@ import {
 } from '@/lib/dash-ai/ocrPrompts';
 import { enforceCriteriaResponseWithSingleRewrite } from '@/features/dash-ai/criteriaEnforcement';
 import { wantsPdfArtifact, type UseDashVoiceSendMessageParams, type DashVoiceDictationProbe, type ConversationEntry } from './types';
+import { getInstantVoiceResponse } from './instantResponses';
 import { useDashVoiceStreaming } from './useDashVoiceStreaming';
 import { useDashVoiceOCR } from './useDashVoiceOCR';
 
@@ -87,10 +88,34 @@ export function useDashVoiceSendMessage({
     setIsProcessing(true);
     setLastResponse('');
     setWhiteboardContent(null);
-    setStreamingText(getStreamingPlaceholder(trimmed));
     const updatedHistory = [...conversationHistoryRef.current, { role: 'user' as const, content: trimmed }];
     conversationHistoryRef.current = updatedHistory;
     setConversationHistory(updatedHistory);
+    const instantResponse = !attachedImage ? getInstantVoiceResponse(trimmed, preferredLanguage) : null;
+    if (instantResponse) {
+      const responseText = instantResponse.text;
+      const withResponse = [...updatedHistory, { role: 'assistant' as const, content: responseText }];
+      conversationHistoryRef.current = withResponse;
+      setConversationHistory(withResponse);
+      setStreamingText('');
+      setLastResponse(responseText);
+      setIsProcessing(false);
+      logDashTrace('instant_response', {
+        turnId,
+        intent: instantResponse.intent,
+        cacheKey: instantResponse.cacheKey,
+        latencyMs: Date.now() - turnStartedAt,
+      });
+      void persistOrbMessages(withResponse);
+      enqueueSpeech(responseText);
+      track('dash.turn.completed', buildDashTurnTelemetry({
+        ...turnTelemetryBase,
+        fallbackReason: 'instant_local_reply',
+        latencyMs: Date.now() - turnStartedAt,
+      }));
+      return;
+    }
+    setStreamingText(getStreamingPlaceholder(trimmed));
     try {
       const supabase = assertSupabase();
       const { data: { session } } = await supabase.auth.getSession();

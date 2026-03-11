@@ -12,6 +12,7 @@ import { isSuperAdmin } from '@/lib/roleUtils';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { logger } from '@/lib/logger';
+import { percentWidth } from '@/lib/progress/clampPercent';
 import {
   type SystemHealth,
   type ErrorLog,
@@ -373,7 +374,7 @@ export default function SuperAdminSystemMonitoringScreen() {
               <View style={styles.resourceItem}>
                 <Text style={styles.resourceLabel}>System Load</Text>
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: `${systemHealth.system_load}%`, backgroundColor: '#00f5ff' }]} />
+                  <View style={[styles.progressFill, { width: percentWidth(systemHealth.system_load), backgroundColor: '#00f5ff' }]} />
                 </View>
                 <Text style={styles.resourceValue}>{systemHealth.system_load.toFixed(1)}%</Text>
               </View>
@@ -382,7 +383,7 @@ export default function SuperAdminSystemMonitoringScreen() {
                 <Text style={styles.resourceLabel}>Memory Usage</Text>
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { 
-                    width: `${systemHealth.memory_usage}%`, 
+                    width: percentWidth(systemHealth.memory_usage), 
                     backgroundColor: systemHealth.memory_usage > 80 ? '#ef4444' : systemHealth.memory_usage > 60 ? '#f59e0b' : '#10b981' 
                   }]} />
                 </View>
@@ -393,7 +394,7 @@ export default function SuperAdminSystemMonitoringScreen() {
                 <Text style={styles.resourceLabel}>Disk Usage</Text>
                 <View style={styles.progressBar}>
                   <View style={[styles.progressFill, { 
-                    width: `${systemHealth.disk_usage}%`, 
+                    width: percentWidth(systemHealth.disk_usage), 
                     backgroundColor: systemHealth.disk_usage > 80 ? '#ef4444' : systemHealth.disk_usage > 60 ? '#f59e0b' : '#10b981' 
                   }]} />
                 </View>

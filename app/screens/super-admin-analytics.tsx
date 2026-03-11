@@ -13,6 +13,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { logger } from '@/lib/logger';
+import { percentWidth } from '@/lib/progress/clampPercent';
 import {
   type PlatformStats,
   type RevenueByPlan,
@@ -311,7 +312,7 @@ export default function SuperAdminAnalyticsScreen() {
                     <Text style={styles.planPercentage}>{plan.percentage.toFixed(1)}% of revenue</Text>
                   </View>
                   <View style={styles.planBar}>
-                    <View style={[styles.planBarFill, { width: `${plan.percentage}%` }]} />
+                    <View style={[styles.planBarFill, { width: percentWidth(plan.percentage) }]} />
                   </View>
                 </View>
               ))}

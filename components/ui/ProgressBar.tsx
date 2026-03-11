@@ -7,6 +7,7 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 export interface ProgressBarProps {
   progress: number; // 0 to 1
@@ -54,7 +55,7 @@ export function ProgressBar({
         style={[
           styles.fill,
           {
-            width: `${progressPercent}%`,
+            width: percentWidth(progressPercent),
             backgroundColor: fillColor,
           },
         ]}

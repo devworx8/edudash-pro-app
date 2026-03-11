@@ -21,7 +21,6 @@ interface AnimationParams {
   isParentProcessing: boolean;
   recorderState: { audioLevel: number; isRecording: boolean; hasSpeechStarted: boolean };
   usingLiveSTT: boolean;
-  isMuted: boolean;
   liveTranscript: string;
   orbSize: number;
   innerSize: number;
@@ -34,7 +33,6 @@ export function useVoiceOrbAnimations({
   isParentProcessing,
   recorderState,
   usingLiveSTT,
-  isMuted,
   liveTranscript,
   orbSize,
   innerSize,
@@ -70,7 +68,7 @@ export function useVoiceOrbAnimations({
   // Voice amplitude reactive animation
   useEffect(() => {
     const level = recorderState.audioLevel;
-    if ((isListening || recorderState.isRecording || usingLiveSTT) && !isMuted) {
+    if (isListening || recorderState.isRecording || usingLiveSTT) {
       const normalized = Math.max(0, Math.min(1, (level + 60) / 60));
       const targetScale = 1 + normalized * 0.25;
       voiceAmplitude.value = withTiming(targetScale, { duration: 100, easing: Easing.out(Easing.quad) });
@@ -78,7 +76,7 @@ export function useVoiceOrbAnimations({
       voiceAmplitude.value = withTiming(1, { duration: 300 });
     }
     prevAudioLevel.current = level;
-  }, [recorderState.audioLevel, isListening, recorderState.isRecording, usingLiveSTT, isMuted]);
+  }, [recorderState.audioLevel, isListening, recorderState.isRecording, usingLiveSTT, voiceAmplitude]);
 
   // Pulse when live STT detects speech
   useEffect(() => {
@@ -89,7 +87,7 @@ export function useVoiceOrbAnimations({
       }, 200);
       return () => clearTimeout(timer);
     }
-  }, [liveTranscript, usingLiveSTT]);
+  }, [liveTranscript, usingLiveSTT, voiceAmplitude]);
 
   // Animation effects based on state
   useEffect(() => {
@@ -134,7 +132,7 @@ export function useVoiceOrbAnimations({
       cancelAnimation(coreRotation);
       cancelAnimation(glowIntensity);
     };
-  }, [isListening, isSpeaking, ttsIsSpeaking, isParentProcessing]);
+  }, [isListening, isSpeaking, ttsIsSpeaking, isParentProcessing, corePulse, coreRotation, glowIntensity]);
 
   // Animated styles
   const orbScaleStyle = useAnimatedStyle(() => ({
