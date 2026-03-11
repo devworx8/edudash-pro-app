@@ -88,7 +88,7 @@ export async function fetchStatsAndCounts(
       subject_specialization, preschool_id, is_active, created_at
     `).eq('preschool_id', preschoolId).or('is_active.eq.true,is_active.is.null')),
 
-    safe(supabase.from('classes').select('id', { count: 'exact', head: true })
+    safe(supabase.from('classes').select('id')
       .eq('preschool_id', preschoolId).or('active.eq.true,active.is.null')),
 
     safe(supabase.from('enrollment_applications').select('id', { count: 'exact', head: true })
@@ -141,7 +141,9 @@ export async function fetchStatsAndCounts(
 
   const studentsCount = v(studentsResult).count || 0;
   const teachersData = v(teachersResult).data || [];
-  const classesCount = v(classesResult).count || 0;
+  const classesCount = Array.isArray(v(classesResult).data)
+    ? v(classesResult).data.length
+    : (v(classesResult).count || 0);
   const applicationsCount = v(applicationsResult).count || 0;
   const approvedCount = v(approvedAppsResult).count || 0;
   const rejectedCount = v(rejectedAppsResult).count || 0;

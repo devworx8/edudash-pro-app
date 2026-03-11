@@ -180,11 +180,11 @@ export const setupPWAMetaTags = (): void => {
     return link;
   });
 
-  // Theme color (brand dark blue-gray)
+  // Theme color (app background)
   ensureTag('meta[name="theme-color"]', () => {
     const meta = document.createElement('meta');
     meta.setAttribute('name', 'theme-color');
-    meta.setAttribute('content', '#0f172a');
+    meta.setAttribute('content', '#0a0a0f');
     return meta;
   });
 

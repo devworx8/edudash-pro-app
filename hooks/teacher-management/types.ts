@@ -82,6 +82,7 @@ export interface UseTeacherManagementReturn {
   handleAssignSeat: (teacherUserId: string, teacherName: string) => void;
   handleRevokeSeat: (teacherUserId: string, teacherName: string) => void;
   handleSetTeacherRole: (teacher: Teacher, role: 'teacher' | 'admin' | 'principal_admin') => Promise<void>;
+  updateTeacher: (teacherId: string, payload: Record<string, unknown>) => Promise<void>;
   pickAndUploadTeacherDoc: (docType: TeacherDocType) => Promise<void>;
   showAttachDocActionSheet: () => void;
   refreshSelectedTeacherDocs: () => Promise<void>;

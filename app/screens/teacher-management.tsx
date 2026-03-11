@@ -50,6 +50,7 @@ export default function TeacherManagementScreen() {
     isAssigning, isRevoking,
     handleAssignSeat, handleRevokeSeat,
     isUpdatingRole, updatingRoleTeacherId, handleSetTeacherRole,
+    updateTeacher,
     shouldDisableAssignment,
     selectedTeacherHasSeat,
     seatUsageDisplay,
@@ -447,6 +448,15 @@ export default function TeacherManagementScreen() {
               onAssignSeat={handleAssignSeat}
               onRevokeSeat={handleRevokeSeat}
               onAttachDocument={() => showAttachDocActionSheet(selectedTeacher.id)}
+              onEditTeacher={async (teacherId, payload) => {
+                try {
+                  await updateTeacher(teacherId, payload);
+                  showAlert({ title: 'Updated', message: 'Teacher details saved.', type: 'success' });
+                } catch (e: unknown) {
+                  const msg = e instanceof Error ? e.message : 'Could not save changes.';
+                  showAlert({ title: 'Update Failed', message: msg, type: 'error' });
+                }
+              }}
               onDeleteTeacher={(teacher) => {
                 const fullName = `${teacher.firstName} ${teacher.lastName}`.trim() || teacher.email;
                 void handleDeleteTeacher(teacher.id, fullName, teacher.teacherUserId || null);

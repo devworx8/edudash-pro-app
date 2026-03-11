@@ -24,6 +24,7 @@ import type {
 } from '@/types/teacher-management';
 import type { UseTeacherManagementOptions, UseTeacherManagementReturn, SafeAlert } from './types';
 
+import { assertSupabase } from '@/lib/supabase';
 import { fetchTeachersForSchool } from './fetchTeachers';
 import { fetchAvailableCandidatesForSchool } from './fetchCandidates';
 import { createSeatHandlers } from './seatHandlers';
@@ -220,6 +221,28 @@ export function useTeacherManagement(
     [fetchTeachers, getPreschoolId, safeAlert],
   );
 
+  // --- Update handler ---
+  const updateTeacher = useCallback(
+    async (teacherId: string, payload: Record<string, unknown>) => {
+      const supabase = assertSupabase();
+      const { error } = await supabase
+        .from('teachers')
+        .update(payload)
+        .eq('id', teacherId);
+      if (error) throw error;
+      // Refresh list so UI reflects changes
+      await fetchTeachers();
+      // Refresh selected teacher if it's the one we just edited
+      if (selectedTeacher?.id === teacherId) {
+        const updated = (await fetchTeachersForSchool(getPreschoolId()!)).find(
+          (t) => t.id === teacherId,
+        );
+        if (updated) setSelectedTeacher(updated);
+      }
+    },
+    [fetchTeachers, selectedTeacher, getPreschoolId],
+  );
+
   // --- Document handlers ---
   const refreshSelectedTeacherDocs = useCallback(
     () => refreshDocs({ selectedTeacher, setTeacherDocsMap, safeAlert }),
@@ -294,6 +317,7 @@ export function useTeacherManagement(
     handleAssignSeat,
     handleRevokeSeat,
     handleSetTeacherRole,
+    updateTeacher,
     pickAndUploadTeacherDoc,
     showAttachDocActionSheet,
     refreshSelectedTeacherDocs,

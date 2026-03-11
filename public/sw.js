@@ -11,12 +11,13 @@
  * - Cross-origin (Supabase, APIs): network-only (never cached)
  */
 
-const CACHE_NAME = 'edudash-static-v3'; // Bumped to v3 for mobile-web gating
+const CACHE_NAME = 'edudash-static-v4'; // Bumped to v4 for apple-touch-icon
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/icons/maskable-512.png',
+  '/icons/apple-touch-icon-180.png',
 ];
 // NOTE: "/" NOT included to allow gating logic to run
 
