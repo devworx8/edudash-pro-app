@@ -1,16 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, ScrollView, Share, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
-
+import { InviteService } from '@/services/InviteService';
+import { useAlertModal } from '@/hooks/useAlertModal';
+import AlertModal from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+
 interface EnrollmentInviteModalProps {
   visible: boolean;
   onClose: () => void;
   theme: any;
-  programId?: string; // Optional: pre-select a program
+  programId?: string;
 }
 
 interface Program {
@@ -27,17 +30,20 @@ export function EnrollmentInviteModal({
 }: EnrollmentInviteModalProps) {
   const { profile } = useAuth();
   const orgId = profile?.organization_id || (profile as any)?.preschool_id;
+  const { alertState, showAlert, hideAlert } = useAlertModal();
 
   const [emails, setEmails] = useState('');
   const [selectedProgramId, setSelectedProgramId] = useState<string>(programId || '');
   const [sending, setSending] = useState(false);
+  const [sentCount, setSentCount] = useState(0);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
 
-  // Fetch available programs/courses
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const { data: programs } = useQuery({
     queryKey: ['org-programs', orgId],
     queryFn: async () => {
       if (!orgId) return [];
-
       const { data, error } = await assertSupabase()
         .from('courses')
         .select('id, title, course_code')
@@ -45,289 +51,280 @@ export function EnrollmentInviteModal({
         .eq('is_active', true)
         .is('deleted_at', null)
         .order('title');
-
-      if (error) {
-        console.error('Failed to fetch programs:', error);
-        return [];
-      }
-
+      if (error) return [];
       return (data || []) as Program[];
     },
     enabled: !!orgId && visible,
   });
 
   useEffect(() => {
-    if (programId) {
-      setSelectedProgramId(programId);
-    }
+    if (programId) setSelectedProgramId(programId);
   }, [programId]);
 
   const handleSendInvites = async () => {
     if (!emails.trim()) {
-      Alert.alert('Error', 'Please enter at least one email address');
+      showAlert('Missing emails', 'Please enter at least one email address.', 'warning');
       return;
     }
-
-    if (!selectedProgramId) {
-      Alert.alert('Error', 'Please select a program');
-      return;
-    }
-
     if (!orgId) {
-      Alert.alert('Error', 'No organization found');
+      showAlert('Error', 'No organization found. Please complete school setup first.', 'error');
       return;
     }
 
     const emailList = emails
       .split(/[,\n]/)
-      .map((e) => e.trim())
+      .map((e) => e.trim().toLowerCase())
       .filter((e) => e.length > 0 && e.includes('@'));
 
     if (emailList.length === 0) {
-      Alert.alert('Error', 'Please enter valid email addresses');
+      showAlert('Invalid emails', 'Please enter valid email addresses separated by commas or new lines.', 'warning');
       return;
     }
 
     setSending(true);
-    try {
-      // TODO: Implement enrollment invite logic
-      // This would typically:
-      // 1. Create enrollment invite records
-      // 2. Send emails with enrollment links
-      // 3. Links allow students to sign up and auto-enroll in the program
+    let successCount = 0;
+    let lastLink: string | null = null;
 
-      Alert.alert(
-        'Invites Sent',
-        `Enrollment invitations have been sent to ${emailList.length} learner(s).`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setEmails('');
-              setSelectedProgramId(programId || '');
-              onClose();
-            },
-          },
-        ]
-      );
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to send invites');
-    } finally {
-      setSending(false);
+    for (const email of emailList) {
+      const result = await InviteService.createInvite({
+        type: 'learner_enroll',
+        organizationId: orgId,
+        preschoolId: orgId,
+        email,
+        message: selectedProgramId ? `Enrollment for program` : undefined,
+        requestedRole: 'student',
+        expiresInDays: 14,
+      });
+      if (result.success) {
+        successCount += 1;
+        if (result.inviteLink) lastLink = result.inviteLink;
+      }
     }
+
+    setSending(false);
+    setSentCount(successCount);
+    if (lastLink) setInviteLink(lastLink);
+
+    if (successCount === emailList.length) {
+      showAlert(
+        'Invitations Sent',
+        `${successCount} enrollment invitation${successCount > 1 ? 's' : ''} sent successfully. Learners will receive an email with a link to join.`,
+        'success',
+        [{ text: 'Done', onPress: () => { resetAndClose(); }, style: 'default' }],
+      );
+    } else if (successCount > 0) {
+      showAlert(
+        'Partially Sent',
+        `${successCount} of ${emailList.length} invitations were sent. Some may have failed due to duplicates or invalid addresses.`,
+        'warning',
+        [{ text: 'OK', style: 'default' }],
+      );
+    } else {
+      showAlert('Failed', 'Could not send invitations. Please check your connection and try again.', 'error');
+    }
+  };
+
+  const handleShareLink = async () => {
+    if (!orgId) return;
+    const result = await InviteService.createInvite({
+      type: 'learner_enroll',
+      organizationId: orgId,
+      preschoolId: orgId,
+      requestedRole: 'student',
+      expiresInDays: 30,
+    });
+    if (result.success && result.inviteLink) {
+      setInviteLink(result.inviteLink);
+      const schoolName = profile?.organization_name || 'our school';
+      await Share.share({
+        message: `You are invited to enroll at ${schoolName}! Use this link to register: ${result.inviteLink}`,
+        title: `Enrollment Invitation - ${schoolName}`,
+      });
+    } else {
+      showAlert('Error', 'Could not generate invite link. Please try again.', 'error');
+    }
+  };
+
+  const resetAndClose = () => {
+    setEmails('');
+    setSelectedProgramId(programId || '');
+    setSentCount(0);
+    setInviteLink(null);
+    onClose();
   };
 
   const selectedProgram = programs?.find((p) => p.id === selectedProgramId);
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={resetAndClose}>
       <View style={styles.overlay}>
-        <View style={[styles.modal, { backgroundColor: theme.card }]}>
+        <View style={[styles.modal, { backgroundColor: theme.cardBackground || theme.card || theme.surface }]}>
           <View style={styles.header}>
-            <Text style={[styles.title, { color: theme.text }]}>
-              Invite Learners
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={24} color={theme.text} />
+            <View style={styles.headerLeft}>
+              <View style={[styles.headerIcon, { backgroundColor: `${theme.primary}15` }]}>
+                <Ionicons name="school" size={22} color={theme.primary} />
+              </View>
+              <View>
+                <Text style={[styles.title, { color: theme.text }]}>Invite Learners</Text>
+                <Text style={[styles.headerSub, { color: theme.textSecondary }]}>
+                  Send enrollment invitations
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity onPress={resetAndClose} style={styles.closeBtn}>
+              <Ionicons name="close" size={22} color={theme.textSecondary} />
             </TouchableOpacity>
           </View>
 
-          <ScrollView 
+          <ScrollView
             style={styles.content}
             contentContainerStyle={{ paddingBottom: 20 }}
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
           >
-            <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>
-                Select Program / Learnership
-              </Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                style={styles.programList}
-              >
-                {programs?.map((program) => (
-                  <TouchableOpacity
-                    key={program.id}
-                    style={[
-                      styles.programChip,
-                      selectedProgramId === program.id && {
-                        backgroundColor: theme.primary,
-                      },
-                      { borderColor: theme.border },
-                    ]}
-                    onPress={() => setSelectedProgramId(program.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.programChipText,
-                        selectedProgramId === program.id && { color: '#fff' },
-                        { color: theme.text },
-                      ]}
-                    >
-                      {program.title}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              {selectedProgram && (
-                <Text style={[styles.selectedProgram, { color: theme.textSecondary }]}>
-                  Selected: {selectedProgram.title}
+            {/* Quick share link */}
+            <TouchableOpacity
+              style={[styles.shareLinkCard, { borderColor: theme.primary + '30', backgroundColor: theme.primary + '08' }]}
+              onPress={handleShareLink}
+              activeOpacity={0.85}
+            >
+              <View style={[styles.shareLinkIcon, { backgroundColor: theme.primary + '18' }]}>
+                <Ionicons name="share-social" size={20} color={theme.primary} />
+              </View>
+              <View style={styles.shareLinkText}>
+                <Text style={[styles.shareLinkTitle, { color: theme.text }]}>Share Enrollment Link</Text>
+                <Text style={[styles.shareLinkSub, { color: theme.textSecondary }]}>
+                  Generate a link to share via WhatsApp, SMS, or email
                 </Text>
-              )}
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+
+            <View style={styles.dividerRow}>
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+              <Text style={[styles.dividerText, { color: theme.textSecondary }]}>or invite by email</Text>
+              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
             </View>
 
+            {programs && programs.length > 0 && (
+              <View style={styles.inputGroup}>
+                <Text style={[styles.label, { color: theme.text }]}>Program (optional)</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.programList}>
+                  {programs.map((program) => (
+                    <TouchableOpacity
+                      key={program.id}
+                      style={[
+                        styles.programChip,
+                        { borderColor: theme.border },
+                        selectedProgramId === program.id && { backgroundColor: theme.primary, borderColor: theme.primary },
+                      ]}
+                      onPress={() => setSelectedProgramId(prev => prev === program.id ? '' : program.id)}
+                    >
+                      <Text style={[
+                        styles.programChipText,
+                        { color: theme.text },
+                        selectedProgramId === program.id && { color: '#fff' },
+                      ]}>
+                        {program.title}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             <View style={styles.inputGroup}>
-              <Text style={[styles.label, { color: theme.text }]}>
-                Learner Email Addresses
-              </Text>
+              <Text style={[styles.label, { color: theme.text }]}>Email Addresses</Text>
               <Text style={[styles.hint, { color: theme.textSecondary }]}>
-                Enter email addresses separated by commas or new lines
+                Separate multiple emails with commas or new lines
               </Text>
               <TextInput
-                style={[styles.textArea, { 
+                style={[styles.textArea, {
                   backgroundColor: theme.background,
                   color: theme.text,
                   borderColor: theme.border,
                 }]}
                 value={emails}
                 onChangeText={setEmails}
-                placeholder="learner1@example.com, learner2@example.com"
+                placeholder="parent@email.com, guardian@email.com"
                 placeholderTextColor={theme.textSecondary}
                 multiline
-                numberOfLines={6}
+                numberOfLines={4}
                 textAlignVertical="top"
+                autoCapitalize="none"
+                keyboardType="email-address"
               />
             </View>
 
             <View style={styles.buttonRow}>
               <TouchableOpacity
-                style={[styles.button, styles.cancelButton, { 
-                  borderColor: theme.border,
-                }]}
-                onPress={onClose}
+                style={[styles.button, styles.cancelButton, { borderColor: theme.border }]}
+                onPress={resetAndClose}
                 disabled={sending}
               >
-                <Text style={[styles.cancelText, { color: theme.text }]}>
-                  Cancel
-                </Text>
+                <Text style={[styles.cancelText, { color: theme.text }]}>Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[styles.button, { backgroundColor: theme.primary }]}
+                style={[styles.button, { backgroundColor: theme.primary }, (!emails.trim() || sending) && styles.buttonDisabled]}
                 onPress={handleSendInvites}
-                disabled={sending || !emails.trim() || !selectedProgramId}
+                disabled={sending || !emails.trim()}
               >
                 {sending ? (
                   <EduDashSpinner color="#fff" />
                 ) : (
-                  <Text style={styles.sendText}>Send Invites</Text>
+                  <View style={styles.sendRow}>
+                    <Ionicons name="send" size={16} color="#fff" />
+                    <Text style={styles.sendText}>Send Invites</Text>
+                  </View>
                 )}
               </TouchableOpacity>
             </View>
           </ScrollView>
         </View>
       </View>
+      <AlertModal
+        visible={alertState.visible}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+        buttons={alertState.buttons}
+        onClose={hideAlert}
+      />
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modal: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: '85%',
-    overflow: 'hidden',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  content: {
-    gap: 20,
-  },
-  inputGroup: {
-    gap: 8,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  hint: {
-    fontSize: 12,
-    marginTop: -4,
-  },
-  programList: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  programChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  programChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  selectedProgram: {
-    fontSize: 12,
-    marginTop: 4,
-    fontStyle: 'italic',
-  },
-  textArea: {
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-    minHeight: 120,
-    maxHeight: 200,
-  },
-  buttonRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  button: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 50,
-  },
-  cancelButton: {
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sendText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+const createStyles = (theme: any) => StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modal: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, maxHeight: '88%', overflow: 'hidden' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  headerIcon: { width: 42, height: 42, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  headerSub: { fontSize: 12, marginTop: 2 },
+  closeBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(128,128,128,0.1)' },
+  title: { fontSize: 18, fontWeight: '700' },
+  content: {},
+  shareLinkCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, borderWidth: 1 },
+  shareLinkIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  shareLinkText: { flex: 1 },
+  shareLinkTitle: { fontSize: 14, fontWeight: '700' },
+  shareLinkSub: { fontSize: 12, marginTop: 2, lineHeight: 16 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 16, gap: 10 },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { fontSize: 12 },
+  inputGroup: { marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', marginBottom: 6 },
+  hint: { fontSize: 12, marginBottom: 8 },
+  programList: { flexDirection: 'row', marginBottom: 4 },
+  programChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 8 },
+  programChipText: { fontSize: 13, fontWeight: '600' },
+  textArea: { borderWidth: 1, borderRadius: 14, padding: 14, fontSize: 15, minHeight: 100, maxHeight: 160 },
+  buttonRow: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  button: { flex: 1, padding: 15, borderRadius: 14, alignItems: 'center', justifyContent: 'center', minHeight: 50 },
+  cancelButton: { borderWidth: 1, backgroundColor: 'transparent' },
+  buttonDisabled: { opacity: 0.5 },
+  cancelText: { fontSize: 15, fontWeight: '600' },
+  sendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sendText: { color: '#fff', fontSize: 15, fontWeight: '700' },
 });
-
