@@ -8,6 +8,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Speech from 'expo-speech';
 
+const END_CONFIDENCE_REQUIRED = 3;
+const NEAR_END_STALL_TICKS = 5;
+const MIN_RELIABLE_DURATION_MS = 500;
+
 export interface VoiceTTSPlaybackHandle {
   playerRef: React.MutableRefObject<AudioPlayer | null>;
   stopPlayback: () => Promise<void>;
@@ -17,6 +21,7 @@ export interface VoiceTTSPlaybackHandle {
 
 export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
   const playerRef = useRef<AudioPlayer | null>(null);
+  const audioModeConfiguredRef = useRef(false);
   const playbackIdRef = useRef(0);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,14 +64,13 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
 
   const playAudioUrl = useCallback((audioUrl: string, timeoutMs: number): Promise<void> => {
     return new Promise<void>(async (resolve, reject) => {
-      try {
-        await setAudioModeAsync({
-          playsInSilentMode: true,
-          shouldPlayInBackground: true,
-          interruptionMode: 'doNotMix',
-        });
-      } catch (modeErr) {
-        console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
+      if (!audioModeConfiguredRef.current) {
+        try {
+          await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
+          audioModeConfiguredRef.current = true;
+        } catch (modeErr) {
+          console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
+        }
       }
 
       let settled = false;
@@ -75,9 +79,7 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
       let endConfidenceTicks = 0;
       let lastPositionMs = 0;
       let playbackStartedAtMs = 0;
-      let stableDurationMs = 0;
-      let durationStableTicks = 0;
-      let lastRawDurationMs = 0;
+      let peakDurationMs = 0;
       let lastSnapshot = { durationMs: 0, positionMs: 0, playing: false };
       const playbackId = playbackIdRef.current + 1;
       playbackIdRef.current = playbackId;
@@ -116,15 +118,7 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
           return;
         }
 
-        if (durationMs > 0) {
-          if (Math.abs(durationMs - lastRawDurationMs) < 50) {
-            durationStableTicks += 1;
-          } else {
-            durationStableTicks = 0;
-          }
-          lastRawDurationMs = durationMs;
-          if (durationStableTicks >= 3) stableDurationMs = durationMs;
-        }
+        if (durationMs > peakDurationMs) peakDurationMs = durationMs;
 
         if (playing) {
           if (!hasStarted) playbackStartedAtMs = Date.now();
@@ -138,20 +132,30 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
 
         const elapsedSinceStartMs = Date.now() - playbackStartedAtMs;
         const hasProgressed = positionMs > lastPositionMs + 20;
-        if (hasProgressed) { lastPositionMs = positionMs; stallTicks = 0; } else { stallTicks += 1; }
+        if (hasProgressed) {
+          lastPositionMs = positionMs;
+          stallTicks = 0;
+          endConfidenceTicks = 0;
+        } else {
+          stallTicks += 1;
+        }
 
-        const useDuration = stableDurationMs > 0 ? stableDurationMs : durationMs;
-        const durationReliable = useDuration > 0 && durationStableTicks >= 3;
+        const stableDuration = peakDurationMs >= MIN_RELIABLE_DURATION_MS;
+        const reachedEnd =
+          stableDuration &&
+          elapsedSinceStartMs > MIN_RELIABLE_DURATION_MS &&
+          positionMs >= Math.max(peakDurationMs - 250, 0);
+        if (reachedEnd) {
+          endConfidenceTicks += 1;
+          if (endConfidenceTicks >= END_CONFIDENCE_REQUIRED) finalize();
+          return;
+        }
 
-        const reachedEnd = durationReliable
-          && positionMs >= Math.max(useDuration - 150, 0)
-          && elapsedSinceStartMs > 500;
-        if (reachedEnd) { if (++endConfidenceTicks >= 3) finalize(); return; }
-
-        const nearEndStall = durationReliable
-          && positionMs >= useDuration * 0.92
-          && stallTicks >= 8
-          && elapsedSinceStartMs > 800;
+        const nearEndStall =
+          stableDuration &&
+          elapsedSinceStartMs > 800 &&
+          positionMs >= peakDurationMs * 0.92 &&
+          stallTicks >= NEAR_END_STALL_TICKS;
         if (nearEndStall) finalize();
       }, 100);
 
