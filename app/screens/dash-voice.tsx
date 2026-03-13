@@ -410,6 +410,7 @@ export default function DashVoiceScreen() {
               preferredLanguage={preferredLanguage}
               theme={theme}
               orbTier={capabilityTier}
+              isMuted={isVoiceMuted}
               onMuteChange={setIsVoiceMuted}
               onStopListening={() => setIsListening(false)}
               onStartListening={() => setIsListening(true)}

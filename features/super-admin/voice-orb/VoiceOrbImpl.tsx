@@ -102,6 +102,8 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   const ttsSpeakingRef = useRef(ttsIsSpeaking);
   const restartBlockedRef = useRef(restartBlocked);
   const skipNextAutoRestartRef = useRef(false);
+  /** Timestamp until which transcripts are discarded (post-TTS echo gate) */
+  const postTTSSilentUntilRef = useRef<number>(0);
   const handleStartRecordingRef = useRef<(() => Promise<void>) | null>(null);
   const handlePrimaryActionRef = useRef<(() => Promise<void>) | null>(null);
   const scheduleLiveFallbackRef = useRef<(() => void) | null>(null);
@@ -121,6 +123,15 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     ttsStartedAtRef.current = null;
     bargeInTriggeredRef.current = false;
   }, [isSpeaking, ttsIsSpeaking]);
+
+  // Wrap onTranscript to silently drop echo after TTS ends
+  const safeOnTranscript = useCallback((text: string, lang?: SupportedLanguage, meta?: Parameters<typeof onTranscript>[2]) => {
+    if (Date.now() < postTTSSilentUntilRef.current) {
+      if (__DEV__) console.log('[VoiceOrb] 🔇 Post-TTS echo gate — discarding transcript to prevent self-interruption');
+      return;
+    }
+    onTranscript(text, lang, meta);
+  }, [onTranscript]);
 
   const bargeInGraceMsRef = useRef(
     Number.parseInt(String(process.env.EXPO_PUBLIC_VOICE_BARGE_IN_GRACE_MS || '2000'), 10) || 2000
@@ -186,7 +197,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   } = useVoiceOrbLiveSession({
     stopLiveListening: async () => { await stopLiveListening(); },
     onPartialTranscript,
-    onTranscript,
+    onTranscript: safeOnTranscript,
     onStopListening,
     selectedLanguage,
     profile,
@@ -216,12 +227,18 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     onPartialResult: (text) => {
       if (!usingLiveSTTRef.current) return;
       void triggerBargeIn(text);
-      lastPartialRef.current = text;
-      liveLastPartialAtRef.current = Date.now();
+      // Guard: don't overwrite accumulated speech with an empty reset from the STT engine.
+      // On-device STT occasionally resets its buffer mid-sentence and emits an empty partial;
+      // preserving lastPartialRef here ensures the silence handler still has real speech to finalize.
+      if (text) {
+        lastPartialRef.current = text;
+        liveLastPartialAtRef.current = Date.now();
+        // Only reset silence timer on real speech — don't extend the window for empty resets
+        resetLiveSilenceTimerRef.current?.();
+      }
       setLiveTranscript(text);
       onPartialTranscript?.(text, selectedLanguage);
       logVoiceTrace('stt_partial', { sessionId: liveSessionRef.current, chars: text.length, preview: text.slice(0, 80) });
-      resetLiveSilenceTimerRef.current?.();
     },
     onFinalResult: (text) => {
       if (!usingLiveSTTRef.current) return;
@@ -263,7 +280,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       if (result?.text) {
         const detected = result.language;
         if (detected === 'en-ZA' || detected === 'af-ZA' || detected === 'zu-ZA') setLastDetectedLanguage(detected);
-        onTranscript(result.text, result.language as SupportedLanguage | undefined, { source: 'recorded', capturedAt: Date.now(), audioBase64: result.audio_base64, audioContentType: result.audio_content_type });
+        safeOnTranscript(result.text, result.language as SupportedLanguage | undefined, { source: 'recorded', capturedAt: Date.now(), audioBase64: result.audio_base64, audioContentType: result.audio_content_type });
         setStatusText('Listening...');
       } else {
         setStatusText('No speech detected');
@@ -272,7 +289,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     } finally {
       if (!usingLiveSTTRef.current) setIsProcessing(false);
     }
-  }, [recorderActions, onStopListening, transcribe, selectedLanguage, onTranscript, isProcessing, stopLiveListening, usingLiveSTTRef, setLastDetectedLanguage]);
+  }, [recorderActions, onStopListening, transcribe, selectedLanguage, safeOnTranscript, isProcessing, stopLiveListening, usingLiveSTTRef, setLastDetectedLanguage]);
 
   useEffect(() => { transcribeRef.current = handleStopAndTranscribe; }, [handleStopAndTranscribe]);
 
@@ -373,6 +390,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     handlePrimaryActionRef,
     skipNextAutoRestartRef,
     setMuted: applyMuteState,
+    postTTSSilentUntilRef,
   });
 
   // Derived sizes
