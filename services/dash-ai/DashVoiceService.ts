@@ -744,22 +744,22 @@ export class DashVoiceService {
   }
 
   /**
-   * Speak text using Azure TTS with chunked prefetch pipeline.
-   * Long text is split into chunks that are synthesized in parallel with playback,
-   * ensuring fluent speech with no pauses between segments.
-   * Note: TTS is a premium feature - free tier users will get an error callback.
+   * Speak text using TTS with intelligent text normalization
+   * Note: TTS is a premium feature - free tier users will get an error callback
    */
   public async speakText(text: string, callbacks?: SpeechCallbacks, options?: { language?: string }): Promise<void> {
     try {
       const voiceSettings = this.config.voiceSettings;
-
+      
+      // Check tier access for TTS (premium feature), cached for chunked playback.
       const canUseTTS = await this.canCurrentUserUseTTS();
       if (!canUseTTS) {
         console.log('[DashVoice] TTS blocked for free tier user');
         callbacks?.onError?.(new Error('TTS_FREE_TIER_BLOCKED'));
         return;
       }
-
+      
+      // Normalize text first (legacy readability + SSOT TTS normalization).
       const legacyNormalizedText = this.normalizeTextForSpeech(text);
       const phonicsMode = shouldUsePhonicsMode(text) || shouldUsePhonicsMode(legacyNormalizedText);
       const normalizedText = normalizeForTTS(legacyNormalizedText, {
@@ -772,6 +772,7 @@ export class DashVoiceService {
         return;
       }
 
+      // Short language code for Edge Function (af, zu, xh, nso, en)
       let shortLang: SupportedLanguage = 'en';
       const requestedLang = options?.language || voiceSettings.language || 'en';
       try {
@@ -780,11 +781,17 @@ export class DashVoiceService {
         const ui = getCurrentLanguage?.();
         shortLang = normalizeLanguageCode(requestedLang || ui || voiceSettings.language) as SupportedLanguage;
 
+        // Check if TTS is supported for this language
         if (!this.isTTSSupported(shortLang)) {
           const langNames: Record<string, string> = {
-            'xh': 'isiXhosa', 'xh-ZA': 'isiXhosa', 'nso': 'Sepedi',
-            'nso-ZA': 'Sepedi', 'st': 'Sesotho', 'zu': 'isiZulu',
-            'af': 'Afrikaans', 'en': 'English',
+            'xh': 'isiXhosa',
+            'xh-ZA': 'isiXhosa',
+            'nso': 'Sepedi',
+            'nso-ZA': 'Sepedi',
+            'st': 'Sesotho',
+            'zu': 'isiZulu',
+            'af': 'Afrikaans',
+            'en': 'English',
           };
           const langName = langNames[shortLang] || shortLang;
           console.warn(`[DashVoice] TTS not supported for ${langName}.`);
@@ -792,6 +799,7 @@ export class DashVoiceService {
           return;
         }
 
+        // Resolve voice ID preference
         const prefs = await this.getCachedVoicePreferences();
         const { voiceService } = await import('@/lib/voice/client');
         const voice_id = resolveSelectedVoiceId({
@@ -801,104 +809,65 @@ export class DashVoiceService {
           preferenceLanguage: prefs?.language,
         });
 
+        // Convert rate/pitch (1.0 baseline) to -50..+50 scale expected by Edge Function
         const baseRate = Number.isFinite(voiceSettings.rate) && voiceSettings.rate > 0
-          ? voiceSettings.rate : 1.0;
+          ? voiceSettings.rate
+          : 1.0;
         const profileSpeakingRate = Math.round((baseRate - 1.0) * 100);
         const speaking_rate = phonicsMode
           ? Math.min(profileSpeakingRate, AZURE_RATE_PHONICS)
           : profileSpeakingRate;
         const pitch = Math.round(((voiceSettings.pitch ?? 1.0) - 1.0) * 100);
 
-        const synthesizeRequest = (chunkText: string) =>
-          voiceService.synthesize({
-            text: chunkText,
-            language: shortLang as any,
-            voice_id,
-            speaking_rate,
-            pitch,
-            phonics_mode: phonicsMode,
-          });
 
-        // Split into chunks for prefetch pipeline (skip chunking for phonics or short text)
-        const FIRST_CHUNK = 120;
-        const FOLLOW_UP_CHUNK = 350;
-        const chunks = this.splitForPrefetch(normalizedText, phonicsMode, FIRST_CHUNK, FOLLOW_UP_CHUNK);
+        // Try Edge Function (Azure) with retry for transient errors
+        const MAX_TTS_RETRIES = 2;
+        const TTS_RETRY_BASE_MS = 400;
+        let lastTTSError: unknown = null;
 
-        const { audioManager } = await import('@/lib/voice/audio');
-        callbacks?.onStart?.();
+        for (let attempt = 0; attempt <= MAX_TTS_RETRIES; attempt += 1) {
+          try {
+            const resp = await voiceService.synthesize({
+              text: normalizedText,
+              language: shortLang as any,
+              voice_id,
+              speaking_rate,
+              pitch,
+              phonics_mode: phonicsMode,
+            });
 
-        // Prefetch pipeline: synthesize next chunk while current one plays
-        type SynthResult = { audioUrl: string | null; promise: Promise<void> };
-        const prefetchMap = new Map<number, SynthResult>();
+            if (!resp?.audio_url) {
+              throw new Error((resp as any)?.error || 'TTS returned no audio');
+            }
 
-        const startPrefetch = (idx: number): void => {
-          if (idx >= chunks.length || prefetchMap.has(idx)) return;
-          const entry: SynthResult = { audioUrl: null, promise: Promise.resolve() };
-          entry.promise = synthesizeRequest(chunks[idx])
-            .then((resp) => { entry.audioUrl = resp?.audio_url || null; })
-            .catch(() => { entry.audioUrl = null; });
-          prefetchMap.set(idx, entry);
-        };
-
-        // Start first two chunks in parallel
-        startPrefetch(0);
-        if (chunks.length > 1) startPrefetch(1);
-
-        let anyPlayed = false;
-        for (let i = 0; i < chunks.length; i++) {
-          const entry = prefetchMap.get(i);
-          if (entry) await entry.promise;
-
-          const audioUrl = entry?.audioUrl;
-          if (!audioUrl) continue;
-
-          // Kick off next prefetch before playing
-          startPrefetch(i + 1);
-          if (i + 2 < chunks.length) startPrefetch(i + 2);
-
-          await audioManager.play(audioUrl);
-          anyPlayed = true;
+            const { audioManager } = await import('@/lib/voice/audio');
+            callbacks?.onStart?.();
+            await audioManager.play(resp.audio_url);
+            callbacks?.onDone?.();
+            return;
+          } catch (edgeError: any) {
+            lastTTSError = edgeError;
+            const errMsg = String(edgeError instanceof Error ? edgeError.message : edgeError || '').toLowerCase();
+            const isRetryable = errMsg.includes('429') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('503') || errMsg.includes('504');
+            if (!isRetryable || attempt === MAX_TTS_RETRIES) break;
+            await new Promise(r => setTimeout(r, TTS_RETRY_BASE_MS * Math.pow(1.5, attempt)));
+          }
         }
 
-        if (anyPlayed) {
-          callbacks?.onDone?.();
-        } else {
-          callbacks?.onError?.(new Error('TTS unavailable right now.'));
-        }
+        console.warn('[DashVoice] Azure TTS failed after retries');
+        callbacks?.onError?.(lastTTSError instanceof Error ? lastTTSError : new Error('TTS unavailable right now.'));
         return;
       } catch (mapErr) {
         console.warn('[DashVoice] Language normalization failed');
         callbacks?.onError?.(mapErr instanceof Error ? mapErr : new Error('TTS unavailable right now.'));
         return;
       }
+      return;
     } catch (error) {
       console.error('[DashVoice] Failed to speak text:', error);
       callbacks?.onError?.(error);
       throw error;
     }
-  }
-
-  private splitForPrefetch(
-    text: string, phonicsMode: boolean, firstMax: number, followMax: number,
-  ): string[] {
-    const trimmed = text.trim();
-    if (!trimmed) return [];
-    if (phonicsMode || trimmed.length <= firstMax) return [trimmed];
-
-    const sentences = trimmed.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
-    if (sentences.length <= 1) return [trimmed];
-
-    const chunks: string[] = [];
-    let current = '';
-    for (const sentence of sentences) {
-      const max = chunks.length === 0 ? firstMax : followMax;
-      const candidate = current ? `${current} ${sentence}` : sentence;
-      if (candidate.length <= max) { current = candidate; continue; }
-      if (current.trim()) chunks.push(current.trim());
-      current = sentence;
-    }
-    if (current.trim()) chunks.push(current.trim());
-    return chunks.filter(Boolean);
   }
 
   /**
