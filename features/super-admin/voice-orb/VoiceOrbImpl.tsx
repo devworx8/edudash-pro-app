@@ -25,6 +25,7 @@ import { useVoiceRecorder } from '@/components/super-admin/voice-orb/useVoiceRec
 import { useVoiceSTT, type SupportedLanguage, type TranscribeLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
 import { useVoiceTTS } from '@/components/super-admin/voice-orb/useVoiceTTS';
 import { canAutoRestartAfterInterrupt, INTERRUPT_RESTART_DELAY_MS } from '@/components/super-admin/voice-orb/interrupt';
+import { canAutoStartBargeInDuringTTS, shouldAutoTriggerBargeIn } from './automaticBargeIn';
 
 import type { VoiceOrbRef, VoiceOrbProps } from './types';
 import { useVoiceOrbLiveSession } from './useVoiceOrbLiveSession';
@@ -51,6 +52,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   size = ORB_SIZE,
   autoStartListening = true,
   autoRestartAfterTTS = true,
+  enableAutomaticBargeInDuringTTS = true,
   restartBlocked = false,
   preschoolMode = false,
   showLiveTranscript = true,
@@ -123,14 +125,16 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   }, [isSpeaking, ttsIsSpeaking]);
 
   const shouldTriggerBargeIn = useCallback((text: string) => {
-    const spoken = String(text || '').trim();
-    if (isMuted || !spoken) return false;
-    if (!(isSpeakingRef.current || ttsSpeakingRef.current)) return false;
-    if (bargeInTriggeredRef.current) return false;
-    const ttsStartedAt = ttsStartedAtRef.current;
-    if (ttsStartedAt != null && Date.now() - ttsStartedAt < 700) return false;
-    return spoken.length >= 4;
-  }, [isMuted]);
+    return shouldAutoTriggerBargeIn({
+      enableAutomaticBargeInDuringTTS,
+      isMuted,
+      text,
+      isSpeaking: isSpeakingRef.current,
+      ttsIsSpeaking: ttsSpeakingRef.current,
+      alreadyTriggered: bargeInTriggeredRef.current,
+      ttsStartedAt: ttsStartedAtRef.current,
+    });
+  }, [enableAutomaticBargeInDuringTTS, isMuted]);
 
   const triggerBargeIn = useCallback(async (text: string) => {
     if (!shouldTriggerBargeIn(text)) return;
@@ -393,7 +397,14 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
 
   // handleStartRecording
   const handleStartRecording = useCallback(async () => {
-    const allowBargeInStart = (isSpeaking || ttsIsSpeaking) && !isMuted && LIVE_TRANSCRIPTION_ENABLED && liveAvailable;
+    const allowBargeInStart = canAutoStartBargeInDuringTTS({
+      enableAutomaticBargeInDuringTTS,
+      isMuted,
+      liveTranscriptionEnabled: LIVE_TRANSCRIPTION_ENABLED,
+      liveAvailable,
+      isSpeaking,
+      ttsIsSpeaking,
+    });
     if ((isSpeaking || ttsIsSpeaking) && !allowBargeInStart) {
       console.log('[VoiceOrb] 🚫 Blocking record start - TTS is playing and barge-in listening is unavailable');
       return;
@@ -446,7 +457,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     clearLiveResults, clearLiveTimers, onVoiceError, logVoiceTrace, selectedLanguage,
     LIVE_SILENCE_TIMEOUT_MS, LIVE_FINAL_FALLBACK_MS, usingLiveSTTRef, liveSessionRef,
     liveFinalizedRef, lastPartialRef, liveSessionStartedAtRef, liveLastPartialAtRef,
-    restartBlockedRef, LIVE_TRANSCRIPTION_ENABLED, isMuted,
+    restartBlockedRef, LIVE_TRANSCRIPTION_ENABLED, enableAutomaticBargeInDuringTTS, isMuted,
   ]);
 
   useEffect(() => { handleStartRecordingRef.current = handleStartRecording; }, [handleStartRecording]);
@@ -464,6 +475,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   }, [autoStartListening, isSpeaking, ttsIsSpeaking, restartBlocked]);
 
   useEffect(() => {
+    if (!enableAutomaticBargeInDuringTTS) return;
     if (isMuted || restartBlocked || isProcessing || isParentProcessing) return;
     if (!(isSpeaking || ttsIsSpeaking)) return;
     if (recorderState.isRecording || usingLiveSTTRef.current || isListening) return;
@@ -484,6 +496,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     restartBlockedRef,
     ttsIsSpeaking,
     usingLiveSTTRef,
+    enableAutomaticBargeInDuringTTS,
   ]);
 
   // Handle orb press

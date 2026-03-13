@@ -128,6 +128,7 @@ export function DashVoiceOrbSection({
       size={orbRenderSize}
       autoStartListening
       autoRestartAfterTTS
+      enableAutomaticBargeInDuringTTS={false}
       restartBlocked={restartBlocked}
       preschoolMode={orgType === 'preschool'}
       showLiveTranscript={false}

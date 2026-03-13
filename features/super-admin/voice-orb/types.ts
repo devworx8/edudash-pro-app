@@ -58,6 +58,8 @@ export interface VoiceOrbProps {
   autoStartListening?: boolean;
   /** Auto-restart listening after TTS ends (default: true) */
   autoRestartAfterTTS?: boolean;
+  /** Allow speech playback to open live STT automatically for hands-free barge-in. */
+  enableAutomaticBargeInDuringTTS?: boolean;
   /** Block auto-restart while parent screen is navigating/interrupted */
   restartBlocked?: boolean;
   /** Preschool mode: longer silence timeout, lower speech threshold for children */
