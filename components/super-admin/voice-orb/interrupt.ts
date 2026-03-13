@@ -1,4 +1,6 @@
-export const INTERRUPT_RESTART_DELAY_MS = 260;
+/** Delay before restarting listening after the user interrupts TTS.
+ *  Must be long enough for the TTS stop to propagate through state. */
+export const INTERRUPT_RESTART_DELAY_MS = 600;
 
 export interface InterruptRestartState {
   isMuted: boolean;
@@ -10,11 +12,10 @@ export interface InterruptRestartState {
 }
 
 export const canAutoRestartAfterInterrupt = (state: InterruptRestartState): boolean => {
+  if (state.isMuted) return false;
   return (
     !state.isProcessing &&
     !state.isRecording &&
-    !state.usingLiveSTT &&
-    !state.isSpeaking &&
-    !state.ttsIsSpeaking
+    !state.usingLiveSTT
   );
 };

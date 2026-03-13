@@ -493,12 +493,24 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       }
       console.log('[VoiceOrb] 🛑 User interrupted TTS - stopping speech');
       await stopSpeaking();
-      setStatusText('Interrupted');
+      if (recorderState.isRecording) {
+        try { await recorderActions.stopRecording(); } catch { /* best-effort */ }
+      }
+      if (usingLiveSTTRef.current) {
+        try { await cancelLiveListening(); } catch { /* best-effort */ }
+        clearLiveTimers();
+        setUsingLiveSTT(false);
+      }
+      onStopListening();
+      setStatusText('Listening...');
       setTimeout(() => {
-        if (!restartBlockedRef.current && canAutoRestartAfterInterrupt({ isMuted, isProcessing, isRecording: recorderState.isRecording, usingLiveSTT: usingLiveSTTRef.current, isSpeaking: isSpeakingRef.current, ttsIsSpeaking: ttsSpeakingRef.current })) {
-          console.log('[VoiceOrb] ✅ One-tap interrupt restart to listening');
+        if (restartBlockedRef.current || isMuted) {
+          console.log('[VoiceOrb] Interrupt restart blocked (restartBlocked or muted)');
+          return;
+        }
+        if (canAutoRestartAfterInterrupt({ isMuted, isProcessing, isRecording: false, usingLiveSTT: false, isSpeaking: false, ttsIsSpeaking: false })) {
+          console.log('[VoiceOrb] ✅ Interrupt → restart listening');
           handleStartRecordingRef.current?.();
-          setStatusText('Listening...');
         }
       }, INTERRUPT_RESTART_DELAY_MS);
       return;
@@ -516,10 +528,15 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     isProcessing,
     isSpeaking,
     recorderState.isRecording,
+    recorderActions,
     restartBlockedRef,
     stopSpeaking,
     ttsIsSpeaking,
     usingLiveSTTRef,
+    cancelLiveListening,
+    clearLiveTimers,
+    setUsingLiveSTT,
+    onStopListening,
   ]);
 
   useEffect(() => {
@@ -602,9 +619,9 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
           cancelAutoRestart();
           void applyMuteState(!isMuted);
         }}
-        style={[styles.muteButton, { borderColor: isMuted ? '#f59e0b' : theme.border, backgroundColor: isMuted ? '#f59e0b20' : 'transparent', marginTop: 16 }]}
+        style={[styles.muteButton, { borderColor: isMuted ? '#ef4444' : theme.border, backgroundColor: isMuted ? 'rgba(239,68,68,0.15)' : 'transparent', marginTop: 16 }]}
       >
-        <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={22} color={isMuted ? '#f59e0b' : theme.textSecondary} />
+        <Ionicons name={isMuted ? 'mic-off' : 'mic'} size={22} color={isMuted ? '#ef4444' : theme.textSecondary} />
       </TouchableOpacity>
     </View>
   );
