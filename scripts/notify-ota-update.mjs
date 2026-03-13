@@ -29,8 +29,11 @@ if (platforms.length === 0) {
 }
 
 const rootPkg = safeReadJson(path.join(process.cwd(), 'package.json'));
+const appConfig = safeReadJson(path.join(process.cwd(), 'app.json'));
+const expoConfig = appConfig?.expo ?? null;
 const appVersion =
   argMap.get('version') ||
+  expoConfig?.version ||
   process.env.npm_package_version ||
   process.env.EXPO_PUBLIC_APP_VERSION ||
   process.env.NEXT_PUBLIC_APP_VERSION ||
@@ -39,6 +42,7 @@ const appVersion =
 
 const buildNumber =
   argMap.get('build-number') ||
+  expoConfig?.android?.versionCode ||
   process.env.ANDROID_VERSION_CODE ||
   process.env.EXPO_ANDROID_VERSION_CODE ||
   process.env.BUILD_NUMBER ||
@@ -66,6 +70,9 @@ const supabaseUrl =
   process.env.EXPO_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const dispatcherTimeoutMs = normalizeTimeoutMs(
+  argMap.get('timeout-ms') || process.env.OTA_NOTIFY_TIMEOUT_MS
+);
 
 if (!supabaseUrl || !serviceRoleKey) {
   console.error('[ota-notify] Missing SUPABASE URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -113,6 +120,7 @@ async function main() {
           Authorization: `Bearer ${serviceRoleKey}`,
           apikey: serviceRoleKey,
         },
+        signal: AbortSignal.timeout(dispatcherTimeoutMs),
         body: JSON.stringify(payload),
       });
 
@@ -165,6 +173,14 @@ function normalizeBoolean(value) {
   if (typeof value === 'boolean') return value;
   if (typeof value !== 'string') return false;
   return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase());
+}
+
+function normalizeTimeoutMs(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return 30000;
+  }
+  return parsed;
 }
 
 function safeReadJson(filePath) {
