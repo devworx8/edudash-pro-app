@@ -129,7 +129,10 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     if (bargeInTriggeredRef.current) return false;
     const ttsStartedAt = ttsStartedAtRef.current;
     if (ttsStartedAt != null && Date.now() - ttsStartedAt < 700) return false;
-    return spoken.length >= 4;
+    // Disable STT-driven barge-in: TTS output (speaker echo) gets picked up by the mic
+    // and falsely triggers barge-in, causing Dash to stop after a few words. Manual
+    // orb-press barge-in remains available.
+    return false;
   }, [isMuted]);
 
   const triggerBargeIn = useCallback(async (text: string) => {
@@ -463,9 +466,12 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     }
   }, [autoStartListening, isSpeaking, ttsIsSpeaking, restartBlocked]);
 
+  // Do NOT start barge-in listening during TTS — speaker echo gets transcribed as speech
+  // and falsely triggers barge-in, causing Dash to stop after a few words. Listening
+  // resumes when TTS ends via auto-restart. User can still tap orb to interrupt.
   useEffect(() => {
     if (isMuted || restartBlocked || isProcessing || isParentProcessing) return;
-    if (!(isSpeaking || ttsIsSpeaking)) return;
+    if (isSpeaking || ttsIsSpeaking) return;
     if (recorderState.isRecording || usingLiveSTTRef.current || isListening) return;
     const timer = setTimeout(() => {
       if (!restartBlockedRef.current && !isMuted) {

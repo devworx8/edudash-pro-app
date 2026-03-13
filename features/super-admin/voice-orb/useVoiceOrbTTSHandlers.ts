@@ -68,27 +68,26 @@ export function useVoiceOrbTTSHandlers({
   const AUTO_RESTART_DELAY_MS = 400;
 
   const suspendListeningForTTS = useCallback(async () => {
-    if (isMuted) {
-      if (recorderState.isRecording) {
-        try {
-          await recorderActions.stopRecording();
-        } catch (stopError) {
-          console.warn('[VoiceOrb] Failed to stop recorder before TTS:', stopError);
-        }
+    // Always stop listening before TTS — prevents speaker echo from triggering false barge-in
+    if (recorderState.isRecording) {
+      try {
+        await recorderActions.stopRecording();
+      } catch (stopError) {
+        console.warn('[VoiceOrb] Failed to stop recorder before TTS:', stopError);
       }
-      if (usingLiveSTTRef.current) {
-        try {
-          await cancelLiveListening();
-        } catch (stopError) {
-          console.warn('[VoiceOrb] Failed to cancel live STT before TTS:', stopError);
-        }
-        clearLiveTimers();
-        setUsingLiveSTT(false);
-      }
-      onStopListening();
     }
+    if (usingLiveSTTRef.current) {
+      try {
+        await cancelLiveListening();
+      } catch (stopError) {
+        console.warn('[VoiceOrb] Failed to cancel live STT before TTS:', stopError);
+      }
+      clearLiveTimers();
+      setUsingLiveSTT(false);
+    }
+    onStopListening();
     setStatusText('Speaking...');
-  }, [cancelLiveListening, clearLiveTimers, isMuted, onStopListening, recorderActions, recorderState.isRecording, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
+  }, [cancelLiveListening, clearLiveTimers, onStopListening, recorderActions, recorderState.isRecording, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
 
   useImperativeHandle(ref, () => ({
     speakText: async (text: string, language?: SupportedLanguage, options?: TTSOptions) => {
@@ -140,26 +139,24 @@ export function useVoiceOrbTTSHandlers({
 
   useEffect(() => {
     if (ttsIsSpeaking || isSpeaking) {
-      if (isMuted) {
-        if (recorderState.isRecording) {
-          console.log('[VoiceOrb] 🔇 Stopping recording - TTS starting while muted');
-          recorderActions.stopRecording();
-          onStopListening();
-        }
-        if (usingLiveSTTRef.current) {
-          console.log('[VoiceOrb] 🔇 Stopping live STT - TTS starting while muted');
-          cancelLiveListening().catch(() => {});
-          clearLiveTimers();
-          setUsingLiveSTT(false);
-          onStopListening();
-        }
+      // Always stop listening when TTS starts — mic picks up speaker echo, causing false
+      // barge-in and Dash stopping after a few words. Listening resumes when TTS ends.
+      if (recorderState.isRecording) {
+        recorderActions.stopRecording();
+        onStopListening();
+      }
+      if (usingLiveSTTRef.current) {
+        cancelLiveListening().catch(() => {});
+        clearLiveTimers();
+        setUsingLiveSTT(false);
+        onStopListening();
       }
       setStatusText('Speaking...');
       onTTSStart?.();
     } else {
       onTTSEnd?.();
     }
-  }, [ttsIsSpeaking, isSpeaking, recorderState.isRecording, recorderActions, onStopListening, onTTSStart, onTTSEnd, cancelLiveListening, clearLiveTimers, isMuted, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
+  }, [ttsIsSpeaking, isSpeaking, recorderState.isRecording, recorderActions, onStopListening, onTTSStart, onTTSEnd, cancelLiveListening, clearLiveTimers, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
 
   const scheduleAutoRestart = useCallback((source: string) => {
     cancelAutoRestart();

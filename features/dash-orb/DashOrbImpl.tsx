@@ -439,6 +439,17 @@ export default function DashOrb({
     setWakeWordEnabled(true);
     wakeWord.startListening();
   }, [voiceEnabled, wakeWordAvailable]);
+
+  // Pause wake word when TTS is speaking — TTS output (e.g. "Hey there") can trigger
+  // false wake-word detection via speaker echo, causing Dash to stop after a few words.
+  useEffect(() => {
+    if (!wakeWordEnabled || !wakeWordAvailable) return;
+    if (isSpeaking) {
+      wakeWord.stopListening();
+    } else {
+      wakeWord.startListening();
+    }
+  }, [isSpeaking, wakeWordEnabled, wakeWordAvailable]);
   
   // Animations & Gestures
   const pan = useRef(new Animated.ValueXY()).current;
