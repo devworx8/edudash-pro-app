@@ -169,12 +169,16 @@ export function useVoiceOrbTTSHandlers({
     cancelAutoRestart();
     autoRestartTimerRef.current = setTimeout(() => {
       autoRestartTimerRef.current = null;
+      if (isMuted) {
+        console.log(`[VoiceOrb] auto-restart blocked (muted, source=${source})`);
+        return;
+      }
       if (!isSpeaking && !ttsIsSpeaking && !restartBlockedRef.current && !isListening && !recorderState.isRecording && !usingLiveSTTRef.current && !isParentProcessing) {
         console.log(`[VoiceOrb] auto-restart (${source})`);
         handleStartRecordingRef.current?.();
       }
     }, AUTO_RESTART_DELAY_MS);
-  }, [cancelAutoRestart, isSpeaking, ttsIsSpeaking, isListening, recorderState.isRecording, isParentProcessing, restartBlockedRef, usingLiveSTTRef, handleStartRecordingRef]);
+  }, [cancelAutoRestart, isMuted, isSpeaking, ttsIsSpeaking, isListening, recorderState.isRecording, isParentProcessing, restartBlockedRef, usingLiveSTTRef, handleStartRecordingRef]);
 
   // Auto-restart after TTS finishes
   const prevTtsSpeaking = useRef(ttsIsSpeaking);
