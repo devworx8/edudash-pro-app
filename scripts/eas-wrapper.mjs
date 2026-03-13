@@ -6,10 +6,6 @@ import process from 'process';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
 
-dotenv.config({ path: '.env' });
-dotenv.config({ path: '.env.local', override: true });
-dotenv.config({ path: '.env.eas', override: true });
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const EAS_NPM_PACKAGE = 'eas-cli@18.0.1';
@@ -20,6 +16,10 @@ const { EAS_PROJECTS, resolveEasProjectConfig } = projectMap.default || projectM
 const args = process.argv.slice(2);
 const isBuild = args[0] === 'build';
 const profile = getProfileArg(args);
+const targetEnvironment = getEnvironmentArg(args) || inferEnvironmentFromProfile(profile);
+
+loadEnvFiles(targetEnvironment);
+
 const isNonInteractive =
   args.includes('--non-interactive') ||
   process.env.CI === 'true' ||
@@ -40,6 +40,9 @@ if (forcedConfig) {
 }
 
 const env = { ...process.env };
+if (targetEnvironment) {
+  env.EAS_ENVIRONMENT = targetEnvironment;
+}
 if (selectedConfig) {
   env.EAS_PROJECT_ID = selectedConfig.id;
   env.EAS_PROJECT_OWNER = selectedConfig.owner;
@@ -90,6 +93,45 @@ function getProfileArg(argv) {
     return token.split('=')[1] || '';
   }
   return argv[index + 1] || '';
+}
+
+function getEnvironmentArg(argv) {
+  const index = argv.findIndex((arg) => arg === '--environment' || arg.startsWith('--environment='));
+  if (index === -1) return '';
+  const token = argv[index];
+  if (token.includes('=')) {
+    return token.split('=')[1] || '';
+  }
+  return argv[index + 1] || '';
+}
+
+function inferEnvironmentFromProfile(profileName) {
+  const normalized = String(profileName || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (['production', 'production-apk', 'playstore'].includes(normalized)) {
+    return 'production';
+  }
+  if (normalized === 'preview') {
+    return 'preview';
+  }
+  if (['development', 'development-apk'].includes(normalized)) {
+    return 'development';
+  }
+  return '';
+}
+
+function shouldPreferManagedEnv(environmentName) {
+  return ['production', 'preview'].includes(String(environmentName || '').trim().toLowerCase());
+}
+
+function loadEnvFiles(environmentName) {
+  if (shouldPreferManagedEnv(environmentName)) {
+    console.log(`[eas-wrapper] Preferring managed ${environmentName} env; skipping .env and .env.local`);
+  } else {
+    dotenv.config({ path: '.env' });
+    dotenv.config({ path: '.env.local', override: true });
+  }
+  dotenv.config({ path: '.env.eas', override: true });
 }
 
 function getForcedConfig(profileName, projects, byId) {

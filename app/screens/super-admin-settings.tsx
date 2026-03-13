@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   Switch,
 } from 'react-native';
+import Constants from 'expo-constants';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
@@ -20,6 +21,7 @@ export default function SuperAdminSettingsScreen() {
   const { theme } = useTheme();
   const styles = createStyles(theme);
   const { showAlert, alertProps } = useAlertModal();
+  const appVersion = Constants.expoConfig?.version || '1.0.33';
 
   const {
     profile,
@@ -175,8 +177,8 @@ export default function SuperAdminSettingsScreen() {
 
         {/* Version Info */}
         <View style={styles.versionInfo}>
-          <Text style={styles.versionText}>EduDash Pro v1.0.2</Text>
-          <Text style={styles.versionText}>Super Admin Panel v1.0.2</Text>
+          <Text style={styles.versionText}>{`EduDash Pro v${appVersion}`}</Text>
+          <Text style={styles.versionText}>{`Super Admin Panel v${appVersion}`}</Text>
           <Text style={styles.versionText}>Last updated: Dec 19, 2024</Text>
           <Text style={styles.versionText}>• WhatsApp integration</Text>
           <Text style={styles.versionText}>• Mobile-first design improvements</Text>
