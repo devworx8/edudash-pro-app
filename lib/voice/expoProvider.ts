@@ -56,10 +56,12 @@ class ExpoSpeechSession implements VoiceSession {
   private static readonly MAX_AUTO_RESTARTS = 50;
   /** Delay before auto-restart (ms) — short for seamless whisper-flow */
   private static readonly AUTO_RESTART_DELAY_MS = 300;
-  /** Delay for network recovery restarts */
-  private static readonly NETWORK_RETRY_DELAY_MS = 700;
+  /** Base delay for network recovery restarts (exponential backoff applied) */
+  private static readonly NETWORK_RETRY_BASE_DELAY_MS = 500;
+  /** Maximum delay between network retries */
+  private static readonly NETWORK_RETRY_MAX_DELAY_MS = 4000;
   /** Cap transient network retries to prevent runaway loops */
-  private static readonly MAX_NETWORK_RETRIES = 6;
+  private static readonly MAX_NETWORK_RETRIES = 8;
   private networkRetryCount = 0;
   private localeCandidates: string[] = [];
   private currentLocaleIndex = 0;
@@ -236,15 +238,22 @@ class ExpoSpeechSession implements VoiceSession {
           normalized.includes('timeout') ||
           normalized.includes('connection') ||
           normalized.includes('unreachable') ||
-          normalized.includes('service-unavailable');
+          normalized.includes('service-unavailable') ||
+          normalized.includes('server') ||
+          normalized.includes('busy') ||
+          normalized.includes('aborted');
 
-        // Treat transient network failures as recoverable while live listening is active.
+        // Treat transient network/service failures as recoverable with exponential backoff.
         if (isNetwork && !this.explicitlyStopped && this.currentOpts) {
           if (this.networkRetryCount < ExpoSpeechSession.MAX_NETWORK_RETRIES) {
             this.networkRetryCount += 1;
+            const backoffDelay = Math.min(
+              ExpoSpeechSession.NETWORK_RETRY_BASE_DELAY_MS * Math.pow(1.5, this.networkRetryCount - 1),
+              ExpoSpeechSession.NETWORK_RETRY_MAX_DELAY_MS,
+            );
             if (__DEV__) {
               console.warn(
-                `[ExpoProvider] Transient network STT error, retrying (${this.networkRetryCount}/${ExpoSpeechSession.MAX_NETWORK_RETRIES})`
+                `[ExpoProvider] Transient network STT error, retrying in ${Math.round(backoffDelay)}ms (${this.networkRetryCount}/${ExpoSpeechSession.MAX_NETWORK_RETRIES})`
               );
             }
             this.currentOpts?.onError?.(
@@ -260,7 +269,7 @@ class ExpoSpeechSession implements VoiceSession {
               this.start(this.currentOpts).catch((err) => {
                 console.error('[ExpoProvider] Network retry failed:', err);
               });
-            }, ExpoSpeechSession.NETWORK_RETRY_DELAY_MS);
+            }, backoffDelay);
             return;
           }
         }

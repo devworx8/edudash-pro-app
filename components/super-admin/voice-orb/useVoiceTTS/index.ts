@@ -1,12 +1,10 @@
 /**
- * useVoiceTTS — Text-to-Speech hook with pre-fetch pipeline.
+ * useVoiceTTS — Text-to-Speech hook.
  *
- * Orchestrates Azure TTS with look-ahead pre-fetching so the next chunk
- * is already synthesized while the current one plays. This eliminates
- * inter-chunk pauses for fluent, uninterrupted speech.
- *
- * Device TTS is only used as an absolute last resort (unsupported language
- * or explicit quota exhaustion), never as a mid-stream fallback.
+ * Orchestrates Azure TTS (primary) with prefetch pipeline for fluent speech.
+ * While one chunk plays, the next is already being synthesized in parallel,
+ * eliminating pauses between chunks. Device TTS is only used as a last resort
+ * when Azure is completely unavailable (not per-chunk failures).
  *
  * @module components/super-admin/voice-orb/useVoiceTTS
  */
@@ -43,12 +41,12 @@ import { useVoiceTTSPlayback } from './useVoiceTTSPlayback';
 export { resolveEffectiveVoiceId } from './ttsUtils';
 export type { TTSOptions, UseVoiceTTSReturn, TTSErrorCategory, EffectiveVoiceResolution } from './types';
 
-// Chunk sizes tuned for fluency: a short first chunk starts audio fast,
-// larger follow-up chunks reduce round-trips and rely on pre-fetch overlap.
-const FIRST_CHUNK_TARGET_CHARS = 250;
-const FOLLOW_UP_CHUNK_MAX_CHARS = 900;
-const MAX_AZURE_RETRIES = 2;
-const RETRY_BASE_DELAY_MS = 350;
+// Chunk sizing: first chunk is small for fast time-to-first-audio (~1-2s synthesis).
+// Follow-up chunks are moderate to balance request count vs synthesis latency.
+// The prefetch pipeline eliminates gaps: chunk N+1 synthesizes while chunk N plays.
+const FIRST_CHUNK_TARGET_CHARS = 120;
+const FOLLOW_UP_CHUNK_TARGET_CHARS = 350;
+const SHORT_TEXT_THRESHOLD = 500;
 
 const normalizeChunkWhitespace = (text: string): string =>
   String(text || '').replace(/\s+/g, ' ').trim();
@@ -77,28 +75,43 @@ const splitChunkByWords = (text: string, maxChars: number): string[] => {
   return chunks;
 };
 
+/**
+ * Split text into chunks optimized for prefetch-pipeline TTS.
+ * First chunk is small for fast start; subsequent chunks are moderate-sized.
+ * Splits prefer sentence boundaries for natural speech prosody.
+ */
 const splitTextForCloudTTS = (text: string, phonicsMode: boolean): string[] => {
   const normalized = normalizeChunkWhitespace(text);
   if (!normalized) return [];
-  if (phonicsMode || normalized.length <= FIRST_CHUNK_TARGET_CHARS) return [normalized];
+  if (phonicsMode) return [normalized];
+  if (normalized.length <= SHORT_TEXT_THRESHOLD) {
+    if (normalized.length <= FIRST_CHUNK_TARGET_CHARS) return [normalized];
+    const sentences = normalized
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (sentences.length <= 1) return [normalized];
+  }
 
   const sentences = normalized
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
     .filter(Boolean);
 
-  if (sentences.length <= 1) {
-    return splitChunkByWords(normalized, FOLLOW_UP_CHUNK_MAX_CHARS);
+  if (sentences.length === 0) return normalized.length > 0 ? [normalized] : [];
+  if (sentences.length === 1) {
+    return splitChunkByWords(normalized, FOLLOW_UP_CHUNK_TARGET_CHARS);
   }
 
   const chunks: string[] = [];
   let current = '';
 
   for (const sentence of sentences) {
-    const maxChars = chunks.length === 0 ? FIRST_CHUNK_TARGET_CHARS : FOLLOW_UP_CHUNK_MAX_CHARS;
+    const isFirstChunk = chunks.length === 0;
+    const maxChars = isFirstChunk ? FIRST_CHUNK_TARGET_CHARS : FOLLOW_UP_CHUNK_TARGET_CHARS;
     const candidate = current ? `${current} ${sentence}` : sentence;
 
-    if (candidate.length <= maxChars || (chunks.length === 0 && current.length < 120)) {
+    if (candidate.length <= maxChars) {
       current = candidate;
       continue;
     }
@@ -107,12 +120,12 @@ const splitTextForCloudTTS = (text: string, phonicsMode: boolean): string[] => {
       chunks.push(current.trim());
     }
 
-    if (sentence.length <= maxChars) {
+    if (sentence.length <= FOLLOW_UP_CHUNK_TARGET_CHARS) {
       current = sentence;
       continue;
     }
 
-    const overflowChunks = splitChunkByWords(sentence, maxChars);
+    const overflowChunks = splitChunkByWords(sentence, FOLLOW_UP_CHUNK_TARGET_CHARS);
     if (overflowChunks.length === 0) {
       current = '';
       continue;
@@ -129,9 +142,11 @@ const splitTextForCloudTTS = (text: string, phonicsMode: boolean): string[] => {
   return chunks.filter(Boolean);
 };
 
-interface PrefetchResult {
-  audioUrl: string;
-  chunkIndex: number;
+interface PrefetchedChunk {
+  text: string;
+  audioUrl: string | null;
+  error: unknown;
+  promise: Promise<void>;
 }
 
 export function useVoiceTTS(): UseVoiceTTSReturn {
@@ -224,7 +239,7 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
     });
   }, [getCachedAISettingsVoice, getCachedVoicePreference, profile]);
 
-  // ── Device TTS (last resort only) ────────────────────────────────────────
+  // ── Device TTS (last-resort fallback only) ────────────────────────────────
   const speakWithDeviceTTS = useCallback(async (
     text: string, language: string, options: TTSOptions = {},
   ): Promise<void> => {
@@ -250,7 +265,7 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
     });
   }, [stopPlayback]);
 
-  // ── Azure TTS with retry ──────────────────────────────────────────────────
+  // ── Azure TTS request with retry ──────────────────────────────────────────
   const requestAzureAudioUrl = useCallback(async (
     cleanText: string, language: SupportedLanguage, options: TTSOptions = {}, cachedToken?: string,
   ): Promise<string> => {
@@ -264,7 +279,7 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
       ? Number(options.rate) : (phonicsMode ? DEFAULT_PHONICS_AZURE_RATE : DEFAULT_AZURE_RATE);
     const effectivePitch = Number.isFinite(options.pitch as number) ? Number(options.pitch) : 0;
     const timeoutRaw = Number.parseInt(String(process.env.EXPO_PUBLIC_TTS_PROXY_TIMEOUT_MS || String(TTS_PROXY_TIMEOUT_DEFAULT_MS)), 10);
-    const requestTimeoutMs = Number.isFinite(timeoutRaw) ? Math.min(15000, Math.max(2000, timeoutRaw)) : TTS_PROXY_TIMEOUT_DEFAULT_MS;
+    const requestTimeoutMs = Number.isFinite(timeoutRaw) ? Math.min(12000, Math.max(1800, timeoutRaw)) : TTS_PROXY_TIMEOUT_DEFAULT_MS;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
@@ -311,27 +326,31 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
     return data.audio_url;
   }, [getSessionTokenCached]);
 
-  // ── Azure request with built-in retry ─────────────────────────────────────
-  const requestAzureWithRetry = useCallback(async (
-    chunkText: string, language: SupportedLanguage, options: TTSOptions, cachedToken: string,
-  ): Promise<string> => {
-    let lastError: unknown = null;
-    for (let attempt = 0; attempt <= MAX_AZURE_RETRIES; attempt += 1) {
-      if (stopRequestedRef.current) throw new Error('STOPPED');
+  /**
+   * Synthesize a chunk with built-in retry logic.
+   * Returns the audio URL or null if both attempts fail.
+   */
+  const synthesizeChunkWithRetry = useCallback(async (
+    chunkText: string,
+    language: SupportedLanguage,
+    options: TTSOptions,
+    cachedToken: string,
+  ): Promise<string | null> => {
+    try {
+      return await requestAzureAudioUrl(chunkText, language, options, cachedToken);
+    } catch (firstErr) {
+      if (!shouldRetryAzureChunk(firstErr) || stopRequestedRef.current) return null;
+      const isThrottle = String(firstErr instanceof Error ? firstErr.message : firstErr || '').toLowerCase().includes('tts_throttled_429');
+      await new Promise(r => setTimeout(r, isThrottle ? 600 : 250));
       try {
         return await requestAzureAudioUrl(chunkText, language, options, cachedToken);
-      } catch (err) {
-        lastError = err;
-        if (!shouldRetryAzureChunk(err) || attempt === MAX_AZURE_RETRIES) break;
-        const isThrottle = String(err instanceof Error ? err.message : err || '').toLowerCase().includes('429');
-        const delay = RETRY_BASE_DELAY_MS * Math.pow(1.6, attempt) * (isThrottle ? 1.5 : 1);
-        await new Promise(r => setTimeout(r, Math.round(delay)));
+      } catch {
+        return null;
       }
     }
-    throw lastError;
   }, [requestAzureAudioUrl]);
 
-  // ── Main speak orchestration with pre-fetch pipeline ──────────────────────
+  // ── Main speak orchestration with prefetch pipeline ───────────────────────
   const speak = useCallback(async (
     text: string,
     language: SupportedLanguage = 'en-ZA',
@@ -377,7 +396,7 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
 
       const cachedToken = await getSessionTokenCached();
 
-      // ── Device-only path (quota exhausted) ────────────────────────────────
+      // ── Device-only path (quota exhausted) ──────────────────────────────
       if (!policy.shouldUseCloudVoice) {
         reportTTSError(new Error('FREE_QUOTA_EXHAUSTED_DEVICE_VOICE'));
         fallbackUsed = 'device';
@@ -386,109 +405,118 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
         return;
       }
 
-      // ── Cloud path with look-ahead pre-fetch pipeline ─────────────────────
+      // ── Cloud path with prefetch pipeline ───────────────────────────────
       const cloudChunks = splitTextForCloudTTS(cleanText, phonicsMode);
-      if (stopRequestedRef.current || cloudChunks.length === 0) return;
-
+      if (stopRequestedRef.current) return;
       cloudAttempted = true;
+
       let anyChunkSucceeded = false;
       let cloudChunkSucceeded = false;
-      let lastErr: Error | null = null;
+      let consecutiveCloudFailures = 0;
       let firstAudioReadyAt: number | null = null;
 
-      // Pre-fetch map: chunkIndex → Promise<audioUrl>
-      const prefetchMap = new Map<number, Promise<PrefetchResult>>();
+      // Prefetch buffer: synthesis runs ahead of playback so there's no gap.
+      // We launch synthesis for the next chunk as soon as we start playing the current one.
+      const prefetchBuffer = new Map<number, PrefetchedChunk>();
 
-      const startPrefetch = (chunkIndex: number) => {
-        if (prefetchMap.has(chunkIndex) || chunkIndex >= cloudChunks.length) return;
-        if (stopRequestedRef.current) return;
-        const chunkText = cloudChunks[chunkIndex];
-        const promise = requestAzureWithRetry(chunkText, language, effectiveOptions, cachedToken)
-          .then((audioUrl) => ({ audioUrl, chunkIndex }));
-        prefetchMap.set(chunkIndex, promise);
+      const startPrefetch = (idx: number): void => {
+        if (idx >= cloudChunks.length || prefetchBuffer.has(idx) || stopRequestedRef.current) return;
+        const chunk: PrefetchedChunk = { text: cloudChunks[idx], audioUrl: null, error: null, promise: Promise.resolve() };
+        chunk.promise = synthesizeChunkWithRetry(chunk.text, language, effectiveOptions, cachedToken)
+          .then((url) => { chunk.audioUrl = url; })
+          .catch((err) => { chunk.error = err; });
+        prefetchBuffer.set(idx, chunk);
       };
 
-      // Kick off first chunk immediately, and pre-fetch chunk 1 in parallel
+      // Kick off synthesis for chunk 0 and chunk 1 in parallel
       startPrefetch(0);
       if (cloudChunks.length > 1) startPrefetch(1);
 
       for (let chunkIndex = 0; chunkIndex < cloudChunks.length; chunkIndex += 1) {
         if (stopRequestedRef.current) break;
 
-        const chunkText = cloudChunks[chunkIndex];
-
-        try {
-          // Ensure this chunk's prefetch is started (should already be)
+        const prefetched = prefetchBuffer.get(chunkIndex);
+        if (!prefetched) {
           startPrefetch(chunkIndex);
-          const prefetchPromise = prefetchMap.get(chunkIndex)!;
-          const requestStartedAt = Date.now();
-          const { audioUrl } = await prefetchPromise;
+        }
+        const chunk = prefetchBuffer.get(chunkIndex)!;
+        await chunk.promise;
 
-          const audioReadyAt = Date.now();
-          if (firstAudioReadyAt == null) {
-            firstAudioReadyAt = audioReadyAt;
-            logVoiceTrace('tts_audio_ready', {
-              timeToAudioReadyMs: firstAudioReadyAt - speechStartedAt,
-              requestMs: audioReadyAt - requestStartedAt,
-              chunkIndex,
-              chunkCount: cloudChunks.length,
-            });
-          }
+        if (stopRequestedRef.current) break;
 
-          if (stopRequestedRef.current) break;
-
-          // Start pre-fetching the NEXT chunk before playing current one
-          startPrefetch(chunkIndex + 1);
-          if (chunkIndex + 2 < cloudChunks.length) startPrefetch(chunkIndex + 2);
-
-          await playAudioUrl(audioUrl, estimatePlaybackTimeoutMs(chunkText));
-          anyChunkSucceeded = true;
-          cloudChunkSucceeded = true;
-        } catch (azureErr) {
-          logVoiceTrace('tts_error', {
-            error: String(azureErr instanceof Error ? azureErr.message : azureErr || 'unknown'),
+        if (!chunk.audioUrl) {
+          consecutiveCloudFailures += 1;
+          logVoiceTrace('tts_chunk_failed', {
             chunkIndex,
             chunkCount: cloudChunks.length,
+            error: String(chunk.error instanceof Error ? chunk.error.message : chunk.error || 'unknown'),
           });
 
-          if (phonicsMode && !ALLOW_DEVICE_FALLBACK_IN_PHONICS) {
-            const phonicsErr = azureErr instanceof Error ? new Error(`PHONICS_REQUIRES_AZURE:${azureErr.message}`) : new Error('PHONICS_REQUIRES_AZURE');
-            reportTTSError(phonicsErr);
-            lastErr = phonicsErr;
-            telemetryError = phonicsErr;
-            fallbackUsed = 'phonics_blocked';
+          // After 2 consecutive failures, stop trying Azure for remaining chunks
+          if (consecutiveCloudFailures >= 2) {
+            logVoiceTrace('tts_azure_giving_up', { failedChunks: consecutiveCloudFailures });
             break;
-          }
-
-          // For non-auth errors, try to continue with remaining chunks via Azure
-          const errMsg = String(azureErr instanceof Error ? azureErr.message : azureErr || '').toLowerCase();
-          const isAuthError = errMsg.includes('auth_missing') || errMsg.includes('401') || errMsg.includes('403');
-          const isQuotaError = errMsg.includes('quota_exhausted');
-
-          if (isAuthError || isQuotaError) {
-            reportTTSError(azureErr);
-            lastErr = azureErr instanceof Error ? azureErr : new Error(String(azureErr));
-            telemetryError = azureErr;
-            break;
-          }
-
-          // Skip this chunk and try the next one rather than falling back to device
-          reportTTSError(azureErr);
-          telemetryError = azureErr;
-
-          if (!anyChunkSucceeded && chunkIndex === cloudChunks.length - 1) {
-            lastErr = azureErr instanceof Error ? azureErr : new Error(String(azureErr));
           }
           continue;
         }
+
+        consecutiveCloudFailures = 0;
+        const audioReadyAt = Date.now();
+        if (firstAudioReadyAt == null) {
+          firstAudioReadyAt = audioReadyAt;
+          logVoiceTrace('tts_audio_ready', {
+            timeToAudioReadyMs: firstAudioReadyAt - speechStartedAt,
+            chunkIndex,
+            chunkCount: cloudChunks.length,
+          });
+        }
+
+        // Start prefetching the NEXT chunk before we begin playing this one.
+        // This is the key to eliminating pauses: synthesis overlaps with playback.
+        startPrefetch(chunkIndex + 1);
+        if (chunkIndex + 2 < cloudChunks.length) startPrefetch(chunkIndex + 2);
+
+        if (!stopRequestedRef.current) {
+          try {
+            await playAudioUrl(chunk.audioUrl, estimatePlaybackTimeoutMs(chunk.text));
+            anyChunkSucceeded = true;
+            cloudChunkSucceeded = true;
+          } catch (playErr) {
+            logVoiceTrace('tts_playback_error', {
+              chunkIndex,
+              error: String(playErr instanceof Error ? playErr.message : playErr || 'unknown'),
+            });
+          }
+        }
       }
 
-      if (!anyChunkSucceeded && lastErr) { telemetryError = lastErr; throw lastErr; }
+      // ── Fallback: if Azure failed for all chunks, try device TTS once ───
+      if (!anyChunkSucceeded && !stopRequestedRef.current) {
+        if (phonicsMode && !ALLOW_DEVICE_FALLBACK_IN_PHONICS) {
+          const phonicsErr = new Error('PHONICS_REQUIRES_AZURE');
+          reportTTSError(phonicsErr);
+          telemetryError = phonicsErr;
+          fallbackUsed = 'phonics_blocked';
+        } else {
+          fallbackUsed = 'device';
+          try {
+            reportTTSError(new Error('AZURE_ALL_CHUNKS_FAILED'));
+            await speakWithDeviceTTS(cleanText, language, effectiveOptions);
+            anyChunkSucceeded = true;
+            telemetryError = new Error('AZURE_ALL_CHUNKS_FAILED');
+          } catch (deviceErr) {
+            reportTTSError(deviceErr);
+            telemetryError = deviceErr instanceof Error ? deviceErr : new Error(String(deviceErr));
+          }
+        }
+      }
+
+      if (!anyChunkSucceeded && telemetryError) throw telemetryError;
       if (!policy.isPremiumTier && cloudChunkSucceeded) await consumePremiumVoiceActivity(user?.id);
 
       const successDiagnostics = parseTTSDiagnostics(telemetryError);
       track('edudash.voice.tts_turn', { tier: tier || 'free', capability_tier: policy.capabilityTier, cloud_attempted: cloudAttempted, fallback_used: fallbackUsed, error_code: successDiagnostics.errorCode || null, upstream_status: successDiagnostics.statusCode || null, request_id: successDiagnostics.requestId || null, success: true });
-      logVoiceTrace('tts_done', { mode: cloudChunkSucceeded ? 'azure' : fallbackUsed || 'none', durationMs: Date.now() - speechStartedAt });
+      logVoiceTrace('tts_done', { mode: cloudChunkSucceeded ? 'azure' : fallbackUsed || 'device', durationMs: Date.now() - speechStartedAt });
 
     } catch (err) {
       console.error('[VoiceTTS] Error:', err);
@@ -499,9 +527,9 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
       setIsSpeaking(false);
     }
   }, [
-    stopPlayback, getSessionTokenCached, requestAzureWithRetry, playAudioUrl,
-    estimatePlaybackTimeoutMs, speakWithDeviceTTS, reportTTSError, resolveSessionVoice,
-    logVoiceTrace, profile?.role, tier, user?.id,
+    stopPlayback, getSessionTokenCached, requestAzureAudioUrl, synthesizeChunkWithRetry,
+    playAudioUrl, estimatePlaybackTimeoutMs, speakWithDeviceTTS, reportTTSError,
+    resolveSessionVoice, logVoiceTrace, profile?.role, tier, user?.id,
   ]);
 
   return { speak, stop, isSpeaking, error };
