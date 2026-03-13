@@ -85,28 +85,44 @@ export class AudioManager {
         this.playbackResolve = resolve;
         this.playbackReject = reject;
 
-        // Set up status polling for updates (expo-audio uses hooks pattern instead of callbacks)
+        let endConfirmTicks = 0;
+        let hasBegunPlaying = false;
+        const playStartedAt = Date.now();
+
         this.pollInterval = setInterval(() => {
           if (!this.player) {
             this.resolvePlaybackPromise();
             return;
           }
 
-          const duration = (this.player.duration || 0) * 1000; // Convert to ms
-          const position = (this.player.currentTime || 0) * 1000; // Convert to ms
+          const duration = (this.player.duration || 0) * 1000;
+          const position = (this.player.currentTime || 0) * 1000;
+          const isPlaying = this.player.playing;
 
           this.playbackState = {
-            isPlaying: this.player.playing,
+            isPlaying,
             duration,
             position,
             uri,
           };
           this.playbackUpdateCallback?.(this.playbackState);
 
-          // Auto-cleanup when playback finishes (small tolerance avoids floating point misses)
-          const reachedEnd = duration > 0 && position >= Math.max(duration - 120, 0);
+          if (isPlaying) {
+            hasBegunPlaying = true;
+            endConfirmTicks = 0;
+            return;
+          }
+          if (!hasBegunPlaying) return;
+
+          const elapsed = Date.now() - playStartedAt;
+          const reachedEnd = duration > 0 && position >= Math.max(duration - 150, 0) && elapsed > 500;
           if (reachedEnd) {
-            void this.stop();
+            endConfirmTicks += 1;
+            if (endConfirmTicks >= 3) {
+              void this.stop();
+            }
+          } else {
+            endConfirmTicks = 0;
           }
         }, 100);
       });

@@ -129,6 +129,7 @@ export const resolveDeviceRate = (rate: unknown, defaultRate: number): number =>
 
 export const shouldRetryAzureChunk = (error: unknown): boolean => {
   const normalized = String(error instanceof Error ? error.message : error || '').toLowerCase();
+  if (normalized.includes('audio_playback') || normalized.includes('audio_player')) return false;
   return (
     normalized.includes('tts_throttled_429') ||
     normalized.includes('network_error_status_429') ||
