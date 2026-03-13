@@ -110,7 +110,7 @@ export default function DashVoiceScreen() {
   const [inputHeight, setInputHeight] = useState(VOICE_COMPOSER_COMPACT_HEIGHT);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [isVoiceMuted, setIsVoiceMuted] = useState(false);
+  const [isVoiceMuted, setIsVoiceMuted] = useState(!isWeb);
   const [restartBlocked, setRestartBlocked] = useState(false);
   const [voiceErrorBanner, setVoiceErrorBanner] = useState<string | null>(null);
   const [preferredLanguage, setPreferredLanguage] = useState<SupportedLanguage>('en-ZA');
@@ -382,11 +382,13 @@ export default function DashVoiceScreen() {
           showTranscript={showTranscript}
           isSpeaking={isSpeaking}
           isProcessing={isProcessing}
+          isVoiceMuted={isVoiceMuted}
           tierStatus={tierStatus}
           onBack={() => { stopDashActivity('navigation_back', true); router.back(); }}
           onStop={() => stopDashActivity('header_stop_button')}
           onSearch={() => { stopDashActivity('open_search', true); router.push('/screens/app-search?scope=dash&q=dash'); }}
           onToggleTranscript={() => setShowTranscript((v) => !v)}
+          onToggleMute={!isWeb ? () => { void voiceOrbRef.current?.setMuted?.(!isVoiceMuted); } : undefined}
           onOpenLangMenu={() => setShowLangMenu(true)}
         />
 

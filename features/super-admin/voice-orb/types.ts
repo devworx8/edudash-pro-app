@@ -60,6 +60,8 @@ export interface VoiceOrbProps {
   autoRestartAfterTTS?: boolean;
   /** Block auto-restart while parent screen is navigating/interrupted */
   restartBlocked?: boolean;
+  /** Initial barge-in mute state. When true, mic stays off during TTS so speech plays fully. Default false. */
+  initialMuted?: boolean;
   /** Preschool mode: longer silence timeout, lower speech threshold for children */
   preschoolMode?: boolean;
   /** Show the live transcription bubble while listening (default: true). */

@@ -52,6 +52,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   autoStartListening = true,
   autoRestartAfterTTS = true,
   restartBlocked = false,
+  initialMuted = false,
   preschoolMode = false,
   showLiveTranscript = true,
 }, ref) => {
@@ -59,12 +60,12 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   const { profile } = useAuth();
   const tenantId = profile?.organization_id || profile?.preschool_id || null;
 
-  // State
+  // State — initialMuted=true keeps mic off during TTS so speech plays fully (avoids false barge-in)
   const [statusText, setStatusText] = useState('Listening...');
   const hasAutoStarted = useRef(false);
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>('en-ZA');
   const [lastDetectedLanguage, setLastDetectedLanguage] = useState<SupportedLanguage | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(initialMuted);
   const [isProcessing, setIsProcessing] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [usingLiveSTT, setUsingLiveSTT] = useState(false);
@@ -463,28 +464,11 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     }
   }, [autoStartListening, isSpeaking, ttsIsSpeaking, restartBlocked]);
 
-  useEffect(() => {
-    if (isMuted || restartBlocked || isProcessing || isParentProcessing) return;
-    if (!(isSpeaking || ttsIsSpeaking)) return;
-    if (recorderState.isRecording || usingLiveSTTRef.current || isListening) return;
-    const timer = setTimeout(() => {
-      if (!restartBlockedRef.current && !isMuted) {
-        handleStartRecordingRef.current?.();
-      }
-    }, 180);
-    return () => clearTimeout(timer);
-  }, [
-    isListening,
-    isMuted,
-    isParentProcessing,
-    isProcessing,
-    isSpeaking,
-    recorderState.isRecording,
-    restartBlocked,
-    restartBlockedRef,
-    ttsIsSpeaking,
-    usingLiveSTTRef,
-  ]);
+  // NOTE: We intentionally do NOT auto-start listening during TTS.
+  // Previously we started the mic 180ms into TTS for barge-in, but the mic picks up
+  // TTS feedback and ambient noise, causing false barge-in triggers that stop TTS
+  // after a few words. User can still tap the orb to interrupt. Barge-in during TTS
+  // is disabled by default; enable via mute toggle (isMuted=false) if desired.
 
   // Handle orb press
   const handlePress = useCallback(async () => {

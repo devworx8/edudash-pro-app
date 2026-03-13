@@ -129,6 +129,7 @@ export function DashVoiceOrbSection({
       autoStartListening
       autoRestartAfterTTS
       restartBlocked={restartBlocked}
+      initialMuted={true}
       preschoolMode={orgType === 'preschool'}
       showLiveTranscript={false}
     />

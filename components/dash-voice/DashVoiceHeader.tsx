@@ -19,11 +19,13 @@ interface DashVoiceHeaderProps {
   showTranscript: boolean;
   isSpeaking: boolean;
   isProcessing: boolean;
+  isVoiceMuted?: boolean;
   tierStatus: TierStatus | null;
   onBack: () => void;
   onStop: () => void;
   onSearch: () => void;
   onToggleTranscript: () => void;
+  onToggleMute?: () => void;
   onOpenLangMenu: () => void;
 }
 
@@ -35,11 +37,13 @@ export function DashVoiceHeader({
   showTranscript,
   isSpeaking,
   isProcessing,
+  isVoiceMuted = false,
   tierStatus,
   onBack,
   onStop,
   onSearch,
   onToggleTranscript,
+  onToggleMute,
   onOpenLangMenu,
 }: DashVoiceHeaderProps) {
   return (
@@ -79,6 +83,15 @@ export function DashVoiceHeader({
         >
           <Ionicons name="search-outline" size={16} color={theme.primary} />
         </TouchableOpacity>
+        {onToggleMute && (
+          <TouchableOpacity
+            onPress={onToggleMute}
+            style={[s.headerIconBtn, { borderColor: isVoiceMuted ? '#f59e0b' : theme.border, backgroundColor: isVoiceMuted ? '#f59e0b20' : 'transparent' }]}
+            accessibilityLabel={isVoiceMuted ? 'Enable barge-in (interrupt while speaking)' : 'Disable barge-in (let Dash finish speaking)'}
+          >
+            <Ionicons name={isVoiceMuted ? 'mic-off' : 'mic'} size={16} color={isVoiceMuted ? '#f59e0b' : theme.primary} />
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           onPress={onToggleTranscript}
           style={[s.headerIconBtn, { borderColor: theme.border, backgroundColor: showTranscript ? theme.surface : 'transparent' }]}
