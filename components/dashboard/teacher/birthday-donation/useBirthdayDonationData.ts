@@ -22,7 +22,8 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
   const normalizedRole = String(profile?.role || '').toLowerCase().trim();
   const isTeacherRole = normalizedRole === 'teacher';
   const canManageDonations = ['teacher', 'principal', 'principal_admin', 'admin', 'super_admin', 'org_admin'].includes(normalizedRole);
-  const useSchoolWide = canManageDonations && !isTeacherRole;
+  const canToggleSchoolWide = canManageDonations && isTeacherRole;
+  const [useSchoolWide, setUseSchoolWide] = useState(canManageDonations && !isTeacherRole);
 
   // ── State ────────────────────────────────────────────────────────────────
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -38,6 +39,16 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
   const [error, setError] = useState<string | null>(null);
   const [schoolStudents, setSchoolStudents] = useState<TeacherStudentSummary[]>([]);
   const [loadingSchoolStudents, setLoadingSchoolStudents] = useState(false);
+
+  useEffect(() => {
+    if (!canManageDonations) {
+      setUseSchoolWide(false);
+      return;
+    }
+    if (!canToggleSchoolWide) {
+      setUseSchoolWide(true);
+    }
+  }, [canManageDonations, canToggleSchoolWide]);
 
   // ── Student data ─────────────────────────────────────────────────────────
   const { students: teacherStudents, loading: teacherStudentsLoading } = useTeacherStudents({
@@ -241,7 +252,7 @@ export function useBirthdayDonationData({ organizationId }: { organizationId?: s
   const remainingAmount = Math.max(expectedAmount - totalReceived, 0);
 
   return {
-    user, isPreschool, useSchoolWide,
+    user, isPreschool, useSchoolWide, setUseSchoolWide, canToggleSchoolWide,
     selectedClassId, setSelectedClassId, classGroups, selectedClass,
     reminderClassId, setReminderClassId, reminderClassGroups,
     birthdayWindowMode, setBirthdayWindowMode,

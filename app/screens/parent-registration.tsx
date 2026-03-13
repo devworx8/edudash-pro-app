@@ -64,6 +64,32 @@ export default function ParentRegistrationScreen() {
     try {
       const supabase = assertSupabase();
       
+      // Helper: save children from registration form as child_registration_requests
+      const saveRegistrationChildren = async (parentId: string, orgId: string) => {
+        const parentReg = registration as any;
+        const children: Array<{ firstName: string; lastName: string; grade?: string; dateOfBirth?: string }> = parentReg.children || [];
+        if (children.length === 0) return;
+
+        for (const child of children) {
+          try {
+            await supabase.from('child_registration_requests').insert({
+              child_first_name: child.firstName?.trim(),
+              child_last_name: child.lastName?.trim(),
+              child_birth_date: child.dateOfBirth || null,
+              parent_id: parentId,
+              preschool_id: orgId,
+              status: 'pending',
+              registration_fee_amount: 0,
+              registration_fee_paid: false,
+              payment_verified: false,
+            } as any);
+            logger.info('[ParentRegistration] Saved child registration request:', `${child.firstName} ${child.lastName}`);
+          } catch (childErr) {
+            logger.error('[ParentRegistration] Failed to save child registration:', childErr);
+          }
+        }
+      };
+
       // Check if user is already logged in
       let { data: { user } } = await supabase.auth.getUser();
       let isExistingUser = false;
@@ -72,6 +98,15 @@ export default function ParentRegistrationScreen() {
       if (!user) {
         logger.info('[ParentRegistration] Creating new user account...');
         
+        const parentReg = registration as any;
+        const selectedOrgForSignup = organizationId || parentReg.organizationId || COMMUNITY_SCHOOL_ID;
+        const childrenForSignup = (parentReg.children || []).map((c: any) => ({
+          firstName: c.firstName,
+          lastName: c.lastName,
+          grade: c.grade || null,
+          dateOfBirth: c.dateOfBirth || null,
+        }));
+
         const { data: authData, error: authError } = await supabase.auth.signUp({
           email: registration.email,
           password: registration.password,
@@ -82,6 +117,8 @@ export default function ParentRegistrationScreen() {
               last_name: registration.lastName,
               phone: registration.phone,
               role: 'parent',
+              selected_organization_id: selectedOrgForSignup,
+              pending_children: childrenForSignup.length > 0 ? childrenForSignup : undefined,
             }
           }
         });
@@ -159,6 +196,13 @@ export default function ParentRegistrationScreen() {
               }
             }
             
+            // Save children before redirecting to verify-email
+            if (user) {
+              const parentReg = registration as any;
+              const selectedOrgId = organizationId || parentReg.organizationId || COMMUNITY_SCHOOL_ID;
+              await saveRegistrationChildren(user.id, selectedOrgId);
+            }
+
             router.replace({
               pathname: '/screens/verify-your-email',
               params: { email: registration.email }
@@ -297,6 +341,13 @@ export default function ParentRegistrationScreen() {
         });
       }
 
+      // Save children from registration form
+      if (user) {
+        const parentReg = registration as any;
+        const selectedOrgId = organizationId || parentReg.organizationId || COMMUNITY_SCHOOL_ID;
+        await saveRegistrationChildren(user.id, selectedOrgId);
+      }
+
       // Prefer centralized routing to avoid sending K-12/community schools
       // to the preschool parent dashboard.
       if (user) {
@@ -356,7 +407,7 @@ export default function ParentRegistrationScreen() {
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right', 'bottom']}>
       <Stack.Screen
         options={{
-          title: 'Parent Registration',
+          headerTitle: 'Parent Registration',
           headerShown: true,
           headerStyle: {
             backgroundColor: theme.surface,

@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface MatchingActivityProps {
   content: {
@@ -124,7 +125,7 @@ export function MatchingActivity({ content, onComplete, theme }: MatchingActivit
         <View
           style={[
             styles.progressFill,
-            { width: `${(Object.keys(matches).length / content.pairs.length) * 100}%`, backgroundColor: theme.success },
+            { width: percentWidth((Object.keys(matches).length / content.pairs.length) * 100), backgroundColor: theme.success },
           ]}
         />
       </View>

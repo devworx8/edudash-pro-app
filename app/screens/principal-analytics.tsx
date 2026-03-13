@@ -24,7 +24,7 @@ import { exportAnalyticsPdf } from '@/lib/services/analytics/exportAnalyticsPdf'
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { getAgeGroupColor } from '@/hooks/student-management/studentHelpers';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 // Period options for analytics
 const PERIODS = ['week', 'month', 'quarter', 'year'] as const;
 
@@ -223,7 +223,7 @@ const EnrollmentSection: React.FC<{ analytics: AnalyticsData; theme: any }> = ({
 	              <View style={[styles_static.ageGroupDot, { backgroundColor: color }]} />
 	              <Text style={[styles_static.distributionLabel, { color: theme.text, flex: 1 }]}>{group.ageGroup}</Text>
 	              <View style={[styles_static.distributionBar, { backgroundColor: theme.border, flex: 2 }]}>
-	                <View style={[styles_static.distributionFill, { width: `${pctWidth}%`, backgroundColor: color }]} />
+	                <View style={[styles_static.distributionFill, { width: percentWidth(pctWidth), backgroundColor: color }]} />
 	              </View>
               <Text style={[styles_static.distributionValue, { color: theme.text, minWidth: 36, textAlign: 'right' }]}>
                 {group.count} <Text style={{ color: theme.textSecondary, fontSize: 11 }}>({pct}%)</Text>

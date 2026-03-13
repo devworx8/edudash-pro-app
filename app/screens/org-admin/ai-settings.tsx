@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -11,6 +12,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function OrgAISettingsScreen() {
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = createStyles(theme);
   
   const { data: orgSettings, isLoading } = useOrgSettings();
@@ -41,16 +43,18 @@ export default function OrgAISettingsScreen() {
         },
       });
 
-      Alert.alert(
-        t('common.success', { defaultValue: 'Success' }),
-        t('ai_settings.saved', { defaultValue: 'AI settings saved successfully' }),
-        [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }]
-      );
+      showAlert({
+        title: t('common.success', { defaultValue: 'Success' }),
+        message: t('ai_settings.saved', { defaultValue: 'AI settings saved successfully' }),
+        type: 'success',
+        buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }]
+      });
     } catch (error: any) {
-      Alert.alert(
-        t('common.error', { defaultValue: 'Error' }),
-        error.message || t('common.save_failed', { defaultValue: 'Failed to save settings' })
-      );
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: error.message || t('common.save_failed', { defaultValue: 'Failed to save settings' }),
+        type: 'error'
+      });
     }
   };
 
@@ -189,6 +193,7 @@ export default function OrgAISettingsScreen() {
           ))}
         </Card>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

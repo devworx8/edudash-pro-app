@@ -17,6 +17,26 @@ export {
   useVoiceInteraction,
 } from './hooks';
 
+// Session token cache (shared across STT/TTS)
+export {
+  isTokenValid,
+  shouldProactiveRefresh,
+  getCachedToken,
+  setCachedToken,
+  invalidateTokenCache,
+  getTokenAge,
+  getOrFetchToken,
+} from './sessionTokenCache';
+
+// TTS phrase cache
+export {
+  shouldCachePhrase,
+  getCachedPhrase,
+  cachePhrase,
+  clearPhraseCache,
+  getPhraseCacheStats,
+} from './ttsPhraseCache';
+
 // Types
 export type {
   SupportedLanguage,

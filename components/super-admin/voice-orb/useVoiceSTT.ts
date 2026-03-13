@@ -9,10 +9,11 @@
 
 import { useCallback, useState } from 'react';
 import { assertSupabase } from '../../../lib/supabase';
+import { getCachedToken, invalidateTokenCache, setCachedToken } from '@/lib/voice/sessionTokenCache';
 
 // Azure Speech Services supported South African languages
 export const SUPPORTED_LANGUAGES = [
-  { code: 'en-ZA', name: 'English (South Africa)', voice: 'en-ZA-LeahNeural' },
+  { code: 'en-ZA', name: 'English (South Africa)', voice: 'en-ZA-LukeNeural' },
   { code: 'af-ZA', name: 'Afrikaans', voice: 'af-ZA-AdriNeural' },
   { code: 'zu-ZA', name: 'isiZulu', voice: 'zu-ZA-ThandoNeural' },
 ] as const;
@@ -65,41 +66,42 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
     
     try {
       const supabase = assertSupabase();
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
-      
-      const resolveTenantId = async (): Promise<string | null> => {
-        if (hookOptions?.preschoolId) return hookOptions.preschoolId;
-        const userMeta = (session.user?.user_metadata || {}) as Record<string, any>;
-        const appMeta = (session.user?.app_metadata || {}) as Record<string, any>;
-        const metaCandidate =
-          userMeta.organization_id ||
-          userMeta.preschool_id ||
-          appMeta.organization_id ||
-          appMeta.preschool_id ||
-          null;
-        if (metaCandidate) return metaCandidate;
+      let session: any = null;
 
-        try {
-          const { data } = await supabase
-            .from('profiles')
-            .select('organization_id, preschool_id')
-            .eq('id', session.user.id)
-            .maybeSingle();
-          return (data as any)?.organization_id || (data as any)?.preschool_id || null;
-        } catch (lookupError) {
-          console.warn('[VoiceSTT] Failed to resolve tenant id from profile lookup:', lookupError);
-          return null;
+      const getAccessToken = async (forceFresh = false): Promise<string> => {
+        if (!forceFresh) {
+          const cachedToken = getCachedToken();
+          if (cachedToken) return cachedToken;
         }
+
+        const { data: { session: freshSession } } = await supabase.auth.getSession();
+        session = freshSession;
+        if (!freshSession?.access_token) {
+          throw new Error('Not authenticated');
+        }
+        setCachedToken(freshSession.access_token);
+        return freshSession.access_token;
       };
 
-      const tenantId = await resolveTenantId();
-      if (!tenantId) {
-        throw new Error('No school assigned to your account');
-      }
+      let accessToken = await getAccessToken();
+
+      const resolveTenantId = (): string | null => {
+        if (hookOptions?.preschoolId) return hookOptions.preschoolId;
+        if (session?.user) {
+          const userMeta = (session.user?.user_metadata || {}) as Record<string, any>;
+          const appMeta = (session.user?.app_metadata || {}) as Record<string, any>;
+          const metaCandidate =
+            userMeta.organization_id ||
+            userMeta.preschool_id ||
+            appMeta.organization_id ||
+            appMeta.preschool_id ||
+            null;
+          if (metaCandidate) return metaCandidate;
+        }
+        return null;
+      };
+
+      const tenantId = resolveTenantId();
 
       // Read audio file as base64
       const response = await fetch(audioUri);
@@ -115,26 +117,42 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
         reader.readAsDataURL(blob);
       });
       
-      const sendRequest = async (lang: TranscribeLanguage): Promise<{ text?: string; language?: string }> => {
+      const sendRequest = async (lang: TranscribeLanguage, canRetryAuth = true): Promise<{ text?: string; language?: string }> => {
         console.log('[VoiceSTT] Sending to STT, language:', lang, 'size:', base64.length);
-        const sttResponse = await fetch(
+        const requestBody = JSON.stringify({
+          audio_base64: base64,
+          language: lang,
+          auto_detect: lang === 'auto',
+          format: 'm4a',
+          ...(tenantId ? { preschool_id: tenantId, organization_id: tenantId } : {}),
+        });
+        let sttResponse = await fetch(
           `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/stt-proxy`,
           {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session.access_token}`,
+              'Authorization': `Bearer ${accessToken}`,
             },
-            body: JSON.stringify({
-              audio_base64: base64,
-              language: lang,
-              auto_detect: lang === 'auto',
-              format: 'm4a',
-              preschool_id: tenantId,
-              organization_id: tenantId,
-            }),
+            body: requestBody,
           }
         );
+
+        if ((sttResponse.status === 401 || sttResponse.status === 403) && canRetryAuth) {
+          invalidateTokenCache();
+          accessToken = await getAccessToken(true);
+          sttResponse = await fetch(
+            `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/stt-proxy`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: requestBody,
+            }
+          );
+        }
 
         if (!sttResponse.ok) {
           const errorText = await sttResponse.text();

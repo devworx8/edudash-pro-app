@@ -9,7 +9,8 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Switch } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -32,6 +33,7 @@ interface AutomationTool {
 export default function AIAutomationScreen() {
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { profile } = useAuth();
   const styles = createStyles(theme);
 
@@ -112,20 +114,22 @@ export default function AIAutomationScreen() {
       setIsGenerating(false);
     },
     onError: (error: any) => {
-      Alert.alert(
-        t('common.error', { defaultValue: 'Error' }),
-        error.message || t('ai_automation.generation_failed', { defaultValue: 'Failed to generate content' })
-      );
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: error.message || t('ai_automation.generation_failed', { defaultValue: 'Failed to generate content' }),
+        type: 'error',
+      });
       setIsGenerating(false);
     },
   });
 
   const handleGenerate = async (toolId: string) => {
     if (!inputText.trim()) {
-      Alert.alert(
-        t('common.error', { defaultValue: 'Error' }),
-        t('ai_automation.enter_prompt', { defaultValue: 'Please enter a prompt or description' })
-      );
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: t('ai_automation.enter_prompt', { defaultValue: 'Please enter a prompt or description' }),
+        type: 'warning',
+      });
       return;
     }
 
@@ -287,7 +291,7 @@ export default function AIAutomationScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       // TODO: Copy to clipboard
-                      Alert.alert(t('common.copied', { defaultValue: 'Copied to clipboard' }));
+                      showAlert({ title: t('common.copied', { defaultValue: 'Copied to clipboard' }), type: 'success' });
                     }}
                   >
                     <Ionicons name="copy-outline" size={20} color={theme.primary} />
@@ -311,6 +315,7 @@ export default function AIAutomationScreen() {
           </Card>
         )}
       </ScrollView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

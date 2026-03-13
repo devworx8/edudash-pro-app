@@ -49,7 +49,7 @@ export const layoutStyles = StyleSheet.create({
     position: 'absolute',
     left: 6,
     right: 6,
-    bottom: 2,
+    bottom: -8,
     zIndex: 100,
     elevation: 0,
   },

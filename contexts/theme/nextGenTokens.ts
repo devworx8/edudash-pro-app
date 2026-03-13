@@ -1,7 +1,7 @@
 /**
  * EduDash Pro Next-Gen Theme Tokens
  * 
- * Modern dark theme design system with purple/green accents
+ * Modern dark theme design system with purple/cyan/gold accents
  * Based on educational app UI/UX best practices
  */
 
@@ -32,11 +32,25 @@ export const nextGenPalette = {
   purple3: '#A78BFA',       // Light purple
   purple4: '#C4B5FD',       // Lighter purple
 
-  // Pink accent (Secondary Brand)
+  // Pink accent (legacy compatibility)
   pink0: '#831843',         // Darkest pink
   pink1: '#BE185D',         // Dark pink
   pink2: '#EC4899',         // Main pink (secondary)
   pink3: '#F472B6',         // Light pink
+
+  // Cyan accent (SUPER_NINJA / Dash orb)
+  cyan0: '#12384D',
+  cyan1: '#0F6A8A',
+  cyan2: '#06B6D4',
+  cyan3: '#22D3EE',
+  cyan4: '#67E8F9',
+
+  // Gold accent (SUPER_NINJA highlight)
+  gold0: '#6B4F13',
+  gold1: '#B78A1E',
+  gold2: '#FBBF24',
+  gold3: '#FCD34D',
+  gold4: '#FDE68A',
 
   // Green accent (Success/Actions)
   green0: '#064E3B',        // Darkest green
@@ -103,7 +117,8 @@ export const nextGenGradients = {
   // Primary brand gradients
   purple: ['#5B21B6', '#8B5CF6', '#A78BFA'] as [string, string, string],
   pinkPurple: ['#EC4899', '#8B5CF6'] as [string, string],
-  primaryBrand: ['#8B5CF6', '#EC4899'] as [string, string],
+  primaryBrand: ['#8B5CF6', '#22D3EE'] as [string, string],
+  cosmicHalo: ['#8B5CF6', '#22D3EE', '#FCD34D'] as [string, string, string],
   
   // Action gradients
   green: ['#047857', '#10B981', '#34D399'] as [string, string, string],
@@ -122,17 +137,19 @@ export const nextGenGradients = {
   danger: ['#EF4444', '#F87171'] as [string, string],
   
   // Cosmic/special gradients
-  cosmic: ['#2E1F5E', '#10B981'] as [string, string],
+  cosmic: ['#2E1F5E', '#06B6D4'] as [string, string],
   cosmicPurple: ['#2E1F5E', '#8B5CF6'] as [string, string],
+  auroraGold: ['#06B6D4', '#FCD34D'] as [string, string],
   
   // Navigation/UI gradients
   navGlass: ['rgba(13, 17, 23, 0.95)', 'rgba(13, 17, 23, 0.88)'] as [string, string],
   headerFade: ['rgba(13, 17, 23, 1)', 'rgba(13, 17, 23, 0)'] as [string, string],
   
   // Glow effects
-  accentGlow: ['rgba(139, 92, 246, 0.3)', 'rgba(139, 92, 246, 0)'] as [string, string],
+  accentGlow: ['rgba(34, 211, 238, 0.32)', 'rgba(34, 211, 238, 0)'] as [string, string],
   greenGlow: ['rgba(16, 185, 129, 0.3)', 'rgba(16, 185, 129, 0)'] as [string, string],
   blueGlow: ['rgba(59, 130, 246, 0.3)', 'rgba(59, 130, 246, 0)'] as [string, string],
+  goldGlow: ['rgba(252, 211, 77, 0.28)', 'rgba(252, 211, 77, 0)'] as [string, string],
 } as const;
 
 export const nextGenTypography = {

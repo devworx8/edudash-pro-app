@@ -27,7 +27,7 @@ import {
   clearAutoRefreshTimer,
   resetPendingRefresh,
 } from './refresh';
-import { withTimeout } from './helpers';
+import { withTimeout, withTimeoutMarker } from './helpers';
 
 /**
  * Initialize session from stored data
@@ -46,7 +46,15 @@ export async function initializeSession(): Promise<{
     }
 
     if (needsRefresh(storedSession)) {
-      const refreshedSession = await refreshSession(storedSession.refresh_token);
+      const { result: refreshedSession, timedOut } = await withTimeoutMarker(
+        refreshSession(storedSession.refresh_token),
+        8000
+      );
+      if (timedOut) {
+        console.warn('[SessionManager] Session refresh timed out during boot, continuing with stored session');
+        setupAutoRefresh(storedSession);
+        return { session: storedSession, profile: storedProfile };
+      }
       if (!refreshedSession) {
         await clearStoredData();
         return { session: null, profile: null };

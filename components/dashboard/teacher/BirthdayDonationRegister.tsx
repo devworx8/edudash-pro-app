@@ -10,7 +10,7 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
   const { t } = useTranslation();
   const [studentSearch, setStudentSearch] = useState('');
   const {
-    isPreschool, useSchoolWide,
+    isPreschool, useSchoolWide, setUseSchoolWide, canToggleSchoolWide,
     selectedClassId, setSelectedClassId, classGroups, selectedClass,
     reminderClassId, setReminderClassId, reminderClassGroups,
     birthdayWindowMode, setBirthdayWindowMode,
@@ -55,6 +55,62 @@ export const BirthdayDonationRegister: React.FC<BirthdayDonationRegisterProps> =
           ? t('dashboard.birthday_donations.subtitle_school', { defaultValue: 'Mark R25 birthday contributions for the whole school.' })
           : t('dashboard.birthday_donations.subtitle', { defaultValue: 'Mark R25 birthday contributions for your class.' })}
       </Text>
+
+      {canToggleSchoolWide && (
+        <View style={styles.birthdayPicker}>
+          <Text style={styles.label}>
+            {t('dashboard.birthday_donations.scope_label', { defaultValue: 'Collection scope' })}
+          </Text>
+          <View style={styles.classRow}>
+            <TouchableOpacity
+              style={[
+                styles.classChip,
+                !useSchoolWide && {
+                  backgroundColor: theme.primary,
+                  borderColor: theme.primary,
+                },
+              ]}
+              onPress={() => {
+                setUseSchoolWide(false);
+                setReminderClassId('all');
+              }}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.classChipText,
+                  !useSchoolWide && { color: '#fff' },
+                ]}
+              >
+                {t('dashboard.birthday_donations.scope_my_class', { defaultValue: 'My class' })}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.classChip,
+                useSchoolWide && {
+                  backgroundColor: theme.primary,
+                  borderColor: theme.primary,
+                },
+              ]}
+              onPress={() => {
+                setUseSchoolWide(true);
+                setReminderClassId('all');
+              }}
+              activeOpacity={0.85}
+            >
+              <Text
+                style={[
+                  styles.classChipText,
+                  useSchoolWide && { color: '#fff' },
+                ]}
+              >
+                {t('dashboard.birthday_donations.scope_school_wide', { defaultValue: 'Whole school' })}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {activeStudentsLoading ? (
         <View style={styles.loadingRow}>

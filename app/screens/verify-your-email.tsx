@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
+import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { assertSupabase } from '@/lib/supabase';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,13 +10,14 @@ import { buildEduDashWebUrl } from '@/lib/config/urls';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function VerifyYourEmailScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { email } = useLocalSearchParams<{ email?: string }>();
   const [resending, setResending] = useState(false);
   const [sent, setSent] = useState(false);
 
   const resend = async () => {
     if (!email) {
-      Alert.alert('Email required', 'We need your email address to resend the confirmation.');
+      showAlert({ title: 'Email required', message: 'We need your email address to resend the confirmation.', type: 'warning' });
       return;
     }
     setResending(true);
@@ -30,9 +32,9 @@ export default function VerifyYourEmailScreen() {
       } as any);
       if (error) throw error;
       setSent(true);
-      Alert.alert('Email sent', 'We’ve resent the confirmation email. Please check your inbox (and spam).');
+      showAlert({ title: 'Email sent', message: 'We\'ve resent the confirmation email. Please check your inbox (and spam).', type: 'success' });
     } catch (e: any) {
-      Alert.alert('Failed to resend', e?.message || 'Please try again later.');
+      showAlert({ title: 'Failed to resend', message: e?.message || 'Please try again later.', type: 'error' });
     } finally {
       setResending(false);
     }
@@ -42,7 +44,8 @@ export default function VerifyYourEmailScreen() {
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <Stack.Screen
         options={{
-          title: 'Verify your email',
+          headerTitle: 'Verify Your Email',
+          headerShown: true,
           headerStyle: { backgroundColor: theme.surface },
           headerTitleStyle: { color: theme.text },
           headerTintColor: theme.primary,
@@ -74,7 +77,14 @@ export default function VerifyYourEmailScreen() {
         <Text style={[styles.note, { color: theme.textTertiary }]}>
           Tip: If you don’t see it, check your spam folder or search for “EduDash Pro”.
         </Text>
-      </View>
+        <TouchableOpacity
+          style={[styles.signInButton, { borderColor: theme.primary }]}
+          onPress={() => router.replace('/(auth)/sign-in')}
+          activeOpacity={0.8}
+        >
+          <Text style={[styles.signInButtonText, { color: theme.primary }]}>Go to Sign In</Text>
+        </TouchableOpacity>      </View>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }
@@ -97,4 +107,6 @@ const styles = StyleSheet.create({
   button: { paddingVertical: 12, borderRadius: 10, alignItems: 'center' },
   buttonText: { fontSize: 16, fontWeight: '700' },
   note: { marginTop: 8, fontSize: 12 },
+  signInButton: { marginTop: 16, paddingVertical: 12, borderRadius: 10, alignItems: 'center', borderWidth: 2 },
+  signInButtonText: { fontSize: 16, fontWeight: '700' },
 });

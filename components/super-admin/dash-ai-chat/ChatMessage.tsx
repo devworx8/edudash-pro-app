@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { styles, getMarkdownStyles } from './DashAIChat.styles';
+import { containsMathSyntax, parseMathSegments } from '@/components/exam-prep/mathSegments';
+import { MathRenderer } from '@/components/ai/dash-assistant/MathRenderer';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 // Conditional import for markdown
@@ -225,6 +227,33 @@ const WebMarkdownRenderer: React.FC<{ content: string; theme: any }> = ({ conten
   return <View>{renderMarkdown(content)}</View>;
 };
 
+/**
+ * Renders content with math expressions using MathRenderer.
+ * Splits text into segments: plain text rendered via markdown, math via KaTeX.
+ */
+const MathAwareContent: React.FC<{ content: string; theme: any; markdownStyles?: any }> = ({ content, theme, markdownStyles }) => {
+  const segments = parseMathSegments(content);
+  return (
+    <View>
+      {segments.map((seg, i) => {
+        if (seg.type === 'block') {
+          return <MathRenderer key={i} expression={seg.value} displayMode />;
+        }
+        if (seg.type === 'inline') {
+          return <MathRenderer key={i} expression={seg.value} displayMode={false} />;
+        }
+        if (isWeb) {
+          return <WebMarkdownRenderer key={i} content={seg.value} theme={theme} />;
+        }
+        if (Markdown) {
+          return <Markdown key={i} style={markdownStyles}>{seg.value}</Markdown>;
+        }
+        return <Text key={i} style={[styles.assistantText, { color: theme.text }]}>{seg.value}</Text>;
+      })}
+    </View>
+  );
+};
+
 export interface ChatMessageData {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -286,8 +315,9 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           </View>
         ) : isUser ? (
           <Text style={styles.userText}>{message.content}</Text>
+        ) : containsMathSyntax(message.content) ? (
+          <MathAwareContent content={message.content} theme={theme} markdownStyles={markdownStyles} />
         ) : (
-          // Use appropriate markdown renderer based on platform
           isWeb ? (
             <WebMarkdownRenderer content={message.content} theme={theme} />
           ) : Markdown ? (

@@ -15,6 +15,8 @@ import { Picker } from '@react-native-picker/picker';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
+import { logger } from '@/lib/logger';
+import { retrySupabaseRead } from '@/lib/supabaseErrors';
 import { useEduDashAlert } from '@/components/ui/EduDashAlert';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 
@@ -195,7 +197,7 @@ export default function PrincipalStationeryScreen() {
       });
       const studentIds = scopedStudents.map((row) => row.id);
 
-      const [{ data: itemRows }, { data: checkRows }, { data: noteRows }, { data: overrideRows }] = await Promise.all([
+      const [{ data: itemRows }, { data: checkRows }, { data: overrideRows }] = await Promise.all([
         listIds.length
           ? supabase
               .from('stationery_list_items')
@@ -212,19 +214,30 @@ export default function PrincipalStationeryScreen() {
           : Promise.resolve({ data: [] as any[] }),
         studentIds.length
           ? supabase
-              .from('stationery_parent_notes')
-              .select('student_id, note_text, expected_completion_date')
-              .in('student_id', studentIds)
-              .eq('academic_year', academicYear)
-          : Promise.resolve({ data: [] as any[] }),
-        studentIds.length
-          ? supabase
               .from('stationery_student_overrides')
               .select('student_id, list_id')
               .in('student_id', studentIds)
               .eq('academic_year', academicYear)
           : Promise.resolve({ data: [] as any[] }),
       ]);
+
+      const { data: noteRows, error: noteError } = studentIds.length
+        ? await retrySupabaseRead(() =>
+            supabase
+              .from('stationery_parent_notes')
+              .select('student_id, note_text, expected_completion_date')
+              .in('student_id', studentIds)
+              .eq('academic_year', academicYear)
+          )
+        : { data: [] as any[], error: null };
+
+      if (noteError) {
+        logger.warn('[PrincipalStationery] parent notes read failed; continuing without notes', {
+          academicYear,
+          studentCount: studentIds.length,
+          noteError,
+        });
+      }
 
       setActiveSchoolId(nextSchoolId);
       setLists(scopedLists);

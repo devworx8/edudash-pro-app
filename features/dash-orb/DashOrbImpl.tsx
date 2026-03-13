@@ -201,6 +201,7 @@ export default function DashOrb({
   const [scannerVisible, setScannerVisible] = useState(false);
   const [remainingAutoScans, setRemainingAutoScans] = useState<number | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isMicMuted, setIsMicMuted] = useState(false);
   const [whisperModeEnabled, setWhisperModeEnabled] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [isListeningForCommand, setIsListeningForCommand] = useState(false);
@@ -348,6 +349,12 @@ export default function DashOrb({
     if (isListeningForCommand || Boolean(voiceRecorderState?.isRecording)) return 'listening';
     return 'idle';
   }, [isSpeaking, isProcessing, isListeningForCommand, voiceRecorderState?.isRecording]);
+  useEffect(() => {
+    if (!isSpeaking && !isSpeakingSentenceRef.current && ttsSentenceQueueRef.current.length === 0) {
+      setIsMicMuted(false);
+    }
+  }, [isSpeaking]);
+
   useEffect(() => {
     if (!isSpeaking) {
       setSimulatedVisemeId(0);
@@ -863,9 +870,12 @@ export default function DashOrb({
       return;
     }
     
-    // If speaking, interrupt and restart listening
-    if (isSpeaking) {
+    // If speaking or TTS pipeline is active, interrupt and restart listening
+    const ttsPipelineActive = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+    if (ttsPipelineActive) {
       console.log('[DashOrb] User interrupted TTS - restarting voice input');
+      ttsSentenceQueueRef.current = [];
+      isSpeakingSentenceRef.current = false;
       await stopSpeaking();
       setTimeout(() => {
         if (!voiceEnabled) return;
@@ -905,6 +915,11 @@ export default function DashOrb({
   const handleWakeWordDetected = async () => {
     console.log('[DashOrb] Wake word detected');
 
+    if (isMicMuted) {
+      console.log('[DashOrb] Mic is muted - ignoring wake word');
+      return;
+    }
+
     if (locked) {
       console.log('[DashOrb] Screen is locked - ignoring wake word');
       if (upgradeTimerRef.current) {
@@ -926,10 +941,13 @@ export default function DashOrb({
       return;
     }
 
-    // ✅ BARGE-IN: if Dash is speaking (or streaming), stop immediately and listen
+    // ✅ BARGE-IN: if Dash is speaking (or TTS pipeline active or streaming), stop immediately and listen
     try {
-      if (isSpeaking) {
-        console.log('[DashOrb] Barge-in: stopping TTS');
+      const bargeInNeeded = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+      if (bargeInNeeded) {
+        console.log('[DashOrb] Barge-in: stopping TTS pipeline');
+        ttsSentenceQueueRef.current = [];
+        isSpeakingSentenceRef.current = false;
         await Promise.resolve(stopSpeaking());
       }
       if (isProcessing) {
@@ -1052,9 +1070,13 @@ export default function DashOrb({
   }, [handleWakeWordDetected]);
 
   const handleMicPress = async () => {
-    // Manual voice input (push-to-talk)
+    const ttsPipelineActive = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+    if (ttsPipelineActive) {
+      setIsMicMuted(prev => !prev);
+      return;
+    }
+
     if (isListeningForCommand) {
-      // Stop listening
       shouldRestartListeningRef.current = false;
       if (onDeviceTimeoutRef.current) {
         clearTimeout(onDeviceTimeoutRef.current);
@@ -1071,7 +1093,6 @@ export default function DashOrb({
       setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
       setIsListeningForCommand(false);
     } else {
-      // Start listening
       await handleWakeWordDetected();
     }
   };
@@ -1133,6 +1154,7 @@ export default function DashOrb({
     const timer = setTimeout(() => {
       if (!whisperModeEnabledRef.current) return;
       if (isProcessing || isSpeaking || isListeningForCommandRef.current) return;
+      if (isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0) return;
       shouldRestartListeningRef.current = false;
       triggerListeningRef.current?.();
     }, 650);
@@ -2379,9 +2401,9 @@ export default function DashOrb({
               }}
             >
               <Ionicons 
-                name={isSpeaking ? 'mic' : isProcessing ? 'sync' : 'sparkles'} 
+                name={isSpeaking && isMicMuted ? 'mic-off' : isSpeaking ? 'mic' : isProcessing ? 'sync' : 'sparkles'} 
                 size={size * 0.35} 
-                color="#ffffff" 
+                color={isSpeaking && isMicMuted ? '#ef4444' : '#ffffff'} 
               />
             </View>
             {locked && (
@@ -2447,6 +2469,7 @@ export default function DashOrb({
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }}
         isSpeaking={isSpeaking}
+        isMicMuted={isMicMuted}
         voiceEnabled={voiceEnabled}
         whisperModeEnabled={whisperModeEnabled}
         onToggleWhisperMode={() => {

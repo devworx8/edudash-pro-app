@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '@/contexts/ThemeContext';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import type { LessonPlanV2 } from '@/lib/ai/lessonPlanSchema';
 
 type FooterAction = {
@@ -84,7 +84,7 @@ export function LessonGenerationFullscreen({
             accessibilityRole="progressbar"
             accessibilityValue={{ min: 0, max: 100, now: Math.round(percent) }}
           >
-            <View style={[styles.fill, { width: `${percent}%`, backgroundColor: theme.primary }]} />
+            <View style={[styles.fill, { width: percentWidth(percent), backgroundColor: theme.primary }]} />
           </View>
           <Text style={[styles.phaseText, { color: theme.textSecondary }]}>
             {Math.round(percent)}% • {progressMessage || PHASES[activePhaseIndex]?.label || 'Processing'}

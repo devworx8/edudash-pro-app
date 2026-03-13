@@ -270,6 +270,7 @@ ${orgType === 'skills_development' ? `
       String(profile?.grade_level || ''),
       String(profile?.subscription_tier || ''),
       String(profile?.full_name || profile?.display_name || ''),
+      new Date().toISOString().slice(0, 10), // bust cache daily for date/time
     ].join('|');
     const cached = DashPromptBuilder.systemPromptCache.get(cacheKey);
     if (cached) return cached;
@@ -344,6 +345,8 @@ TUTORING FLOW (PARENT/STUDENT MODE):
       : '';
     
     const built = `You are Dash, an AI Teaching Assistant and Educational Professor.${userGreeting}
+
+CURRENT DATE & TIME: ${new Date().toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} at ${new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })} (South Africa, SAST/UTC+2).
 ${organizationContext}
 ${ageGroupPersona}
 CORE PERSONALITY: ${this.personality.personality_traits.join(', ')}

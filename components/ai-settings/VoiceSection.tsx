@@ -2,10 +2,12 @@
  * Voice settings section component
  */
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { voiceService } from '@/lib/voice/client';
 import { normalizeLanguageCode, resolveDefaultVoiceId } from '@/lib/ai/dashSettings';
+import { MULTILINGUAL_VOICES, HD_VOICES, DASH_VOICE_ID, LEGACY_VOICES_BY_LANG, type TTSShortLang } from '@/lib/voice/voiceMapping';
+import { clampPercent } from '@/lib/progress/clampPercent';
 import { SectionHeader } from './SectionHeader';
 import { ToggleSetting, SliderSetting, PickerSetting } from './SettingRows';
 import { AISettings, LANGUAGE_OPTIONS, TTS_SUPPORTED_LANGUAGES } from './types';
@@ -111,72 +113,58 @@ export function VoiceSection({
     }
   };
 
+  const resolveDefaultVoiceForLanguage = (_language: string): string => {
+    return DASH_VOICE_ID;
+  };
+
   const renderVoiceOptions = () => {
     const lang = settings.voiceLanguage;
-    const voiceOptions: Record<string, Array<{ name: string; value: string; gender: string }>> = {
-      en: [
-        { name: 'Leah', value: 'en-ZA-LeahNeural', gender: '👩' },
-        { name: 'Luke', value: 'en-ZA-LukeNeural', gender: '👨' },
-      ],
-      af: [
-        { name: 'Adri', value: 'af-ZA-AdriNeural', gender: '👩' },
-        { name: 'Willem', value: 'af-ZA-WillemNeural', gender: '👨' },
-      ],
-      zu: [
-        { name: 'Themba', value: 'zu-ZA-ThembaNeural', gender: '👨' },
-        { name: 'Thando', value: 'zu-ZA-ThandoNeural', gender: '👩' },
-      ],
-    };
 
-    if (voiceOptions[lang]) {
-      return (
-        <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
-          <View style={styles.settingInfo}>
-            <Text style={[styles.settingTitle, { color: theme.text }]}>Azure Neural Voice</Text>
-            <Text style={[styles.settingSubtitle, { color: theme.textSecondary }]}>
-              Premium voices for {lang === 'en' ? 'English (SA)' : lang === 'af' ? 'Afrikaans' : 'isiZulu'}
-            </Text>
-          </View>
-          <View style={{ flexDirection: 'column', gap: 8 }}>
-            {voiceOptions[lang].map(opt => (
-              <TouchableOpacity
-                key={opt.value}
-                style={[styles.pickerOption, {
-                  backgroundColor: settings.voiceType === opt.value ? theme.primary : 'transparent',
-                  borderColor: theme.border
-                }]}
-                onPress={() => onChange('voiceType', opt.value)}
-              >
-                <Text style={[styles.pickerOptionText, { color: settings.voiceType === opt.value ? 'white' : theme.text }]}>
-                  {opt.gender} {opt.name} ({opt.gender === '👨' ? 'Male' : 'Female'})
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      );
-    }
+    const multilingualOptions = [
+      { name: 'Andrew', value: MULTILINGUAL_VOICES.male, gender: '👨', label: 'Multilingual' },
+      { name: 'Ava', value: MULTILINGUAL_VOICES.female, gender: '👩', label: 'Multilingual' },
+    ];
 
-    if (lang === 'xh' || lang === 'nso') {
-      return (
-        <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
-          <Text style={[styles.settingSubtitle, { color: theme.textSecondary, padding: 8 }]}>
-            Azure Speech supports {lang === 'xh' ? 'isiXhosa' : 'Northern Sotho'} with default voice.
-          </Text>
-        </View>
-      );
-    }
+    const hdOptions = lang === 'en' ? [
+      { name: 'Luke', value: HD_VOICES['en-ZA-male'], gender: '👨', label: 'HD · EN-ZA' },
+      { name: 'Leah', value: HD_VOICES['en-ZA-female'], gender: '👩', label: 'HD · EN-ZA' },
+      { name: 'Ryan', value: HD_VOICES['en-GB-male'], gender: '👨', label: 'HD · EN-GB' },
+      { name: 'Sonia', value: HD_VOICES['en-GB-female'], gender: '👩', label: 'HD · EN-GB' },
+      { name: 'Guy', value: HD_VOICES['en-US-male'], gender: '👨', label: 'HD · EN-US' },
+      { name: 'Aria', value: HD_VOICES['en-US-female'], gender: '👩', label: 'HD · EN-US' },
+    ] : [];
 
-    // Generic gender picker
+    const shortCode = (['en', 'af', 'zu', 'xh', 'nso'] as TTSShortLang[]).find(c => c === lang) ?? null;
+    const legacyOptions = shortCode ? [
+      { name: LEGACY_VOICES_BY_LANG[shortCode].male.split('-')[2]?.replace('Neural', '') || 'Male', value: LEGACY_VOICES_BY_LANG[shortCode].male, gender: '👨', label: 'Classic' },
+      { name: LEGACY_VOICES_BY_LANG[shortCode].female.split('-')[2]?.replace('Neural', '') || 'Female', value: LEGACY_VOICES_BY_LANG[shortCode].female, gender: '👩', label: 'Classic' },
+    ] : [];
+
+    const allOptions = [...multilingualOptions, ...hdOptions, ...legacyOptions];
+
     return (
       <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>
         <View style={styles.settingInfo}>
-          <Text style={[styles.settingTitle, { color: theme.text }]}>Voice Gender</Text>
+          <Text style={[styles.settingTitle, { color: theme.text }]}>Azure Neural Voice</Text>
           <Text style={[styles.settingSubtitle, { color: theme.textSecondary }]}>
-            {Platform.OS === 'android' ? 'Voice via pitch modulation' : 'Uses device voice packs'}
+            Choose Dash's speaking voice
           </Text>
         </View>
-        <View style={styles.pickerContainer}>
+        <View style={{ flexDirection: 'column', gap: 8 }}>
+          {allOptions.map(opt => (
+            <TouchableOpacity
+              key={opt.value}
+              style={[styles.pickerOption, {
+                backgroundColor: settings.voiceType === opt.value ? theme.primary : 'transparent',
+                borderColor: theme.border
+              }]}
+              onPress={() => onChange('voiceType', opt.value)}
+            >
+              <Text style={[styles.pickerOptionText, { color: settings.voiceType === opt.value ? 'white' : theme.text }]}>
+                {opt.gender} {opt.name} ({opt.label})
+              </Text>
+            </TouchableOpacity>
+          ))}
           {['male', 'female'].map(g => (
             <TouchableOpacity
               key={g}
@@ -187,7 +175,7 @@ export function VoiceSection({
               onPress={() => onChange('voiceType', g)}
             >
               <Text style={[styles.pickerOptionText, { color: settings.voiceType === g ? 'white' : theme.text }]}>
-                {g === 'male' ? '👨 Male' : '👩 Female'}
+                {g === 'male' ? '👨 Male (auto)' : '👩 Female (auto)'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -195,6 +183,10 @@ export function VoiceSection({
       </View>
     );
   };
+
+  const sampleProgressPercent = clampPercent(sampleProgress * 100, {
+    source: 'components/ai-settings/VoiceSection.sampleProgress',
+  });
 
   return (
     <>
@@ -211,6 +203,7 @@ export function VoiceSection({
               onChange('responseLanguage', v);
               // Auto-sync voice language when response language changes
               onChange('voiceLanguage', v);
+              onChange('voiceType', resolveDefaultVoiceForLanguage(v));
             }}
             theme={theme}
           />
@@ -253,7 +246,10 @@ export function VoiceSection({
             subtitle="Primary language for voice output"
             value={settings.voiceLanguage}
             options={LANGUAGE_OPTIONS.filter(o => TTS_SUPPORTED_LANGUAGES.includes(o.value))}
-            onValueChange={(v) => onChange('voiceLanguage', v)}
+            onValueChange={(v) => {
+              onChange('voiceLanguage', v);
+              onChange('voiceType', resolveDefaultVoiceForLanguage(v));
+            }}
             theme={theme}
           />
           {renderVoiceOptions()}
@@ -270,7 +266,7 @@ export function VoiceSection({
             {(samplePlaying || sampleLoading) && (
               <View style={{ marginTop: 8 }}>
                 <View style={{ height: 6, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden' }}>
-                  <View style={{ width: `${Math.round(sampleProgress * 100)}%`, height: '100%', backgroundColor: theme.primary }} />
+                  <View style={{ width: `${sampleProgressPercent}%`, height: '100%', backgroundColor: theme.primary }} />
                 </View>
                 <Text style={{ marginTop: 6, fontSize: 12, color: theme.textSecondary }}>Playing… {Math.round(sampleProgress * 100)}%</Text>
               </View>

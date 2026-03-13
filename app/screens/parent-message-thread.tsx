@@ -1,11 +1,3 @@
-/**
- * Parent Message Thread Screen
- * Full-featured WhatsApp-style chat interface with wallpaper, voice, actions, etc.
- *
- * State/handlers extracted → hooks/useParentMessageThread.ts
- * Styles extracted → parent-message-thread.styles.ts
- * Hooks: useMessageActions, useThreadOptions (pre-existing)
- */
 import React, { useMemo, useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Platform, KeyboardAvoidingView, ImageBackground, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -24,20 +16,27 @@ import { AlertModal, useAlertModal, type AlertButton } from '@/components/ui/Ale
 import {
   Message, DateSeparator, MessageBubble, ChatHeader, MessageComposer,
   ForwardMessagePicker, ChatSearchOverlay, MediaGalleryView, StarredMessagesView,
+  ChatParticipantSheet,
 } from '@/components/messaging';
 import { SwipeableMessageRow } from '@/components/messaging/SwipeableMessageRow';
 import { MessageScheduler } from '@/components/messaging/MessageScheduler';
 import { TemplatePickerSheet } from '@/components/messaging/TemplatePickerSheet';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { useThreadParticipantInteractions } from '@/hooks/messaging/useThreadParticipantInteractions';
 import { useParentMessageThread, type ChatRow } from '@/hooks/useParentMessageThread';
 import { useAutoTranslateTranscribe } from '@/hooks/messaging/useAutoTranslateTranscribe';
 import { parseThemeFromMessage } from '@/lib/messaging/parseThemeFromMessage';
+import {
+  useAddGroupParticipants,
+  useOrgMembers,
+  useRemoveGroupParticipant,
+  useUpdateGroupReplyPolicy,
+} from '@/hooks/useGroupMessaging';
 import {
   messageThreadStyles as styles, defaultTheme,
   COMPOSER_FLOAT_GAP, COMPOSER_OVERLAY_HEIGHT,
 } from '@/lib/screen-styles/parent-message-thread.styles';
 
-// Safe component imports
 let ChatWallpaperPicker: React.FC<any> | null = null;
 let MessageActionsMenu: React.FC<any> | null = null;
 let ThreadOptionsMenu: React.FC<any> | null = null;
@@ -67,9 +66,10 @@ export default function ParentMessageThreadScreen() {
     threadType?: string;
   }>();
   const threadId = params.threadId || '';
-  const contactName = params.teacherName || params.parentName || params.title || '';
-  const isGroup = params.isGroup === '1';
-  const threadType = params.threadType || '';
+  const routeTitle = params.title || '';
+  const routeContactName = params.teacherName || params.parentName || routeTitle || '';
+  const routeIsGroup = params.isGroup === '1';
+  const routeThreadType = params.threadType || '';
   const theme = useTheme().theme || defaultTheme;
   const { user, profile } = useAuth();
 
@@ -80,18 +80,31 @@ export default function ParentMessageThreadScreen() {
     showAlert({ title, message, buttons, type: 'warning' });
   }, [showAlert]);
   const h = useParentMessageThread(threadId, user?.id, user?.email);
+  const { data: orgParents = [] } = useOrgMembers(['parent']);
+  const updateGroupReplyPolicy = useUpdateGroupReplyPolicy();
+  const addGroupParticipants = useAddGroupParticipants();
+  const removeGroupParticipant = useRemoveGroupParticipant();
   const att = useAutoTranslateTranscribe({
     threadId, userId: user?.id,
     preferredLanguage: (profile?.language as any) || 'en',
     messages: h.allMessages,
   });
 
+  const effectiveThreadType = String(h.threadInfo?.group_type || routeThreadType || h.threadInfo?.type || '');
+  const isGroup = Boolean(
+    routeIsGroup ||
+    h.threadInfo?.is_group === true ||
+    h.threadInfo?.group_name ||
+    ['class_group', 'parent_group', 'teacher_group', 'announcement'].includes(effectiveThreadType),
+  );
   const displayName = useMemo(() => {
-    try { return contactName ? decodeURIComponent(contactName) : t('parent.teacher', { defaultValue: 'Contact' }); }
-    catch { return contactName || 'Contact'; }
-  }, [contactName, t]);
+    const rawName = isGroup
+      ? h.threadInfo?.group_name || routeTitle || h.threadInfo?.subject || routeContactName
+      : routeContactName || h.threadInfo?.subject || '';
+    try { return rawName ? decodeURIComponent(rawName) : t('parent.teacher', { defaultValue: 'Contact' }); }
+    catch { return rawName || 'Contact'; }
+  }, [h.threadInfo?.group_name, h.threadInfo?.subject, isGroup, routeContactName, routeTitle, t]);
 
-  // Message actions hook
   const actions = useMessageActions({
     selectedMessage: h.selectedMessage, user, refetch: h.refetch,
     setSelectedMessage: h.setSelectedMessage, setShowMessageActions: h.setShowMessageActions,
@@ -99,15 +112,12 @@ export default function ParentMessageThreadScreen() {
     showAlert: ({ title, message, buttons }) => showThreadAlert(title, message, buttons),
   });
 
-  // Pinned messages
   const pinnedMessages = useMemo(() =>
     h.allMessages.filter((m: any) => m.is_pinned),
   [h.allMessages]);
 
-  // Template picker
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
 
-  // Thread options hook
   const routeRecipientId =
     params.recipientId ||
     params.recipientid ||
@@ -131,6 +141,10 @@ export default function ParentMessageThreadScreen() {
   const recipientRole =
     h.otherParticipant?.sender?.role ||
     participantRecipient?.user_profile?.role ||
+    null;
+  const recipientAvatarUrl =
+    h.otherParticipant?.sender?.avatar_url ||
+    participantRecipient?.user_profile?.avatar_url ||
     null;
   const isPrincipal =
     profile?.role === 'principal' || profile?.role === 'principal_admin';
@@ -198,13 +212,13 @@ export default function ParentMessageThreadScreen() {
   const isOnline = recipientId && callContext ? callContext.isUserOnline(recipientId) : false;
   const groupTypeLabel = isGroup
     ? (
-      threadType === 'class_group'
+      effectiveThreadType === 'class_group'
         ? 'Class group'
-        : threadType === 'announcement'
+        : effectiveThreadType === 'announcement'
           ? 'Announcement channel'
-          : threadType === 'parent_group'
+          : effectiveThreadType === 'parent_group'
             ? 'Parent group'
-            : threadType === 'teacher_group'
+            : effectiveThreadType === 'teacher_group'
               ? 'Teacher group'
               : 'Group'
     )
@@ -216,63 +230,6 @@ export default function ParentMessageThreadScreen() {
       groupMemberCount > 0 ? `${groupMemberCount} member${groupMemberCount === 1 ? '' : 's'}` : null,
     ].filter(Boolean).join(' • ')
     : (recipientId && callContext ? callContext.getLastSeenText(recipientId) : 'Offline');
-
-  const handleOpenGroupInfo = useCallback(() => {
-    if (!isGroup) return;
-    const rows = groupParticipants.map((participant, index) => {
-      const first = participant.user_profile?.first_name || '';
-      const last = participant.user_profile?.last_name || '';
-      const fullName = `${first} ${last}`.trim() || `Member ${index + 1}`;
-      const role = participant.user_profile?.role || participant.role || 'member';
-      const onlineLabel = callContext?.isUserOnline(participant.user_id) ? 'online' : 'offline';
-      return `• ${fullName} (${role}) — ${onlineLabel}`;
-    });
-    const body = rows.length > 0
-      ? rows.join('\n')
-      : 'No participant details available yet.';
-    showThreadAlert(
-      'Group info',
-      `${displayName}\n${groupOnlineCount} online • ${groupMemberCount} members\n\n${body}`,
-      [{ text: 'OK' }]
-    );
-  }, [callContext, displayName, groupMemberCount, groupOnlineCount, groupParticipants, isGroup, showThreadAlert]);
-
-  const handleReactionLongPress = useCallback(async (_messageId: string, emoji: string, reactedByUserIds: string[]) => {
-    if (reactedByUserIds.length === 0) return;
-    try {
-      const { assertSupabase } = require('@/lib/supabase');
-      const client = assertSupabase?.();
-      if (!client) return;
-      const uniqueUserIds = Array.from(new Set(reactedByUserIds));
-      const participantNameMap = new Map<string, string>();
-      groupParticipants.forEach((participant) => {
-        const first = participant.user_profile?.first_name || '';
-        const last = participant.user_profile?.last_name || '';
-        const fullName = `${first} ${last}`.trim();
-        if (participant.user_id && fullName) {
-          participantNameMap.set(participant.user_id, fullName);
-        }
-      });
-      const missingUserIds = uniqueUserIds.filter((id) => !participantNameMap.has(id));
-      if (missingUserIds.length > 0) {
-        const { data: profiles } = await client
-          .from('profiles')
-          .select('id, first_name, last_name')
-          .in('id', missingUserIds);
-        (profiles || []).forEach((p: { id: string; first_name?: string; last_name?: string }) => {
-          const fullName = [p.first_name, p.last_name].filter(Boolean).join(' ').trim();
-          if (fullName) {
-            participantNameMap.set(p.id, fullName);
-          }
-        });
-      }
-      const names = uniqueUserIds.map((id) => participantNameMap.get(id) || 'Someone');
-      const message = names.length > 0 ? `${names.join(', ')} reacted with ${emoji}` : `${emoji}`;
-      showThreadAlert(t('messaging.whoReacted', { defaultValue: 'Who reacted' }), message, [{ text: 'OK' }]);
-    } catch {
-      showThreadAlert(t('messaging.whoReacted', { defaultValue: 'Who reacted' }), `${emoji}`, [{ text: 'OK' }]);
-    }
-  }, [groupParticipants, showThreadAlert, t]);
 
   const handleVoiceCall = useCallback(() => {
     if (!callContext) { toast.warn('Voice calling is not available.', 'Voice Call'); return; }
@@ -306,7 +263,41 @@ export default function ParentMessageThreadScreen() {
     callContext.startVoiceCall(event.callerId, event.callerName || 'Contact', { threadId });
   }, [callContext, threadId]);
 
-  // Scroll to a quoted message when tapped
+  const {
+    showParticipantSheet,
+    setShowParticipantSheet,
+    participantSheetLoading,
+    participantSheetDetails,
+    participantSheetMembers,
+    participantQuickActions,
+    openParticipantSheet,
+    handleReactionDetails,
+  } = useThreadParticipantInteractions({
+    isGroup,
+    recipientId,
+    recipientRole,
+    recipientAvatarUrl,
+    currentUserId: user?.id,
+    groupParticipants,
+    isUserOnline: (participantUserId) => !!callContext?.isUserOnline(participantUserId),
+    showThreadAlert,
+    onVoiceCall: handleVoiceCall,
+    onVideoCall: handleVideoCall,
+    onOpenSearch: () => {
+      setShowParticipantSheet(false);
+      opts.handleSearchInChat();
+    },
+    onOpenMedia: () => {
+      setShowParticipantSheet(false);
+      opts.handleMediaLinksAndDocs();
+    },
+    onOpenMoreOptions: () => {
+      setShowParticipantSheet(false);
+      h.setShowOptionsMenu(true);
+    },
+  });
+  const headerAvatarUrl = participantSheetDetails?.avatar_url || recipientAvatarUrl;
+
   const handleScrollToMessage = useCallback((messageId: string) => {
     const idx = h.rowsAsc.findIndex((r: ChatRow) => r.type === 'message' && r.msg?.id === messageId);
     if (idx >= 0 && h.listRef?.current) {
@@ -314,7 +305,6 @@ export default function ParentMessageThreadScreen() {
     }
   }, [h.rowsAsc, h.listRef]);
 
-  // Render row
   const renderRow = useCallback(({ item }: { item: ChatRow }) => {
     if (item.type === 'date') return <DateSeparator label={item.label} />;
     const msg = item.msg;
@@ -334,7 +324,8 @@ export default function ParentMessageThreadScreen() {
           hasNextVoice={hasNextVoice} hasPreviousVoice={hasPreviousVoice}
           autoPlayVoice={!!msg.voice_url && h.currentlyPlayingVoiceId === msg.id}
           onReactionPress={actions.handleReactionPress}
-          onReactionLongPress={handleReactionLongPress}
+          onReactionLongPress={(_messageId, emoji, reactedByUserIds) => handleReactionDetails(emoji, reactedByUserIds)}
+          showReactionDetailsOnPress={isGroup || groupMemberCount > 2}
           onReplyPress={handleScrollToMessage}
           onCallEventPress={handleCallEventPress}
           isFirstInGroup={item.isFirstInGroup}
@@ -348,12 +339,57 @@ export default function ParentMessageThreadScreen() {
         />
       </SwipeableMessageRow>
     );
-  }, [h.currentlyPlayingVoiceId, h.handleMessageLongPress, h.voiceMessageIdsAsc, h.setReplyingTo, actions.handleReactionPress, handleReactionLongPress, handleScrollToMessage, handleCallEventPress, user?.id, att]);
+  }, [h.currentlyPlayingVoiceId, h.handleMessageLongPress, h.voiceMessageIdsAsc, h.setReplyingTo, actions.handleReactionPress, handleReactionDetails, handleScrollToMessage, handleCallEventPress, user?.id, att]);
 
   // Announcement channels: only admins/principals can post
   const userRole = (profile as any)?.role || '';
   const isAdmin = ['principal', 'admin', 'principal_admin', 'super_admin', 'superadmin'].includes(userRole);
-  const isAnnouncementReadOnly = threadType === 'announcement' && !isAdmin;
+  const canUsePrincipalDashAssist = ['principal', 'principal_admin'].includes(userRole);
+  const isUserGroupAdmin = h.currentParticipant?.is_admin === true;
+  const currentParticipantCanSend = h.currentParticipant?.is_admin === true || h.currentParticipant?.can_send_messages === true;
+  const canManageParentGroup =
+    effectiveThreadType === 'parent_group' &&
+    isAdmin &&
+    (isUserGroupAdmin || h.threadInfo?.created_by === user?.id);
+  const isAnnouncementReadOnly = Boolean(
+    isGroup &&
+    effectiveThreadType === 'announcement' &&
+    ((h.currentParticipant && !currentParticipantCanSend) || (!h.currentParticipant && !isAdmin))
+  );
+  const isGroupReplyReadOnly = Boolean(
+    isGroup &&
+    effectiveThreadType !== 'announcement' &&
+    (
+      (h.currentParticipant && !currentParticipantCanSend)
+      || (!h.currentParticipant && h.threadInfo?.allow_replies === false && !isAdmin)
+    )
+  );
+  const isComposerReadOnly = isAnnouncementReadOnly || isGroupReplyReadOnly;
+  const availableParentCandidates = useMemo(() => {
+    if (!canManageParentGroup) return [];
+    const existingIds = new Set(h.threadParticipants.map((participant) => participant.user_id));
+    return orgParents
+      .filter((member) => !existingIds.has(member.id))
+      .map((member) => ({
+        id: member.id,
+        name: member.display_name,
+        role: member.role,
+        email: member.email || null,
+      }));
+  }, [canManageParentGroup, h.threadParticipants, orgParents]);
+  const dashAssistRecipientRole = isGroup
+    ? (
+      effectiveThreadType === 'announcement'
+        ? 'parents and staff in an announcement channel'
+        : effectiveThreadType === 'parent_group'
+          ? 'a parent group'
+          : effectiveThreadType === 'class_group'
+            ? 'class parents and staff'
+            : effectiveThreadType === 'teacher_group'
+              ? 'a teacher group'
+              : 'a school group'
+    )
+    : recipientRole || undefined;
   const announcementBannerStyle = {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -362,11 +398,70 @@ export default function ParentMessageThreadScreen() {
     borderTopWidth: 1,
     paddingHorizontal: 16,
   };
+  const composerReadOnlyLabel = isAnnouncementReadOnly
+    ? 'Only admins can post in this channel'
+    : 'Replies are turned off for this group';
+
+  const handleToggleGroupReplies = useCallback(async (nextValue: boolean) => {
+    try {
+      await updateGroupReplyPolicy.mutateAsync({
+        threadId,
+        allowReplies: nextValue,
+      });
+      h.refreshThreadMeta();
+      toast.success(nextValue ? 'Replies enabled for parents.' : 'Parents are now read-only.');
+    } catch (error: any) {
+      showThreadAlert('Reply controls', error?.message || 'Could not update reply permissions.', [{ text: 'OK' }]);
+    }
+  }, [h.refreshThreadMeta, showThreadAlert, threadId, updateGroupReplyPolicy]);
+
+  const handleAddGroupMembers = useCallback(async (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    try {
+      await addGroupParticipants.mutateAsync({ threadId, userIds });
+      h.refreshThreadMeta();
+      toast.success(userIds.length === 1 ? 'Parent added to group.' : 'Parents added to group.');
+    } catch (error: any) {
+      showThreadAlert('Add members', error?.message || 'Could not add members to this group.', [{ text: 'OK' }]);
+    }
+  }, [addGroupParticipants, h.refreshThreadMeta, showThreadAlert, threadId]);
+
+  const handleRemoveGroupMember = useCallback((participantUserId: string) => {
+    const participant = h.threadParticipants.find((entry) => entry.user_id === participantUserId);
+    const participantName = [
+      participant?.user_profile?.first_name || '',
+      participant?.user_profile?.last_name || '',
+    ].join(' ').trim() || 'this member';
+
+    showThreadAlert(
+      'Remove member',
+      `Remove ${participantName} from this group?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeGroupParticipant.mutateAsync({
+                threadId,
+                userId: participantUserId,
+              });
+              h.refreshThreadMeta();
+              toast.success('Member removed from the group.');
+            } catch (error: any) {
+              showThreadAlert('Remove member', error?.message || 'Could not remove this member.', [{ text: 'OK' }]);
+            }
+          },
+        },
+      ],
+    );
+  }, [h.refreshThreadMeta, h.threadParticipants, removeGroupParticipant, showThreadAlert, threadId]);
 
   // Layout calculations
   const composerBottomInset = Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 2);
   const keyboardUp = h.keyboardHeight > 0;
-  const safeComposerHeight = isAnnouncementReadOnly
+  const safeComposerHeight = isComposerReadOnly
     ? 52
     : Math.max(h.composerHeight, COMPOSER_OVERLAY_HEIGHT);
   // When keyboard is up: move safe-area from padding → bottom offset (clears nav bar).
@@ -394,10 +489,11 @@ export default function ParentMessageThreadScreen() {
         displayName={displayName} isOnline={isOnline} lastSeenText={lastSeenText}
         isLoading={h.loading} isTyping={h.isOtherTyping} typingText={h.typingText}
         recipientRole={isGroup ? null : recipientRole}
+        avatarUrl={headerAvatarUrl}
         isGroup={isGroup}
         participantCount={isGroup ? groupMemberCount : undefined}
         onlineCount={isGroup ? groupOnlineCount : undefined}
-        onHeaderPress={isGroup ? handleOpenGroupInfo : undefined}
+        onHeaderPress={openParticipantSheet}
         onVoiceCall={handleVoiceCall} onVideoCall={handleVideoCall}
         onOptionsPress={() => h.setShowOptionsMenu(true)}
       />
@@ -479,12 +575,12 @@ export default function ParentMessageThreadScreen() {
         )}
 
         {/* Composer — hidden for announcement channel subscribers */}
-        <View style={[styles.composerArea, { bottom: h.keyboardHeight + COMPOSER_FLOAT_GAP + composerExtraBottom, paddingBottom: keyboardUp ? 0 : composerBottomInset }]} onLayout={isAnnouncementReadOnly ? undefined : h.handleComposerLayout}>
-          {isAnnouncementReadOnly ? (
+        <View style={[styles.composerArea, { bottom: h.keyboardHeight + COMPOSER_FLOAT_GAP + composerExtraBottom, paddingBottom: keyboardUp ? 0 : composerBottomInset }]} onLayout={isComposerReadOnly ? undefined : h.handleComposerLayout}>
+          {isComposerReadOnly ? (
             <View style={[announcementBannerStyle, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Ionicons name="megaphone-outline" size={16} color={theme.textSecondary} />
+              <Ionicons name={isAnnouncementReadOnly ? 'megaphone-outline' : 'chatbox-ellipses-outline'} size={16} color={theme.textSecondary} />
               <Text style={{ color: theme.textSecondary, fontSize: 13, marginLeft: 8 }}>
-                Only admins can post in this channel
+                {composerReadOnlyLabel}
               </Text>
             </View>
           ) : (
@@ -493,6 +589,8 @@ export default function ParentMessageThreadScreen() {
               onVoiceRecording={h.handleVoiceRecording} onImageAttach={h.handleImageAttach}
               sending={h.sending} replyingTo={h.replyingTo} onCancelReply={() => h.setReplyingTo(null)}
               onTyping={h.setTyping} editingMessage={actions.editingMessage} onCancelEdit={actions.cancelEdit}
+              enableDashAssist={canUsePrincipalDashAssist}
+              dashAssistRecipientRole={dashAssistRecipientRole}
               showAlert={(config) => showThreadAlert(config.title, config.message, config.buttons)}
               onSchedule={(text) => { h.setPendingScheduleText(text); h.setShowScheduler(true); }}
               onOpenTemplates={() => setShowTemplatePicker(true)}
@@ -509,10 +607,14 @@ export default function ParentMessageThreadScreen() {
           onClearChat={opts.handleClearChat} onExportChat={opts.handleExportChat}
           onMediaLinksAndDocs={opts.handleMediaLinksAndDocs} onStarredMessages={opts.handleStarredMessages}
           onDisappearingMessages={opts.handleDisappearingMessages} onAddShortcut={opts.handleAddShortcut}
-          onReport={opts.handleReport} onBlockUser={opts.handleBlockUser} onViewContact={opts.handleViewContact}
+          onReport={opts.handleReport} onBlockUser={opts.handleBlockUser}
+          onViewContact={() => {
+            h.setShowOptionsMenu(false);
+            void openParticipantSheet();
+          }}
           isMuted={opts.isMuted} isBlocked={opts.isUserBlocked} disappearingLabel={opts.disappearingStatusLabel}
           contactName={displayName} isGroup={isGroup} participantCount={groupMemberCount || undefined}
-          onGroupInfo={isGroup ? handleOpenGroupInfo : undefined}
+          onGroupInfo={isGroup ? () => void openParticipantSheet() : undefined}
           onToggleAutoTranslate={att.toggleAutoTranslate}
           isAutoTranslateEnabled={att.autoTranslateEnabled} />
       )}
@@ -538,13 +640,44 @@ export default function ParentMessageThreadScreen() {
       )}
       <ForwardMessagePicker visible={actions.showForwardPicker} onSelect={actions.confirmForward} onCancel={actions.cancelForward} />
       <ChatSearchOverlay visible={opts.showSearchOverlay} query={opts.searchQuery} results={opts.searchResults as any[]}
-        isSearching={opts.isSearching} onSearch={opts.performSearch} onClose={opts.closeSearch} />
+        isSearching={opts.isSearching} onSearch={opts.performSearch} onClose={opts.closeSearch}
+        onScrollToMessage={handleScrollToMessage} />
       <MediaGalleryView visible={opts.showMediaGallery} threadId={threadId} onClose={opts.closeMediaGallery} />
       <StarredMessagesView visible={opts.showStarredMessages} threadId={threadId} onClose={opts.closeStarredMessages} />
       <MessageScheduler visible={h.showScheduler} onClose={() => { h.setShowScheduler(false); h.setPendingScheduleText(null); }}
         onSchedule={(scheduledAt) => { h.handleScheduledSend(scheduledAt); }} />
       <TemplatePickerSheet visible={showTemplatePicker} onClose={() => setShowTemplatePicker(false)}
         onSelect={(tpl) => { h.handleSend(tpl.body); setShowTemplatePicker(false); }} />
+      <ChatParticipantSheet
+        visible={showParticipantSheet}
+        onClose={() => setShowParticipantSheet(false)}
+        title={displayName}
+        subtitle={isGroup ? groupTypeLabel || 'Group chat' : (isOnline ? 'Online now' : lastSeenText)}
+        role={isGroup ? null : (participantSheetDetails?.role || recipientRole)}
+        email={participantSheetDetails?.email}
+        phone={participantSheetDetails?.phone}
+        avatarUrl={headerAvatarUrl}
+        avatarLabel={displayName.charAt(0).toUpperCase()}
+        isGroup={isGroup}
+        isLoading={participantSheetLoading}
+        participantCount={groupMemberCount}
+        onlineCount={groupOnlineCount}
+        participants={participantSheetMembers}
+        quickActions={participantQuickActions}
+        groupDescription={h.threadInfo?.group_description || null}
+        adminControls={canManageParentGroup ? {
+          canManageMembers: true,
+          canToggleReplies: true,
+          allowReplies: h.threadInfo?.allow_replies ?? true,
+          isUpdatingReplies: updateGroupReplyPolicy.isPending,
+          onToggleReplies: handleToggleGroupReplies,
+          addCandidates: availableParentCandidates,
+          isAddingMembers: addGroupParticipants.isPending,
+          onAddMembers: handleAddGroupMembers,
+          onRemoveParticipant: handleRemoveGroupMember,
+          removingParticipantId: removeGroupParticipant.isPending ? (removeGroupParticipant.variables?.userId ?? null) : null,
+        } : null}
+      />
       <AlertModal {...alertProps} />
     </KeyboardAvoidingView>
   );

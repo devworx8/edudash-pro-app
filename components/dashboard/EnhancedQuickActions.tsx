@@ -7,6 +7,7 @@ import { router } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { useTheme } from '@/contexts/ThemeContext'
 import { useOrganizationTerminology, useOrgType } from '@/lib/hooks/useOrganizationTerminology'
+import { useRewardedFeature } from '@/contexts/AdsContext'
 
 interface EnhancedQuickActionProps {
   icon: keyof typeof Ionicons.glyphMap
@@ -17,6 +18,8 @@ interface EnhancedQuickActionProps {
   disabled?: boolean
   isPremium?: boolean
   premiumDescription?: string
+  /** Stable key for rewarded-ad unlock state. Defaults to slugified title. */
+  featureKey?: string
 }
 
 const EnhancedQuickAction: React.FC<EnhancedQuickActionProps> = ({
@@ -27,14 +30,19 @@ const EnhancedQuickAction: React.FC<EnhancedQuickActionProps> = ({
   onPress,
   disabled = false,
   isPremium = false,
-  premiumDescription
+  premiumDescription,
+  featureKey,
 }) => {
   const { t } = useTranslation('common')
   const { width } = Dimensions.get('window')
   const cardWidth = (width - 48) / 2
   const { tier } = useSubscription()
   const normalizedTier = String(tier || '').toLowerCase().replace(/-/g, '_')
-  
+
+  // Stable feature key for rewarded unlock tracking
+  const resolvedFeatureKey = featureKey || title.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+  const { isUnlocked } = useRewardedFeature(resolvedFeatureKey)
+
   // Check if feature is premium-gated and user doesn't have a paid tier
   // For parents: parent_starter or parent_plus unlock premium features
   // For schools: premium or enterprise unlock premium features
@@ -49,8 +57,8 @@ const EnhancedQuickAction: React.FC<EnhancedQuickActionProps> = ({
     'school_premium',
     'school_pro',
   ].includes(normalizedTier)
-  const isPremiumBlocked = isPremium && !isPaidTier
-  
+  const isPremiumBlocked = isPremium && !isPaidTier && !isUnlocked
+
   const handlePress = () => {
     if (isPremiumBlocked) {
       // Navigate to premium feature banner screen
@@ -61,6 +69,7 @@ const EnhancedQuickAction: React.FC<EnhancedQuickActionProps> = ({
           description: premiumDescription || description,
           screen: 'quick-actions',
           icon: icon,
+          featureKey: resolvedFeatureKey,
         },
       })
       return

@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -198,7 +199,7 @@ export default function AnalyticsScreen() {
                   <View 
                     style={[
                       styles.demographicFill, 
-                      { backgroundColor: item.color, width: `${item.percentage}%` }
+                      { backgroundColor: item.color, width: percentWidth(item.percentage) }
                     ]} 
                   />
                 </View>

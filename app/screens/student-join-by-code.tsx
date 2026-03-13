@@ -1,9 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { assertSupabase } from '@/lib/supabase';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 // Generic join-by-code for adults/learners (invitation types like 'student' or 'member').
@@ -11,6 +12,7 @@ export default function StudentJoinByCodeScreen() {
   const { user, profile } = useAuth();
   const { theme } = useTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   const params = useLocalSearchParams<{ code?: string }>();
   const initialCode = typeof params?.code === 'string' ? params.code : '';
@@ -23,7 +25,7 @@ export default function StudentJoinByCodeScreen() {
 
   const onValidate = async () => {
     if (!code.trim() || !email.trim()) {
-      Alert.alert('Missing info', 'Enter the invite code and your email.');
+      showAlert({ title: 'Missing info', message: 'Enter the invite code and your email.', type: 'warning' });
       return;
     }
     try {
@@ -40,9 +42,9 @@ export default function StudentJoinByCodeScreen() {
         }
       }
       setValidated(data);
-      Alert.alert('Code valid', 'You can join this organization.');
+      showAlert({ title: 'Code valid', message: 'You can join this organization.', type: 'success' });
     } catch (e: any) {
-      Alert.alert('Invalid code', e?.message || 'This code is invalid or expired.');
+      showAlert({ title: 'Invalid code', message: e?.message || 'This code is invalid or expired.', type: 'error' });
     } finally {
       setValidating(false);
     }
@@ -50,11 +52,11 @@ export default function StudentJoinByCodeScreen() {
 
   const onJoin = async () => {
     if (!user?.id) {
-      Alert.alert('Sign in required', 'Please sign in first.');
+      showAlert({ title: 'Sign in required', message: 'Please sign in first.', type: 'warning' });
       return;
     }
     if (!code.trim()) {
-      Alert.alert('Missing code', 'Enter a code first.');
+      showAlert({ title: 'Missing code', message: 'Enter a code first.', type: 'warning' });
       return;
     }
     try {
@@ -68,10 +70,10 @@ export default function StudentJoinByCodeScreen() {
           p_phone: (profile as any)?.phone || null,
         });
       if (error) throw error;
-      Alert.alert('Joined!', 'Your account is now linked.');
+      showAlert({ title: 'Joined!', message: 'Your account is now linked.', type: 'success' });
       router.replace('/');
     } catch (e: any) {
-      Alert.alert('Failed', e?.message || 'Could not join with this code.');
+      showAlert({ title: 'Failed', message: e?.message || 'Could not join with this code.', type: 'error' });
     } finally {
       setRedeeming(false);
     }
@@ -115,6 +117,7 @@ export default function StudentJoinByCodeScreen() {
           </TouchableOpacity>
         </View>
       )}
+      <AlertModal {...alertProps} />
     </View>
   );
 }

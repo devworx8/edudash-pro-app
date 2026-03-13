@@ -8,6 +8,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, Vi
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { evaluateExpression, formatResult } from '@/lib/calculator/scientificEval';
+import { HapticPatterns } from '@/lib/utils/haptics';
 
 type KeyType =
   | 'shift'
@@ -217,12 +218,14 @@ export function CasioStyleCalculator() {
     const value = evaluateExpression(expr, radians);
     if (value == null) {
       setResult('Math ERROR');
+      HapticPatterns.calculatorError();
       return;
     }
 
     setExpression(expr);
     setResult(formatResult(value));
     setLastAns(value);
+    HapticPatterns.calculatorEquals();
   }, [expression, lastAns, radians]);
 
   const applyShiftLayer = useCallback(
@@ -287,14 +290,19 @@ export function CasioStyleCalculator() {
 
   const handleKey = useCallback(
     (key: CalcKey) => {
+      // Default haptic feedback for all key presses
+      HapticPatterns.calculatorPress();
+
       if (key.type === 'shift') {
         setShift((prev) => !prev);
         setAlpha(false);
+        HapticPatterns.selection();
         return;
       }
       if (key.type === 'alpha') {
         setAlpha((prev) => !prev);
         setShift(false);
+        HapticPatterns.selection();
         return;
       }
 
@@ -303,18 +311,22 @@ export function CasioStyleCalculator() {
       setAlpha(false);
 
       if (key.p === 'AC') {
+        HapticPatterns.calculatorClear();
         clearAll();
         return;
       }
       if (key.p === '⌫' || key.p === 'DEL') {
+        HapticPatterns.calculatorDelete();
         backspace();
         return;
       }
       if (key.p === '=') {
+        // Haptic is handled in evaluate() for success/error differentiation
         evaluate();
         return;
       }
       if (key.p === 'MODE') {
+        HapticPatterns.selection();
         setRadians((prev) => !prev);
         return;
       }
@@ -323,6 +335,7 @@ export function CasioStyleCalculator() {
           ? normalizeDisplayNumber(result)
           : lastAns ?? evaluateExpression(expression, radians) ?? 0;
         setMemory((prev) => prev + current);
+        HapticPatterns.success();
         return;
       }
       if (key.p === 'RCL') {
@@ -428,9 +441,10 @@ export function CasioStyleCalculator() {
   const displayExpression = expression || ' ';
   const displayResult = useMemo(() => {
     if (result != null) return result;
-    if (lastAns != null) return formatResult(lastAns);
+    // AC clears result to null — show 0, not the stale last answer.
+    // (lastAns is still accessible via the Ans button.)
     return '0';
-  }, [lastAns, result]);
+  }, [result]);
   const isError = displayResult === 'Math ERROR';
 
   return (

@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { CVSection } from './types';
 import { CVTemplate, TEMPLATE_CONFIGS, SECTION_ICONS, TemplateColors } from './templates';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const A4_RATIO = 297 / 210; // A4 paper ratio
@@ -344,7 +345,7 @@ export function CVPreviewEnhanced({
                       previewStyles.proficiencyFill, 
                       { 
                         backgroundColor: colors.primary,
-                        width: `${getProficiencyPercent(lang.proficiency)}%`
+                        width: percentWidth(getProficiencyPercent(lang.proficiency))
                       }
                     ]} 
                   />

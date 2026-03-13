@@ -2,7 +2,7 @@
 // Handles password and terms acceptance during registration
 
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Linking } from 'react-native';
 import { RegistrationFormState } from '../../../hooks/useEnhancedRegistration';
 import { PasswordStrengthIndicator } from '../PasswordStrengthIndicator';
 import { PasswordValidation } from '../../../types/auth-enhanced';
@@ -61,6 +61,11 @@ export const SecuritySetupStep: React.FC<SecuritySetupStepProps> = ({
   onToggleConfirmPassword,
   onPasswordValidationChange
 }) => {
+  const openLegalUrl = React.useCallback(async (path: 'terms' | 'privacy') => {
+    const url = `https://edudashpro.org.za/${path}`;
+    await Linking.openURL(url);
+  }, []);
+
   // Render password field helper
   const renderPasswordField = (
     fieldName: 'password' | 'confirmPassword',
@@ -156,7 +161,7 @@ export const SecuritySetupStep: React.FC<SecuritySetupStepProps> = ({
       <View style={styles.fieldsContainer}>
         {renderPasswordField('password', 'Password', true)}
         
-        {formState.password && (
+        {!!formState.password && (
           <PasswordStrengthIndicator
             password={formState.password}
             userInfo={userInfo}
@@ -188,11 +193,17 @@ export const SecuritySetupStep: React.FC<SecuritySetupStepProps> = ({
               { color: theme.colors.onSurface, fontSize: theme.typography.body2.fontSize }
             ]}>
               I accept the{' '}
-              <Text style={{ color: theme.colors.primary, textDecorationLine: 'underline' }}>
+              <Text
+                style={{ color: theme.colors.primary, textDecorationLine: 'underline' }}
+                onPress={() => { void openLegalUrl('terms'); }}
+              >
                 Terms and Conditions
               </Text>
               {' '}and{' '}
-              <Text style={{ color: theme.colors.primary, textDecorationLine: 'underline' }}>
+              <Text
+                style={{ color: theme.colors.primary, textDecorationLine: 'underline' }}
+                onPress={() => { void openLegalUrl('privacy'); }}
+              >
                 Privacy Policy
               </Text>
             </Text>

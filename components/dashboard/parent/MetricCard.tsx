@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { createDashboardStyles, SPACING, RADIUS, FONT_SIZE, FONT_WEIGHT, SHADOW } from '@/lib/styles/dashboardTheme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface MetricCardProps {
   /**
@@ -166,7 +167,7 @@ export function MetricCard({
               style={[
                 dashStyles.progressBarFill,
                 styles.progressFill,
-                { width: `${Math.min(progress, 100)}%` },
+                { width: percentWidth(Math.min(progress, 100)) },
               ]}
             />
           </View>

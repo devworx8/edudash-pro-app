@@ -21,7 +21,7 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAIQuota, useAIUserLimits } from '@/hooks/useAI';
 import { track } from '@/lib/analytics';
 import type { AIQuotaFeature } from '@/lib/ai/limits';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export interface AIQuotaDisplayProps {
@@ -63,7 +63,7 @@ const QuotaBar: React.FC<QuotaBarProps> = ({ used, limit, color, showLabel = tru
           colors={[color, color + '80']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={[styles.quotaBarFill, { width: `${percentage}%` }]}
+          style={[styles.quotaBarFill, { width: percentWidth(percentage) }]}
         />
       </View>
       {showLabel && (

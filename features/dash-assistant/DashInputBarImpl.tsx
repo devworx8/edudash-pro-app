@@ -161,7 +161,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [inputHeight, setInputHeight] = useState(FULL_CHAT_COMPACT_HEIGHT);
-  const orbSize = screenWidth < 360 ? 42 : screenWidth < 400 ? 46 : 48;
+  const orbSize = screenWidth < 360 ? 28 : screenWidth < 400 ? 30 : 32;
   const orbRingSize = orbSize + 14;
   const webCharsPerLine = Math.max(22, Math.floor((screenWidth - 172) / 8));
   const handleComposerTextChange = useCallback((text: string) => {
@@ -361,7 +361,8 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
     : 0;
   // Avoid duplicate "thinking" UI: loading state is rendered by the
   // floating bottom thinking dock in DashAssistant shell.
-  const showVoiceStatus = isRecording || hasPartialTranscript || isSpeaking || showAutoSendCountdown;
+  // Speaking state is shown inline in the message bubble via SpeakingWaveIndicator.
+  const showVoiceStatus = isRecording || hasPartialTranscript || showAutoSendCountdown;
   const waveformActive = isRecording && recordingVoiceActivity;
   const statusToneColor = isRecording ? theme.error : (isLoading ? theme.primary : theme.textSecondary);
   const voiceStatusLabel = isRecording
@@ -370,9 +371,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       ? 'Auto-send armed'
     : isLoading
       ? 'Dash is thinking'
-      : isSpeaking
-        ? 'Dash is speaking'
-        : 'Transcript ready';
+      : 'Transcript ready';
   const voiceStatusHint = isRecording
     ? (hasPartialTranscript
       ? 'Keep speaking. Brief pauses are okay, Dash will keep listening.'
@@ -381,9 +380,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       ? `Auto-send in ${autoSendRemainingSeconds}s. Tap cancel if you still want to continue talking.`
     : isLoading
       ? 'Analyzing your request and preparing a response...'
-      : isSpeaking
-        ? 'Reading the latest answer aloud.'
-        : 'Tap send to submit or continue dictating.';
+      : 'Tap send to submit or continue dictating.';
   // Show conversation starters when chat is empty
   const canShowQuickChips = !hideQuickChips && !hasContent && !isRecording && !isLoading && !hasMessages;
 
@@ -505,13 +502,9 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
           style={[
             styles.inputWrapper,
             {
-              backgroundColor: theme.inputBackground,
-              borderColor: isFocused ? theme.primary + '66' : theme.inputBorder,
-              shadowColor: '#020617',
-              shadowOpacity: isFocused ? 0.2 : 0.1,
-              shadowRadius: isFocused ? 18 : 12,
-              shadowOffset: { width: 0, height: 8 },
-              elevation: isFocused ? 10 : 6,
+              backgroundColor: 'transparent',
+              shadowOpacity: 0,
+              elevation: 0,
             },
           ]}
         >
@@ -593,7 +586,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
                 ? undefined
                 : (e) =>
                     setInputHeight((prev) => {
-                      const measuredHeight = e.nativeEvent.contentSize.height + 16;
+                      const measuredHeight = (e?.nativeEvent?.contentSize?.height ?? 0) + 16;
                       const nextHeight = measuredHeight <= FULL_CHAT_GROW_THRESHOLD
                         ? FULL_CHAT_COMPACT_HEIGHT
                         : Math.min(measuredHeight, FULL_CHAT_MAX_HEIGHT);
@@ -619,7 +612,9 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
               const nativeEvent = (e as any)?.nativeEvent || {};
               const key = nativeEvent.key;
               const shiftKey = nativeEvent.shiftKey;
-              if (key === 'Enter' && !shiftKey) {
+              const ctrlKey  = nativeEvent.ctrlKey || nativeEvent.metaKey;
+              // Enter = send, Ctrl/Cmd+Enter = send, Shift+Enter = new line
+              if (key === 'Enter' && (!shiftKey || ctrlKey)) {
                 (e as any).preventDefault?.();
                 handleSubmit();
               }
@@ -687,7 +682,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             accessibilityRole="button"
             activeOpacity={0.7}
           >
-            <Ionicons name="stop" size={20} color={theme.onPrimary || '#fff'} />
+            <Ionicons name="stop" size={16} color={theme.onPrimary || '#fff'} />
           </TouchableOpacity>
         )}
 
@@ -718,7 +713,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             {(isLoading || isUploading) ? (
               <EduDashSpinner size="small" color={theme.onPrimary} />
             ) : (
-              <Ionicons name="send" size={20} color={theme.onPrimary} />
+              <Ionicons name="send" size={16} color={theme.onPrimary} />
             )}
           </TouchableOpacity>
         )}

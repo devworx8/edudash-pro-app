@@ -5,6 +5,12 @@
 
 import { StyleSheet } from 'react-native';
 
+const COSMIC_BACKGROUND = '#07101f';
+const COSMIC_SURFACE = 'rgba(16, 26, 52, 0.9)';
+const COSMIC_SURFACE_STRONG = 'rgba(12, 20, 40, 0.96)';
+const COSMIC_BORDER = 'rgba(125, 211, 252, 0.14)';
+const COSMIC_BORDER_SOFT = 'rgba(255,255,255,0.08)';
+
 export function getProgressColor(percentage: number): string {
   if (percentage >= 80) return '#10B981';
   if (percentage >= 60) return '#F59E0B';
@@ -24,7 +30,7 @@ export function getStatusColor(status: string): string {
 export const createProgressStyles = (theme: any) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.background,
+    backgroundColor: COSMIC_BACKGROUND,
   },
   centered: {
     alignItems: 'center',
@@ -37,7 +43,7 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -65,7 +71,7 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   },
   contentContainer: {
     padding: 16,
-    paddingBottom: 100,
+    paddingBottom: 104,
   },
   childSelector: {
     marginBottom: 16,
@@ -79,39 +85,39 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: theme.card,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderRadius: 16,
+    backgroundColor: COSMIC_SURFACE,
+    borderWidth: 1,
+    borderColor: COSMIC_BORDER_SOFT,
   },
   childTabActive: {
-    borderColor: '#10B981',
-    backgroundColor: '#10B98110',
+    borderColor: 'rgba(8, 197, 255, 0.34)',
+    backgroundColor: 'rgba(69, 51, 144, 0.42)',
   },
   childAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#10B98120',
+    backgroundColor: 'rgba(92, 124, 255, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
   },
   childAvatarActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#5c7cff',
   },
   childAvatarText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#10B981',
+    color: '#f8fbff',
   },
   childName: {
     fontSize: 13,
-    color: theme.textSecondary,
+    color: '#b1c2ef',
     fontWeight: '500',
   },
   childNameActive: {
-    color: '#10B981',
+    color: '#f8fbff',
   },
   emptyContainer: {
     alignItems: 'center',
@@ -121,21 +127,28 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
-    color: theme.text,
+    color: '#f4f7ff',
     marginTop: 16,
   },
   emptyText: {
     fontSize: 14,
-    color: theme.textSecondary,
+    color: '#9fb1dd',
     marginTop: 8,
     textAlign: 'center',
     paddingHorizontal: 40,
   },
   overviewCard: {
-    backgroundColor: theme.card,
-    borderRadius: 20,
+    backgroundColor: COSMIC_SURFACE,
+    borderRadius: 24,
     padding: 20,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COSMIC_BORDER,
+    shadowColor: '#040817',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.24,
+    shadowRadius: 20,
+    elevation: 6,
   },
   overviewHeader: {
     flexDirection: 'row',
@@ -151,18 +164,20 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   overviewTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: theme.text,
+    color: '#f5f8ff',
   },
   gradeBadge: {
-    backgroundColor: '#10B98120',
+    backgroundColor: 'rgba(8, 197, 255, 0.16)',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(8, 197, 255, 0.22)',
   },
   gradeBadgeText: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#10B981',
+    color: '#87ecff',
   },
   streakBadge: {
     flexDirection: 'row',
@@ -186,9 +201,11 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
     width: 140,
     height: 140,
     borderRadius: 70,
-    backgroundColor: theme.border,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
     justifyContent: 'flex-end',
+    borderWidth: 1,
+    borderColor: COSMIC_BORDER_SOFT,
   },
   progressRingFill: {
     width: '100%',
@@ -203,18 +220,18 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
     right: 10,
     bottom: 10,
     borderRadius: 60,
-    backgroundColor: theme.card,
+    backgroundColor: COSMIC_SURFACE_STRONG,
     alignItems: 'center',
     justifyContent: 'center',
   },
   progressPercentage: {
     fontSize: 32,
     fontWeight: '700',
-    color: theme.text,
+    color: '#f4f7ff',
   },
   progressLabel: {
     fontSize: 12,
-    color: theme.textSecondary,
+    color: '#9fb1dd',
     marginTop: 2,
   },
   statsGrid: {
@@ -235,11 +252,11 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   statValue: {
     fontSize: 18,
     fontWeight: '700',
-    color: theme.text,
+    color: '#f4f7ff',
   },
   statLabel: {
     fontSize: 12,
-    color: theme.textSecondary,
+    color: '#9fb1dd',
     marginTop: 2,
   },
   starsSummaryRow: {
@@ -252,13 +269,15 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   starsSummaryText: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.textSecondary,
+    color: '#9fb1dd',
   },
   sectionCard: {
-    backgroundColor: theme.card,
-    borderRadius: 16,
+    backgroundColor: COSMIC_SURFACE,
+    borderRadius: 20,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: COSMIC_BORDER_SOFT,
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -269,11 +288,11 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: theme.text,
+    color: '#f4f7ff',
   },
   viewAllText: {
     fontSize: 14,
-    color: theme.primary,
+    color: '#87ecff',
     fontWeight: '500',
   },
   emptySection: {
@@ -282,7 +301,7 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   },
   emptySectionText: {
     fontSize: 14,
-    color: theme.textSecondary,
+    color: '#9fb1dd',
     marginTop: 8,
   },
   lessonItem: {
@@ -292,7 +311,7 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   },
   lessonItemBorder: {
     borderTopWidth: 1,
-    borderTopColor: theme.border,
+    borderTopColor: COSMIC_BORDER_SOFT,
   },
   lessonStatus: {
     width: 4,
@@ -306,11 +325,11 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   lessonTitle: {
     fontSize: 15,
     fontWeight: '500',
-    color: theme.text,
+    color: '#f4f7ff',
   },
   lessonMeta: {
     fontSize: 13,
-    color: theme.textSecondary,
+    color: '#9fb1dd',
     marginTop: 2,
   },
   scoreContainer: {
@@ -337,24 +356,24 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   summaryValue: {
     fontSize: 20,
     fontWeight: '700',
-    color: theme.text,
+    color: '#f4f7ff',
     marginTop: 6,
   },
   summaryLabel: {
     fontSize: 12,
-    color: theme.textSecondary,
+    color: '#9fb1dd',
     marginTop: 2,
   },
   topSubjectsContainer: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: theme.border,
+    borderTopColor: COSMIC_BORDER_SOFT,
   },
   topSubjectsTitle: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.textSecondary,
+    color: '#9fb1dd',
     marginBottom: 8,
   },
   topSubjectsList: {
@@ -387,17 +406,17 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   domainLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: theme.text,
+    color: '#f4f7ff',
     textTransform: 'capitalize',
   },
   domainMeta: {
     fontSize: 12,
-    color: theme.textSecondary,
+    color: '#9fb1dd',
   },
   domainBarTrack: {
     height: 6,
     borderRadius: 4,
-    backgroundColor: theme.border,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
   },
   domainBarFill: {
@@ -416,7 +435,7 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   },
   feedbackText: {
     fontSize: 14,
-    color: theme.text,
+    color: '#f4f7ff',
     flex: 1,
   },
   actionsContainer: {
@@ -426,10 +445,12 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   },
   actionButton: {
     flex: 1,
-    backgroundColor: theme.card,
-    borderRadius: 16,
+    backgroundColor: COSMIC_SURFACE,
+    borderRadius: 18,
     padding: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COSMIC_BORDER_SOFT,
   },
   actionIcon: {
     width: 48,
@@ -442,6 +463,6 @@ export const createProgressStyles = (theme: any) => StyleSheet.create({
   actionText: {
     fontSize: 14,
     fontWeight: '500',
-    color: theme.text,
+    color: '#f4f7ff',
   },
 });

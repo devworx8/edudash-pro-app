@@ -21,13 +21,13 @@ import {
   Platform,
   Image,
 } from 'react-native';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { AudioModule, setAudioModeAsync, createAudioPlayer, AudioPlayer } from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import type { CallType } from './types';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import { scaleWidth, scaleHeight, scaleFont, getTopPadding, getBottomPadding } from './WhatsAppStyleIncomingCall.responsive';
 
 // CRITICAL: Preload ringtone at module level for instant playback
 // This ensures the audio is ready when an incoming call arrives
@@ -485,18 +485,18 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    width: '100%',
+    height: '100%',
     zIndex: 9999,
   },
   gradient: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
+    paddingTop: getTopPadding(),
+    paddingBottom: getBottomPadding(),
   },
   topSection: {
     alignItems: 'center',
-    paddingTop: 20,
+    paddingTop: scaleHeight(2.5),
   },
   encryptedBadge: {
     flexDirection: 'row',
@@ -504,20 +504,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,180,216,0.15)',
     borderWidth: 1,
     borderColor: 'rgba(0,180,216,0.25)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginBottom: 12,
+    paddingHorizontal: scaleWidth(4),
+    paddingVertical: scaleHeight(0.8),
+    borderRadius: scaleWidth(6),
+    marginBottom: scaleHeight(1.5),
   },
   encryptedText: {
     color: 'rgba(0,245,255,0.85)',
-    fontSize: 12,
+    fontSize: scaleFont(12),
     fontWeight: '500',
-    marginLeft: 6,
+    marginLeft: scaleWidth(1.5),
   },
   callTypeLabel: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: scaleFont(16),
     fontWeight: '500',
   },
   middleSection: {
@@ -526,23 +526,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   ringsContainer: {
-    width: 200,
-    height: 200,
+    width: scaleWidth(55),
+    height: scaleWidth(55),
     alignItems: 'center',
     justifyContent: 'center',
   },
   ring: {
     position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: scaleWidth(38),
+    height: scaleWidth(38),
+    borderRadius: scaleWidth(19),
     borderWidth: 3,
     borderColor: 'rgba(0,180,216,0.4)',
   },
   avatarContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: scaleWidth(38),
+    height: scaleWidth(38),
+    borderRadius: scaleWidth(19),
     overflow: 'hidden',
     backgroundColor: 'rgba(0,180,216,0.25)',
     alignItems: 'center',
@@ -563,35 +563,35 @@ const styles = StyleSheet.create({
   },
   avatarInitials: {
     color: '#fff',
-    fontSize: 48,
+    fontSize: scaleFont(48),
     fontWeight: '600',
   },
   callerName: {
     color: '#fff',
-    fontSize: 32,
+    fontSize: scaleFont(32),
     fontWeight: '600',
-    marginTop: 24,
+    marginTop: scaleHeight(3),
     textAlign: 'center',
   },
   callerStatus: {
     color: 'rgba(255,255,255,0.8)',
-    fontSize: 16,
-    marginTop: 8,
+    fontSize: scaleFont(16),
+    marginTop: scaleHeight(1),
   },
   bottomSection: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'flex-end',
-    paddingHorizontal: 40,
-    paddingBottom: 20,
+    paddingHorizontal: scaleWidth(10),
+    paddingBottom: scaleHeight(2.5),
   },
   buttonWrapper: {
     alignItems: 'center',
   },
   actionButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: scaleWidth(19),
+    height: scaleWidth(19),
+    borderRadius: scaleWidth(9.5),
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -608,28 +608,28 @@ const styles = StyleSheet.create({
   },
   buttonLabel: {
     color: '#fff',
-    fontSize: 14,
-    marginTop: 8,
+    fontSize: scaleFont(14),
+    marginTop: scaleHeight(1),
     fontWeight: '500',
   },
   connectingContainer: {
     alignItems: 'center',
-    paddingBottom: 60,
+    paddingBottom: scaleHeight(8),
   },
   connectingDots: {
     flexDirection: 'row',
-    marginBottom: 12,
+    marginBottom: scaleHeight(1.5),
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: scaleWidth(2.2),
+    height: scaleWidth(2.2),
+    borderRadius: scaleWidth(1.1),
     backgroundColor: '#fff',
-    marginHorizontal: 4,
+    marginHorizontal: scaleWidth(0.8),
   },
   connectingText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: scaleFont(16),
   },
 });
 

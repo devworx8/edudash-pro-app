@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -9,6 +9,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { extractOrganizationId } from '@/lib/tenant/compat';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface ImportProgress {
@@ -20,6 +21,7 @@ interface ImportProgress {
 export default function DataImportScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const orgId = extractOrganizationId(profile);
   const [importing, setImporting] = useState(false);
   const [progress, setProgress] = useState<ImportProgress | null>(null);
@@ -35,19 +37,17 @@ export default function DataImportScreen() {
       if (result.canceled) return;
 
       const file = result.assets[0];
-      Alert.alert(
-        'Import Learners',
-        `Selected: ${file.name}\n\nThis will import learner data from the CSV/Excel file. Continue?`,
-        [
+      showAlert({
+        title: 'Import Learners',
+        message: `Selected: ${file.name}\n\nThis will import learner data from the CSV/Excel file. Continue?`,
+        type: 'info',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Import',
-            onPress: () => processLearnerImport(file.uri, file.name),
-          },
-        ]
-      );
+          { text: 'Import', onPress: () => processLearnerImport(file.uri, file.name) },
+        ],
+      });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to pick file');
+      showAlert({ title: 'Error', message: error.message || 'Failed to pick file', type: 'error' });
     }
   };
 
@@ -61,19 +61,17 @@ export default function DataImportScreen() {
       if (result.canceled) return;
 
       const file = result.assets[0];
-      Alert.alert(
-        'Import Enrollments',
-        `Selected: ${file.name}\n\nThis will import enrollment records. Continue?`,
-        [
+      showAlert({
+        title: 'Import Enrollments',
+        message: `Selected: ${file.name}\n\nThis will import enrollment records. Continue?`,
+        type: 'info',
+        buttons: [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Import',
-            onPress: () => processEnrollmentImport(file.uri, file.name),
-          },
-        ]
-      );
+          { text: 'Import', onPress: () => processEnrollmentImport(file.uri, file.name) },
+        ],
+      });
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to pick file');
+      showAlert({ title: 'Error', message: error.message || 'Failed to pick file', type: 'error' });
     }
   };
 
@@ -131,13 +129,13 @@ export default function DataImportScreen() {
         }
       }
 
-      Alert.alert(
-        'Import Complete',
-        `Processed: ${processed}\nErrors: ${errors}`,
-        [{ text: 'OK' }]
-      );
+      showAlert({
+        title: 'Import Complete',
+        message: `Processed: ${processed}\nErrors: ${errors}`,
+        type: 'success',
+      });
     } catch (error: any) {
-      Alert.alert('Import Failed', error.message || 'Failed to process file');
+      showAlert({ title: 'Import Failed', message: error.message || 'Failed to process file', type: 'error' });
     } finally {
       setImporting(false);
       setProgress(null);
@@ -151,9 +149,9 @@ export default function DataImportScreen() {
     try {
       // Similar logic for enrollments
       // Expected: learner_email, program_id, enrollment_date, status
-      Alert.alert('Info', 'Enrollment import functionality will be implemented');
+      showAlert({ title: 'Info', message: 'Enrollment import functionality will be implemented', type: 'info' });
     } catch (error: any) {
-      Alert.alert('Import Failed', error.message || 'Failed to process file');
+      showAlert({ title: 'Import Failed', message: error.message || 'Failed to process file', type: 'error' });
     } finally {
       setImporting(false);
       setProgress(null);
@@ -171,11 +169,11 @@ learner2@example.com,program-uuid-here,2025-01-01,active`,
     };
 
     // In production, create and download actual file
-    Alert.alert(
-      'Template',
-      `Copy this template:\n\n${templates[type]}`,
-      [{ text: 'OK' }]
-    );
+    showAlert({
+      title: 'Template',
+      message: `Copy this template:\n\n${templates[type]}`,
+      type: 'info',
+    });
   };
 
   return (
@@ -291,6 +289,8 @@ learner2@example.com,program-uuid-here,2025-01-01,active`,
           </View>
         </View>
       </ScrollView>
+
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

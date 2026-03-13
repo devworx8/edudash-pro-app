@@ -114,7 +114,7 @@ export function CircularQuotaRing({
 
       {/* Center content */}
       <View style={styles.centerContent}>
-        <Text style={[styles.valueText, { fontSize: size * 0.22, color: ringColor }]}>
+        <Text style={[styles.valueText, { fontSize: Math.max(size * 0.38, 13), color: ringColor }]}>
           {displayValue}
         </Text>
         {label && (

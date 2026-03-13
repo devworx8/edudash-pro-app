@@ -1,7 +1,3 @@
-/**
- * useParentMessageThread — state + handlers for parent message thread screen
- * Extracted from parent-message-thread.tsx for WARP compliance.
- */
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Platform, Keyboard, Vibration, type LayoutChangeEvent, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { type FlashListRef } from '@shopify/flash-list';
@@ -11,7 +7,6 @@ import { logger } from '@/lib/logger';
 import type { Message } from '@/components/messaging';
 import { getDateKey, getDateSeparatorLabel } from '@/components/messaging';
 import { COMPOSER_OVERLAY_HEIGHT, COMPOSER_FLOAT_GAP, WALLPAPER_ACCENTS } from '@/lib/screen-styles/parent-message-thread.styles';
-// Safe dynamic imports
 let useThreadMessages: (id: string | null) => { data: any[]; isLoading: boolean; error: any; refetch: () => void };
 let useSendMessage: () => { mutateAsync: (args: any) => Promise<any>; isLoading: boolean };
 let useMarkThreadRead: () => { mutate: (args: any) => void };
@@ -33,22 +28,45 @@ export type ChatRow = { type: 'date'; key: string; label: string } | { type: 'me
 export type ThreadParticipant = {
   user_id: string;
   role: string;
+  is_admin?: boolean;
+  can_send_messages?: boolean;
   user_profile?: {
     first_name?: string;
     last_name?: string;
+    email?: string;
     avatar_url?: string | null;
     role?: string;
   } | null;
 };
 
+export type GroupThreadInfo = {
+  id: string;
+  subject?: string | null;
+  type?: string | null;
+  is_group?: boolean;
+  group_name?: string | null;
+  group_description?: string | null;
+  group_type?: string | null;
+  allow_replies?: boolean;
+  created_by?: string;
+};
+
 export function useParentMessageThread(threadId: string, userId: string | undefined, userEmail: string | undefined) {
   const listRef = useRef<FlashListRef<any> | null>(null);
   const isAtBottomRef = useRef(true);
+  const scrollToLatest = useCallback((animated = true, delay = 60) => {
+    setTimeout(() => {
+      try {
+        listRef.current?.scrollToEnd({ animated });
+      } catch {
+        // FlashList on web can occasionally reject scrollToEnd while reflowing.
+      }
+    }, delay);
+  }, []);
 
   const { isOtherTyping, typingText, setTyping, clearTyping } = useTypingIndicator({
     threadId: threadId || null, userId: userId || null, userName: userEmail?.split('@')[0] || 'User',
   });
-  // State
   const [sending, setSending] = useState(false);
   const [optimisticMsgs, setOptimisticMsgs] = useState<Message[]>([]);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -65,7 +83,11 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
   const [pendingScheduleText, setPendingScheduleText] = useState<string | null>(null);
   const [threadParticipantCount, setThreadParticipantCount] = useState<number | null>(null);
   const [threadParticipants, setThreadParticipants] = useState<ThreadParticipant[]>([]);
-  // Keyboard
+  const [threadInfo, setThreadInfo] = useState<GroupThreadInfo | null>(null);
+  const [threadMetaVersion, setThreadMetaVersion] = useState(0);
+  const refreshThreadMeta = useCallback(() => {
+    setThreadMetaVersion((value) => value + 1);
+  }, []);
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -73,42 +95,59 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     const hideSub = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
-  // Load wallpaper
   useEffect(() => {
     if (getStoredWallpaper) getStoredWallpaper().then(wp => { if (wp) setCurrentWallpaper(wp); }).catch(() => {});
   }, []);
-  // Resolve participant count once per thread so sender labels follow true 1:1 vs group rules.
   useEffect(() => {
     let isCancelled = false;
 
     if (!threadId) {
       setThreadParticipantCount(null);
       setThreadParticipants([]);
+      setThreadInfo(null);
       return;
     }
 
     (async () => {
       try {
-        const { data, count, error } = await assertSupabase()
-          .from('message_participants')
-          .select(
-            `
-              user_id,
-              role,
-              user_profile:profiles(first_name, last_name, avatar_url, role)
-            `,
-            { count: 'exact' }
-          )
-          .eq('thread_id', threadId);
+        const client = assertSupabase();
+        const [
+          participantResult,
+          threadResult,
+        ] = await Promise.all([
+          client
+            .from('message_participants')
+            .select(
+              `
+                user_id,
+                role,
+                is_admin,
+                can_send_messages,
+                user_profile:profiles(first_name, last_name, email, avatar_url, role)
+              `,
+              { count: 'exact' }
+            )
+            .eq('thread_id', threadId),
+          client
+            .from('message_threads')
+            .select('id, subject, type, is_group, group_name, group_description, group_type, allow_replies, created_by')
+            .eq('id', threadId)
+            .maybeSingle(),
+        ]);
+
+        const { data, count, error } = participantResult;
+        const { data: threadData } = threadResult;
 
         if (!isCancelled) {
           setThreadParticipants((data || []) as ThreadParticipant[]);
           setThreadParticipantCount(!error && typeof count === 'number' ? count : null);
+          setThreadInfo((threadData || null) as GroupThreadInfo | null);
         }
       } catch {
         if (!isCancelled) {
           setThreadParticipants([]);
           setThreadParticipantCount(null);
+          setThreadInfo(null);
         }
       }
     })();
@@ -116,8 +155,7 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     return () => {
       isCancelled = true;
     };
-  }, [threadId]);
-  // Data hooks
+  }, [threadId, threadMetaVersion]);
   let messages: Message[] = [];
   let loading = false;
   let error: any = null;
@@ -128,10 +166,8 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
   try { const r = useThreadMessages(threadId || null); messages = r.data || []; loading = r.isLoading; error = r.error; refetch = r.refetch; } catch (e) { if (__DEV__) logger.warn('ParentThread', 'useThreadMessages error:', e); }
   try { const s = useSendMessage(); sendMessage = s.mutateAsync; } catch (e) { if (__DEV__) logger.warn('ParentThread', 'useSendMessage error:', e); }
   try { const m = useMarkThreadRead(); markRead = m.mutate; } catch (e) { if (__DEV__) logger.warn('ParentThread', 'useMarkThreadRead error:', e); }
-  // Real-time
   useRealtimeMessages(threadId || null);
 
-  // Combined messages
   const allMessages = useMemo(() => {
     const ids = new Set(messages.map(m => m.id));
     const unique = optimisticMsgs.filter(m => {
@@ -141,7 +177,6 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     return [...messages, ...unique].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   }, [messages, optimisticMsgs]);
 
-  // Mark read/delivered
   useEffect(() => {
     if (threadId && messages.length > 0 && !loading && userId) {
       try { assertSupabase().rpc('mark_messages_delivered', { p_thread_id: threadId, p_user_id: userId }).then(() => { if (__DEV__) logger.debug('ParentThread', 'Marked messages as delivered'); }).catch((err: any) => { if (__DEV__) logger.warn('ParentThread', 'Failed to mark delivered:', err); }); } catch {}
@@ -149,20 +184,20 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     }
   }, [threadId, messages.length, loading, userId]);
 
-  // Auto-scroll
   useEffect(() => {
-    if (!allMessages.length || !isAtBottomRef.current) return;
-    setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
-  }, [allMessages.length]);
+    if (!allMessages.length) return;
+    const lastMessage = allMessages[allMessages.length - 1];
+    if (isAtBottomRef.current || lastMessage?.sender_id === userId) {
+      scrollToLatest(!lastMessage?._pending, 70);
+    }
+  }, [allMessages, scrollToLatest, userId]);
 
-  // Wallpaper gradient
   const getWallpaperGradient = useCallback((): [string, string, ...string[]] => {
     if (!currentWallpaper || currentWallpaper.type === 'url') return ['#0f172a', '#1e1b4b', '#0f172a'];
     const preset = WALLPAPER_PRESETS.find((p: any) => p.key === currentWallpaper.value);
     return preset?.colors || ['#0f172a', '#1e1b4b', '#0f172a'];
   }, [currentWallpaper]);
 
-  // Voice IDs
   const voiceMessageIdsAsc = useMemo(() => allMessages.filter(m => m.voice_url).map(m => m.id), [allMessages]);
 
   const showSenderNames = useMemo(() => {
@@ -178,7 +213,6 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     return nonSelfSenderIds.size > 1;
   }, [messages, threadParticipantCount, userId]);
 
-  // Chat rows
   const rowsAsc = useMemo<ChatRow[]>(() => {
     const rows: ChatRow[] = [];
     let lastDateKey = '';
@@ -196,15 +230,14 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     return rows;
   }, [allMessages]);
 
-  // Handlers
   const handleSend = useCallback(async (content: string) => {
     if (!content || !threadId || sending) return;
     const replyToId = replyingTo?.id;
     clearTyping();
     setSending(true);
     setReplyingTo(null);
-    try { await sendMessage({ threadId, content, replyToId }); setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60); } catch (err) { logger.error('ParentMessageThread', 'Send failed:', err); toast.error('Failed to send message. Please try again.'); } finally { setSending(false); }
-  }, [threadId, sending, sendMessage, clearTyping, replyingTo]);
+    try { await sendMessage({ threadId, content, replyToId }); scrollToLatest(true, 50); } catch (err) { logger.error('ParentMessageThread', 'Send failed:', err); toast.error('Failed to send message. Please try again.'); } finally { setSending(false); }
+  }, [threadId, sending, sendMessage, clearTyping, replyingTo, scrollToLatest]);
 
   const handleScheduledSend = useCallback(async (scheduledAt: Date) => {
     if (!pendingScheduleText || !threadId) return;
@@ -227,9 +260,9 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     const content = `🎤 Voice (${durationSecs}s)`;
     try {
       if (uploadVoiceNote) { const result = await uploadVoiceNote(uri, duration, threadId); await sendMessage({ threadId, content, voiceUrl: result.storagePath, voiceDuration: durationSecs }); } else { if (__DEV__) logger.warn('ParentThread', 'uploadVoiceNote not available'); await sendMessage({ threadId, content }); }
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
+      scrollToLatest(true, 50);
     } catch (err) { logger.error('ParentThread', 'Voice send failed:', err); toast.error('Failed to send voice message.'); }
-  }, [threadId, sendMessage]);
+  }, [threadId, sendMessage, scrollToLatest]);
 
   const handleImageAttach = useCallback(async (uri: string, mimeType: string) => {
     if (!threadId || !userId) return;
@@ -257,9 +290,9 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
         : `📷 Photo\n[image](${urlData.publicUrl})`;
       await sendMessage({ threadId, content });
       toast.success(isVideo ? 'Video sent' : 'Photo sent');
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 60);
+      scrollToLatest(true, 50);
     } catch (err) { logger.error('ParentThread', 'Image send failed:', err); toast.error('Failed to send photo.'); }
-  }, [threadId, userId, sendMessage]);
+  }, [threadId, userId, sendMessage, scrollToLatest]);
 
   const handleMessageLongPress = useCallback((msg: Message) => {
     if (Platform.OS !== 'web') Vibration.vibrate(10);
@@ -274,15 +307,24 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     setShowScrollFab(!atBottom);
   }, []);
 
-  const scrollToBottom = useCallback(() => { listRef.current?.scrollToEnd({ animated: true }); setShowScrollFab(false); }, []);
+  const scrollToBottom = useCallback(() => { scrollToLatest(true, 0); setShowScrollFab(false); }, [scrollToLatest]);
 
   const handleComposerLayout = useCallback((event: LayoutChangeEvent) => {
     const h = Math.ceil(event.nativeEvent.layout.height);
-    if (h > 0 && Math.abs(h - composerHeight) > 1) setComposerHeight(h);
-  }, [composerHeight]);
+    if (h > 0 && Math.abs(h - composerHeight) > 1) {
+      setComposerHeight(h);
+      if (isAtBottomRef.current) {
+        scrollToLatest(false, 20);
+      }
+    }
+  }, [composerHeight, scrollToLatest]);
 
   // Other participant
   const otherParticipant = useMemo(() => messages.find(m => m.sender_id !== userId), [messages, userId]);
+  const currentParticipant = useMemo(
+    () => threadParticipants.find((participant) => participant.user_id === userId) || null,
+    [threadParticipants, userId],
+  );
 
   return {
     listRef, isAtBottomRef, isOtherTyping, typingText, setTyping, clearTyping,
@@ -292,10 +334,10 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     showMessageActions, setShowMessageActions, currentlyPlayingVoiceId, setCurrentlyPlayingVoiceId,
     replyingTo, setReplyingTo, showScrollFab, showScheduler, setShowScheduler,
     pendingScheduleText, setPendingScheduleText, handleScheduledSend,
-    threadParticipantCount, threadParticipants,
+    threadParticipantCount, threadParticipants, threadInfo, currentParticipant, refreshThreadMeta,
     messages, loading, error, refetch, allMessages, voiceMessageIdsAsc, rowsAsc,
     getWallpaperGradient, otherParticipant, showSenderNames,
     handleSend, handleVoiceRecording, handleImageAttach, handleMessageLongPress,
-    handleScroll, scrollToBottom, handleComposerLayout,
+    handleScroll, scrollToBottom, handleComposerLayout, scrollToLatest,
   };
 }

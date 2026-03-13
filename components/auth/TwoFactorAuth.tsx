@@ -7,6 +7,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { EnhancedUser } from '../../types/auth-enhanced';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { percentWidth } from '@/lib/progress/clampPercent';
 const { width } = Dimensions.get('window');
 
 interface TwoFactorAuthProps {
@@ -604,7 +605,7 @@ export const TwoFactorAuth: React.FC<TwoFactorAuthProps> = ({
                 styles.progressFill,
                 { 
                   backgroundColor: theme.primary,
-                  width: `${(step / totalSteps) * 100}%`
+                  width: percentWidth((step / totalSteps) * 100)
                 }
               ]} />
             </View>

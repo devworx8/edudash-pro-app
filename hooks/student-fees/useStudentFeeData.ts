@@ -7,12 +7,15 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getMonthStartISO } from '@/lib/utils/dateUtils';
+import {
+  isStudentFeeInMonth,
+  shouldExcludeStudentFeeFromMonthScopedViews,
+} from '@/lib/utils/studentFeeMonth';
 import type { FinanceStudentFeesRouteSource } from '@/types/finance';
 import type { Student, StudentFee, ClassOption } from './types';
 import {
   type FeeSetupStatus,
   bootstrapFeesIfMissing,
-  getEnrollmentMonthStart,
   mapFeeRow,
 } from './feeHelpers';
 
@@ -200,13 +203,9 @@ export function useStudentFeeData(studentId?: string, options?: UseStudentFeeDat
   }, [student, loadFees, organizationId, profile?.id]);
 
   const displayFees = useMemo(() => {
-    const enrollmentStart = getEnrollmentMonthStart(student?.enrollment_date);
-    if (!enrollmentStart) return fees;
-    return fees.filter(f => {
-      if (!f.due_date) return true;
-      const due = new Date(f.due_date);
-      return Number.isNaN(due.getTime()) || due >= enrollmentStart;
-    });
+    return fees.filter((fee) =>
+      !shouldExcludeStudentFeeFromMonthScopedViews(fee, student?.enrollment_date),
+    );
   }, [fees, student?.enrollment_date]);
 
   const displayFeesForMonth = useMemo(() => {
@@ -215,11 +214,7 @@ export function useStudentFeeData(studentId?: string, options?: UseStudentFeeDat
     const statusPriority: Record<string, number> = { overdue: 0, partially_paid: 1, pending: 2 };
     const filtered = displayFees.filter((fee) => {
       if (!unpaidStatuses.has(String(fee.status || '').toLowerCase())) return false;
-      if (!activeMonthIso) return true;
-      const feeMonthIso = getMonthStartISO(fee.billing_month || fee.due_date || '', {
-        recoverUtcMonthBoundary: Boolean(fee.billing_month),
-      });
-      return feeMonthIso === activeMonthIso;
+      return isStudentFeeInMonth(fee, activeMonthIso);
     });
     return filtered.sort((a, b) => {
       const pa = statusPriority[a.status] ?? 3;
@@ -234,20 +229,13 @@ export function useStudentFeeData(studentId?: string, options?: UseStudentFeeDat
   const totals = useMemo(() => {
     const today = new Date();
     const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const enrollmentStart = getEnrollmentMonthStart(student?.enrollment_date);
-
-    const isPreEnrollment = (fee: StudentFee) => {
-      if (!enrollmentStart || !fee.due_date) return false;
-      const due = new Date(fee.due_date);
-      return !Number.isNaN(due.getTime()) && due < enrollmentStart;
-    };
 
     const unpaidStatuses = new Set(['pending', 'overdue', 'partially_paid']);
 
     if (source === 'receivables') {
       const receivableFees = displayFeesForMonth;
-      const paid = fees.filter(f => f.status === 'paid');
-      const waived = fees.filter(f => f.status === 'waived' || (f.discount_amount || f.waived_amount));
+      const paid = displayFees.filter(f => f.status === 'paid');
+      const waived = displayFees.filter(f => f.status === 'waived' || (f.discount_amount || f.waived_amount));
 
       return {
         outstanding: receivableFees.reduce((sum, f) => {
@@ -266,14 +254,17 @@ export function useStudentFeeData(studentId?: string, options?: UseStudentFeeDat
     }
 
     const pending = fees.filter(f => {
-      if (isPreEnrollment(f)) return false;
+      if (shouldExcludeStudentFeeFromMonthScopedViews(f, student?.enrollment_date)) return false;
       if (!unpaidStatuses.has(f.status)) return false;
       if (!f.due_date) return true;
       const due = new Date(f.due_date);
       return Number.isNaN(due.getTime()) || due <= todayStart;
     });
-    const paid = fees.filter(f => f.status === 'paid');
-    const waived = fees.filter(f => f.status === 'waived' || (f.discount_amount || f.waived_amount));
+    const eligibleFees = fees.filter((fee) =>
+      !shouldExcludeStudentFeeFromMonthScopedViews(fee, student?.enrollment_date),
+    );
+    const paid = eligibleFees.filter(f => f.status === 'paid');
+    const waived = eligibleFees.filter(f => f.status === 'waived' || (f.discount_amount || f.waived_amount));
 
     return {
       outstanding: pending.reduce((sum, f) => {

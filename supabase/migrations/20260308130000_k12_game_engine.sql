@@ -39,7 +39,7 @@ CREATE POLICY "student_view_class_assignments"
   USING (
     status = 'active'
     AND class_id IN (
-      SELECT class_id FROM public.class_students WHERE student_id = auth.uid()
+      SELECT class_id FROM public.student_enrollments WHERE student_id = auth.uid() AND is_active = true
     )
   );
 
@@ -79,13 +79,14 @@ CREATE POLICY "teacher_read_class_sessions"
   FOR SELECT
   USING (
     student_id IN (
-      SELECT cs.student_id
-      FROM public.class_students cs
-      JOIN public.classes c ON c.id = cs.class_id
-      WHERE c.teacher_id = auth.uid()
+      SELECT se.student_id
+      FROM public.student_enrollments se
+      JOIN public.classes c ON c.id = se.class_id
+      WHERE se.is_active = true
+        AND (c.teacher_id = auth.uid()
          OR c.id IN (
            SELECT class_id FROM public.k12_game_assignments WHERE teacher_id = auth.uid()
-         )
+         ))
     )
   );
 
@@ -98,8 +99,9 @@ CREATE POLICY "student_read_leaderboard_sessions"
     AND assignment_id IN (
       SELECT a.id
       FROM public.k12_game_assignments a
-      JOIN public.class_students cs ON cs.class_id = a.class_id
-      WHERE cs.student_id = auth.uid()
+      JOIN public.student_enrollments se ON se.class_id = a.class_id
+      WHERE se.student_id = auth.uid()
+        AND se.is_active = true
         AND a.show_leaderboard = true
         AND a.status = 'active'
     )
@@ -133,10 +135,12 @@ CREATE POLICY "student_read_classmate_xp"
   FOR SELECT
   USING (
     student_id IN (
-      SELECT cs2.student_id
-      FROM public.class_students cs1
-      JOIN public.class_students cs2 ON cs2.class_id = cs1.class_id
-      WHERE cs1.student_id = auth.uid()
+      SELECT se2.student_id
+      FROM public.student_enrollments se1
+      JOIN public.student_enrollments se2 ON se2.class_id = se1.class_id
+      WHERE se1.student_id = auth.uid()
+        AND se1.is_active = true
+        AND se2.is_active = true
     )
   );
 
@@ -146,10 +150,11 @@ CREATE POLICY "teacher_read_class_xp"
   FOR SELECT
   USING (
     student_id IN (
-      SELECT cs.student_id
-      FROM public.class_students cs
-      JOIN public.classes c ON c.id = cs.class_id
-      WHERE c.teacher_id = auth.uid()
+      SELECT se.student_id
+      FROM public.student_enrollments se
+      JOIN public.classes c ON c.id = se.class_id
+      WHERE se.is_active = true
+        AND c.teacher_id = auth.uid()
     )
   );
 

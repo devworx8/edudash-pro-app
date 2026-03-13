@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface StrategicInitiative {
   id: string;
@@ -194,7 +195,7 @@ export default function StrategyScreen() {
                         styles.progressFill, 
                         { 
                           backgroundColor: progress >= 80 ? '#10B981' : progress >= 50 ? '#F59E0B' : '#3B82F6',
-                          width: `${Math.min(progress, 100)}%` 
+                          width: percentWidth(Math.min(progress, 100)) 
                         }
                       ]} 
                     />
@@ -259,7 +260,7 @@ export default function StrategyScreen() {
                       styles.progressFillLarge, 
                       { 
                         backgroundColor: getStatusColor(initiative.status),
-                        width: `${initiative.progress}%` 
+                        width: percentWidth(initiative.progress) 
                       }
                     ]} 
                   />

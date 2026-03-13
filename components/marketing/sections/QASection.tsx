@@ -13,7 +13,7 @@ const faqs = [
   },
   {
     question: 'Is it safe for preschool children?',
-    answer: 'Yes. EduDash Pro is designed specifically for ages 3-6 with parental consent, data minimization, and child-directed advertising restrictions. We are fully COPPA compliant and use bank-level security.',
+    answer: 'Yes. EduDash Pro uses parental consent, data minimization, and strict child-data protections. Core learner, parent, and school workflows are ad-free, and any limited sponsored placements are restricted to eligible adult community users only.',
   },
   {
     question: 'Do I need technical skills to use it?',

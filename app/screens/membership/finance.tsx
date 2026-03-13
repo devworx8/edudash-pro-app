@@ -1,9 +1,6 @@
-/**
- * Finance Dashboard Screen
- * Comprehensive financial tracking for membership payments, invoices, and reports
- */
 import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, FlatList, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Dimensions, RefreshControl } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { router } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,7 +8,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useTranslation } from 'react-i18next';
 import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
-import { 
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
+import {
   useFinancialSummary, 
   useRecentPayments, 
   useOverdueInvoices, 
@@ -215,9 +213,10 @@ export default function FinanceScreen() {
           </View>
           
           {regionalFinance.map((region, index) => {
-            const percentage = region.total_members > 0 
+            const percentage = region.total_members > 0
               ? Math.round((region.members_paid / region.total_members) * 100)
               : 0;
+            const safePercentage = clampPercent(percentage, { source: 'membership/finance.region-payment-progress' });
             
             return (
               <View key={region.code} style={[styles.regionFinanceCard, { backgroundColor: theme.card }]}>
@@ -244,13 +243,13 @@ export default function FinanceScreen() {
                       style={[
                         styles.progressFill, 
                         { 
-                          backgroundColor: percentage >= 80 ? '#10B981' : percentage >= 50 ? '#F59E0B' : '#EF4444',
-                          width: `${percentage}%` 
+                          backgroundColor: safePercentage >= 80 ? '#10B981' : safePercentage >= 50 ? '#F59E0B' : '#EF4444',
+                          width: percentWidth(safePercentage) 
                         }
                       ]} 
                     />
                   </View>
-                  <Text style={[styles.progressText, { color: theme.textSecondary }]}>{percentage}%</Text>
+                  <Text style={[styles.progressText, { color: theme.textSecondary }]}>{safePercentage}%</Text>
                 </View>
               </View>
             );
@@ -308,7 +307,7 @@ export default function FinanceScreen() {
   );
 
   const renderPaymentsList = () => (
-    <FlatList
+    <FlashList
       data={recentPayments}
       renderItem={({ item: payment }) => (
         <View style={[styles.paymentCard, { backgroundColor: theme.card }]}>
@@ -344,6 +343,7 @@ export default function FinanceScreen() {
       )}
       keyExtractor={(item) => item.id}
       contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 20 }}
+      estimatedItemSize={100}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
       }

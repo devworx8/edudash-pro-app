@@ -14,11 +14,11 @@ import React from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   TextInput,
   RefreshControl,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { router } from 'expo-router';
@@ -139,7 +139,7 @@ export default function TeachersDetailScreen() {
       </View>
 
       {/* Teachers List */}
-      <FlatList
+      <FlashList
         data={filteredTeachers}
         renderItem={renderTeacherCard}
         keyExtractor={(item) => item.id}
@@ -147,6 +147,7 @@ export default function TeachersDetailScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={() => loadTeachers(true)} />
         }
+        estimatedItemSize={80}
         ListEmptyComponent={() => (
           loading ? null : <EmptyTeachersState />
         )}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAIModelSelection } from '@/hooks/useAIModelSelection';
-import { getDefaultModels, type AIModelId, type AIModelInfo, type SubscriptionTier } from '@/lib/ai/models';
+import { getDefaultModelForTier, getDefaultModels, type AIModelId, type AIModelInfo, type SubscriptionTier } from '@/lib/ai/models';
 import { getPreferredModel, setPreferredModel } from '@/lib/ai/preferences';
 
 interface DashChatModelPreferenceState {
@@ -27,19 +27,31 @@ export function useDashChatModelPreference(): DashChatModelPreferenceState {
   const allModels = useMemo(() => getDefaultModels(), []);
 
   useEffect(() => {
+    if (modelPrefLoaded || isLoading || availableModels.length === 0) return;
     let mounted = true;
     (async () => {
       const stored = await getPreferredModel('chat_message');
       if (!mounted) return;
-      if (stored && canSelectModel(stored as AIModelId)) {
-        setSelectedModel(stored as AIModelId);
+      const allowedIds = new Set(availableModels.map((model) => model.id));
+      const tierDefault = getDefaultModelForTier(tier);
+      const fallbackModel =
+        (allowedIds.has(tierDefault) ? tierDefault : null) ??
+        availableModels[0]?.id ??
+        selectedModel;
+
+      if (stored && allowedIds.has(stored as AIModelId)) {
+        if (stored !== selectedModel) {
+          setSelectedModel(stored as AIModelId);
+        }
+      } else if (!allowedIds.has(selectedModel) && fallbackModel && fallbackModel !== selectedModel) {
+        setSelectedModel(fallbackModel);
       }
       setModelPrefLoaded(true);
     })();
     return () => {
       mounted = false;
     };
-  }, [canSelectModel, setSelectedModel]);
+  }, [availableModels, isLoading, modelPrefLoaded, selectedModel, setSelectedModel, tier]);
 
   useEffect(() => {
     if (!modelPrefLoaded) return;
@@ -49,9 +61,11 @@ export function useDashChatModelPreference(): DashChatModelPreferenceState {
   useEffect(() => {
     if (availableModels.length === 0) return;
     if (!availableModels.find((model) => model.id === selectedModel)) {
-      setSelectedModel(availableModels[0].id);
+      const tierDefault = getDefaultModelForTier(tier);
+      const fallbackModel = availableModels.find((model) => model.id === tierDefault)?.id || availableModels[0].id;
+      setSelectedModel(fallbackModel);
     }
-  }, [availableModels, selectedModel, setSelectedModel]);
+  }, [availableModels, selectedModel, setSelectedModel, tier]);
 
   return {
     availableModels,

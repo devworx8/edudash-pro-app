@@ -6,6 +6,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 interface ProgressChartProps {
   metrics: {
@@ -53,7 +54,7 @@ export function ProgressChart({ metrics, theme }: ProgressChartProps) {
                 <View
                   style={[
                     styles.barFill,
-                    { width: `${percentage}%`, backgroundColor: config.color },
+                    { width: percentWidth(percentage), backgroundColor: config.color },
                   ]}
                 />
               </View>

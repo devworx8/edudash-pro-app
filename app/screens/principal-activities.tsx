@@ -7,7 +7,8 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, RefreshControl } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -30,6 +31,7 @@ import { useActivities } from '@/hooks/principal/useActivities';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function PrincipalActivitiesScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { profile, user } = useAuth();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -65,11 +67,12 @@ export default function PrincipalActivitiesScreen() {
 
   const handleAddActivity = async (activity: ActivityTemplate) => {
     await addActivityToLesson(activity);
-    Alert.alert(
-      'Activity Added',
-      `"${activity.title}" has been added to your lesson plan.`,
-      [{ text: 'OK', onPress: () => setShowDetailModal(false) }]
-    );
+    showAlert({
+      title: 'Activity Added',
+      message: `"${activity.title}" has been added to your lesson plan.`,
+      type: 'success',
+      buttons: [{ text: 'OK', onPress: () => setShowDetailModal(false) }]
+    });
   };
 
   const content = (
@@ -214,6 +217,7 @@ export default function PrincipalActivitiesScreen() {
         onClose={() => setShowCreateModal(false)}
         onSave={saveActivity}
       />
+      <AlertModal {...alertProps} />
     </View>
   );
 

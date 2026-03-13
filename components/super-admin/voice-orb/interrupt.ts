@@ -11,7 +11,6 @@ export interface InterruptRestartState {
 
 export const canAutoRestartAfterInterrupt = (state: InterruptRestartState): boolean => {
   return (
-    !state.isMuted &&
     !state.isProcessing &&
     !state.isRecording &&
     !state.usingLiveSTT &&

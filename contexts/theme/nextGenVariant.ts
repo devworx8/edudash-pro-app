@@ -1,7 +1,7 @@
 /**
  * EduDash Pro Next-Gen Theme Variant
  * 
- * Modern dark theme variant with purple/green accents
+ * Modern dark theme variant with purple/cyan/gold accents
  * Based on educational app UI/UX best practices
  */
 
@@ -44,29 +44,25 @@ export const getNextGenThemeOverrides = (isDark: boolean): NextGenThemeOverrides
       primary: p.purple2,           // Main purple
       primaryLight: p.purple3,
       primaryDark: p.purple1,
-      secondary: p.green2,          // Main green
-      secondaryLight: p.green3,
-      secondaryDark: p.green1,
-      accent: p.pink2,              // Pink accent
+      secondary: p.cyan2,
+      secondaryLight: p.cyan3,
+      secondaryDark: p.cyan1,
+      accent: p.gold2,
       
       // Status Colors
       success: p.success,
       successLight: p.green3,
-      successBackground: 'rgba(16, 185, 129, 0.15)',
       warning: p.warning,
       warningLight: p.orange3,
-      warningBackground: 'rgba(245, 158, 11, 0.15)',
       error: p.danger,
       errorLight: p.red3,
-      errorBackground: 'rgba(239, 68, 68, 0.15)',
       info: p.info,
       infoLight: p.blue3,
-      infoBackground: 'rgba(59, 130, 246, 0.15)',
       
       // Header
       headerBackground: chrome,
       headerText: p.text,
-      headerTint: p.purple3,
+      headerTint: p.cyan3,
       
       // Modal & Overlay
       modalBackground: elevated,
@@ -80,32 +76,39 @@ export const getNextGenThemeOverrides = (isDark: boolean): NextGenThemeOverrides
       inputText: p.text,
       inputPlaceholder: p.textSubtle,
       
-      // Navigation
-      navBackground: p.bg0,
-      navActive: p.purple2,
-      navInactive: p.textSubtle,
-      
       // Buttons
-      buttonPrimary: p.purple2,
-      buttonPrimaryHover: p.purple1,
-      buttonSecondary: p.bg2,
-      buttonDisabled: '#374151',
-      
-      // Grade Colors
-      gradeA: p.gradeA,
-      gradeB: p.gradeB,
-      gradeC: p.gradeC,
-      gradeD: p.gradeD,
+      tint: p.purple2,
+      tabIconDefault: p.textSubtle,
+      tabIconSelected: p.cyan3,
+      modalOverlay: 'rgba(0, 0, 0, 0.6)',
+      textDisabled: '#6B7280',
+      chartPrimary: p.purple2,
+      chartSecondary: p.cyan2,
+      chartTertiary: p.gold2,
+      chartQuaternary: p.info,
+      chartQuinary: p.success,
+      cardSecondary: p.glassStrong,
+      notificationBackground: p.bg2,
+      notificationText: p.text,
+      notificationBorder: p.border,
+      successDark: p.green1,
+      onSuccess: '#FFFFFF',
+      warningDark: p.orange1,
+      onWarning: '#FFFFFF',
+      errorDark: p.red1,
+      onError: '#FFFFFF',
+      infoDark: p.blue1,
+      onInfo: '#FFFFFF',
+      accentLight: p.gold3,
+      accentDark: p.gold1,
+      onAccent: '#111827',
     },
     aliases: {
       primary: p.purple2,
       onPrimary: '#FFFFFF',
       primaryContainer: p.purple1,
       onPrimaryContainer: '#EDE9FE',
-      secondary: p.green2,
-      onSecondary: '#FFFFFF',
-      secondaryContainer: p.green1,
-      onSecondaryContainer: '#D1FAE5',
+      secondary: p.cyan2,
       surface: p.glass,
       surfaceVariant: p.glassStrong,
       onSurface: p.text,
@@ -124,13 +127,6 @@ export const getNextGenThemeOverrides = (isDark: boolean): NextGenThemeOverrides
       info: p.info,
       disabled: p.textSubtle,
       cardBackground: p.glass,
-      
-      // Additional aliases for common use
-      accent: p.pink2,
-      gradeA: p.gradeA,
-      gradeB: p.gradeB,
-      gradeC: p.gradeC,
-      gradeD: p.gradeD,
     },
   };
 };

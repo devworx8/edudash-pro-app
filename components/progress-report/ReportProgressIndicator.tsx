@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { percentWidth } from '@/lib/progress/clampPercent';
 interface ReportProgressIndicatorProps {
   percentage: number;
   autoSaveStatus: 'saved' | 'saving' | 'unsaved';
@@ -36,7 +37,7 @@ export const ReportProgressIndicator: React.FC<ReportProgressIndicatorProps> = (
           style={[
             styles.progressBarInner,
             {
-              width: `${percentage}%`,
+              width: percentWidth(percentage),
               backgroundColor: percentage === 100 ? '#059669' : theme.primary,
             },
           ]}

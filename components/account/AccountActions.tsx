@@ -26,6 +26,9 @@ interface AccountActionsProps {
 
 export function AccountActions({ theme, styles, onChangeEmail, onChangePassword, onSwitchAccount }: AccountActionsProps) {
   const { t } = useTranslation();
+  const signOutColor = '#0f172a';
+  const signOutBackground = '#eef3ff';
+  const signOutBorder = 'rgba(15, 23, 42, 0.16)';
 
   return (
     <View style={styles.infoSection}>
@@ -101,11 +104,19 @@ export function AccountActions({ theme, styles, onChangeEmail, onChangePassword,
 
       <TouchableOpacity
         onPress={() => signOutAndRedirect({ clearBiometrics: false, redirectTo: '/(auth)/sign-in' })}
-        style={styles.signOutButton}
+        style={[
+          styles.signOutButton,
+          {
+            backgroundColor: signOutBackground,
+            borderColor: signOutBorder,
+          },
+        ]}
         activeOpacity={0.7}
       >
-        <Ionicons name="log-out-outline" size={22} color={theme.onError} />
-        <Text style={styles.signOutText}>{t('navigation.logout', { defaultValue: 'Sign Out' })}</Text>
+        <Ionicons name="log-out-outline" size={22} color={signOutColor} />
+        <Text style={[styles.signOutText, { color: signOutColor }]}>
+          {t('navigation.logout', { defaultValue: 'Sign Out' })}
+        </Text>
       </TouchableOpacity>
     </View>
   );

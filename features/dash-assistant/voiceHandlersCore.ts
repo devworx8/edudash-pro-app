@@ -9,8 +9,15 @@ import { getSingleUseVoiceProvider } from '@/lib/voice/unifiedProvider';
 import { formatTranscript } from '@/lib/voice/formatTranscript';
 import type { VoiceProbeMetrics } from '@/lib/voice/benchmark/types';
 import { track } from '@/lib/analytics';
-import { buildVoicePlaybackText, cleanForTTS, splitForTTS, TTS_CHUNK_MAX_LEN, getStreamingPlaceholder } from '@/lib/dash-voice-utils';
+import {
+  cleanForTTS,
+  splitForTTSWithFastStart,
+  TTS_CHUNK_MAX_LEN,
+  TTS_FAST_START_FIRST_CHUNK_MAX_LEN,
+  getStreamingPlaceholder,
+} from '@/lib/dash-voice-utils';
 import { shouldUsePhonicsMode } from '@/lib/dash-ai/phonicsDetection';
+import { evaluateDashSpeechContent } from './speechContentPolicy';
 
 type VoiceRefs = {
   voiceSessionRef: React.MutableRefObject<VoiceSession | null>;
@@ -23,9 +30,6 @@ type VoiceRefs = {
 };
 
 const DEFAULT_DASH_VOICE_LOCALE = 'en-ZA';
-const TTS_FAST_START_SUMMARY_MAX_CHARS = 260;
-const TTS_FAST_START_SUMMARY_MAX_SENTENCES = 2;
-const TTS_FAST_START_FIRST_CHUNK_MAX_LEN = 220;
 const TTS_CHUNK_TIMEOUT_MIN_MS = 45_000;
 const TTS_CHUNK_TIMEOUT_MAX_MS = 210_000;
 const TTS_CHUNK_TIMEOUT_PER_CHAR_MS = 85;
@@ -227,6 +231,7 @@ export async function speakDashResponse(params: {
   setVoiceEnabled: (value: boolean) => void;
   stopSpeaking: () => Promise<void>;
   preferFastStart?: boolean;
+  forceSpeak?: boolean;
   onSpeechChunkProgress?: (progress: SpeechChunkProgress) => void;
 }) {
   const {
@@ -246,6 +251,7 @@ export async function speakDashResponse(params: {
     setVoiceEnabled,
     stopSpeaking,
     preferFastStart = false,
+    forceSpeak = false,
     onSpeechChunkProgress,
   } = params;
 
@@ -306,22 +312,27 @@ export async function speakDashResponse(params: {
     if (trimmedRaw && trimmedRaw === getStreamingPlaceholder(trimmedRaw)) {
       return;
     }
-    const speechInput = preferFastStart
-      ? buildVoicePlaybackText(rawSpeechInput, {
-          maxChars: TTS_FAST_START_SUMMARY_MAX_CHARS,
-          maxSentences: TTS_FAST_START_SUMMARY_MAX_SENTENCES,
-        })
-      : rawSpeechInput;
-    const normalizedSpeechInput = normalizeUrlHeavyMarkdownForSpeech(speechInput || '');
-    const isPhonics = shouldUsePhonicsMode(speechInput || '');
+    const normalizedSpeechInput = normalizeUrlHeavyMarkdownForSpeech(rawSpeechInput || '');
+    const speechPolicy = evaluateDashSpeechContent(normalizedSpeechInput || rawSpeechInput || '');
+    if (!forceSpeak && speechPolicy.shouldSuppress) {
+      onSpeechChunkProgress?.({
+        messageId: message.id,
+        chunkIndex: 0,
+        chunkCount: 0,
+        isPlaying: false,
+        isComplete: true,
+      });
+      setIsSpeaking(false);
+      setSpeakingMessageId(null);
+      return;
+    }
+    const isPhonics = shouldUsePhonicsMode(rawSpeechInput || '');
     const cleaned = cleanForTTS(normalizedSpeechInput || '', { phonicsMode: isPhonics });
-    const baseChunks = splitForTTS(cleaned, TTS_CHUNK_MAX_LEN);
-    const chunks = preferFastStart && baseChunks.length > 0
-      ? [
-          ...splitForTTS(baseChunks[0], TTS_FAST_START_FIRST_CHUNK_MAX_LEN),
-          ...baseChunks.slice(1),
-        ]
-      : baseChunks;
+    const chunks = splitForTTSWithFastStart(cleaned, {
+      enabled: preferFastStart,
+      maxLen: TTS_CHUNK_MAX_LEN,
+      firstChunkMaxLen: TTS_FAST_START_FIRST_CHUNK_MAX_LEN,
+    });
     if (chunks.length === 0) {
       onSpeechChunkProgress?.({
         messageId: message.id,
@@ -336,7 +347,7 @@ export async function speakDashResponse(params: {
     }
     const preferredVoiceLocale = resolveSpeechLocale(
       message,
-      speechInput,
+      rawSpeechInput,
       String(dashInstance?.getPersonality?.()?.voice_settings?.language || DEFAULT_DASH_VOICE_LOCALE)
     );
     const stableLocale = preferredVoiceLocale.includes('-')

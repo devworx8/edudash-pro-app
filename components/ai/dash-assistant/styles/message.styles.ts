@@ -113,6 +113,19 @@ export const messageStyles = StyleSheet.create({
     borderBottomLeftRadius: 8,
     marginRight: 10,
   },
+  userMessageStack: {
+    width: '100%',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  userTextBubble: {
+    alignSelf: 'flex-end',
+  },
+  userStandaloneMediaContainer: {
+    alignSelf: 'flex-end',
+    maxWidth: bubbleMaxWidth,
+    gap: 8,
+  },
 
   // Message Content
   messageText: {
@@ -208,26 +221,32 @@ export const messageStyles = StyleSheet.create({
     gap: 6,
   },
   imagePreviewRow: {
-    marginTop: 8,
-    gap: 8,
+    marginTop: 6,
+    gap: 6,
+    alignSelf: 'flex-end',
+    alignItems: 'flex-end',
+  },
+  imagePreviewRowFlush: {
+    marginTop: 0,
   },
   imagePreviewCard: {
-    borderRadius: 18,
+    alignSelf: 'flex-end',
+    borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 1.5,
+    borderWidth: 0,
     ...(Platform.OS === 'ios' ? {
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.12,
-      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
     } : {
-      elevation: 3,
+      elevation: 2,
     }),
   },
   imagePreview: {
-    width: screenWidth < 360 ? 180 : 210,
-    height: screenWidth < 360 ? 120 : 140,
-    resizeMode: 'cover',
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   messageAttachment: {
     flexDirection: 'row',

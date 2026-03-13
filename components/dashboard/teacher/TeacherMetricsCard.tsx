@@ -3,10 +3,16 @@
  * 
  * Shared by both legacy and new enhanced teacher dashboards.
  * Displays a metric with icon, value, title, and optional trend indicator.
+ * 
+ * Features:
+ * - Improved accessibility with proper ARIA labels
+ * - Better color contrast for trend indicators
+ * - Skeleton loading state
+ * - Optimized re-renders with React.memo
  */
 
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import React, { memo, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, AccessibilityInfo, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -31,9 +37,13 @@ interface TeacherMetricsCardProps {
   size?: 'small' | 'medium' | 'large';
   /** When true, card fills its container (e.g. in a two-column grid row) */
   fillContainer?: boolean;
+  /** Show skeleton loading state */
+  isLoading?: boolean;
+  /** Accessibility hint for screen readers */
+  accessibilityHint?: string;
 }
 
-export const TeacherMetricsCard: React.FC<TeacherMetricsCardProps> = ({
+export const TeacherMetricsCard: React.FC<TeacherMetricsCardProps> = memo(function TeacherMetricsCard({
   title,
   value,
   icon,
@@ -42,12 +52,50 @@ export const TeacherMetricsCard: React.FC<TeacherMetricsCardProps> = ({
   onPress,
   size = 'medium',
   fillContainer = false,
-}) => {
+  isLoading = false,
+  accessibilityHint,
+}) {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const layout = getLayoutMetrics(width || 0);
   const styles = getStyles(theme, layout);
+
+  // Memoize accessibility label
+  const accessibilityLabel = useMemo(() => {
+    const trendText = trend ? `, ${getTrendText(trend, t)}` : '';
+    return `${title}: ${value}${trendText}`;
+  }, [title, value, trend, t]);
+
+  // Announce value changes to screen readers
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' && value !== undefined) {
+      AccessibilityInfo.announceForAccessibility(`${title} is now ${value}`);
+    }
+  }, [title, value]);
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <View
+        style={[
+          styles.metricCard,
+          size === 'large' && styles.metricCardLarge,
+          size === 'small' && styles.metricCardSmall,
+          fillContainer && styles.metricCardFill,
+          fillContainer && { width: undefined },
+          !fillContainer && { marginHorizontal: layout.cardGap / 2, marginBottom: layout.cardGap },
+          styles.skeletonCard,
+        ]}
+      >
+        <View style={styles.metricContent}>
+          <View style={[styles.skeletonIcon, { backgroundColor: 'rgba(255,255,255,0.1)' }]} />
+          <View style={[styles.skeletonValue, { backgroundColor: 'rgba(255,255,255,0.1)' }]} />
+          <View style={[styles.skeletonTitle, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -62,6 +110,10 @@ export const TeacherMetricsCard: React.FC<TeacherMetricsCardProps> = ({
       onPress={onPress}
       disabled={!onPress}
       activeOpacity={0.7}
+      accessible={true}
+      accessibilityRole={onPress ? 'button' : 'text'}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
     >
       <View style={styles.metricContent}>
         <View style={styles.metricHeader}>
@@ -73,19 +125,19 @@ export const TeacherMetricsCard: React.FC<TeacherMetricsCardProps> = ({
             />
           </View>
           {trend && (
-            <View style={styles.trendContainer}>
+            <View style={styles.trendContainer} accessibilityRole="text" accessibilityLabel={`Trend: ${getTrendText(trend, t)}`}>
               <Text style={[styles.trendText, getTrendColor(trend, theme)]}>
                 {getTrendIcon(trend)} {getTrendText(trend, t)}
               </Text>
             </View>
           )}
         </View>
-        <Text style={styles.metricValue}>{value}</Text>
+        <Text style={styles.metricValue} accessibilityRole="text">{value}</Text>
         <Text style={styles.metricTitle}>{title}</Text>
       </View>
     </TouchableOpacity>
   );
-};
+});
 
 // Trend helper functions
 export const getTrendColor = (trend: string, theme: any) => {
@@ -187,6 +239,27 @@ const getStyles = (theme: any, layout: ReturnType<typeof getLayoutMetrics>) => {
       color: isNextGenTeacher ? 'rgba(234,240,255,0.72)' : theme.textSecondary,
       fontWeight: '600',
       lineHeight: layout.isTablet ? 22 : layout.isSmallScreen ? 16 : 18,
+    },
+    // Skeleton loading styles
+    skeletonCard: {
+      opacity: 0.7,
+    },
+    skeletonIcon: {
+      width: layout.isSmallScreen ? 40 : 48,
+      height: layout.isSmallScreen ? 40 : 48,
+      borderRadius: isNextGenTeacher ? (layout.isSmallScreen ? 12 : 14) : (layout.isSmallScreen ? 20 : 24),
+      marginBottom: 12,
+    },
+    skeletonValue: {
+      width: '60%',
+      height: layout.isTablet ? 32 : layout.isSmallScreen ? 24 : 28,
+      borderRadius: 4,
+      marginBottom: 8,
+    },
+    skeletonTitle: {
+      width: '80%',
+      height: layout.isTablet ? 16 : layout.isSmallScreen ? 12 : 13,
+      borderRadius: 4,
     },
   });
 };

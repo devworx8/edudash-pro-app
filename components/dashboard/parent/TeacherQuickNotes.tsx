@@ -46,11 +46,11 @@ export function TeacherQuickNotes({
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const noteTypes = useMemo(() => ({
-    highlight: { icon: 'sunny', color: '#F59E0B', label: t('dashboard.parent.teacher_notes.types.highlight', { defaultValue: 'Daily Highlight' }) },
-    concern: { icon: 'alert-circle', color: '#EF4444', label: t('dashboard.parent.teacher_notes.types.concern', { defaultValue: 'Please Note' }) },
-    achievement: { icon: 'trophy', color: '#10B981', label: t('dashboard.parent.teacher_notes.types.achievement', { defaultValue: 'Achievement' }) },
-    reminder: { icon: 'notifications', color: '#6366F1', label: t('dashboard.parent.teacher_notes.types.reminder', { defaultValue: 'Reminder' }) },
-    general: { icon: 'chatbubble', color: '#3B82F6', label: t('dashboard.parent.teacher_notes.types.general', { defaultValue: 'Note' }) },
+    highlight: { icon: 'sunny', color: '#F8CA59', label: t('dashboard.parent.teacher_notes.types.highlight', { defaultValue: 'Daily Highlight' }) },
+    concern: { icon: 'alert-circle', color: '#F87171', label: t('dashboard.parent.teacher_notes.types.concern', { defaultValue: 'Please Note' }) },
+    achievement: { icon: 'trophy', color: '#34D399', label: t('dashboard.parent.teacher_notes.types.achievement', { defaultValue: 'Achievement' }) },
+    reminder: { icon: 'notifications', color: '#8B5CF6', label: t('dashboard.parent.teacher_notes.types.reminder', { defaultValue: 'Reminder' }) },
+    general: { icon: 'chatbubble', color: '#38BDF8', label: t('dashboard.parent.teacher_notes.types.general', { defaultValue: 'Note' }) },
   }), [t]);
 
   const loadNotes = useCallback(async () => {
@@ -169,7 +169,7 @@ export function TeacherQuickNotes({
       <TouchableOpacity
         style={[
           styles.noteItem,
-          { backgroundColor: isUnread ? `${noteConfig.color}10` : theme.background },
+          { backgroundColor: isUnread ? `${noteConfig.color}12` : 'rgba(12, 20, 42, 0.72)' },
           { borderLeftColor: noteConfig.color },
         ]}
         onPress={() => {
@@ -263,17 +263,17 @@ export function TeacherQuickNotes({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.card }]}>
+    <View style={[styles.container, { backgroundColor: 'rgba(8, 14, 31, 0.9)' }]}>
       {showHeader && (
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <Ionicons name="chatbubbles" size={20} color={theme.primary} />
+            <Ionicons name="chatbubbles" size={20} color="#38BDF8" />
             <Text style={[styles.headerTitle, { color: theme.text }]}>
               {t('dashboard.parent.teacher_notes.title', { defaultValue: 'From Teacher' })}
             </Text>
           </View>
           {notes.filter(n => !n.is_read).length > 0 && (
-            <View style={[styles.unreadBadge, { backgroundColor: theme.primary }]}
+            <View style={[styles.unreadBadge, { backgroundColor: '#6D4CF6' }]}
             >
               <Text style={styles.unreadCount}>
                 {t('dashboard.parent.teacher_notes.new_count', {

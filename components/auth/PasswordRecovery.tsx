@@ -8,6 +8,7 @@ import { ValidationResult } from '../../types/auth-enhanced';
 import PasswordStrengthIndicator from './PasswordStrengthIndicator';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { percentWidth } from '@/lib/progress/clampPercent';
 interface PasswordRecoveryProps {
   onRecoveryComplete?: (email: string) => void;
   onError?: (error: string) => void;
@@ -394,7 +395,7 @@ export const PasswordRecovery: React.FC<PasswordRecoveryProps> = ({
             styles.progressFill,
             {
               backgroundColor: theme.primary,
-              width: `${((currentIndex + 1) / steps.length) * 100}%`
+              width: percentWidth(((currentIndex + 1) / steps.length) * 100)
             }
           ]} />
         </View>

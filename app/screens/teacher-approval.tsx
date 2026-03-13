@@ -6,7 +6,8 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, Modal, ScrollView, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, RefreshControl, Modal, ScrollView, TextInput } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -269,7 +270,7 @@ export default function TeacherApprovalScreen() {
       </LinearGradient>
       
       {/* List */}
-      <FlatList
+      <FlashList
         data={pendingTeachers}
         keyExtractor={item => item.id}
         renderItem={renderTeacher}
@@ -277,6 +278,7 @@ export default function TeacherApprovalScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
+        estimatedItemSize={100}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={64} color={theme.textSecondary} />

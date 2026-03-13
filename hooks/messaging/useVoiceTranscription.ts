@@ -10,6 +10,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { assertSupabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
+import * as Sentry from '@sentry/react-native';
 
 const CACHE_PREFIX = 'voice_transcript:';
 
@@ -24,6 +25,7 @@ export function useVoiceTranscription(): UseVoiceTranscriptionReturn {
   const [transcriptions, setTranscriptions] = useState<Map<string, string>>(new Map());
   const [transcribing, setTranscribing] = useState<Set<string>>(new Set());
   const inflightRef = useRef<Map<string, Promise<string>>>(new Map());
+  const functionUrl = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/stt-proxy`;
 
   // Load cached transcriptions on mount
   useEffect(() => {
@@ -56,67 +58,111 @@ export function useVoiceTranscription(): UseVoiceTranscriptionReturn {
       const inflight = inflightRef.current.get(cacheKey);
       if (inflight) return inflight;
 
+      const MAX_RETRIES = 2;
+      let attempt = 0;
+      let lastError: any = null;
+
       const promise = (async () => {
         setTranscribing((prev) => new Set(prev).add(cacheKey));
 
-        try {
-          const client = assertSupabase();
+        while (attempt <= MAX_RETRIES) {
+          try {
+            const client = assertSupabase();
+            const { data: { session } } = await client.auth.getSession();
+            if (!session?.access_token) {
+              const authError = new Error('Not authenticated');
+              (authError as any).status = 401;
+              throw authError;
+            }
 
-          const { data, error } = await client.functions.invoke('stt-proxy', {
-            body: {
-              audio_url: audioUrl,
-              language: 'auto',
-              auto_detect: true,
-            },
-          });
+            const response = await fetch(functionUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({
+                audio_url: audioUrl,
+                language: 'auto',
+                auto_detect: true,
+              }),
+            });
 
-          if (error) {
-            logger.warn('useVoiceTranscription', `Transcription failed: ${error.message}`);
-            throw error;
+            if (!response.ok) {
+              const rawError = await response.text();
+              let message = `Request failed (${response.status})`;
+              try {
+                const parsed = JSON.parse(rawError) as { error?: string; message?: string; details?: string };
+                message = String(parsed.error || parsed.message || parsed.details || message);
+              } catch {
+                if (rawError.trim()) message = rawError.trim();
+              }
+              const requestError = new Error(message);
+              (requestError as any).status = response.status;
+              logger.warn('useVoiceTranscription', `Transcription failed: ${message}`);
+              throw requestError;
+            }
+
+            const data = await response.json().catch(() => ({} as Record<string, unknown>));
+
+            const text =
+              typeof data === 'string'
+                ? data.trim()
+                : (data?.text || data?.transcription || '').trim();
+
+            if (!text) {
+              throw new Error('Empty transcription response');
+            }
+
+            setTranscriptions((prev) => {
+              const next = new Map(prev);
+              next.set(cacheKey, text);
+              return next;
+            });
+
+            // Persist to AsyncStorage
+            AsyncStorage.setItem(`${CACHE_PREFIX}${cacheKey}`, text).catch(() => {});
+
+            return text;
+          } catch (err: any) {
+            lastError = err;
+            logger.error('useVoiceTranscription', 'Transcription error:', err);
+            const status = Number(err?.status || 0);
+            if ([401, 403, 429, 500, 502, 503, 504].includes(status) && attempt < MAX_RETRIES) {
+              attempt++;
+              await new Promise((res) => setTimeout(res, 600 * attempt));
+              continue;
+            }
+            break;
           }
-
-          const text =
-            typeof data === 'string'
-              ? data.trim()
-              : (data?.text || data?.transcription || '').trim();
-
-          if (!text) {
-            throw new Error('Empty transcription response');
-          }
-
-          setTranscriptions((prev) => {
-            const next = new Map(prev);
-            next.set(cacheKey, text);
-            return next;
-          });
-
-          // Persist to AsyncStorage
-          AsyncStorage.setItem(`${CACHE_PREFIX}${cacheKey}`, text).catch(() => {});
-
-          return text;
-        } catch (err) {
-          logger.error('useVoiceTranscription', 'Transcription error:', err);
-          const fallback = 'Transcription unavailable';
-          setTranscriptions((prev) => {
-            const next = new Map(prev);
-            next.set(cacheKey, fallback);
-            return next;
-          });
-          return fallback;
-        } finally {
-          setTranscribing((prev) => {
-            const next = new Set(prev);
-            next.delete(cacheKey);
-            return next;
-          });
-          inflightRef.current.delete(cacheKey);
         }
-      })();
+
+        // Capture in Sentry with context
+        Sentry.captureException(lastError, {
+          tags: { feature: 'voice-transcription' },
+          extra: { audioUrl, messageId, attempt, error: lastError?.message || lastError },
+        });
+
+        const fallback = 'Transcription unavailable. Please try again later.';
+        setTranscriptions((prev) => {
+          const next = new Map(prev);
+          next.set(cacheKey, fallback);
+          return next;
+        });
+        return fallback;
+      })().finally(() => {
+        inflightRef.current.delete(cacheKey);
+        setTranscribing((prev) => {
+          const next = new Set(prev);
+          next.delete(cacheKey);
+          return next;
+        });
+      });
 
       inflightRef.current.set(cacheKey, promise);
       return promise;
     },
-    [transcriptions],
+    [functionUrl, transcriptions],
   );
 
   const autoTranscribeVoice = useCallback(

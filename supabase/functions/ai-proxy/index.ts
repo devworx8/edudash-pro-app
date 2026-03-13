@@ -3749,6 +3749,13 @@ serve(async (req) => {
         if (usageResult.error) {
           console.warn('[ai-proxy] record_ai_usage returned error (non-fatal):', usageResult.error);
         }
+        // Increment user_ai_usage counters + ai_request_log for quota tracking
+        await supabase.rpc('increment_ai_usage', {
+          p_user_id: userData.user.id,
+          p_request_type: 'image_generation',
+          p_status: 'success',
+          p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
+        });
       } catch (usageError) {
         console.warn('[ai-proxy] record_ai_usage failed (non-fatal):', usageError);
       }
@@ -3812,6 +3819,13 @@ serve(async (req) => {
                 request_metadata: payload.metadata || {},
               },
             });
+            // Increment user_ai_usage counters + ai_request_log for quota tracking
+            await supabase.rpc('increment_ai_usage', {
+              p_user_id: userData.user.id,
+              p_request_type: normalizeServiceType(payload.service_type),
+              p_status: 'success',
+              p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
+            });
           } catch (usageErr) {
             console.warn('[ai-proxy] Streaming usage recording failed (non-fatal):', usageErr);
           }
@@ -3867,6 +3881,13 @@ serve(async (req) => {
                 streaming: true,
                 request_metadata: payload.metadata || {},
               },
+            });
+            // Increment user_ai_usage counters + ai_request_log for quota tracking
+            await supabase.rpc('increment_ai_usage', {
+              p_user_id: userData.user.id,
+              p_request_type: normalizeServiceType(payload.service_type),
+              p_status: 'success',
+              p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
             });
           } catch (usageErr) {
             console.warn('[ai-proxy] OpenAI streaming usage recording failed (non-fatal):', usageErr);
@@ -4019,6 +4040,13 @@ serve(async (req) => {
       if (usageResult.error) {
         console.warn('[ai-proxy] record_ai_usage returned error (non-fatal):', usageResult.error);
       }
+      // Increment user_ai_usage counters + ai_request_log for quota tracking
+      await supabase.rpc('increment_ai_usage', {
+        p_user_id: userData.user.id,
+        p_request_type: normalizeServiceType(payload.service_type),
+        p_status: 'success',
+        p_metadata: { scope: payload.scope, organization_id: profile.organization_id || profile.preschool_id || null },
+      });
     } catch (usageError) {
       console.warn('[ai-proxy] record_ai_usage failed (non-fatal):', usageError);
     }

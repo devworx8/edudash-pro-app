@@ -207,10 +207,8 @@ export async function cancelTransaction(ctx: ActionContext, transactionId: strin
 export async function canDelete(userId: string | undefined): Promise<boolean> {
   if (!userId) return false;
   try {
-    const { data } = await assertSupabase().from('profiles').select('role').eq('auth_user_id', userId).maybeSingle();
-    if (data?.role) return ['principal', 'principal_admin', 'admin', 'superadmin'].includes(data.role);
-    const { data: userRow } = await assertSupabase().from('users').select('role').eq('auth_user_id', userId).maybeSingle();
-    return ['principal', 'principal_admin', 'admin', 'superadmin'].includes(userRow?.role || '');
+    const { data } = await assertSupabase().from('profiles').select('role').eq('id', userId).maybeSingle();
+    return ['principal', 'principal_admin', 'admin', 'superadmin'].includes(data?.role || '');
   } catch { return false; }
 }
 

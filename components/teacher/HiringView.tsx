@@ -9,13 +9,13 @@ import React from 'react';
 import {
   View,
   Text,
-  FlatList,
   TouchableOpacity,
   TextInput,
   RefreshControl,
   Share,
   Linking,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { TeacherInviteService } from '@/lib/services/teacherInviteService';
@@ -354,7 +354,7 @@ export function HiringView({
         </TouchableOpacity>
       </View>
 
-      <FlatList
+      <FlashList
         data={availableTeachers}
         keyExtractor={(i) => i.id}
         renderItem={renderAvailableTeacher}
@@ -362,6 +362,7 @@ export function HiringView({
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={onRefresh} />}
         ListEmptyComponent={<Text style={styles.emptyText}>No available teachers</Text>}
+        estimatedItemSize={100}
       />
 
       {/* Invites section */}
@@ -370,13 +371,14 @@ export function HiringView({
         <Text style={styles.sectionSubtitle}>{invites.length} invites</Text>
       </View>
 
-      <FlatList
+      <FlashList
         data={invites}
         keyExtractor={(i) => i.id}
         renderItem={renderInvite}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={<Text style={styles.emptyText}>No pending invitations</Text>}
+        estimatedItemSize={80}
       />
     </View>
   );

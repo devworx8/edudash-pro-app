@@ -15,7 +15,6 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
 } from 'react-native';
@@ -25,6 +24,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { extractOrganizationId } from '@/lib/tenant/compat';
@@ -94,6 +94,7 @@ const DEFAULT_NEW_SLOT_FORM: NewSlotForm = {
 export default function TimetableManagementScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
+  const { showAlert, alertProps } = useAlertModal();
   const styles = createStyles(theme);
   const organizationId = extractOrganizationId(profile);
 
@@ -160,7 +161,7 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
       await Print.printAsync({ html: buildTimetableHTML() });
     } catch (err) {
       logger.error('[Timetable]', 'Print failed', err);
-      Alert.alert('Print failed', 'Could not open print dialog. Please try again.');
+      showAlert({ title: 'Print failed', message: 'Could not open print dialog. Please try again.', type: 'error' });
     } finally {
       setExporting(false);
     }
@@ -174,11 +175,11 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Save ${filename}` });
       } else {
-        Alert.alert('Saved', `PDF saved as ${filename}`);
+        showAlert({ title: 'Saved', message: `PDF saved as ${filename}`, type: 'success' });
       }
     } catch (err) {
       logger.error('[Timetable]', 'PDF export failed', err);
-      Alert.alert('Export failed', 'Could not save PDF. Please try again.');
+      showAlert({ title: 'Export failed', message: 'Could not save PDF. Please try again.', type: 'error' });
     } finally {
       setExporting(false);
     }
@@ -200,7 +201,7 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
 
   const handleCreateSlot = useCallback(async () => {
     if (!organizationId) {
-      Alert.alert('Missing school', 'Could not determine your school. Please sign in again.');
+      showAlert({ title: 'Missing school', message: 'Could not determine your school. Please sign in again.', type: 'error' });
       return;
     }
 
@@ -210,11 +211,11 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
     const activityType = newSlotForm.activityType.trim() || 'lesson';
     const timePattern = /^([01]\d|2[0-3]):([0-5]\d)$/;
     if (!timePattern.test(newSlotForm.startTime) || !timePattern.test(newSlotForm.endTime)) {
-      Alert.alert('Invalid time', 'Use 24-hour format HH:MM (for example 08:30).');
+      showAlert({ title: 'Invalid time', message: 'Use 24-hour format HH:MM (for example 08:30).', type: 'warning' });
       return;
     }
     if (newSlotForm.endTime <= newSlotForm.startTime) {
-      Alert.alert('Invalid range', 'End time must be after start time.');
+      showAlert({ title: 'Invalid range', message: 'End time must be after start time.', type: 'warning' });
       return;
     }
 
@@ -222,7 +223,7 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
       ? Number.parseInt(newSlotForm.periodNumber.trim(), 10)
       : null;
     if (newSlotForm.periodNumber.trim() && (!Number.isFinite(parsedPeriod) || parsedPeriod <= 0)) {
-      Alert.alert('Invalid period', 'Period number must be a positive number.');
+      showAlert({ title: 'Invalid period', message: 'Period number must be a positive number.', type: 'warning' });
       return;
     }
 
@@ -246,10 +247,10 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
 
       setShowCreateModal(false);
       await fetchSlots();
-      Alert.alert('Added', `Timetable slot created for ${DAYS[selectedDay]}.`);
+      showAlert({ title: 'Added', message: `Timetable slot created for ${DAYS[selectedDay]}.`, type: 'success' });
     } catch (err) {
       logger.error('[Timetable]', 'Failed to create slot', err);
-      Alert.alert('Create failed', 'Could not create the timetable slot. Please try again.');
+      showAlert({ title: 'Create failed', message: 'Could not create the timetable slot. Please try again.', type: 'error' });
     } finally {
       setCreatingSlot(false);
     }
@@ -485,6 +486,8 @@ th,td{border:1px solid #ddd;padding:10px;text-align:left}th{background:#f5f5f5;f
           </View>
         </View>
       </Modal>
+
+      <AlertModal {...alertProps} />
     </DesktopLayout>
   );
 }

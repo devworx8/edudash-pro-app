@@ -85,9 +85,9 @@ export const SA_LANGUAGES: Record<SALanguageCode, SALanguage> = {
  * These are the actual voice IDs available in Azure Speech Service
  */
 export const AZURE_TTS_VOICES: Record<string, string> = {
-  // English (South Africa) - Verified ✅
-  'en-ZA': 'en-ZA-LeahNeural',
-  'en-ZA-male': 'en-ZA-LukeNeural',
+  // English — Multilingual (default for Dash) ✅
+  'en-ZA': 'en-US-AndrewMultilingualNeural',
+  'en-ZA-male': 'en-US-AndrewMultilingualNeural',
   
   // Afrikaans - Verified ✅
   'af-ZA': 'af-ZA-AdriNeural',

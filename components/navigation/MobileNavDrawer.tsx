@@ -386,7 +386,11 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
           duration: 150,
           useNativeDriver: Platform.OS !== 'web',
         }),
-      ]).start();
+      // stopTogether: false ensures fadeAnim completes even if slideAnim is
+      // cancelled by the drawerWidth-reset effect running concurrently.
+      ], { stopTogether: false }).start(() => {
+        fadeAnim.setValue(0);
+      });
     }
 
     return () => {

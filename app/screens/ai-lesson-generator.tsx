@@ -4,7 +4,8 @@
  * @module app/screens/ai-lesson-generator
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, RefreshControl, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, TextInput } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
@@ -27,13 +28,14 @@ import { ModelInUseIndicator } from '@/components/ai/ModelInUseIndicator';
 import { ModelSelectorChips } from '@/components/ai/ModelSelectorChips';
 import { parseLessonPlanResponse } from '@/lib/ai/parseLessonPlan';
 import type { LessonPlanV2 } from '@/lib/ai/lessonPlanSchema';
-import { clampPercent } from '@/lib/progress/clampPercent';
+import { clampPercent, percentWidth } from '@/lib/progress/clampPercent';
 import {
   buildQuickLessonThemeHint,
   loadQuickLessonThemeContext,
   summarizeQuickLessonContext,
   type QuickLessonThemeContext,
 } from '@/lib/lesson-planning/quickLessonThemeContext';
+import { useRewardedFeature } from '@/contexts/AdsContext';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 type LanguageCode = 'en' | 'es' | 'fr' | 'pt' | 'de' | 'af' | 'zu' | 'st';
 type LessonSectionCard = {
@@ -67,6 +69,7 @@ function parseLessonSections(raw: string): LessonSectionCard[] {
 }
 export default function AILessonGeneratorScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const { profile, user } = useAuth();
   const palette = useMemo(() => ({
     bg: theme.background, text: theme.text, textSec: theme.textSecondary,
@@ -108,6 +111,7 @@ export default function AILessonGeneratorScreen() {
   const { generated, setGenerated, pending, progress, progressPhase, progressMessage, errorMsg, lastPayload, usage, quotaStatus, isQuotaExhausted, onGenerate, onCancel, refreshUsage } = useAILessonGeneration();
   const { availableModels, selectedModel, setSelectedModel, isLoading: modelsLoading } = useLessonGeneratorModels();
   const { tierInfo } = useTierInfo();
+  const { isUnlocked: isLessonUnlocked, offerRewardedUnlock: offerLessonUnlock, canShowRewardedAd } = useRewardedFeature('lesson_generation');
   const generatedContentText = useMemo(() => {
     if (typeof generated?.content === 'string' && generated.content.trim()) {
       return generated.content.trim();
@@ -220,12 +224,19 @@ export default function AILessonGeneratorScreen() {
   }, [buildDashPrompt]);
   const onExportPDF = useCallback(async () => {
     const content = generatedContentText;
-    if (!content) { Alert.alert('Export PDF', 'Generate a lesson first.'); return; }
+    if (!content) { showAlert({ title: 'Export PDF', message: 'Generate a lesson first.', type: 'info' }); return; }
     try { await EducationalPDFService.generateTextPDF(`${subject}: ${topic}`, content); toast.success('PDF generated'); }
     catch { toast.error('Failed to generate PDF'); }
   }, [subject, topic, generatedContentText]);
-  const handleGenerate = useCallback(() => {
-    if (isQuotaExhausted) { navigateToUpgrade({ source: 'lesson_generator' }); return; }
+  const handleGenerate = useCallback(async () => {
+    if (isQuotaExhausted && !isLessonUnlocked) {
+      if (canShowRewardedAd) {
+        const unlocked = await offerLessonUnlock();
+        if (!unlocked) { navigateToUpgrade({ source: 'lesson_generator' }); return; }
+      } else {
+        navigateToUpgrade({ source: 'lesson_generator' }); return;
+      }
+    }
     if (lessonFullscreenEnabled) {
       setShowFullscreenLesson(true);
     }
@@ -246,6 +257,9 @@ export default function AILessonGeneratorScreen() {
     });
   }, [
     isQuotaExhausted,
+    isLessonUnlocked,
+    canShowRewardedAd,
+    offerLessonUnlock,
     onGenerate,
     topic,
     subject,
@@ -302,14 +316,15 @@ export default function AILessonGeneratorScreen() {
       if (!res.success) { toast.error(`Save failed: ${res.error || 'Unknown error'}`); return; }
       toast.success(`Lesson saved! View in My Lessons`);
       // Optionally navigate to Browse Lessons
-      Alert.alert(
-        'Lesson Saved!',
-        'Your lesson has been saved. Would you like to browse your lessons?',
-        [
+      showAlert({
+        title: 'Lesson Saved!',
+        message: 'Your lesson has been saved. Would you like to browse your lessons?',
+        type: 'success',
+        buttons: [
           { text: 'Stay Here', style: 'cancel' },
           { text: 'Browse Lessons', onPress: () => router.push('/screens/teacher-lessons') }
         ]
-      );
+      });
     } catch (e: unknown) { toast.error(`Save error: ${e instanceof Error ? e.message : 'Failed'}`); }
     finally { setSaving(false); }
   }, [categoriesQuery.data, generated, duration]);
@@ -395,7 +410,7 @@ export default function AILessonGeneratorScreen() {
               <TouchableOpacity style={{ backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }} onPress={onCancel}><Text style={{ color: '#FFF', fontSize: 12 }}>Cancel</Text></TouchableOpacity>
             </View>
             <Text style={{ color: palette.textSec, fontSize: 13 }}>{progressMessage || 'Generating lesson...'}</Text>
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', marginTop: 8 }}><View style={{ width: `${safeProgress}%`, height: 6, borderRadius: 3, backgroundColor: theme.primary }} /></View>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', marginTop: 8 }}><View style={{ width: percentWidth(safeProgress), height: 6, borderRadius: 3, backgroundColor: theme.primary }} /></View>
             <Text style={{ color: palette.textSec, fontSize: 11, textAlign: 'center', marginTop: 4 }}>{Math.round(safeProgress)}% • {progressPhase.replace('_', ' ')}</Text>
           </View>
         )}
@@ -502,6 +517,7 @@ export default function AILessonGeneratorScreen() {
           }
         />
       )}
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

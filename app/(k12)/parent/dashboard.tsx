@@ -16,12 +16,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth, usePermissions } from '@/contexts/AuthContext';
 import { K12ThemeOverrideProvider, useNextGenTheme } from '@/contexts/K12NextGenThemeContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useAds } from '@/contexts/AdsContext';
+import { PLACEMENT_KEYS } from '@/lib/ads/placements';
+import AdBannerWithUpgrade from '@/components/ui/AdBannerWithUpgrade';
+import SubscriptionAdGate from '@/components/ui/SubscriptionAdGate';
 import { useTranslation } from 'react-i18next';
 import { track } from '@/lib/analytics';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { trackK12ParentQuickwinsRendered } from '@/lib/ai/trackingEvents';
 import { hasCapability, getRequiredTier, type Tier } from '@/lib/ai/capabilities';
 import { getCapabilityTier, normalizeTierName } from '@/lib/tiers';
+import { resolveEffectiveTier } from '@/lib/tiers/resolveEffectiveTier';
 import { useNotificationBadgeCount } from '@/hooks/useNotificationCount';
 import { nextGenK12Parent } from '@/contexts/theme/nextGenK12Parent';
 
@@ -36,6 +41,7 @@ import { useK12ParentDashboard, toUuidOrUndefined } from '@/domains/k12/hooks/us
 import { MobileNavDrawer } from '@/components/navigation/MobileNavDrawer';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
+import { PremiumCosmicOrb } from '@/components/dash-orb/PremiumCosmicOrb';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import {
   K12_PARENT_ACTIONS,
@@ -49,9 +55,18 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
   const { theme } = useNextGenTheme();
   const { t } = useTranslation();
   const { tier } = useSubscription();
+  const { maybeShowInterstitial } = useAds();
   const { showAlert, alertProps } = useAlertModal();
   const params = useLocalSearchParams<{ schoolType?: string; mode?: string }>();
   const notificationCount = useNotificationBadgeCount();
+  const effectiveTier = useMemo(
+    () => resolveEffectiveTier({
+      role: String(profile?.role || 'parent'),
+      profileTier: String((profile as any)?.subscription_tier || '').trim() || null,
+      candidates: [tier],
+    }).rawTier,
+    [profile, tier]
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -88,12 +103,12 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
 
   const tierBadgeLabel = useMemo(() => {
     const normalizedTier = normalizeTierName(
-      String(tier || (p as Record<string, unknown> | undefined)?.subscription_tier || 'free'),
+      String(effectiveTier || 'free'),
     );
     return `Tier: ${normalizedTier.charAt(0).toUpperCase() + normalizedTier.slice(1)}`;
-  }, [profile, tier]);
+  }, [effectiveTier]);
 
-  const tierForCaps: Tier = getCapabilityTier(normalizeTierName(tier || 'free'));
+  const tierForCaps: Tier = getCapabilityTier(normalizeTierName(effectiveTier || 'free'));
   const canShowExamPrep = hasExamEligibleChild;
   const canUseExamPrep = hasCapability(tierForCaps, 'exam.practice') && canShowExamPrep;
   const requiredExamTier = getRequiredTier('exam.practice');
@@ -110,6 +125,17 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
       trackK12ParentQuickwinsRendered({ route: '/(k12)/parent/dashboard', userId: user?.id || null });
     }
   }, [quickWinsEnabled, user?.id]);
+
+  // Show interstitial ad after dashboard loads (with delay to not disrupt UX)
+  useEffect(() => {
+    if (authLoading || profileLoading || !user?.id || !canView || !hasAccess) return;
+    const timer = setTimeout(async () => {
+      try {
+        await maybeShowInterstitial(PLACEMENT_KEYS.INTERSTITIAL_K12_PARENT_DASHBOARD_ENTER);
+      } catch { /* rate-limited or not eligible — silent */ }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [authLoading, profileLoading, user?.id, canView, hasAccess, maybeShowInterstitial]);
 
   useEffect(() => {
     if (profile?.id && !authLoading && !profileLoading) fetchChildrenData();
@@ -218,7 +244,7 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
   }
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {/* Cosmic backdrop (brand identity) */}
       <View pointerEvents="none" style={styles.cosmicBackdrop}>
         <LinearGradient colors={['#070B16', '#0F121E', '#131A2E']} style={styles.cosmicBackdropFill} />
@@ -244,7 +270,12 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
             {Platform.OS === 'web' ? (
               <Ionicons name="menu" size={28} color={theme.text} />
             ) : (
-              <CosmicOrb size={30} isProcessing={false} isSpeaking={false} />
+              (() => {
+                const OrbComponent = tierForCaps === 'premium' || tierForCaps === 'enterprise' 
+                  ? PremiumCosmicOrb 
+                  : CosmicOrb;
+                return <OrbComponent size={30} isProcessing={false} isSpeaking={false} />;
+              })()
             )}
           </Pressable>
           <View style={styles.headerTitleWrapper}>
@@ -273,7 +304,7 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
 
       {/* Scrollable Content */}
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: quickWinsEnabled ? 100 : 80 }]}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: 0 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
         showsVerticalScrollIndicator={false}
       >
@@ -350,6 +381,15 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
           theme={theme}
           quickWinsEnabled={quickWinsEnabled}
         />
+
+        {/* Banner Ad — free tier users only */}
+        <SubscriptionAdGate>
+          <AdBannerWithUpgrade
+            screen="k12_parent_dashboard"
+            showUpgradeCTA={true}
+            margin={8}
+          />
+        </SubscriptionAdGate>
       </ScrollView>
 
       <AlertModal {...alertProps} />

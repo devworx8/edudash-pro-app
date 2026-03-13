@@ -10,8 +10,8 @@ import {
   TouchableOpacity,
   Modal,
   StyleSheet,
-  Alert,
 } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -95,6 +95,7 @@ const toSingle = <T,>(value: T | T[] | null | undefined): T | null => {
 
 export default function DashPlaygroundScreen() {
   const { theme } = useTheme();
+  const { showAlert, alertProps } = useAlertModal();
   const insets = useSafeAreaInsets();
   const { tier } = useSubscription();
   const { data, loading } = useParentDashboard();
@@ -258,14 +259,15 @@ export default function DashPlaygroundScreen() {
     const voiceSession = await beginActivitySession(item.assignmentId);
 
     if (voiceSession.didSwitchToDevice) {
-      Alert.alert(
-        'Cloud Voice Preview Used',
-        'You have used 3 free high-quality Dash voice activities. Playground will now use device voice. Upgrade for premium natural voices.',
-        [
+      showAlert({
+        title: 'Cloud Voice Preview Used',
+        message: 'You have used 3 free high-quality Dash voice activities. Playground will now use device voice. Upgrade for premium natural voices.',
+        type: 'info',
+        buttons: [
           { text: 'Not now', style: 'cancel' },
           { text: 'Upgrade', onPress: () => router.push('/screens/subscription-setup') },
         ],
-      );
+      });
     }
 
     track('playground.activity_started', {
@@ -579,6 +581,7 @@ export default function DashPlaygroundScreen() {
           </SafeAreaView>
         )}
       </Modal>
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

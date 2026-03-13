@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Alert, Platform, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Platform, KeyboardAvoidingView } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +21,7 @@ export default function EmailVerificationScreen() {
   const params = useLocalSearchParams();
   const { theme } = useTheme();
   const { token, email, schoolName } = params as { token?: string; email?: string; schoolName?: string };
+  const { showAlert, alertProps } = useAlertModal();
 
   const [verificationToken, setVerificationToken] = useState(token || '');
   const [loading, setLoading] = useState(false);
@@ -38,7 +40,7 @@ export default function EmailVerificationScreen() {
 
   const handleVerification = async () => {
     if (!verificationToken || verificationToken.length < 10) {
-      Alert.alert('Invalid Token', 'Please enter a valid verification token.');
+      showAlert({ title: 'Invalid Token', message: 'Please enter a valid verification token.', type: 'warning' });
       return;
     }
 
@@ -71,10 +73,11 @@ export default function EmailVerificationScreen() {
       });
 
       // Show success message with next steps
-      Alert.alert(
-        'Verification Successful!',
-        `${verificationData.message}\n\nYour school registration is now verified. You can proceed with the next steps in your onboarding process.`,
-        [
+      showAlert({
+        title: 'Verification Successful!',
+        message: `${verificationData.message}\n\nYour school registration is now verified. You can proceed with the next steps in your onboarding process.`,
+        type: 'success',
+        buttons: [
           {
             text: 'Continue Setup',
             onPress: () => {
@@ -93,7 +96,7 @@ export default function EmailVerificationScreen() {
             }
           }
         ]
-      );
+      });
 
     } catch (error: any) {
       console.error('Email verification failed:', error);
@@ -110,7 +113,7 @@ export default function EmailVerificationScreen() {
         errorMessage = error.message;
       }
       
-      Alert.alert('Verification Failed', errorMessage);
+      showAlert({ title: 'Verification Failed', message: errorMessage, type: 'error' });
       
       track('school_email_verification_failed', {
         error: error.message,
@@ -124,10 +127,11 @@ export default function EmailVerificationScreen() {
 
   const handleResendVerification = async () => {
     if (!email) {
-      Alert.alert(
-        'Email Required',
-        'Please provide the school email address to resend verification.'
-      );
+      showAlert({
+        title: 'Email Required',
+        message: 'Please provide the school email address to resend verification.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -147,11 +151,11 @@ export default function EmailVerificationScreen() {
         throw new Error(data.error);
       }
 
-      Alert.alert(
-        'Verification Email Sent',
-        'A new verification email has been sent. Please check your inbox and spam folder.',
-        [{ text: 'OK' }]
-      );
+      showAlert({
+        title: 'Verification Email Sent',
+        message: 'A new verification email has been sent. Please check your inbox and spam folder.',
+        type: 'success',
+      });
 
       track('school_verification_resent', {
         email: email
@@ -159,10 +163,11 @@ export default function EmailVerificationScreen() {
 
     } catch (error: any) {
       console.error('Failed to resend verification:', error);
-      Alert.alert(
-        'Failed to Resend',
-        error.message || 'Could not resend verification email. Please try again later.'
-      );
+      showAlert({
+        title: 'Failed to Resend',
+        message: error.message || 'Could not resend verification email. Please try again later.',
+        type: 'error',
+      });
     } finally {
       setResending(false);
     }
@@ -352,6 +357,7 @@ export default function EmailVerificationScreen() {
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
+        <AlertModal {...alertProps} />
       </SafeAreaView>
     </View>
   );

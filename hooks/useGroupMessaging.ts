@@ -37,8 +37,15 @@ export interface OrgMember {
   id: string;
   first_name: string;
   last_name: string;
+  email?: string;
   role: string;
   avatar_url?: string;
+  display_name: string;
+  initials: string;
+}
+
+interface GroupParticipantMutationArgs {
+  threadId: string;
 }
 
 export interface ClassInfo {
@@ -49,11 +56,46 @@ export interface ClassInfo {
   parent_count?: number;
 }
 
+const normalizeMemberText = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : '';
+
+export function buildOrgMemberDisplayName(member: {
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+}): string {
+  const fullName = `${normalizeMemberText(member.first_name)} ${normalizeMemberText(member.last_name)}`.trim();
+  if (fullName) return fullName;
+  return normalizeMemberText(member.email);
+}
+
+export function buildOrgMemberInitials(member: {
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  display_name?: string | null;
+}): string {
+  const first = normalizeMemberText(member.first_name);
+  const last = normalizeMemberText(member.last_name);
+  const initials = `${first.charAt(0)}${last.charAt(0)}`.trim();
+  if (initials) return initials.toUpperCase();
+
+  const displayName = normalizeMemberText(member.display_name);
+  if (displayName) return displayName.charAt(0).toUpperCase();
+
+  const email = normalizeMemberText(member.email);
+  if (email) return email.charAt(0).toUpperCase();
+
+  return '?';
+}
+
 // ─── Fetch org members (same school) ──────────────────────────────
 
 export const useOrgMembers = (roleFilter?: string[]) => {
   const { user, profile } = useAuth();
-  const orgId = (profile as any)?.preschool_id || (profile as any)?.organization_id;
+  const preschoolId = (profile as any)?.preschool_id;
+  const organizationId = (profile as any)?.organization_id;
+  const orgId = preschoolId || organizationId;
 
   return useQuery({
     queryKey: ['org-members', orgId, roleFilter],
@@ -63,20 +105,79 @@ export const useOrgMembers = (roleFilter?: string[]) => {
 
       let query = client
         .from('profiles')
-        .select('id, first_name, last_name, role, avatar_url')
-        .eq('preschool_id', orgId)
-        .neq('id', user?.id || '');
+        .select('id, first_name, last_name, email, role, avatar_url, is_active')
+        .neq('id', user?.id || '')
+        .neq('is_active', false);
+
+      if (preschoolId) {
+        query = query.eq('preschool_id', preschoolId);
+      } else if (organizationId) {
+        query = query.eq('organization_id', organizationId);
+      } else {
+        return [];
+      }
 
       if (roleFilter && roleFilter.length > 0) {
         query = query.in('role', roleFilter);
       }
 
-      const { data, error } = await query.order('first_name');
+      const { data, error } = await query;
       if (error) {
         logger.warn('useOrgMembers', 'Error:', error.message);
         return [];
       }
-      return (data || []) as OrgMember[];
+
+      let linkedParentIds = new Set<string>();
+      if (!roleFilter || roleFilter.includes('parent')) {
+        let studentQuery = client.from('students').select('parent_id, guardian_id');
+        if (preschoolId) {
+          studentQuery = studentQuery.eq('preschool_id', preschoolId);
+        } else if (organizationId) {
+          studentQuery = studentQuery.eq('organization_id', organizationId);
+        }
+
+        const { data: studentLinks, error: studentError } = await studentQuery;
+        if (studentError) {
+          logger.warn('useOrgMembers', 'Student link lookup error:', studentError.message);
+        } else {
+          linkedParentIds = new Set(
+            (studentLinks || []).flatMap((student: any) => [
+              normalizeMemberText(student.parent_id),
+              normalizeMemberText(student.guardian_id),
+            ]).filter(Boolean),
+          );
+        }
+      }
+
+      const normalizedMembers = (data || [])
+        .map((row: any) => {
+          const first_name = normalizeMemberText(row.first_name);
+          const last_name = normalizeMemberText(row.last_name);
+          const email = normalizeMemberText(row.email);
+          const role = normalizeMemberText(row.role).toLowerCase();
+          const display_name = buildOrgMemberDisplayName({ first_name, last_name, email });
+
+          return {
+            id: row.id,
+            first_name,
+            last_name,
+            email: email || undefined,
+            role,
+            avatar_url: row.avatar_url || undefined,
+            display_name,
+            initials: buildOrgMemberInitials({ first_name, last_name, email, display_name }),
+            linkedToLearner: linkedParentIds.has(row.id),
+          };
+        })
+        .filter((member) => {
+          if (!member.display_name) return false;
+          if (member.role !== 'parent') return true;
+          return member.linkedToLearner || Boolean(member.email);
+        })
+        .sort((a, b) => a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' }))
+        .map(({ linkedToLearner, ...member }) => member);
+
+      return normalizedMembers as OrgMember[];
     },
     enabled: !!orgId && !!user?.id,
     staleTime: 1000 * 60 * 5, // 5 min
@@ -323,6 +424,101 @@ export const useCreateParentThread = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parent', 'threads'] });
+    },
+  });
+};
+
+// ─── Toggle replies for existing groups ──────────────────────────
+
+export const useUpdateGroupReplyPolicy = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      threadId,
+      allowReplies,
+    }: GroupParticipantMutationArgs & {
+      allowReplies: boolean;
+    }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const client = assertSupabase();
+      const { data, error } = await client.rpc('set_group_reply_policy', {
+        p_thread_id: threadId,
+        p_allow_replies: allowReplies,
+        p_updated_by: user.id,
+      });
+
+      if (error) throw error;
+      return data as boolean;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parent', 'threads'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher', 'threads'] });
+    },
+  });
+};
+
+// ─── Add members to an existing group ────────────────────────────
+
+export const useAddGroupParticipants = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      threadId,
+      userIds,
+    }: GroupParticipantMutationArgs & {
+      userIds: string[];
+    }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      if (userIds.length === 0) return true;
+
+      const client = assertSupabase();
+      const { data, error } = await client.rpc('add_group_participants', {
+        p_thread_id: threadId,
+        p_user_ids: userIds,
+        p_added_by: user.id,
+      });
+
+      if (error) throw error;
+      return data as boolean;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parent', 'threads'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher', 'threads'] });
+    },
+  });
+};
+
+// ─── Remove a participant from an existing group ─────────────────
+
+export const useRemoveGroupParticipant = () => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      threadId,
+      userId,
+    }: GroupParticipantMutationArgs & {
+      userId: string;
+    }) => {
+      if (!user?.id) throw new Error('Not authenticated');
+      const client = assertSupabase();
+      const { data, error } = await client.rpc('remove_group_participant', {
+        p_thread_id: threadId,
+        p_user_id: userId,
+        p_removed_by: user.id,
+      });
+
+      if (error) throw error;
+      return data as boolean;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['parent', 'threads'] });
+      queryClient.invalidateQueries({ queryKey: ['teacher', 'threads'] });
     },
   });
 };

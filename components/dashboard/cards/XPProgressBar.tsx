@@ -9,7 +9,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getLearningStats, type LearningStats } from '@/lib/dash-ai/learningStreakStore';
-import { ratioToPercent } from '@/lib/progress/clampPercent';
+import { ratioToPercent, percentWidth } from '@/lib/progress/clampPercent';
 
 const XP_PER_SESSION_GOAL = 100; // Default 100 XP daily target
 
@@ -53,7 +53,7 @@ export function XPProgressBar() {
           style={[
             styles.barFill,
             {
-              width: `${progressPercent}%`,
+              width: percentWidth(progressPercent),
               backgroundColor: goalReached ? '#10B981' : '#3B82F6',
             },
           ]}

@@ -17,6 +17,8 @@ import {
   trackDashboardRouteMismatch,
   trackDashboardRouteResolution,
 } from '@/lib/dashboard/dashboardRoutingTelemetry';
+import { useAds } from '@/contexts/AdsContext';
+import { PLACEMENT_KEYS } from '@/lib/ads/placements';
 
 export default function ParentDashboardScreen() {
   const { t } = useTranslation();
@@ -24,6 +26,7 @@ export default function ParentDashboardScreen() {
   const { user, profile, loading: authLoading, profileLoading } = useAuth();
   const permissions = usePermissions();
   const { ready: subscriptionReady, tier } = useSubscription();
+  const { maybeShowInterstitial } = useAds();
   const { focus } = useLocalSearchParams<{ focus?: string | string[] }>();
   const focusSection = Array.isArray(focus) ? focus[0] : focus;
   const isAuthMissing = !user?.id;
@@ -61,6 +64,19 @@ export default function ParentDashboardScreen() {
       });
     }
   }, [canView, hasAccess, subscriptionReady, tier, user?.id, featuresEnabled]);
+
+  // Show interstitial ad on dashboard entry for free-tier parents (non-school-work-facing screen)
+  React.useEffect(() => {
+    if (!canView || !hasAccess || !subscriptionReady || tier !== 'free' || Platform.OS === 'web') return;
+    const timer = setTimeout(async () => {
+      try {
+        await maybeShowInterstitial(PLACEMENT_KEYS.INTERSTITIAL_PARENT_NAV);
+      } catch (error) {
+        console.debug('[ParentDashboard] Failed to show interstitial ad:', error);
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [canView, hasAccess, subscriptionReady, tier, maybeShowInterstitial]);
 
   // Safe redirect effect (top-level) to avoid rule-of-hooks violations and loops
   const hasRedirectedRef = React.useRef(false);

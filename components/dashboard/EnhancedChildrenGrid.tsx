@@ -1,3 +1,4 @@
+import { percentWidth } from '@/lib/progress/clampPercent';
 import React, { useMemo, useState } from 'react'
 import {
   View, 
@@ -311,7 +312,7 @@ export const EnhancedChildrenGrid: React.FC<EnhancedChildrenGridProps> = ({
                     styles.progressFill,
                     { 
                       backgroundColor: getProgressColor(child.progressScore),
-                      width: `${child.progressScore}%`
+                      width: percentWidth(child.progressScore)
                     }
                   ]} 
                 />

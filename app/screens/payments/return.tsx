@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
@@ -26,6 +27,7 @@ interface PaymentReturn {
 
 export default function PaymentReturnScreen() {
   const params = useLocalSearchParams() as Partial<PaymentReturn>;
+  const { showAlert, alertProps } = useAlertModal();
   const { profile, refreshProfile } = useAuth();
   const { theme } = useTheme();
   const { refresh: refreshSubscription } = useSubscription();
@@ -162,10 +164,11 @@ export default function PaymentReturnScreen() {
   };
 
   const handleContactSupport = () => {
-    Alert.alert(
-      'Contact Support',
-      'Please reach out to our support team with your transaction details.',
-      [
+    showAlert({
+      title: 'Contact Support',
+      message: 'Please reach out to our support team with your transaction details.',
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Send Email',
@@ -186,11 +189,11 @@ Thanks!`);
             const mailtoUrl = `mailto:support@edudashpro.org.za?subject=${subject}&body=${body}`;
             // Note: In a real app, you'd use Linking.openURL(mailtoUrl)
             // For now, we'll show an alert with the details
-            Alert.alert('Support Email', `Please email: support@edudashpro.org.za\n\nSubject: ${decodeURIComponent(subject)}\n\nInclude transaction details: ${params.transaction_id || 'N/A'}`);
+            showAlert({ title: 'Support Email', message: `Please email: support@edudashpro.org.za\n\nSubject: ${decodeURIComponent(subject)}\n\nInclude transaction details: ${params.transaction_id || 'N/A'}`, type: 'info' });
           }
         }
-      ]
-    );
+      ],
+    });
   };
 
   const getStatusColor = () => {
@@ -329,6 +332,7 @@ Thanks!`);
           </View>
         </View>
       </SafeAreaView>
+      <AlertModal {...alertProps} />
     </View>
   );
 }

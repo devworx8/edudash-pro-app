@@ -17,6 +17,7 @@ import { ExamGenerationReadyContent } from '@/features/exam-generation/ExamGener
 import { ExamGenerationStatusState } from '@/features/exam-generation/ExamGenerationStatusState';
 import { useExamGenerationController } from '@/features/exam-generation/useExamGenerationController';
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
+import { useRewardedFeature } from '@/contexts/AdsContext';
 
 type ExamGenerationParams = {
   grade?: string;
@@ -107,14 +108,19 @@ export default function ExamGenerationScreen() {
   );
 
   const controller = useExamGenerationController(controllerParams);
+  const { offerRewardedUnlock: offerExamUnlock, canShowRewardedAd } = useRewardedFeature('exam_generation');
 
   const handleBack = useCallback(() => {
     router.back();
   }, []);
 
-  const handleUpgrade = useCallback(() => {
+  const handleUpgrade = useCallback(async () => {
+    if (canShowRewardedAd) {
+      const unlocked = await offerExamUnlock();
+      if (unlocked) return;
+    }
     navigateToUpgrade({ source: 'exam_generation', reason: 'limit_reached' });
-  }, []);
+  }, [canShowRewardedAd, offerExamUnlock]);
 
   if (controller.readyWithPayload) {
     return (

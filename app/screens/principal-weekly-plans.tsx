@@ -1,7 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
-  Alert,
-  FlatList,
   Modal,
   RefreshControl,
   StyleSheet,
@@ -10,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { FlashList } from '@shopify/flash-list';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
@@ -85,6 +85,7 @@ export default function PrincipalWeeklyPlansScreen() {
   const { theme } = useTheme();
   const { profile, user } = useAuth();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
   const organizationId = extractOrganizationId(profile);
   const createdBy = (profile as any)?.id || user?.id;
 
@@ -115,7 +116,7 @@ export default function PrincipalWeeklyPlansScreen() {
       if (error) throw error;
       setPlans((data || []) as WeeklyPlan[]);
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'Failed to load weekly plans');
+      showAlert({ title: 'Error', message: error?.message || 'Failed to load weekly plans', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -152,11 +153,11 @@ export default function PrincipalWeeklyPlansScreen() {
 
   const savePlan = async () => {
     if (!organizationId || !createdBy) {
-      Alert.alert('Missing profile', 'Unable to identify your school profile.');
+      showAlert({ title: 'Missing profile', message: 'Unable to identify your school profile.', type: 'error' });
       return;
     }
     if (!form.weekStartDate) {
-      Alert.alert('Validation', 'Week start date is required (YYYY-MM-DD).');
+      showAlert({ title: 'Validation', message: 'Week start date is required (YYYY-MM-DD).', type: 'warning' });
       return;
     }
 
@@ -196,7 +197,7 @@ export default function PrincipalWeeklyPlansScreen() {
       setForm(createEmptyForm());
       await fetchPlans();
     } catch (error: any) {
-      Alert.alert('Save failed', error?.message || 'Unable to save weekly plan.');
+      showAlert({ title: 'Save failed', message: error?.message || 'Unable to save weekly plan.', type: 'error' });
     } finally {
       setSaving(false);
     }
@@ -215,7 +216,7 @@ export default function PrincipalWeeklyPlansScreen() {
       if (error) throw error;
       await fetchPlans();
     } catch (error: any) {
-      Alert.alert('Status update failed', error?.message || 'Unable to update plan status.');
+      showAlert({ title: 'Status update failed', message: error?.message || 'Unable to update plan status.', type: 'error' });
     }
   };
 
@@ -281,12 +282,13 @@ export default function PrincipalWeeklyPlansScreen() {
           </TouchableOpacity>
         </View>
 
-        <FlatList
+        <FlashList
           data={plans}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          estimatedItemSize={150}
           ListEmptyComponent={
             !loading ? (
               <View style={styles.emptyState}>
@@ -394,6 +396,7 @@ export default function PrincipalWeeklyPlansScreen() {
             </View>
           </View>
         </Modal>
+        <AlertModal {...alertProps} />
       </View>
     </DesktopLayout>
   );

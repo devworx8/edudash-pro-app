@@ -92,9 +92,11 @@ export const extractFollowUps = (text: string): string[] => {
         continue;
       }
 
-      if (line.includes('?') && isValidFollowUp(cleaned(line))) {
-        results.push(line);
-      }
+      // NOTE: bare '?'-line scraping deliberately removed — it captured Dash's
+      // own conversational questions (e.g. "Hey Olivia, what can I help with?")
+      // and showed them as chips the user is supposed to click, which felt like
+      // talking to themselves in the 3rd person. Only structured list formats
+      // (numbered, bullets, User:) should become suggestion chips.
     }
     return dedupe(results);
   } catch {

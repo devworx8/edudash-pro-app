@@ -17,6 +17,10 @@ interface AdsContextType {
   canShowBanner: boolean;
   maybeShowInterstitial: (tag: string) => Promise<boolean>;
   offerRewarded: (tag: string) => Promise<{ shown: boolean; rewarded: boolean }>;
+  /** Grant temporary access to a premium feature after a rewarded ad. Default: 30 minutes. */
+  unlockFeature: (featureKey: string, durationMs?: number) => void;
+  /** Returns true if the feature was unlocked via a rewarded ad and the grant hasn't expired. */
+  isFeatureUnlocked: (featureKey: string) => boolean;
 }
 
 const AdsContext = createContext<AdsContextType>({
@@ -24,6 +28,8 @@ const AdsContext = createContext<AdsContextType>({
   canShowBanner: false,
   maybeShowInterstitial: async () => false,
   offerRewarded: async () => ({ shown: false, rewarded: false }),
+  unlockFeature: () => {},
+  isFeatureUnlocked: () => false,
 });
 
 // Storage keys for frequency control
@@ -40,17 +46,23 @@ const STORAGE_KEYS = {
 const RATE_LIMITS = {
   interstitialMinInterval: 2 * 60 * 1000, // 2 minutes
   interstitialMaxPerDay: 3,
-  rewardedMaxPerDay: 2,
+  rewardedMaxPerDay: 5,
   initialGracePeriod: 60 * 1000, // 1 minute after app start
   appOpenMinInterval: 4 * 60 * 60 * 1000, // 4 hours between app-open interstitials
   appOpenMaxPerDay: 2,
   appOpenDelay: 12 * 1000, // Show after 12 seconds to avoid jarring UX
 };
 
+// Default rewarded unlock duration: 30 minutes
+const REWARDED_UNLOCK_DURATION_MS = 30 * 60 * 1000;
+
 export function AdsProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [appStartTime, setAppStartTime] = useState<number>(Date.now());
   const appOpenAttemptedRef = useRef(false);
+  // In-memory map of featureKey → expiresAt timestamp. Clears on app restart (intentional).
+  const unlockedFeaturesRef = useRef<Map<string, number>>(new Map());
+  const [unlockVersion, setUnlockVersion] = useState(0);
   const { ready: subscriptionReady, tier } = useSubscription();
   const { user, profile, loading: authLoading, profileLoading } = useAuth();
   const pathname = usePathname();
@@ -387,6 +399,24 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const unlockFeature = useCallback((featureKey: string, durationMs = REWARDED_UNLOCK_DURATION_MS) => {
+    unlockedFeaturesRef.current.set(featureKey, Date.now() + durationMs);
+    setUnlockVersion((v) => v + 1);
+    track('ads.feature_unlocked', { featureKey, durationMs, tier, platform: Platform.OS });
+    debug('[AdsProvider] Feature unlocked via rewarded ad', { featureKey, durationMs });
+  }, [tier]);
+
+  const isFeatureUnlocked = useCallback((featureKey: string): boolean => {
+    const expiresAt = unlockedFeaturesRef.current.get(featureKey);
+    if (!expiresAt) return false;
+    if (Date.now() > expiresAt) {
+      unlockedFeaturesRef.current.delete(featureKey);
+      return false;
+    }
+    return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlockVersion]);
+
   // Show an interstitial shortly after app open for eligible free-tier users.
   useEffect(() => {
     if (!ready || !shouldEnableAds || !authReady || !user?.id) return;
@@ -441,8 +471,10 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       canShowBanner,
       maybeShowInterstitial,
       offerRewarded,
+      unlockFeature,
+      isFeatureUnlocked,
     }),
-    [ready, canShowBanner]
+    [ready, canShowBanner, unlockFeature, isFeatureUnlocked]
   );
 
   return (
@@ -465,4 +497,33 @@ export function useAds() {
     throw new Error('useAds must be used within an AdsProvider');
   }
   return context;
+}
+
+/**
+ * Convenience hook for premium feature gates.
+ *
+ * Returns `isUnlocked` (true for 30 min after watching a rewarded ad) and
+ * `offerRewardedUnlock` (call this when the user taps "Watch Ad").
+ *
+ * Usage:
+ * ```tsx
+ * const { isUnlocked, offerRewardedUnlock } = useRewardedFeature('advanced_analytics');
+ * if (isUnlocked || tier !== 'free') return <FeatureContent />;
+ * return <PremiumFeatureBanner onRewardedUnlock={offerRewardedUnlock} ... />;
+ * ```
+ */
+export function useRewardedFeature(featureKey: string) {
+  const { isFeatureUnlocked, unlockFeature, offerRewarded, canShowBanner } = useAds();
+  const isUnlocked = isFeatureUnlocked(featureKey);
+
+  const offerRewardedUnlock = useCallback(async (): Promise<boolean> => {
+    const result = await offerRewarded(`premium_preview_${featureKey}`);
+    if (result.rewarded) {
+      unlockFeature(featureKey);
+      return true;
+    }
+    return false;
+  }, [featureKey, offerRewarded, unlockFeature]);
+
+  return { isUnlocked, offerRewardedUnlock, canShowRewardedAd: canShowBanner };
 }

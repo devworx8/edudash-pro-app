@@ -4,7 +4,8 @@
  * Shows program details and allows management by executives/admins
  */
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -58,6 +59,7 @@ export default function ProgramDetailScreen() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const styles = React.useMemo(() => createStyles(theme), [theme]);
+  const { showAlert, alertProps } = useAlertModal();
 
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
@@ -146,10 +148,10 @@ export default function ProgramDetailScreen() {
     onSuccess: (newCode) => {
       queryClient.invalidateQueries({ queryKey: ['program-detail', id] });
       queryClient.invalidateQueries({ queryKey: ['org-programs'] });
-      Alert.alert('Success', `Program code generated: ${newCode}`);
+      showAlert({ title: 'Success', message: `Program code generated: ${newCode}`, type: 'success' });
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message || 'Failed to generate code');
+      showAlert({ title: 'Error', message: error.message || 'Failed to generate code', type: 'error' });
     },
   });
 
@@ -168,10 +170,10 @@ export default function ProgramDetailScreen() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['program-detail', id] });
       queryClient.invalidateQueries({ queryKey: ['org-programs'] });
-      Alert.alert('Success', `Program ${program?.is_active ? 'deactivated' : 'activated'}`);
+      showAlert({ title: 'Success', message: `Program ${program?.is_active ? 'deactivated' : 'activated'}`, type: 'success' });
     },
     onError: (error: any) => {
-      Alert.alert('Error', error.message || 'Failed to update program');
+      showAlert({ title: 'Error', message: error.message || 'Failed to update program', type: 'error' });
     },
   });
 
@@ -183,27 +185,29 @@ export default function ProgramDetailScreen() {
   };
 
   const handleGenerateCode = () => {
-    Alert.alert(
-      'Generate Program Code',
-      'This will create a unique code that learners can use to enroll. Continue?',
-      [
+    showAlert({
+      title: 'Generate Program Code',
+      message: 'This will create a unique code that learners can use to enroll. Continue?',
+      type: 'info',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Generate', onPress: () => generateCodeMutation.mutate() },
       ]
-    );
+    });
   };
 
   const handleToggleActive = () => {
-    Alert.alert(
-      program?.is_active ? 'Deactivate Program' : 'Activate Program',
-      program?.is_active 
+    showAlert({
+      title: program?.is_active ? 'Deactivate Program' : 'Activate Program',
+      message: program?.is_active 
         ? 'This will hide the program from learners. Existing enrollments will not be affected.'
         : 'This will make the program visible to learners again.',
-      [
+      type: 'warning',
+      buttons: [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Confirm', onPress: () => toggleActiveMutation.mutate() },
       ]
-    );
+    });
   };
 
   if (isLoading) {
@@ -460,6 +464,7 @@ export default function ProgramDetailScreen() {
         theme={theme}
         programId={program.id}
       />
+      <AlertModal {...alertProps} />
     </SafeAreaView>
   );
 }

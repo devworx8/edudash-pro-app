@@ -176,6 +176,30 @@ function collapseRepeatedLetterSounds(text: string, phonicsMode: boolean): strin
   return result;
 }
 
+/**
+ * Convert South African Rand amounts to spoken-word form.
+ * "R 65.00" → "65 rands", "R1,234.56" → "1234 rands and 56 cents"
+ */
+function normalizeSouthAfricanCurrency(text: string): string {
+  // Match R/ZAR followed by optional space + amount (handles R65, R 65.00, R1,234.56, ZAR 100)
+  return text.replace(
+    /\b(?:ZAR|R)\s?(\d{1,3}(?:[,\s]\d{3})*(?:\.\d{1,2})?)\b/gi,
+    (_match, amount: string) => {
+      const cleaned = amount.replace(/[,\s]/g, '');
+      const num = parseFloat(cleaned);
+      if (isNaN(num)) return _match;
+
+      const whole = Math.floor(num);
+      const centsRaw = Math.round((num - whole) * 100);
+
+      if (whole === 0 && centsRaw === 0) return 'zero rands';
+      if (whole === 0) return `${centsRaw} cent${centsRaw === 1 ? '' : 's'}`;
+      if (centsRaw === 0) return `${whole} rand${whole === 1 ? '' : 's'}`;
+      return `${whole} rand${whole === 1 ? '' : 's'} and ${centsRaw} cent${centsRaw === 1 ? '' : 's'}`;
+    },
+  );
+}
+
 function normalizeChoiceLabels(text: string): string {
   let next = String(text || '');
 
@@ -315,6 +339,7 @@ export function normalizeForTTS(input: string, options: TTSNormalizeOptions = {}
   text = stripEmojiAndSymbols(text);
   text = normalizeChoiceLabels(text);
   text = normalizeEduDashBrandForms(text);
+  text = normalizeSouthAfricanCurrency(text);
 
   // Apply pronunciation dictionary (brand names, SA languages, acronyms)
   text = applyPronunciationPlainText(text);

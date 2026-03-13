@@ -126,6 +126,26 @@ function chooseStorage() {
 
 const storage = chooseStorage();
 
+function isValidStoredSession(value: any): value is UserSession {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof value.access_token === 'string' &&
+    typeof value.refresh_token === 'string' &&
+    typeof value.user_id === 'string' &&
+    Number.isFinite(Number(value.expires_at))
+  );
+}
+
+function isValidStoredProfile(value: any): value is UserProfile {
+  return Boolean(
+    value &&
+    typeof value === 'object' &&
+    typeof value.id === 'string' &&
+    typeof value.role === 'string'
+  );
+}
+
 // ============================================================================
 // Session CRUD
 // ============================================================================
@@ -142,9 +162,21 @@ export async function storeSession(session: UserSession): Promise<void> {
 export async function getStoredSession(): Promise<UserSession | null> {
   try {
     const sessionData = await storage.getItem(SESSION_STORAGE_KEY);
-    return sessionData ? JSON.parse(sessionData) : null;
+    if (!sessionData) return null;
+    const parsed = JSON.parse(sessionData);
+    if (!isValidStoredSession(parsed)) {
+      console.warn('[SessionManager] Invalid stored session payload detected, clearing it');
+      await storage.removeItem(SESSION_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch (error) {
     console.error('Failed to retrieve session:', error);
+    try {
+      await storage.removeItem(SESSION_STORAGE_KEY);
+    } catch {
+      // ignore cleanup failures
+    }
     return null;
   }
 }
@@ -160,9 +192,21 @@ export async function storeProfile(profile: UserProfile): Promise<void> {
 export async function getStoredProfile(): Promise<UserProfile | null> {
   try {
     const profileData = await storage.getItem(PROFILE_STORAGE_KEY);
-    return profileData ? JSON.parse(profileData) : null;
+    if (!profileData) return null;
+    const parsed = JSON.parse(profileData);
+    if (!isValidStoredProfile(parsed)) {
+      console.warn('[SessionManager] Invalid stored profile payload detected, clearing it');
+      await storage.removeItem(PROFILE_STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch (error) {
     console.error('Failed to retrieve profile:', error);
+    try {
+      await storage.removeItem(PROFILE_STORAGE_KEY);
+    } catch {
+      // ignore cleanup failures
+    }
     return null;
   }
 }

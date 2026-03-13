@@ -26,9 +26,16 @@ export interface TeacherNote {
 export const createStyles = (theme: any) =>
   StyleSheet.create({
     container: {
-      borderRadius: 16,
+      borderRadius: 20,
       padding: 16,
       marginBottom: 16,
+      borderWidth: 1,
+      borderColor: 'rgba(125, 211, 252, 0.16)',
+      shadowColor: '#040a1a',
+      shadowOffset: { width: 0, height: 10 },
+      shadowOpacity: 0.24,
+      shadowRadius: 18,
+      elevation: 8,
     },
     loadingContainer: {
       padding: 40,
@@ -52,7 +59,7 @@ export const createStyles = (theme: any) =>
     unreadBadge: {
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 12,
+      borderRadius: 999,
     },
     unreadCount: {
       color: '#FFF',
@@ -61,9 +68,11 @@ export const createStyles = (theme: any) =>
     },
     noteItem: {
       padding: 14,
-      borderRadius: 12,
+      borderRadius: 16,
       borderLeftWidth: 4,
       position: 'relative',
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.06)',
     },
     noteHeader: {
       flexDirection: 'row',
@@ -71,9 +80,9 @@ export const createStyles = (theme: any) =>
       marginBottom: 8,
     },
     noteTypeIcon: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      width: 34,
+      height: 34,
+      borderRadius: 17,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -95,7 +104,7 @@ export const createStyles = (theme: any) =>
     },
     noteTitle: {
       fontSize: 15,
-      fontWeight: '600',
+      fontWeight: '700',
       marginBottom: 4,
     },
     noteContent: {
@@ -106,7 +115,7 @@ export const createStyles = (theme: any) =>
       marginTop: 12,
       paddingTop: 12,
       borderTopWidth: 1,
-      borderTopColor: 'rgba(128, 128, 128, 0.2)',
+      borderTopColor: 'rgba(125, 211, 252, 0.12)',
     },
     teacherInfo: {
       fontSize: 12,
@@ -118,7 +127,7 @@ export const createStyles = (theme: any) =>
       justifyContent: 'center',
       paddingVertical: 10,
       paddingHorizontal: 16,
-      borderRadius: 8,
+      borderRadius: 12,
       gap: 6,
     },
     acknowledgeText: {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 // --------------- Shared Types ---------------
 
@@ -139,7 +140,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({ progress, color, track
     <View
       style={[
         progressBarStyles.fill,
-        { width: `${Math.min(Math.max(progress, 0), 1) * 100}%`, backgroundColor: color },
+        { width: percentWidth(Math.min(Math.max(progress, 0), 1) * 100), backgroundColor: color },
       ]}
     />
   </View>

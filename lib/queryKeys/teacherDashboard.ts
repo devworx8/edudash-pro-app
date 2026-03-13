@@ -39,4 +39,12 @@ export const teacherDashboardKeys = {
   /** Composed dashboard data (all-in-one) */
   dashboard: (userId: string) =>
     [...teacherDashboardKeys.all, 'composed', userId] as const,
+
+  /** Today's routine data */
+  routine: (schoolId: string) =>
+    [...teacherDashboardKeys.all, 'routine', schoolId] as const,
+
+  /** Class-specific routine */
+  classRoutine: (schoolId: string, classId: string) =>
+    [...teacherDashboardKeys.all, 'routine', schoolId, classId] as const,
 } as const;

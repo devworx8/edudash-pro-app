@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Platform, View, StyleSheet } from 'react-native';
-import { router } from 'expo-router';
+import { router, useRootNavigationState } from 'expo-router';
 import * as Linking from 'expo-linking';
 import { useAuth } from '@/contexts/AuthContext';
 import MarketingLanding from '@/components/marketing/MarketingLanding';
@@ -27,6 +27,7 @@ const defaultTheme = {
  */
 export default function Index() {
   const { session, user, profile, loading, profileLoading } = useAuth();
+  const rootNavigationState = useRootNavigationState();
   // Safe theme access with fallback
   let theme = defaultTheme;
   try {
@@ -37,10 +38,12 @@ export default function Index() {
   }
   const hasNavigatedRef = useRef(false);
   const isNative = Platform.OS !== 'web';
+  const isRootNavigationReady = Boolean(rootNavigationState?.key);
 
   useEffect(() => {
     // Wait for auth to finish loading
     if (loading) return;
+    if (!isRootNavigationReady) return;
     
     // Prevent duplicate navigation
     if (hasNavigatedRef.current) return;
@@ -53,8 +56,6 @@ export default function Index() {
     
     // Native app: Always skip landing page
     if (isNative) {
-      hasNavigatedRef.current = true;
-
       // If we were launched via a deep link (e.g. PayFast return -> /landing?flow=payment-return),
       // respect it and route there before running our "default" native redirects.
       // This avoids losing deep links on cold start due to the Index screen redirecting immediately.
@@ -85,6 +86,7 @@ export default function Index() {
                 logger.info(TAG, 'Password reset deep link detected - routing to native reset flow');
                 // Set recovery flag early so AuthContext does not auto-route away.
                 try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
+                hasNavigatedRef.current = true;
                 router.replace(`/reset-password${search.toString() ? `?${search.toString()}` : ''}` as `/${string}`);
                 return;
               }
@@ -94,10 +96,12 @@ export default function Index() {
                 if (flow === 'recovery') {
                   try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
                 }
+                hasNavigatedRef.current = true;
                 router.replace(`/auth-callback${search.toString() ? `?${search.toString()}` : ''}` as `/${string}`);
                 return;
               }
               
+              hasNavigatedRef.current = true;
               router.replace(target as `/${string}`);
               return;
             }
@@ -109,17 +113,21 @@ export default function Index() {
         // If authenticated with profile, go to dashboard
         if (session && user && profile?.role) {
           logger.info(TAG, 'Native + authenticated, routing to dashboard');
+          hasNavigatedRef.current = true;
           routeAfterLogin(user, profile).catch((err) => {
             console.error('[Index] routeAfterLogin failed:', err);
+            hasNavigatedRef.current = false;
             // AuthContext may already be routing this user; avoid competing redirects here.
           });
         } else if (session && user) {
           // Authenticated but no role - go to profiles gate
           logger.info(TAG, 'Native + authenticated but no role, going to profiles-gate');
+          hasNavigatedRef.current = true;
           router.replace('/profiles-gate');
         } else {
           // Not authenticated - go to next-gen welcome (Sign In | Sign Up)
           logger.info(TAG, 'Native + not authenticated, going to welcome');
+          hasNavigatedRef.current = true;
           router.replace('/(auth)/welcome');
         }
       })();
@@ -128,20 +136,22 @@ export default function Index() {
     
     // Web: Only redirect if authenticated
     if (session && user) {
-      hasNavigatedRef.current = true;
       logger.info(TAG, 'Web + authenticated, routing to dashboard');
       
       if (profile?.role) {
+        hasNavigatedRef.current = true;
         routeAfterLogin(user, profile).catch((err) => {
           console.error('[Index] routeAfterLogin failed:', err);
+          hasNavigatedRef.current = false;
           // AuthContext may already be routing this user; avoid competing redirects here.
         });
       } else {
+        hasNavigatedRef.current = true;
         router.replace('/profiles-gate');
       }
     }
     // Web + not authenticated: Show landing page (default render)
-  }, [session, user, profile, loading, isNative, profileLoading]);
+  }, [session, user, profile, loading, isNative, isRootNavigationReady, profileLoading]);
 
   // Native: Show loading indicator while redirecting (NEVER show landing page)
   if (isNative) {

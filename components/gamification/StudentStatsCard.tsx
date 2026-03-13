@@ -16,6 +16,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { assertSupabase } from '../../lib/supabase';
 import { ProgressStars } from './ProgressStars';
 import { BadgeDisplay, Badge } from './BadgeDisplay';
+import { percentWidth } from '@/lib/progress/clampPercent';
 
 // ====================================================================
 // TYPES
@@ -203,7 +204,7 @@ export function StudentStatsCard({
                 styles.progressFill, 
                 { 
                   backgroundColor: colors.primary,
-                  width: `${progress * 100}%`,
+                  width: percentWidth(progress * 100),
                 }
               ]} 
             />

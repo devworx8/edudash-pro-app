@@ -24,6 +24,7 @@ export interface DashAssistantMessagesProps {
   setIsNearBottom: (v: boolean) => void;
   unreadCount: number;
   setUnreadCount: (n: number) => void;
+  bottomScrollRequestId?: number;
   scrollToBottom: (opts: { animated?: boolean; delay?: number; force?: boolean }) => void;
   renderSuggestedActions: () => React.ReactElement | null;
   onSendMessage?: (text: string) => void;
@@ -58,6 +59,7 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
   isNearBottom,
   setIsNearBottom,
   setUnreadCount,
+  bottomScrollRequestId,
   scrollToBottom,
   renderSuggestedActions,
   onSendMessage,
@@ -77,6 +79,9 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
 }) => {
   const contentHeightRef = React.useRef(0);
   const lastAutoScrollAtRef = React.useRef(0);
+  const forceAlignUntilRef = React.useRef(0);
+  const lastBottomScrollRequestRef = React.useRef(0);
+  const forceAlignTimersRef = React.useRef<Array<ReturnType<typeof setTimeout>>>([]);
   const getTutorPhase = (message: any) => {
     const explicitPhase = message?.metadata?.tutor_phase || message?.metadata?.phase;
     if (explicitPhase) {
@@ -164,6 +169,35 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
     },
   ]) as ViewStyle;
 
+  React.useEffect(() => () => {
+    if (forceAlignTimersRef.current.length > 0) {
+      forceAlignTimersRef.current.forEach((timer) => clearTimeout(timer));
+      forceAlignTimersRef.current = [];
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!bottomScrollRequestId) return;
+    if (bottomScrollRequestId === lastBottomScrollRequestRef.current) return;
+
+    lastBottomScrollRequestRef.current = bottomScrollRequestId;
+    forceAlignUntilRef.current = Date.now() + 1800;
+
+    if (forceAlignTimersRef.current.length > 0) {
+      forceAlignTimersRef.current.forEach((timer) => clearTimeout(timer));
+      forceAlignTimersRef.current = [];
+    }
+
+    scrollToBottom({ animated: false, delay: 0 });
+
+    [60, 220, 480].forEach((timeoutMs) => {
+      const timer = setTimeout(() => {
+        scrollToBottom({ animated: false, delay: 0 });
+      }, timeoutMs);
+      forceAlignTimersRef.current.push(timer);
+    });
+  }, [bottomScrollRequestId, scrollToBottom]);
+
   return (
     <FlashList
       ref={flashListRef}
@@ -198,15 +232,22 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
       onContentSizeChange={(_width: number, height: number) => {
         const previousHeight = contentHeightRef.current;
         contentHeightRef.current = height;
+        const forceAligning = Date.now() < forceAlignUntilRef.current;
 
         // Keep the viewport stable when the user is reading older messages.
-        if (!isNearBottom) return;
+        if (!isNearBottom && !forceAligning) return;
         if (Math.abs(height - previousHeight) < 6) return;
 
         const now = Date.now();
         if (now - lastAutoScrollAtRef.current < 220) return;
         lastAutoScrollAtRef.current = now;
-        scrollToBottom({ animated: !isLoading, delay: 0 });
+        scrollToBottom({ animated: !isLoading && !forceAligning, delay: 0, force: forceAligning });
+      }}
+      onLoad={() => {
+        if (messages.length === 0) return;
+        requestAnimationFrame(() => {
+          scrollToBottom({ animated: false, delay: 0, force: true });
+        });
       }}
       ListHeaderComponent={
         messages.length > 0 ? (

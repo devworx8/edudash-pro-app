@@ -8,9 +8,52 @@ import {
   IMAGE_COMPRESS_STEPS,
 } from '@/lib/dash-ai/imageCompression';
 
+async function encodeImageForWeb(uri: string, fallbackMime: string): Promise<{ base64: string; mediaType: string } | null> {
+  try {
+    const dataUriMatch = uri.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataUriMatch) return { base64: dataUriMatch[2], mediaType: dataUriMatch[1] };
+    const resp = await fetch(uri);
+    const blob = await resp.blob();
+    const mediaType = blob.type || fallbackMime;
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((String(reader.result || '')).split(',')[1] ?? '');
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return { base64, mediaType };
+  } catch {
+    return null;
+  }
+}
+
 export const prepareAttachmentsForAI = async (attachments: DashAttachment[]) => {
-  if (Platform.OS === 'web') return attachments;
   if (!attachments || attachments.length === 0) return attachments;
+
+  // Web: ImageManipulator is not available — encode via fetch + FileReader instead.
+  if (Platform.OS === 'web') {
+    const prepared: DashAttachment[] = [];
+    for (const attachment of attachments) {
+      if (attachment.kind !== 'image' || !attachment.previewUri) {
+        prepared.push(attachment);
+        continue;
+      }
+      const encoded = await encodeImageForWeb(attachment.previewUri, attachment.mimeType || 'image/jpeg');
+      if (encoded) {
+        // Store a data: URI as previewUri so the image survives page refreshes
+        // (blob: URLs are session-ephemeral and 404 after restart).
+        const dataUri = `data:${encoded.mediaType};base64,${encoded.base64}`;
+        prepared.push({
+          ...attachment,
+          previewUri: dataUri,
+          meta: { ...(attachment.meta || {}), image_base64: encoded.base64, image_media_type: encoded.mediaType },
+        });
+      } else {
+        prepared.push(attachment);
+      }
+    }
+    return prepared;
+  }
 
   const prepared: DashAttachment[] = [];
 
