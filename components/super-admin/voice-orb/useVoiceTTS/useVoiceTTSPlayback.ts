@@ -1,6 +1,10 @@
 /**
  * useVoiceTTSPlayback — AudioPlayer lifecycle management sub-hook.
- * Handles create/play/stop/cleanup of expo-audio players and timing.
+ *
+ * Handles create/play/stop/cleanup of expo-audio players with aggressive
+ * polling for fast completion detection. Tuned for minimal inter-chunk
+ * gap so speech sounds fluent when chunks are played back-to-back.
+ *
  * @module components/super-admin/voice-orb/useVoiceTTS/useVoiceTTSPlayback
  */
 
@@ -8,9 +12,11 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Speech from 'expo-speech';
 
-const END_CONFIDENCE_REQUIRED = 3;
-const NEAR_END_STALL_TICKS = 5;
-const MIN_RELIABLE_DURATION_MS = 500;
+// Faster polling detects end-of-playback sooner, reducing inter-chunk gap.
+const POLL_INTERVAL_MS = 60;
+const END_CONFIDENCE_REQUIRED = 2;
+const NEAR_END_STALL_TICKS = 3;
+const MIN_RELIABLE_DURATION_MS = 300;
 
 export interface VoiceTTSPlaybackHandle {
   playerRef: React.MutableRefObject<AudioPlayer | null>;
@@ -58,8 +64,8 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
   }, [clearPlaybackTimers, cleanupPlayer]);
 
   const estimatePlaybackTimeoutMs = useCallback((text: string): number => {
-    const estimated = (text || '').length * 120;
-    return Math.min(120000, Math.max(20000, estimated));
+    const estimated = (text || '').length * 100;
+    return Math.min(90000, Math.max(15000, estimated));
   }, []);
 
   const playAudioUrl = useCallback((audioUrl: string, timeoutMs: number): Promise<void> => {
@@ -90,7 +96,16 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
         if (settled) return;
         settled = true;
         clearPlaybackTimers();
-        cleanupPlayer(playerRef.current);
+        // Release player only on error; on success the caller may start next
+        // chunk immediately and a tiny overlap with cleanup is acceptable.
+        if (err) {
+          cleanupPlayer(playerRef.current);
+        } else {
+          const p = playerRef.current;
+          playerRef.current = null;
+          // Defer cleanup to avoid blocking the next chunk's start
+          setTimeout(() => cleanupPlayer(p), 20);
+        }
         err ? reject(err) : resolve();
       };
 
@@ -157,7 +172,7 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
           positionMs >= peakDurationMs * 0.92 &&
           stallTicks >= NEAR_END_STALL_TICKS;
         if (nearEndStall) finalize();
-      }, 100);
+      }, POLL_INTERVAL_MS);
 
       playbackTimeoutRef.current = setTimeout(() => {
         if (!hasStarted) { finalize(new Error('AUDIO_PLAYBACK_TIMEOUT')); return; }

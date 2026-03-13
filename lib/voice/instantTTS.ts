@@ -26,65 +26,64 @@ interface InstantTTSOptions {
 
 const EDGE_FUNCTION_URL = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/tts-proxy';
 
-// Minimum text length before we start streaming
-const MIN_CHUNK_LENGTH = 20;
-// Ideal chunk size for natural speech
-const IDEAL_CHUNK_SIZE = 80;
-// Maximum chunk size to avoid long delays
-const MAX_CHUNK_SIZE = 150;
+const MIN_CHUNK_LENGTH = 30;
+const IDEAL_CHUNK_SIZE = 250;
+const MAX_CHUNK_SIZE = 400;
 
 /**
- * Split text into natural speech chunks
- * Prioritizes sentence boundaries, then phrase boundaries
+ * Split text into speech-friendly chunks aligned with sentence boundaries.
+ * Larger chunks reduce Azure round-trips; pre-fetch overlap keeps speech fluent.
  */
 export function splitIntoSpeechChunks(text: string): string[] {
   const chunks: string[] = [];
   let remaining = text.trim();
 
   while (remaining.length > 0) {
-    // If remaining text is short enough, use it all
     if (remaining.length <= IDEAL_CHUNK_SIZE) {
       chunks.push(remaining);
       break;
     }
 
-    // Try to find a sentence boundary within ideal range
-    const sentenceEndMatch = remaining.slice(0, MAX_CHUNK_SIZE).match(/[.!?]+\s*/g);
-    if (sentenceEndMatch) {
-      const lastSentenceEnd = remaining.indexOf(
-        sentenceEndMatch[sentenceEndMatch.length - 1],
-        Math.max(0, IDEAL_CHUNK_SIZE - 40)
-      );
-      if (lastSentenceEnd > MIN_CHUNK_LENGTH) {
-        chunks.push(remaining.slice(0, lastSentenceEnd + sentenceEndMatch[sentenceEndMatch.length - 1].length));
-        remaining = remaining.slice(lastSentenceEnd + sentenceEndMatch[sentenceEndMatch.length - 1].length);
+    const window = remaining.slice(0, MAX_CHUNK_SIZE);
+    const sentenceMatches = [...window.matchAll(/[.!?]+\s*/g)];
+    if (sentenceMatches.length > 0) {
+      let bestIdx = -1;
+      for (const m of sentenceMatches) {
+        const endPos = (m.index ?? 0) + m[0].length;
+        if (endPos >= MIN_CHUNK_LENGTH && endPos <= MAX_CHUNK_SIZE) {
+          bestIdx = endPos;
+        }
+      }
+      if (bestIdx > MIN_CHUNK_LENGTH) {
+        chunks.push(remaining.slice(0, bestIdx).trim());
+        remaining = remaining.slice(bestIdx).trim();
         continue;
       }
     }
 
-    // Try phrase boundaries (comma, semicolon, etc.)
-    const phraseEndMatch = remaining.slice(0, MAX_CHUNK_SIZE).match(/[,;:]\s+/g);
-    if (phraseEndMatch) {
-      const lastPhraseEnd = remaining.indexOf(
-        phraseEndMatch[phraseEndMatch.length - 1],
-        Math.max(0, IDEAL_CHUNK_SIZE - 30)
-      );
-      if (lastPhraseEnd > MIN_CHUNK_LENGTH) {
-        chunks.push(remaining.slice(0, lastPhraseEnd + phraseEndMatch[phraseEndMatch.length - 1].length));
-        remaining = remaining.slice(lastPhraseEnd + phraseEndMatch[phraseEndMatch.length - 1].length);
+    const clauseMatches = [...window.matchAll(/[,;:]\s+/g)];
+    if (clauseMatches.length > 0) {
+      let bestIdx = -1;
+      for (const m of clauseMatches) {
+        const endPos = (m.index ?? 0) + m[0].length;
+        if (endPos >= MIN_CHUNK_LENGTH && endPos <= MAX_CHUNK_SIZE) {
+          bestIdx = endPos;
+        }
+      }
+      if (bestIdx > MIN_CHUNK_LENGTH) {
+        chunks.push(remaining.slice(0, bestIdx).trim());
+        remaining = remaining.slice(bestIdx).trim();
         continue;
       }
     }
 
-    // Fall back to word boundary
     const wordBoundary = remaining.slice(0, IDEAL_CHUNK_SIZE).lastIndexOf(' ');
     if (wordBoundary > MIN_CHUNK_LENGTH) {
-      chunks.push(remaining.slice(0, wordBoundary + 1));
-      remaining = remaining.slice(wordBoundary + 1);
+      chunks.push(remaining.slice(0, wordBoundary).trim());
+      remaining = remaining.slice(wordBoundary + 1).trim();
     } else {
-      // Last resort: hard split at max size
-      chunks.push(remaining.slice(0, MAX_CHUNK_SIZE));
-      remaining = remaining.slice(MAX_CHUNK_SIZE);
+      chunks.push(remaining.slice(0, MAX_CHUNK_SIZE).trim());
+      remaining = remaining.slice(MAX_CHUNK_SIZE).trim();
     }
   }
 
