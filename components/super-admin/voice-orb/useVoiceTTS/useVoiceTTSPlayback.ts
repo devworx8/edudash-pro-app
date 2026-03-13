@@ -20,7 +20,6 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
   const playbackIdRef = useRef(0);
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const audioModeConfiguredRef = useRef(false);
 
   const clearPlaybackTimers = useCallback(() => {
     if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
@@ -60,13 +59,14 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
 
   const playAudioUrl = useCallback((audioUrl: string, timeoutMs: number): Promise<void> => {
     return new Promise<void>(async (resolve, reject) => {
-      if (!audioModeConfiguredRef.current) {
-        try {
-          await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: 'duckOthers' });
-          audioModeConfiguredRef.current = true;
-        } catch (modeErr) {
-          console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
-        }
+      try {
+        await setAudioModeAsync({
+          playsInSilentMode: true,
+          shouldPlayInBackground: true,
+          interruptionMode: 'doNotMix',
+        });
+      } catch (modeErr) {
+        console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
       }
 
       let settled = false;
@@ -74,6 +74,10 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
       let stallTicks = 0;
       let endConfidenceTicks = 0;
       let lastPositionMs = 0;
+      let playbackStartedAtMs = 0;
+      let stableDurationMs = 0;
+      let durationStableTicks = 0;
+      let lastRawDurationMs = 0;
       let lastSnapshot = { durationMs: 0, positionMs: 0, playing: false };
       const playbackId = playbackIdRef.current + 1;
       playbackIdRef.current = playbackId;
@@ -111,17 +115,43 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
           finalize(new Error('AUDIO_PLAYER_STATUS_ERROR'));
           return;
         }
+
+        if (durationMs > 0) {
+          if (Math.abs(durationMs - lastRawDurationMs) < 50) {
+            durationStableTicks += 1;
+          } else {
+            durationStableTicks = 0;
+          }
+          lastRawDurationMs = durationMs;
+          if (durationStableTicks >= 3) stableDurationMs = durationMs;
+        }
+
         if (playing) {
-          hasStarted = true; stallTicks = 0; endConfidenceTicks = 0;
+          if (!hasStarted) playbackStartedAtMs = Date.now();
+          hasStarted = true;
+          stallTicks = 0;
+          endConfidenceTicks = 0;
           if (positionMs > lastPositionMs) lastPositionMs = positionMs;
           return;
         }
         if (!hasStarted) return;
+
+        const elapsedSinceStartMs = Date.now() - playbackStartedAtMs;
         const hasProgressed = positionMs > lastPositionMs + 20;
         if (hasProgressed) { lastPositionMs = positionMs; stallTicks = 0; } else { stallTicks += 1; }
-        const reachedEnd = durationMs > 0 && positionMs >= Math.max(durationMs - 180, 0);
-        if (reachedEnd) { if (++endConfidenceTicks >= 1) finalize(); return; }
-        const nearEndStall = durationMs > 0 && positionMs >= durationMs * 0.95 && stallTicks >= 3;
+
+        const useDuration = stableDurationMs > 0 ? stableDurationMs : durationMs;
+        const durationReliable = useDuration > 0 && durationStableTicks >= 3;
+
+        const reachedEnd = durationReliable
+          && positionMs >= Math.max(useDuration - 150, 0)
+          && elapsedSinceStartMs > 500;
+        if (reachedEnd) { if (++endConfidenceTicks >= 3) finalize(); return; }
+
+        const nearEndStall = durationReliable
+          && positionMs >= useDuration * 0.92
+          && stallTicks >= 8
+          && elapsedSinceStartMs > 800;
         if (nearEndStall) finalize();
       }, 100);
 

@@ -1129,10 +1129,13 @@ export default function DashOrb({
     if (!whisperModeEnabled) return;
     if (!shouldRestartListeningRef.current) return;
     if (isProcessing || isSpeaking || isListeningForCommand) return;
+    if (isSpeakingSentenceRef.current) return;
 
     const timer = setTimeout(() => {
       if (!whisperModeEnabledRef.current) return;
-      if (isProcessing || isSpeaking || isListeningForCommandRef.current) return;
+      if (isListeningForCommandRef.current) return;
+      if (isSpeakingSentenceRef.current) return;
+      if (ttsSentenceQueueRef.current.length > 0) return;
       shouldRestartListeningRef.current = false;
       triggerListeningRef.current?.();
     }, 650);
