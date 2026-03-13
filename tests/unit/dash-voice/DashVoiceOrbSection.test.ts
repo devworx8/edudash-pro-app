@@ -10,6 +10,7 @@ jest.mock('react-native', () => {
 
   return {
     Platform: { OS: 'ios', select: (obj: any) => obj.ios || obj.default },
+    Dimensions: { get: () => ({ width: 390, height: 844 }) },
     StyleSheet: {
       create: (styles: any) => styles,
       flatten: (style: any) => style,
