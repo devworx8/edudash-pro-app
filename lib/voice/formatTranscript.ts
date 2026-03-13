@@ -39,9 +39,27 @@ const QUESTION_STARTERS: Record<SupportedLang, string[]> = {
 };
 
 const FILLER_PATTERNS: Array<[RegExp, string]> = [
-  [/\b(um+|uh+|erm+|hmm+)\b/gi, ''],
+  [/\b(um+|uh+|erm+|hmm+|ah+)\b/gi, ''],
   [/\b(you know|like|sort of|kind of|basically|actually)\b/gi, ''],
-  [/\b(i mean)\b/gi, ''],
+  [/\b(i mean|so basically|right so)\b/gi, ''],
+];
+
+/**
+ * Fix common STT grammar artifacts where the recognizer produces
+ * nonsensical pronoun/verb combinations.
+ */
+const GRAMMAR_FIXES: Array<[RegExp, string]> = [
+  [/\bwhat are meant\b/gi, 'what I meant'],
+  [/\bwhat are mean\b/gi, 'what I mean'],
+  [/\bwhat is meant was\b/gi, 'what I meant was'],
+  [/\bwhat are meant was\b/gi, 'what I meant was'],
+  [/\bhow is you\b/gi, 'how are you'],
+  [/\bhow are you is\b/gi, 'how are you'],
+  [/\bdo you can\b/gi, 'can you'],
+  [/\bcan you please to\b/gi, 'can you please'],
+  [/\bi wants\b/gi, 'I want'],
+  [/\bi needs\b/gi, 'I need'],
+  [/\bi doesn't\b/gi, "I don't"],
 ];
 
 import { STT_CORRECTIONS } from '@/lib/voice/sttDictionary';
@@ -75,6 +93,13 @@ const applyWhisperFlowAutoEdits = (
 
   for (const [pattern, replacement] of COMMON_STT_CORRECTIONS) {
     next = next.replace(pattern, replacement);
+  }
+
+  // Grammar fixes for common STT artifacts (run before filler removal)
+  if (lang === 'en') {
+    for (const [pattern, replacement] of GRAMMAR_FIXES) {
+      next = next.replace(pattern, replacement);
+    }
   }
 
   if (!preschoolMode) {
