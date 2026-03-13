@@ -32,6 +32,8 @@ interface TTSHandlerParams {
   handlePrimaryActionRef: React.MutableRefObject<(() => Promise<void>) | null>;
   skipNextAutoRestartRef: React.MutableRefObject<boolean>;
   setMuted: (muted: boolean) => Promise<void>;
+  /** Ref set to Date.now() + grace_ms when TTS ends; onTranscript is gated until this timestamp */
+  postTTSSilentUntilRef: React.MutableRefObject<number>;
 }
 
 export function useVoiceOrbTTSHandlers({
@@ -63,9 +65,13 @@ export function useVoiceOrbTTSHandlers({
   handlePrimaryActionRef,
   skipNextAutoRestartRef,
   setMuted,
+  postTTSSilentUntilRef,
 }: TTSHandlerParams) {
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const AUTO_RESTART_DELAY_MS = 400;
+  // Delay before re-enabling mic after TTS ends — long enough for speaker echo to die down
+  const AUTO_RESTART_DELAY_MS = 1500;
+  // How long (ms) to gate onTranscript after TTS ends to prevent echo self-interruption
+  const POST_TTS_ECHO_GATE_MS = 2000;
 
   const suspendListeningForTTS = useCallback(async () => {
     if (recorderState.isRecording) {
@@ -174,6 +180,8 @@ export function useVoiceOrbTTSHandlers({
   const prevTtsSpeaking = useRef(ttsIsSpeaking);
   useEffect(() => {
     if (prevTtsSpeaking.current && !ttsIsSpeaking && !isSpeaking && autoRestartAfterTTS && !isProcessing && !restartBlocked) {
+      // Set echo gate so any transcript picked up right after TTS ends is discarded
+      postTTSSilentUntilRef.current = Date.now() + POST_TTS_ECHO_GATE_MS;
       if (skipNextAutoRestartRef.current) {
         skipNextAutoRestartRef.current = false;
         prevTtsSpeaking.current = ttsIsSpeaking;
@@ -182,7 +190,7 @@ export function useVoiceOrbTTSHandlers({
       scheduleAutoRestart('tts-stop');
     }
     prevTtsSpeaking.current = ttsIsSpeaking;
-  }, [isSpeaking, ttsIsSpeaking, autoRestartAfterTTS, isProcessing, restartBlocked, scheduleAutoRestart, skipNextAutoRestartRef]);
+  }, [isSpeaking, ttsIsSpeaking, autoRestartAfterTTS, isProcessing, restartBlocked, scheduleAutoRestart, skipNextAutoRestartRef, postTTSSilentUntilRef, POST_TTS_ECHO_GATE_MS]);
 
   // Auto-restart after transcription completes
   const prevIsProcessingRef = useRef(isProcessing);
