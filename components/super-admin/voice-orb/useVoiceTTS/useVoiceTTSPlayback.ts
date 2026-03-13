@@ -8,6 +8,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Speech from 'expo-speech';
 
+const END_CONFIDENCE_REQUIRED = 3;
+const NEAR_END_STALL_TICKS = 5;
+const MIN_RELIABLE_DURATION_MS = 500;
+
 export interface VoiceTTSPlaybackHandle {
   playerRef: React.MutableRefObject<AudioPlayer | null>;
   stopPlayback: () => Promise<void>;
@@ -62,7 +66,7 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
     return new Promise<void>(async (resolve, reject) => {
       if (!audioModeConfiguredRef.current) {
         try {
-          await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: 'duckOthers' });
+          await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
           audioModeConfiguredRef.current = true;
         } catch (modeErr) {
           console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
@@ -74,6 +78,7 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
       let stallTicks = 0;
       let endConfidenceTicks = 0;
       let lastPositionMs = 0;
+      let peakDurationMs = 0;
       let lastSnapshot = { durationMs: 0, positionMs: 0, playing: false };
       const playbackId = playbackIdRef.current + 1;
       playbackIdRef.current = playbackId;
@@ -111,6 +116,9 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
           finalize(new Error('AUDIO_PLAYER_STATUS_ERROR'));
           return;
         }
+
+        if (durationMs > peakDurationMs) peakDurationMs = durationMs;
+
         if (playing) {
           hasStarted = true; stallTicks = 0; endConfidenceTicks = 0;
           if (positionMs > lastPositionMs) lastPositionMs = positionMs;
@@ -118,10 +126,13 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
         }
         if (!hasStarted) return;
         const hasProgressed = positionMs > lastPositionMs + 20;
-        if (hasProgressed) { lastPositionMs = positionMs; stallTicks = 0; } else { stallTicks += 1; }
-        const reachedEnd = durationMs > 0 && positionMs >= Math.max(durationMs - 180, 0);
-        if (reachedEnd) { if (++endConfidenceTicks >= 1) finalize(); return; }
-        const nearEndStall = durationMs > 0 && positionMs >= durationMs * 0.95 && stallTicks >= 3;
+        if (hasProgressed) { lastPositionMs = positionMs; stallTicks = 0; endConfidenceTicks = 0; } else { stallTicks += 1; }
+
+        const stableDuration = peakDurationMs >= MIN_RELIABLE_DURATION_MS;
+        const reachedEnd = stableDuration && positionMs >= Math.max(peakDurationMs - 250, 0);
+        if (reachedEnd) { if (++endConfidenceTicks >= END_CONFIDENCE_REQUIRED) finalize(); return; }
+
+        const nearEndStall = stableDuration && positionMs >= peakDurationMs * 0.92 && stallTicks >= NEAR_END_STALL_TICKS;
         if (nearEndStall) finalize();
       }, 100);
 

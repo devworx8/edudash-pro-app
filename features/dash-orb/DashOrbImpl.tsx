@@ -863,9 +863,12 @@ export default function DashOrb({
       return;
     }
     
-    // If speaking, interrupt and restart listening
-    if (isSpeaking) {
+    // If speaking or TTS pipeline is active, interrupt and restart listening
+    const ttsPipelineActive = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+    if (ttsPipelineActive) {
       console.log('[DashOrb] User interrupted TTS - restarting voice input');
+      ttsSentenceQueueRef.current = [];
+      isSpeakingSentenceRef.current = false;
       await stopSpeaking();
       setTimeout(() => {
         if (!voiceEnabled) return;
@@ -926,10 +929,13 @@ export default function DashOrb({
       return;
     }
 
-    // ✅ BARGE-IN: if Dash is speaking (or streaming), stop immediately and listen
+    // ✅ BARGE-IN: if Dash is speaking (or TTS pipeline active or streaming), stop immediately and listen
     try {
-      if (isSpeaking) {
-        console.log('[DashOrb] Barge-in: stopping TTS');
+      const bargeInNeeded = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+      if (bargeInNeeded) {
+        console.log('[DashOrb] Barge-in: stopping TTS pipeline');
+        ttsSentenceQueueRef.current = [];
+        isSpeakingSentenceRef.current = false;
         await Promise.resolve(stopSpeaking());
       }
       if (isProcessing) {
@@ -1133,6 +1139,7 @@ export default function DashOrb({
     const timer = setTimeout(() => {
       if (!whisperModeEnabledRef.current) return;
       if (isProcessing || isSpeaking || isListeningForCommandRef.current) return;
+      if (isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0) return;
       shouldRestartListeningRef.current = false;
       triggerListeningRef.current?.();
     }, 650);

@@ -131,8 +131,8 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     if (!(isSpeakingRef.current || ttsSpeakingRef.current)) return false;
     if (bargeInTriggeredRef.current) return false;
     const ttsStartedAt = ttsStartedAtRef.current;
-    if (ttsStartedAt != null && Date.now() - ttsStartedAt < bargeInGraceMsRef.current) return false;
-    return spoken.length >= 4;
+    if (ttsStartedAt != null && Date.now() - ttsStartedAt < 2000) return false;
+    return spoken.length >= 10;
   }, [isMuted]);
 
   const triggerBargeIn = useCallback(async (text: string) => {
@@ -478,7 +478,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
       if (!restartBlockedRef.current && !isMuted) {
         handleStartRecordingRef.current?.();
       }
-    }, BARGE_IN_LISTEN_DELAY_MS);
+    }, 900);
     return () => clearTimeout(timer);
   }, [
     BARGE_IN_LISTEN_DELAY_MS,
