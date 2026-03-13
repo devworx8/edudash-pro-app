@@ -26,13 +26,11 @@ export const DEFAULT_DEVICE_RATE = DEVICE_RATE_NORMAL;
 export const DEFAULT_PHONICS_DEVICE_RATE = DEVICE_RATE_PHONICS;
 export const ALLOW_DEVICE_FALLBACK_IN_PHONICS =
   process.env.EXPO_PUBLIC_ALLOW_DEVICE_FALLBACK_IN_PHONICS === 'true';
-export const TTS_FAST_START_FIRST_CHUNK_MAX_CHARS = 200;
-export const TTS_FAST_START_FIRST_CHUNK_MAX_SENTENCES = 1;
-// Raised from 5000 → 9000 to accommodate Azure TTS responses that take 6-8s.
-// Prevents every chunk from timing out and retrying, which was causing 100s+ pauses.
-export const TTS_PROXY_TIMEOUT_DEFAULT_MS = 9000;
+export const TTS_FAST_START_FIRST_CHUNK_MAX_CHARS = 250;
+export const TTS_FAST_START_FIRST_CHUNK_MAX_SENTENCES = 2;
+export const TTS_PROXY_TIMEOUT_DEFAULT_MS = 12000;
 export const TTS_PREFETCH_ENABLED = true;
-export const TTS_PARALLEL_PREFETCH_THRESHOLD_MS = 800;
+export const TTS_PARALLEL_PREFETCH_THRESHOLD_MS = 0;
 
 export const VOICE_ID_PATTERN = /^[a-z]{2}-[a-z]{2}-[a-z0-9-]+neural$/i;
 
@@ -281,10 +279,12 @@ export const buildFastStartChunks = (text: string, maxLength: number): string[] 
 
   const sentences = firstChunk.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
   let fastStartChunk = '';
-  for (let i = 0; i < sentences.length && i < TTS_FAST_START_FIRST_CHUNK_MAX_SENTENCES; i += 1) {
+  let sentencesUsed = 0;
+  for (let i = 0; i < sentences.length && sentencesUsed < TTS_FAST_START_FIRST_CHUNK_MAX_SENTENCES; i += 1) {
     const candidate = fastStartChunk ? `${fastStartChunk} ${sentences[i]}` : sentences[i];
-    if (candidate.length > TTS_FAST_START_FIRST_CHUNK_MAX_CHARS) break;
+    if (candidate.length > TTS_FAST_START_FIRST_CHUNK_MAX_CHARS && fastStartChunk) break;
     fastStartChunk = candidate;
+    sentencesUsed += 1;
   }
   if (!fastStartChunk) {
     const clipped = firstChunk.slice(0, TTS_FAST_START_FIRST_CHUNK_MAX_CHARS);

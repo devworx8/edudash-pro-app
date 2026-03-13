@@ -820,32 +820,43 @@ export class DashVoiceService {
         const pitch = Math.round(((voiceSettings.pitch ?? 1.0) - 1.0) * 100);
 
 
-        // Try Edge Function (Azure)
-        try {
-          const resp = await voiceService.synthesize({
-            text: normalizedText,
-            language: shortLang as any,
-            voice_id,
-            speaking_rate,
-            pitch,
-            phonics_mode: phonicsMode,
-          });
+        // Try Edge Function (Azure) with retry for transient errors
+        const MAX_TTS_RETRIES = 2;
+        const TTS_RETRY_BASE_MS = 400;
+        let lastTTSError: unknown = null;
 
-          if (!resp?.audio_url) {
-            throw new Error((resp as any)?.error || 'TTS returned no audio');
+        for (let attempt = 0; attempt <= MAX_TTS_RETRIES; attempt += 1) {
+          try {
+            const resp = await voiceService.synthesize({
+              text: normalizedText,
+              language: shortLang as any,
+              voice_id,
+              speaking_rate,
+              pitch,
+              phonics_mode: phonicsMode,
+            });
+
+            if (!resp?.audio_url) {
+              throw new Error((resp as any)?.error || 'TTS returned no audio');
+            }
+
+            const { audioManager } = await import('@/lib/voice/audio');
+            callbacks?.onStart?.();
+            await audioManager.play(resp.audio_url);
+            callbacks?.onDone?.();
+            return;
+          } catch (edgeError: any) {
+            lastTTSError = edgeError;
+            const errMsg = String(edgeError instanceof Error ? edgeError.message : edgeError || '').toLowerCase();
+            const isRetryable = errMsg.includes('429') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('503') || errMsg.includes('504');
+            if (!isRetryable || attempt === MAX_TTS_RETRIES) break;
+            await new Promise(r => setTimeout(r, TTS_RETRY_BASE_MS * Math.pow(1.5, attempt)));
           }
-
-          // Play via audio manager
-          const { audioManager } = await import('@/lib/voice/audio');
-          callbacks?.onStart?.();
-          await audioManager.play(resp.audio_url);
-          callbacks?.onDone?.();
-          return;
-        } catch (edgeError: any) {
-          console.warn('[DashVoice] Azure TTS failed or unavailable');
-          callbacks?.onError?.(edgeError instanceof Error ? edgeError : new Error('TTS unavailable right now.'));
-          return;
         }
+
+        console.warn('[DashVoice] Azure TTS failed after retries');
+        callbacks?.onError?.(lastTTSError instanceof Error ? lastTTSError : new Error('TTS unavailable right now.'));
+        return;
       } catch (mapErr) {
         console.warn('[DashVoice] Language normalization failed');
         callbacks?.onError?.(mapErr instanceof Error ? mapErr : new Error('TTS unavailable right now.'));
