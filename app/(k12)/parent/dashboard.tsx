@@ -26,6 +26,7 @@ import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { trackK12ParentQuickwinsRendered } from '@/lib/ai/trackingEvents';
 import { hasCapability, getRequiredTier, type Tier } from '@/lib/ai/capabilities';
 import { getCapabilityTier, normalizeTierName } from '@/lib/tiers';
+import { resolveEffectiveTier } from '@/lib/tiers/resolveEffectiveTier';
 import { useNotificationBadgeCount } from '@/hooks/useNotificationCount';
 import { nextGenK12Parent } from '@/contexts/theme/nextGenK12Parent';
 
@@ -58,6 +59,14 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
   const { showAlert, alertProps } = useAlertModal();
   const params = useLocalSearchParams<{ schoolType?: string; mode?: string }>();
   const notificationCount = useNotificationBadgeCount();
+  const effectiveTier = useMemo(
+    () => resolveEffectiveTier({
+      role: String(profile?.role || 'parent'),
+      profileTier: String((profile as any)?.subscription_tier || '').trim() || null,
+      candidates: [tier],
+    }).rawTier,
+    [profile, tier]
+  );
 
   const [refreshing, setRefreshing] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -94,12 +103,12 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
 
   const tierBadgeLabel = useMemo(() => {
     const normalizedTier = normalizeTierName(
-      String(tier || (p as Record<string, unknown> | undefined)?.subscription_tier || 'free'),
+      String(effectiveTier || 'free'),
     );
     return `Tier: ${normalizedTier.charAt(0).toUpperCase() + normalizedTier.slice(1)}`;
-  }, [profile, tier]);
+  }, [effectiveTier]);
 
-  const tierForCaps: Tier = getCapabilityTier(normalizeTierName(tier || 'free'));
+  const tierForCaps: Tier = getCapabilityTier(normalizeTierName(effectiveTier || 'free'));
   const canShowExamPrep = hasExamEligibleChild;
   const canUseExamPrep = hasCapability(tierForCaps, 'exam.practice') && canShowExamPrep;
   const requiredExamTier = getRequiredTier('exam.practice');

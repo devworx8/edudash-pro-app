@@ -16,6 +16,7 @@ interface ComposerOverlaysProps {
   composerText: string;
   onAcceptAssist: (value: string) => void;
   onCloseAssist: () => void;
+  recipientRole?: string;
   EmojiPicker: React.FC<any> | null;
   showEmojiPicker: boolean;
   onEmojiSelect: (emoji: string) => void;
@@ -36,6 +37,7 @@ export function ComposerOverlays({
   composerText,
   onAcceptAssist,
   onCloseAssist,
+  recipientRole,
   EmojiPicker,
   showEmojiPicker,
   onEmojiSelect,
@@ -66,6 +68,7 @@ export function ComposerOverlays({
         composerText={composerText}
         onAccept={onAcceptAssist}
         onClose={onCloseAssist}
+        recipientRole={recipientRole}
       />
 
       {EmojiPicker && (

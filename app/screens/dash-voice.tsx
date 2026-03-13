@@ -33,7 +33,7 @@ import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVo
 import { resolveDashPolicy } from '@/lib/dash-ai/DashPolicyResolver';
 import { resolveAIProxyScopeFromRole } from '@/lib/ai/aiProxyScope';
 import { shouldGreetToday, buildDynamicGreeting } from '@/lib/ai/greetingManager';
-import { getCapabilityTier, normalizeTierName } from '@/lib/tiers';
+import { resolveEffectiveTier } from '@/lib/tiers/resolveEffectiveTier';
 import { useRealtimeTier } from '@/hooks/useRealtimeTier';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import HomeworkScanner from '@/components/ai/HomeworkScanner';
@@ -151,10 +151,15 @@ export default function DashVoiceScreen() {
     () => String((profile as any)?.subscription_tier || (profile as any)?.tier || (profile as any)?.current_tier || 'free').toLowerCase(),
     [profile]
   );
-  const capabilityTierFromProfile = useMemo(() => getCapabilityTier(normalizeTierName(activeTier || 'free')), [activeTier]);
-  const { capabilityTier: capabilityTierFromSub } = useSubscription();
-  // Prefer SubscriptionContext (robust resolution via RevenueCat/DB), fall back to profile-derived
-  const capabilityTier = capabilityTierFromSub || capabilityTierFromProfile;
+  const { tier: subscriptionTier, capabilityTier: subscriptionCapabilityTier } = useSubscription();
+  const capabilityTier = useMemo(
+    () => resolveEffectiveTier({
+      role,
+      profileTier: activeTier,
+      candidates: [subscriptionTier, subscriptionCapabilityTier],
+    }).capabilityTier,
+    [activeTier, role, subscriptionCapabilityTier, subscriptionTier]
+  );
   const { tierStatus } = useRealtimeTier();
 
   const refreshAutoScanBudget = useCallback(async () => {

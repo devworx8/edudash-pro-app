@@ -4,14 +4,14 @@
  * Tier-based orb visuals:
  * - free: DashOrb (shared glass-ring orb across web/native)
  * - starter: CosmicOrb (purple/teal concentric rings, purple core)
- * - premium/enterprise: NebulaSphereOrb (glowing nebula sphere, orbital rings)
+ * - premium/enterprise: PremiumCosmicOrb (premium cosmic orb with orbiting satellites)
  */
 
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
-import { NebulaSphereOrb } from '@/components/dash-orb/NebulaSphereOrb';
+import { PremiumCosmicOrb } from '@/components/dash-orb/PremiumCosmicOrb';
 import { DashOrb } from '@/components/dash-orb/DashOrb';
 import { s } from '@/app/screens/dash-voice.styles';
 import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
@@ -138,7 +138,7 @@ export function DashVoiceOrbSection({
   const showFreeOrb = orbTier === 'free';
   // starter tier — CosmicOrb visual (purple/teal rings)
   const showStarterOrb = orbTier === 'starter';
-  // premium/enterprise — NebulaSphereOrb visual (glowing nebula)
+  // premium/enterprise — PremiumCosmicOrb visual (premium cosmic orb)
   const showPremiumOrb = orbTier === 'premium' || orbTier === 'enterprise';
 
   // Map processing/speaking state to DashOrb state prop
@@ -168,7 +168,7 @@ export function DashVoiceOrbSection({
           <>
             {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
             <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
-              <NebulaSphereOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
+              <PremiumCosmicOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
             </TouchableOpacity>
           </>
         ) : (

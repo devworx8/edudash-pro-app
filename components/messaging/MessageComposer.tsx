@@ -61,6 +61,10 @@ interface MessageComposerProps {
   onSchedule?: (text: string) => void;
   /** Called when user taps the template button to open template picker */
   onOpenTemplates?: () => void;
+  /** Enable Dash AI assist controls for this composer */
+  enableDashAssist?: boolean;
+  /** Optional hint used by Dash AI assist to tailor tone */
+  dashAssistRecipientRole?: string;
 }
 
 export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
@@ -80,6 +84,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
   onSendError,
   onSchedule,
   onOpenTemplates,
+  enableDashAssist = true,
+  dashAssistRecipientRole,
 }) => {
   const [text, setText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -111,6 +117,12 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
       setText(editingMessage.content || '');
     }
   }, [editingMessage]);
+
+  useEffect(() => {
+    if (!enableDashAssist) {
+      setShowAssistBar(false);
+    }
+  }, [enableDashAssist]);
 
   const isEditing = !!editingMessage;
 
@@ -244,10 +256,11 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
         sendingImage={sendingImage}
         onConfirmImage={handleConfirmImage}
         onCancelPendingImage={() => setPendingImage(null)}
-        showAssistBar={showAssistBar}
+        showAssistBar={enableDashAssist && showAssistBar}
         composerText={text}
         onAcceptAssist={setText}
         onCloseAssist={() => setShowAssistBar(false)}
+        recipientRole={dashAssistRecipientRole}
         EmojiPicker={EmojiPicker}
         showEmojiPicker={showEmojiPicker}
         onEmojiSelect={handleEmojiSelect}
@@ -277,7 +290,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
             disabled={disabled}
             placeholder={placeholder}
             showEmojiPicker={showEmojiPicker}
-            showAssistBar={showAssistBar}
+            showAssistBar={enableDashAssist && showAssistBar}
+            enableDashAssist={enableDashAssist}
             failedMessageCount={failedMessageCount}
             onCancelReply={onCancelReply}
             onToggleEmojiPicker={() => setShowEmojiPicker((value) => !value)}

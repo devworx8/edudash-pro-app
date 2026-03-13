@@ -7,6 +7,7 @@
  */
 import { logger } from '@/lib/logger';
 import { assertSupabase } from '@/lib/supabase';
+import { isTuitionFee } from '@/lib/utils/feeUtils';
 import { FinancialDataService } from '@/services/FinancialDataService';
 import type { RegistrationFeeRow } from './types';
 
@@ -233,17 +234,24 @@ export async function fetchStatsAndCounts(
         : Promise.resolve({ data: [] as any[] }),
       safe(supabase
         .from('school_fee_structures')
-        .select('amount_cents, amount')
+        .select('amount_cents, fee_category, name, description')
         .eq('preschool_id', preschoolId)
-        .ilike('category_code', '%tuition%')
         .eq('is_active', true)
-        .limit(1)),
+        .limit(50)),
     ]);
 
     const monthFees = (v(feesResult).data || []) as any[];
-    const feeStruct = (v(structResult).data || []) as any[];
-    const defaultTuition = feeStruct[0]
-      ? Number(feeStruct[0].amount_cents ? feeStruct[0].amount_cents / 100 : feeStruct[0].amount || 0)
+    const feeStructures = (v(structResult).data || []) as Array<{
+      amount_cents?: number | null;
+      fee_category?: string | null;
+      name?: string | null;
+      description?: string | null;
+    }>;
+    const tuitionStructure = feeStructures.find((fee) =>
+      isTuitionFee(fee.fee_category, fee.name, fee.description),
+    );
+    const defaultTuition = tuitionStructure
+      ? Number(tuitionStructure.amount_cents ? tuitionStructure.amount_cents / 100 : 0)
       : 0;
 
     const studentsWithFees = new Set(monthFees.map((f: any) => f.student_id));

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
   Modal,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
@@ -19,6 +20,9 @@ type ParticipantSummary = {
   name: string;
   role?: string | null;
   online?: boolean;
+  isAdmin?: boolean;
+  canSendMessages?: boolean;
+  isSelf?: boolean;
 };
 
 type QuickAction = {
@@ -27,6 +31,26 @@ type QuickAction = {
   icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
   disabled?: boolean;
+};
+
+type GroupAdminCandidate = {
+  id: string;
+  name: string;
+  role?: string | null;
+  email?: string | null;
+};
+
+type GroupAdminControls = {
+  canManageMembers?: boolean;
+  canToggleReplies?: boolean;
+  allowReplies?: boolean;
+  isUpdatingReplies?: boolean;
+  onToggleReplies?: (nextValue: boolean) => void;
+  addCandidates?: GroupAdminCandidate[];
+  isAddingMembers?: boolean;
+  onAddMembers?: (userIds: string[]) => void;
+  onRemoveParticipant?: (userId: string) => void;
+  removingParticipantId?: string | null;
 };
 
 interface ChatParticipantSheetProps {
@@ -45,6 +69,8 @@ interface ChatParticipantSheetProps {
   onlineCount?: number;
   participants?: ParticipantSummary[];
   quickActions?: QuickAction[];
+  groupDescription?: string | null;
+  adminControls?: GroupAdminControls | null;
 }
 
 export function ChatParticipantSheet({
@@ -63,8 +89,30 @@ export function ChatParticipantSheet({
   onlineCount = 0,
   participants = [],
   quickActions = [],
+  groupDescription,
+  adminControls = null,
 }: ChatParticipantSheetProps) {
   const insets = useSafeAreaInsets();
+  const [candidateQuery, setCandidateQuery] = useState('');
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!visible) {
+      setCandidateQuery('');
+      setSelectedCandidateIds([]);
+    }
+  }, [visible]);
+
+  const filteredCandidates = useMemo(() => {
+    const candidates = adminControls?.addCandidates || [];
+    if (!candidateQuery.trim()) return candidates;
+    const query = candidateQuery.toLowerCase();
+    return candidates.filter((candidate) =>
+      candidate.name.toLowerCase().includes(query) ||
+      (candidate.email || '').toLowerCase().includes(query) ||
+      (candidate.role || '').toLowerCase().includes(query),
+    );
+  }, [adminControls?.addCandidates, candidateQuery]);
 
   const styles = useMemo(() => StyleSheet.create({
     overlay: {
@@ -228,6 +276,124 @@ export function ChatParticipantSheet({
       fontWeight: '500',
       flex: 1,
     },
+    groupDescriptionText: {
+      color: '#dbeafe',
+      fontSize: 14,
+      lineHeight: 20,
+      paddingHorizontal: 14,
+      paddingBottom: 14,
+      paddingTop: 4,
+    },
+    controlRow: {
+      flexDirection: 'row',
+      gap: 12,
+      alignItems: 'center',
+      paddingHorizontal: 14,
+      paddingTop: 8,
+      paddingBottom: 12,
+    },
+    controlTextWrap: {
+      flex: 1,
+    },
+    controlTitle: {
+      color: '#f8fafc',
+      fontSize: 14,
+      fontWeight: '700',
+    },
+    controlBody: {
+      color: '#b8c8f4',
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 4,
+    },
+    controlToggle: {
+      minWidth: 68,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: 'rgba(51, 65, 85, 0.78)',
+      borderWidth: 1,
+      borderColor: 'rgba(125, 211, 252, 0.14)',
+    },
+    controlToggleActive: {
+      backgroundColor: 'rgba(8, 197, 255, 0.22)',
+      borderColor: 'rgba(34, 211, 238, 0.45)',
+    },
+    controlToggleDisabled: {
+      opacity: 0.6,
+    },
+    controlToggleText: {
+      color: '#e2e8f0',
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    addMembersBlock: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: 'rgba(125, 211, 252, 0.12)',
+      paddingHorizontal: 14,
+      paddingTop: 12,
+      paddingBottom: 14,
+    },
+    searchInput: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(125, 211, 252, 0.18)',
+      backgroundColor: 'rgba(15, 23, 42, 0.88)',
+      color: '#e2e8f0',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      marginTop: 10,
+      marginBottom: 10,
+    },
+    candidateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(125, 211, 252, 0.12)',
+      backgroundColor: 'rgba(15, 23, 42, 0.7)',
+      marginBottom: 8,
+    },
+    candidateRowSelected: {
+      borderColor: 'rgba(34, 211, 238, 0.45)',
+      backgroundColor: 'rgba(8, 197, 255, 0.1)',
+    },
+    candidateTextWrap: {
+      flex: 1,
+    },
+    candidateName: {
+      color: '#e2e8f0',
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    candidateMeta: {
+      color: '#b8c8f4',
+      fontSize: 12,
+      marginTop: 2,
+    },
+    addButton: {
+      alignSelf: 'flex-start',
+      marginTop: 4,
+      borderRadius: 999,
+      backgroundColor: 'rgba(34, 211, 238, 0.18)',
+      borderWidth: 1,
+      borderColor: 'rgba(34, 211, 238, 0.45)',
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    addButtonDisabled: {
+      opacity: 0.45,
+    },
+    addButtonText: {
+      color: '#ccfbf1',
+      fontSize: 13,
+      fontWeight: '700',
+    },
     participantRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -250,13 +416,64 @@ export function ChatParticipantSheet({
       color: '#e2e8f0',
       fontSize: 14,
       fontWeight: '600',
+    },
+    participantTextWrap: {
       flex: 1,
+    },
+    participantBadges: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 6,
+      marginTop: 4,
     },
     participantRole: {
       color: '#b8c8f4',
       fontSize: 12,
       fontWeight: '600',
       textTransform: 'capitalize',
+    },
+    participantBadge: {
+      color: '#ccfbf1',
+      fontSize: 11,
+      fontWeight: '700',
+      backgroundColor: 'rgba(34, 211, 238, 0.16)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+    },
+    participantBadgeMuted: {
+      color: '#fef3c7',
+      fontSize: 11,
+      fontWeight: '700',
+      backgroundColor: 'rgba(245, 158, 11, 0.16)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+    },
+    participantBadgeSelf: {
+      color: '#dbeafe',
+      fontSize: 11,
+      fontWeight: '700',
+      backgroundColor: 'rgba(99, 102, 241, 0.18)',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 999,
+    },
+    removeButton: {
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: 'rgba(248, 113, 113, 0.35)',
+      backgroundColor: 'rgba(127, 29, 29, 0.24)',
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+    },
+    removeButtonDisabled: {
+      opacity: 0.45,
+    },
+    removeButtonText: {
+      color: '#fecaca',
+      fontSize: 12,
+      fontWeight: '700',
     },
     loadingText: {
       color: '#b8c8f4',
@@ -352,20 +569,156 @@ export function ChatParticipantSheet({
                   )}
 
                   {isGroup && (
-                    <View style={styles.section}>
-                      <Text style={styles.sectionTitle}>Members</Text>
-                      {participants.length === 0 ? (
-                        <Text style={styles.loadingText}>No participant details available yet.</Text>
-                      ) : (
-                        participants.map((participant) => (
-                          <View key={participant.id} style={styles.participantRow}>
-                            <View style={[styles.participantDot, participant.online && styles.participantDotOnline]} />
-                            <Text style={styles.participantName}>{participant.name}</Text>
-                            {participant.role ? <Text style={styles.participantRole}>{participant.role}</Text> : null}
-                          </View>
-                        ))
-                      )}
-                    </View>
+                    <>
+                      {groupDescription ? (
+                        <View style={styles.section}>
+                          <Text style={styles.sectionTitle}>About this group</Text>
+                          <Text style={styles.groupDescriptionText}>{groupDescription}</Text>
+                        </View>
+                      ) : null}
+
+                      {(adminControls?.canToggleReplies || adminControls?.canManageMembers) ? (
+                        <View style={styles.section}>
+                          <Text style={styles.sectionTitle}>Principal controls</Text>
+                          {adminControls?.canToggleReplies ? (
+                            <View style={styles.controlRow}>
+                              <View style={styles.controlTextWrap}>
+                                <Text style={styles.controlTitle}>Parent replies</Text>
+                                <Text style={styles.controlBody}>
+                                  {adminControls.allowReplies
+                                    ? 'Parents can send messages in this group.'
+                                    : 'Only admins can post. Parents are currently read-only.'}
+                                </Text>
+                              </View>
+                              <TouchableOpacity
+                                style={[
+                                  styles.controlToggle,
+                                  adminControls.allowReplies && styles.controlToggleActive,
+                                  adminControls.isUpdatingReplies && styles.controlToggleDisabled,
+                                ]}
+                                onPress={() => adminControls.onToggleReplies?.(!adminControls.allowReplies)}
+                                disabled={adminControls.isUpdatingReplies}
+                                activeOpacity={0.85}
+                              >
+                                <Text style={styles.controlToggleText}>
+                                  {adminControls.isUpdatingReplies
+                                    ? 'Saving...'
+                                    : adminControls.allowReplies
+                                      ? 'On'
+                                      : 'Off'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : null}
+
+                          {adminControls?.canManageMembers ? (
+                            <View style={styles.addMembersBlock}>
+                              <Text style={styles.controlTitle}>Add parents</Text>
+                              <Text style={styles.controlBody}>
+                                Search parents in this school and add them to the group.
+                              </Text>
+                              <TextInput
+                                style={styles.searchInput}
+                                value={candidateQuery}
+                                onChangeText={setCandidateQuery}
+                                placeholder="Search by name or email..."
+                                placeholderTextColor="rgba(184, 200, 244, 0.5)"
+                              />
+                              {filteredCandidates.length === 0 ? (
+                                <Text style={styles.loadingText}>No additional parents available.</Text>
+                              ) : (
+                                filteredCandidates.slice(0, 8).map((candidate) => {
+                                  const isSelected = selectedCandidateIds.includes(candidate.id);
+                                  return (
+                                    <TouchableOpacity
+                                      key={candidate.id}
+                                      style={[
+                                        styles.candidateRow,
+                                        isSelected && styles.candidateRowSelected,
+                                      ]}
+                                      onPress={() => {
+                                        setSelectedCandidateIds((current) =>
+                                          current.includes(candidate.id)
+                                            ? current.filter((id) => id !== candidate.id)
+                                            : [...current, candidate.id],
+                                        );
+                                      }}
+                                      activeOpacity={0.8}
+                                    >
+                                      <View style={styles.candidateTextWrap}>
+                                        <Text style={styles.candidateName}>{candidate.name}</Text>
+                                        <Text style={styles.candidateMeta}>
+                                          {[candidate.role, candidate.email].filter(Boolean).join(' • ')}
+                                        </Text>
+                                      </View>
+                                      <Ionicons
+                                        name={isSelected ? 'checkbox' : 'square-outline'}
+                                        size={20}
+                                        color={isSelected ? '#22d3ee' : '#8fb4ff'}
+                                      />
+                                    </TouchableOpacity>
+                                  );
+                                })
+                              )}
+                              <TouchableOpacity
+                                style={[
+                                  styles.addButton,
+                                  (selectedCandidateIds.length === 0 || adminControls.isAddingMembers) && styles.addButtonDisabled,
+                                ]}
+                                onPress={() => {
+                                  adminControls.onAddMembers?.(selectedCandidateIds);
+                                }}
+                                disabled={selectedCandidateIds.length === 0 || adminControls.isAddingMembers}
+                                activeOpacity={0.85}
+                              >
+                                <Text style={styles.addButtonText}>
+                                  {adminControls.isAddingMembers ? 'Adding...' : `Add ${selectedCandidateIds.length || ''}`.trim()}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+
+                      <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Members</Text>
+                        {participants.length === 0 ? (
+                          <Text style={styles.loadingText}>No participant details available yet.</Text>
+                        ) : (
+                          participants.map((participant) => (
+                            <View key={participant.id} style={styles.participantRow}>
+                              <View style={[styles.participantDot, participant.online && styles.participantDotOnline]} />
+                              <View style={styles.participantTextWrap}>
+                                <Text style={styles.participantName}>{participant.name}</Text>
+                                <View style={styles.participantBadges}>
+                                  {participant.role ? <Text style={styles.participantRole}>{participant.role}</Text> : null}
+                                  {participant.isAdmin ? <Text style={styles.participantBadge}>Admin</Text> : null}
+                                  {!participant.isAdmin && participant.canSendMessages === false ? (
+                                    <Text style={styles.participantBadgeMuted}>Read only</Text>
+                                  ) : null}
+                                  {participant.isSelf ? <Text style={styles.participantBadgeSelf}>You</Text> : null}
+                                </View>
+                              </View>
+                              {adminControls?.canManageMembers && !participant.isSelf ? (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.removeButton,
+                                    adminControls.removingParticipantId === participant.id && styles.removeButtonDisabled,
+                                  ]}
+                                  onPress={() => adminControls.onRemoveParticipant?.(participant.id)}
+                                  disabled={adminControls.removingParticipantId === participant.id}
+                                  activeOpacity={0.85}
+                                >
+                                  <Text style={styles.removeButtonText}>
+                                    {adminControls.removingParticipantId === participant.id ? '...' : 'Remove'}
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                            </View>
+                          ))
+                        )}
+                      </View>
+                    </>
                   )}
                 </View>
               </ScrollView>
