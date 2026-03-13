@@ -68,27 +68,25 @@ export function useVoiceOrbTTSHandlers({
   const AUTO_RESTART_DELAY_MS = 400;
 
   const suspendListeningForTTS = useCallback(async () => {
-    if (isMuted) {
-      if (recorderState.isRecording) {
-        try {
-          await recorderActions.stopRecording();
-        } catch (stopError) {
-          console.warn('[VoiceOrb] Failed to stop recorder before TTS:', stopError);
-        }
+    if (recorderState.isRecording) {
+      try {
+        await recorderActions.stopRecording();
+      } catch (stopError) {
+        console.warn('[VoiceOrb] Failed to stop recorder before TTS:', stopError);
       }
-      if (usingLiveSTTRef.current) {
-        try {
-          await cancelLiveListening();
-        } catch (stopError) {
-          console.warn('[VoiceOrb] Failed to cancel live STT before TTS:', stopError);
-        }
-        clearLiveTimers();
-        setUsingLiveSTT(false);
-      }
-      onStopListening();
     }
+    if (usingLiveSTTRef.current) {
+      try {
+        await cancelLiveListening();
+      } catch (stopError) {
+        console.warn('[VoiceOrb] Failed to cancel live STT before TTS:', stopError);
+      }
+      clearLiveTimers();
+      setUsingLiveSTT(false);
+    }
+    onStopListening();
     setStatusText('Speaking...');
-  }, [cancelLiveListening, clearLiveTimers, isMuted, onStopListening, recorderActions, recorderState.isRecording, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
+  }, [cancelLiveListening, clearLiveTimers, onStopListening, recorderActions, recorderState.isRecording, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
 
   useImperativeHandle(ref, () => ({
     speakText: async (text: string, language?: SupportedLanguage, options?: TTSOptions) => {
