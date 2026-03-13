@@ -122,6 +122,9 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     bargeInTriggeredRef.current = false;
   }, [isSpeaking, ttsIsSpeaking]);
 
+  const bargeInGraceMsRef = useRef(
+    Number.parseInt(String(process.env.EXPO_PUBLIC_VOICE_BARGE_IN_GRACE_MS || '2500'), 10) || 2500
+  );
   const shouldTriggerBargeIn = useCallback((text: string) => {
     const spoken = String(text || '').trim();
     if (isMuted || !spoken) return false;
@@ -463,6 +466,10 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     }
   }, [autoStartListening, isSpeaking, ttsIsSpeaking, restartBlocked]);
 
+  const BARGE_IN_LISTEN_DELAY_MS = Number.parseInt(
+    String(process.env.EXPO_PUBLIC_VOICE_BARGE_IN_LISTEN_DELAY_MS || '2000'),
+    10
+  ) || 2000;
   useEffect(() => {
     if (isMuted || restartBlocked || isProcessing || isParentProcessing) return;
     if (!(isSpeaking || ttsIsSpeaking)) return;
@@ -474,6 +481,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     }, 900);
     return () => clearTimeout(timer);
   }, [
+    BARGE_IN_LISTEN_DELAY_MS,
     isListening,
     isMuted,
     isParentProcessing,
