@@ -1,7 +1,36 @@
-// Load environment variables from .env files (base, then local overrides)
-require('dotenv').config({ path: '.env' });
-require('dotenv').config({ path: '.env.local', override: true });
-require('dotenv').config({ path: '.env.eas', override: true });
+const dotenv = require('dotenv');
+
+function inferManagedEnvironment() {
+  const candidates = [
+    process.env.EAS_ENVIRONMENT,
+    process.env.EXPO_PUBLIC_ENVIRONMENT,
+    process.env.EAS_BUILD_PROFILE,
+    process.env.APP_VARIANT,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).trim().toLowerCase());
+
+  for (const candidate of candidates) {
+    if (candidate === 'preview') {
+      return 'preview';
+    }
+    if (['production', 'production-apk', 'playstore'].includes(candidate)) {
+      return 'production';
+    }
+  }
+
+  return '';
+}
+
+const managedEnvironment = inferManagedEnvironment();
+
+if (managedEnvironment) {
+  console.log(`[app.config.js] Preferring managed ${managedEnvironment} env; skipping .env and .env.local`);
+} else {
+  dotenv.config({ path: '.env' });
+  dotenv.config({ path: '.env.local', override: true });
+}
+dotenv.config({ path: '.env.eas', override: true });
 
 /**
  * app.config.js - Minimal Dynamic Configuration
