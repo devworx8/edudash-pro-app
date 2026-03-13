@@ -210,19 +210,20 @@ export function useOnDeviceVoice(options: OnDeviceVoiceOptions = {}) {
       restartTimerRef.current = null;
     }
 
-    if (!isListeningRef.current) {
-      console.warn('[useOnDeviceVoice] Not listening');
-      return;
-    }
-
+    // Always attempt to stop the session even if isListeningRef is false.
+    // The ref can desync from the actual session state (e.g. after an error
+    // callback sets it to false while the recognizer is still running).
     try {
-      console.log('[useOnDeviceVoice] Stopping speech recognition');
-      await sessionRef.current?.stop?.();
-      console.log('[useOnDeviceVoice] ✅ Speech recognition stopped');
-      isListeningRef.current = false;
-      setState(prev => ({ ...prev, isListening: false }));
+      if (sessionRef.current) {
+        console.log('[useOnDeviceVoice] Stopping speech recognition');
+        await sessionRef.current.stop();
+        console.log('[useOnDeviceVoice] ✅ Speech recognition stopped');
+      }
     } catch (error) {
       console.error('[useOnDeviceVoice] Failed to stop:', error);
+    } finally {
+      isListeningRef.current = false;
+      setState(prev => ({ ...prev, isListening: false }));
     }
   }, []);
 
@@ -233,23 +234,26 @@ export function useOnDeviceVoice(options: OnDeviceVoiceOptions = {}) {
       restartTimerRef.current = null;
     }
 
-    if (!isListeningRef.current) {
-      return;
-    }
-
+    // Always attempt to stop — do not early-return based on isListeningRef.
+    // The ref can be out of sync while the underlying session is still active,
+    // which causes the "Listening muted" label to show while the recognizer
+    // keeps running in the background.
     try {
-      console.log('[useOnDeviceVoice] Canceling speech recognition');
-      await sessionRef.current?.stop?.();
-      isListeningRef.current = false;
-      setState(prev => ({ 
-        ...prev, 
-        isListening: false, 
-        partialText: '', 
-        finalText: '' 
-      }));
-      console.log('[useOnDeviceVoice] ✅ Speech recognition canceled');
+      if (sessionRef.current) {
+        console.log('[useOnDeviceVoice] Canceling speech recognition');
+        await sessionRef.current.stop();
+        console.log('[useOnDeviceVoice] ✅ Speech recognition canceled');
+      }
     } catch (error) {
       console.error('[useOnDeviceVoice] Failed to cancel:', error);
+    } finally {
+      isListeningRef.current = false;
+      setState(prev => ({
+        ...prev,
+        isListening: false,
+        partialText: '',
+        finalText: '',
+      }));
     }
   }, []);
 
