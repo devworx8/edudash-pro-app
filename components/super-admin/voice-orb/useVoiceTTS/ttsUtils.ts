@@ -28,7 +28,8 @@ export const ALLOW_DEVICE_FALLBACK_IN_PHONICS =
   process.env.EXPO_PUBLIC_ALLOW_DEVICE_FALLBACK_IN_PHONICS === 'true';
 export const TTS_FAST_START_FIRST_CHUNK_MAX_CHARS = 150;
 export const TTS_FAST_START_FIRST_CHUNK_MAX_SENTENCES = 1;
-export const TTS_PROXY_TIMEOUT_DEFAULT_MS = 8000;
+// Raised to 9000 to accommodate Azure TTS responses that take 6-8s.
+export const TTS_PROXY_TIMEOUT_DEFAULT_MS = 9000;
 export const TTS_PREFETCH_ENABLED = true;
 export const TTS_PARALLEL_PREFETCH_THRESHOLD_MS = 0;
 
