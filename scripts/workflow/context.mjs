@@ -55,6 +55,8 @@ export function readWorkspaceContext() {
     appVersion: appConfig.version ?? 'unknown',
     runtimeVersion: appConfig.runtimeVersion ?? 'unknown',
     androidVersionCode: appConfig.android?.versionCode ?? 'unknown',
+    newArchEnabled: Boolean(appConfig.newArchEnabled),
+    appVersionSource: easConfig.cli?.appVersionSource ?? 'unknown',
     easConfig,
     packageJson,
   };
@@ -82,5 +84,12 @@ export function describeRuntime(runtimeVersion) {
   return {
     label: 'unknown',
     mode: 'unknown',
+  };
+}
+
+export function describeBuildProfile(profile = {}) {
+  return {
+    channel: typeof profile.channel === 'string' ? profile.channel : 'default',
+    distribution: typeof profile.distribution === 'string' ? profile.distribution : 'store/default',
   };
 }
