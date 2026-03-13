@@ -28,12 +28,27 @@ export type ChatRow = { type: 'date'; key: string; label: string } | { type: 'me
 export type ThreadParticipant = {
   user_id: string;
   role: string;
+  is_admin?: boolean;
+  can_send_messages?: boolean;
   user_profile?: {
     first_name?: string;
     last_name?: string;
+    email?: string;
     avatar_url?: string | null;
     role?: string;
   } | null;
+};
+
+export type GroupThreadInfo = {
+  id: string;
+  subject?: string | null;
+  type?: string | null;
+  is_group?: boolean;
+  group_name?: string | null;
+  group_description?: string | null;
+  group_type?: string | null;
+  allow_replies?: boolean;
+  created_by?: string;
 };
 
 export function useParentMessageThread(threadId: string, userId: string | undefined, userEmail: string | undefined) {
@@ -68,6 +83,11 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
   const [pendingScheduleText, setPendingScheduleText] = useState<string | null>(null);
   const [threadParticipantCount, setThreadParticipantCount] = useState<number | null>(null);
   const [threadParticipants, setThreadParticipants] = useState<ThreadParticipant[]>([]);
+  const [threadInfo, setThreadInfo] = useState<GroupThreadInfo | null>(null);
+  const [threadMetaVersion, setThreadMetaVersion] = useState(0);
+  const refreshThreadMeta = useCallback(() => {
+    setThreadMetaVersion((value) => value + 1);
+  }, []);
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -84,31 +104,50 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     if (!threadId) {
       setThreadParticipantCount(null);
       setThreadParticipants([]);
+      setThreadInfo(null);
       return;
     }
 
     (async () => {
       try {
-        const { data, count, error } = await assertSupabase()
-          .from('message_participants')
-          .select(
-            `
-              user_id,
-              role,
-              user_profile:profiles(first_name, last_name, avatar_url, role)
-            `,
-            { count: 'exact' }
-          )
-          .eq('thread_id', threadId);
+        const client = assertSupabase();
+        const [
+          participantResult,
+          threadResult,
+        ] = await Promise.all([
+          client
+            .from('message_participants')
+            .select(
+              `
+                user_id,
+                role,
+                is_admin,
+                can_send_messages,
+                user_profile:profiles(first_name, last_name, email, avatar_url, role)
+              `,
+              { count: 'exact' }
+            )
+            .eq('thread_id', threadId),
+          client
+            .from('message_threads')
+            .select('id, subject, type, is_group, group_name, group_description, group_type, allow_replies, created_by')
+            .eq('id', threadId)
+            .maybeSingle(),
+        ]);
+
+        const { data, count, error } = participantResult;
+        const { data: threadData } = threadResult;
 
         if (!isCancelled) {
           setThreadParticipants((data || []) as ThreadParticipant[]);
           setThreadParticipantCount(!error && typeof count === 'number' ? count : null);
+          setThreadInfo((threadData || null) as GroupThreadInfo | null);
         }
       } catch {
         if (!isCancelled) {
           setThreadParticipants([]);
           setThreadParticipantCount(null);
+          setThreadInfo(null);
         }
       }
     })();
@@ -116,7 +155,7 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     return () => {
       isCancelled = true;
     };
-  }, [threadId]);
+  }, [threadId, threadMetaVersion]);
   let messages: Message[] = [];
   let loading = false;
   let error: any = null;
@@ -282,6 +321,10 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
 
   // Other participant
   const otherParticipant = useMemo(() => messages.find(m => m.sender_id !== userId), [messages, userId]);
+  const currentParticipant = useMemo(
+    () => threadParticipants.find((participant) => participant.user_id === userId) || null,
+    [threadParticipants, userId],
+  );
 
   return {
     listRef, isAtBottomRef, isOtherTyping, typingText, setTyping, clearTyping,
@@ -291,7 +334,7 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     showMessageActions, setShowMessageActions, currentlyPlayingVoiceId, setCurrentlyPlayingVoiceId,
     replyingTo, setReplyingTo, showScrollFab, showScheduler, setShowScheduler,
     pendingScheduleText, setPendingScheduleText, handleScheduledSend,
-    threadParticipantCount, threadParticipants,
+    threadParticipantCount, threadParticipants, threadInfo, currentParticipant, refreshThreadMeta,
     messages, loading, error, refetch, allMessages, voiceMessageIdsAsc, rowsAsc,
     getWallpaperGradient, otherParticipant, showSenderNames,
     handleSend, handleVoiceRecording, handleImageAttach, handleMessageLongPress,

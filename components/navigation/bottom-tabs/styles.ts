@@ -111,7 +111,7 @@ export function createBottomTabBarStyles(options: BottomTabBarStyleOptions) {
       shadowOpacity: 0.46,
     },
     centerLabel: {
-      marginTop: options.isCompact ? 6 : 8,
+      marginTop: options.isCompact ? 2 : 4,
       marginBottom: -10,
       fontSize: options.isCompact ? 9 : 10,
       fontWeight: '700',

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { assertSupabase } from '@/lib/supabase';
+import { isTuitionFee } from '@/lib/utils/feeUtils';
 import { shouldExcludeStudentFeeFromMonthScopedViews } from '@/lib/utils/studentFeeMonth';
 import { formatCurrency, pickSectionError } from '@/hooks/useFinanceControlCenter';
 import type { FinanceControlCenterBundle } from '@/types/finance';
@@ -61,14 +62,16 @@ export function FinanceReceivablesTab({
 
       const { data: feeStructures } = await supabase
         .from('school_fee_structures')
-        .select('amount_cents, amount')
+        .select('amount_cents, fee_category, name, description')
         .eq('preschool_id', organizationId)
-        .ilike('category_code', '%tuition%')
         .eq('is_active', true)
-        .limit(1);
+        .limit(50);
 
-      const defaultTuition = feeStructures?.[0]
-        ? Number(feeStructures[0].amount_cents ? feeStructures[0].amount_cents / 100 : feeStructures[0].amount || 0)
+      const tuitionStructure = (feeStructures || []).find((fee: any) =>
+        isTuitionFee(fee?.fee_category, fee?.name, fee?.description),
+      );
+      const defaultTuition = tuitionStructure
+        ? Number(tuitionStructure.amount_cents ? tuitionStructure.amount_cents / 100 : 0)
         : 0;
 
       const list = students.map((s: any) => {

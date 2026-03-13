@@ -91,7 +91,7 @@ export function useDashMessageAssistant(): UseDashMessageAssistantReturn {
 
         const actionPrompt = ACTION_PROMPTS[action];
         const roleHint = context?.recipientRole
-          ? ` The recipient is a ${context.recipientRole}.`
+          ? ` The intended audience is ${context.recipientRole}.`
           : '';
 
         const prompt = `${actionPrompt}${roleHint}\n\n${text}`;

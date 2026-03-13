@@ -7,9 +7,9 @@
  * @module components/super-admin/voice-orb/useVoiceSTT
  */
 
-import { useCallback, useState, useRef } from 'react';
+import { useCallback, useState } from 'react';
 import { assertSupabase } from '../../../lib/supabase';
-import { getCachedToken, setCachedToken } from '@/lib/voice/sessionTokenCache';
+import { getCachedToken, invalidateTokenCache, setCachedToken } from '@/lib/voice/sessionTokenCache';
 
 // Azure Speech Services supported South African languages
 export const SUPPORTED_LANGUAGES = [
@@ -66,24 +66,27 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
     
     try {
       const supabase = assertSupabase();
-      
-      // Use cached token for faster response
-      let accessToken = getCachedToken();
       let session: any = null;
-      
-      if (!accessToken) {
+
+      const getAccessToken = async (forceFresh = false): Promise<string> => {
+        if (!forceFresh) {
+          const cachedToken = getCachedToken();
+          if (cachedToken) return cachedToken;
+        }
+
         const { data: { session: freshSession } } = await supabase.auth.getSession();
         session = freshSession;
-        if (!session?.access_token) {
+        if (!freshSession?.access_token) {
           throw new Error('Not authenticated');
         }
-        accessToken = session.access_token;
-        setCachedToken(accessToken);
-      }
-      
-      const resolveTenantId = async (): Promise<string | null> => {
+        setCachedToken(freshSession.access_token);
+        return freshSession.access_token;
+      };
+
+      let accessToken = await getAccessToken();
+
+      const resolveTenantId = (): string | null => {
         if (hookOptions?.preschoolId) return hookOptions.preschoolId;
-        // If we have session from fresh fetch, use it
         if (session?.user) {
           const userMeta = (session.user?.user_metadata || {}) as Record<string, any>;
           const appMeta = (session.user?.app_metadata || {}) as Record<string, any>;
@@ -95,24 +98,10 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
             null;
           if (metaCandidate) return metaCandidate;
         }
-
-        try {
-          const { data } = await supabase
-            .from('profiles')
-            .select('organization_id, preschool_id')
-            .eq('id', session.user.id)
-            .maybeSingle();
-          return (data as any)?.organization_id || (data as any)?.preschool_id || null;
-        } catch (lookupError) {
-          console.warn('[VoiceSTT] Failed to resolve tenant id from profile lookup:', lookupError);
-          return null;
-        }
+        return null;
       };
 
-      const tenantId = await resolveTenantId();
-      if (!tenantId) {
-        throw new Error('No school assigned to your account');
-      }
+      const tenantId = resolveTenantId();
 
       // Read audio file as base64
       const response = await fetch(audioUri);
@@ -128,9 +117,16 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
         reader.readAsDataURL(blob);
       });
       
-      const sendRequest = async (lang: TranscribeLanguage): Promise<{ text?: string; language?: string }> => {
+      const sendRequest = async (lang: TranscribeLanguage, canRetryAuth = true): Promise<{ text?: string; language?: string }> => {
         console.log('[VoiceSTT] Sending to STT, language:', lang, 'size:', base64.length);
-        const sttResponse = await fetch(
+        const requestBody = JSON.stringify({
+          audio_base64: base64,
+          language: lang,
+          auto_detect: lang === 'auto',
+          format: 'm4a',
+          ...(tenantId ? { preschool_id: tenantId, organization_id: tenantId } : {}),
+        });
+        let sttResponse = await fetch(
           `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/stt-proxy`,
           {
             method: 'POST',
@@ -138,16 +134,25 @@ export function useVoiceSTT(hookOptions: UseVoiceSTTOptions = {}): UseVoiceSTTRe
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${accessToken}`,
             },
-            body: JSON.stringify({
-              audio_base64: base64,
-              language: lang,
-              auto_detect: lang === 'auto',
-              format: 'm4a',
-              preschool_id: tenantId,
-              organization_id: tenantId,
-            }),
+            body: requestBody,
           }
         );
+
+        if ((sttResponse.status === 401 || sttResponse.status === 403) && canRetryAuth) {
+          invalidateTokenCache();
+          accessToken = await getAccessToken(true);
+          sttResponse = await fetch(
+            `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/stt-proxy`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`,
+              },
+              body: requestBody,
+            }
+          );
+        }
 
         if (!sttResponse.ok) {
           const errorText = await sttResponse.text();

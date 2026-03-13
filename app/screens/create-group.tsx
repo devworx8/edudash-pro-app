@@ -27,6 +27,10 @@ import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import SkeletonLoader from '@/components/ui/SkeletonLoader';
 import {
+  getGroupCreationCopy,
+  getReplyPolicyCopy,
+} from '@/lib/messaging/groupCreationSuggestions';
+import {
   useOrgMembers,
   useOrgClasses,
   useCreateClassGroup,
@@ -55,10 +59,13 @@ export default function CreateGroupScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [audience, setAudience] = useState<'all_parents' | 'all_teachers' | 'all_staff' | 'everyone'>('all_parents');
   const [allowReplies, setAllowReplies] = useState(true);
+  const parentOnlyMemberFilter = groupType === 'parent_group' || groupType === 'parent_dm'
+    ? ['parent']
+    : undefined;
 
   // Data
   const { data: members = [], isLoading: membersLoading } = useOrgMembers(
-    groupType === 'parent_dm' ? ['parent'] : undefined
+    parentOnlyMemberFilter
   );
   const { data: classes = [], isLoading: classesLoading } = useOrgClasses();
 
@@ -73,13 +80,31 @@ export default function CreateGroupScreen() {
 
   const isCreating = createClassGroup.isPending || createParentGroup.isPending
     || createAnnouncement.isPending || createParentThread.isPending;
+  const selectedClassName = useMemo(
+    () => classes.find((cls) => cls.id === selectedClassId)?.name ?? null,
+    [classes, selectedClassId],
+  );
+  const groupCopy = useMemo(
+    () => getGroupCreationCopy({
+      groupType,
+      audience,
+      className: selectedClassName,
+      allowReplies,
+    }),
+    [allowReplies, audience, groupType, selectedClassName],
+  );
+  const replyPolicy = useMemo(
+    () => getReplyPolicyCopy({ groupType, allowReplies }),
+    [allowReplies, groupType],
+  );
 
   // Filter members by search
   const filteredMembers = useMemo(() => {
     if (!searchQuery.trim()) return members;
     const q = searchQuery.toLowerCase();
     return members.filter(m =>
-      `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+      m.display_name.toLowerCase().includes(q) ||
+      (m.email || '').toLowerCase().includes(q) ||
       m.role.toLowerCase().includes(q)
     );
   }, [members, searchQuery]);
@@ -166,6 +191,35 @@ export default function CreateGroupScreen() {
   const subtextColor = isDark ? '#94a3b8' : '#64748b';
   const borderColor = isDark ? '#334155' : '#e2e8f0';
   const accentColor = '#06b6d4';
+  const formatRoleLabel = (role: string) =>
+    role.split('_').filter(Boolean).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+
+  const renderSuggestionChips = (
+    suggestions: string[],
+    onSelect: (value: string) => void,
+  ) => {
+    if (suggestions.length === 0) return null;
+
+    return (
+      <View style={styles.suggestionSection}>
+        <Text style={[styles.suggestionLabel, { color: subtextColor }]}>Quick ideas</Text>
+        <View style={styles.suggestionWrap}>
+          {suggestions.map((suggestion) => (
+            <TouchableOpacity
+              key={suggestion}
+              style={[styles.suggestionChip, { borderColor, backgroundColor: cardBg }]}
+              onPress={() => onSelect(suggestion)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.suggestionChipText, { color: textColor }]}>
+                {suggestion}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
 
   // ─── Step 1: Select group type ──────────────────────
   if (!groupType) {
@@ -325,11 +379,12 @@ export default function CreateGroupScreen() {
             </Text>
             <TextInput
               style={[styles.input, { backgroundColor: cardBg, color: textColor, borderColor }]}
-              placeholder="e.g. Grade 1 Parents"
+              placeholder={groupCopy.namePlaceholder}
               placeholderTextColor={subtextColor}
               value={groupName}
               onChangeText={setGroupName}
             />
+            {renderSuggestionChips(groupCopy.nameSuggestions, setGroupName)}
           </>
         )}
 
@@ -339,19 +394,22 @@ export default function CreateGroupScreen() {
             <Text style={[styles.sectionTitle, { color: subtextColor }]}>Group Name</Text>
             <TextInput
               style={[styles.input, { backgroundColor: cardBg, color: textColor, borderColor }]}
-              placeholder="e.g. Fundraising Committee"
+              placeholder={groupCopy.namePlaceholder}
               placeholderTextColor={subtextColor}
               value={groupName}
               onChangeText={setGroupName}
             />
+            {renderSuggestionChips(groupCopy.nameSuggestions, setGroupName)}
             <Text style={[styles.sectionTitle, { color: subtextColor }]}>Description (optional)</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: cardBg, color: textColor, borderColor }]}
-              placeholder="What is this group for?"
+              style={[styles.input, styles.multilineInput, { backgroundColor: cardBg, color: textColor, borderColor }]}
+              placeholder={groupCopy.descriptionPlaceholder}
               placeholderTextColor={subtextColor}
               value={description}
               onChangeText={setDescription}
+              multiline
             />
+            {renderSuggestionChips(groupCopy.descriptionSuggestions, setDescription)}
             <View style={styles.toggleRow}>
               <Text style={[styles.toggleLabel, { color: textColor }]}>Allow Replies</Text>
               <TouchableOpacity onPress={() => setAllowReplies(!allowReplies)}>
@@ -362,6 +420,12 @@ export default function CreateGroupScreen() {
                 />
               </TouchableOpacity>
             </View>
+            {replyPolicy ? (
+              <View style={[styles.infoCard, { backgroundColor: cardBg, borderColor }]}>
+                <Text style={[styles.infoCardTitle, { color: textColor }]}>{replyPolicy.title}</Text>
+                <Text style={[styles.infoCardText, { color: subtextColor }]}>{replyPolicy.body}</Text>
+              </View>
+            ) : null}
             {renderMemberSelector()}
           </>
         )}
@@ -372,19 +436,22 @@ export default function CreateGroupScreen() {
             <Text style={[styles.sectionTitle, { color: subtextColor }]}>Channel Name</Text>
             <TextInput
               style={[styles.input, { backgroundColor: cardBg, color: textColor, borderColor }]}
-              placeholder="e.g. School Updates"
+              placeholder={groupCopy.namePlaceholder}
               placeholderTextColor={subtextColor}
               value={groupName}
               onChangeText={setGroupName}
             />
+            {renderSuggestionChips(groupCopy.nameSuggestions, setGroupName)}
             <Text style={[styles.sectionTitle, { color: subtextColor }]}>Description (optional)</Text>
             <TextInput
-              style={[styles.input, { backgroundColor: cardBg, color: textColor, borderColor }]}
-              placeholder="What will you announce?"
+              style={[styles.input, styles.multilineInput, { backgroundColor: cardBg, color: textColor, borderColor }]}
+              placeholder={groupCopy.descriptionPlaceholder}
               placeholderTextColor={subtextColor}
               value={description}
               onChangeText={setDescription}
+              multiline
             />
+            {renderSuggestionChips(groupCopy.descriptionSuggestions, setDescription)}
             <Text style={[styles.sectionTitle, { color: subtextColor }]}>Audience</Text>
             {(['all_parents', 'all_teachers', 'all_staff', 'everyone'] as const).map(a => (
               <TouchableOpacity
@@ -408,6 +475,12 @@ export default function CreateGroupScreen() {
                 </Text>
               </TouchableOpacity>
             ))}
+            {replyPolicy ? (
+              <View style={[styles.infoCard, { backgroundColor: cardBg, borderColor }]}>
+                <Text style={[styles.infoCardTitle, { color: textColor }]}>{replyPolicy.title}</Text>
+                <Text style={[styles.infoCardText, { color: subtextColor }]}>{replyPolicy.body}</Text>
+              </View>
+            ) : null}
           </>
         )}
 
@@ -420,7 +493,7 @@ export default function CreateGroupScreen() {
 
   // ─── Member selector component ──────────────────────
   function renderMemberSelector(singleSelect = false) {
-    const roleFilter = groupType === 'parent_dm' ? ['parent'] : undefined;
+    const roleFilter = groupType === 'parent_dm' || groupType === 'parent_group' ? ['parent'] : undefined;
     const displayMembers = roleFilter
       ? filteredMembers.filter(m => roleFilter.includes(m.role))
       : filteredMembers;
@@ -443,7 +516,7 @@ export default function CreateGroupScreen() {
         </View>
         <TextInput
           style={[styles.searchInput, { backgroundColor: cardBg, color: textColor, borderColor, marginTop: 10 }]}
-          placeholder="Search by name..."
+          placeholder="Search by name or email..."
           placeholderTextColor={subtextColor}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -475,15 +548,15 @@ export default function CreateGroupScreen() {
               >
                 <View style={[styles.avatar, { backgroundColor: isDark ? '#334155' : '#e2e8f0' }]}>
                   <Text style={[styles.avatarText, { color: accentColor }]}>
-                    {(member.first_name?.[0] || '') + (member.last_name?.[0] || '')}
+                    {member.initials}
                   </Text>
                 </View>
                 <View style={styles.memberInfo}>
                   <Text style={[styles.memberName, { color: textColor }]}>
-                    {member.first_name} {member.last_name}
+                    {member.display_name}
                   </Text>
                   <Text style={[styles.memberRole, { color: subtextColor }]}>
-                    {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                    {member.email ? `${formatRoleLabel(member.role)} • ${member.email}` : formatRoleLabel(member.role)}
                   </Text>
                 </View>
                 <Ionicons
@@ -547,6 +620,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 16,
   },
+  multilineInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
   searchInput: {
     borderWidth: 1,
     borderRadius: 10,
@@ -572,6 +649,38 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   toggleLabel: { fontSize: 15, fontWeight: '500' },
+  infoCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  infoCardTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  infoCardText: { fontSize: 13, lineHeight: 18 },
+  suggestionSection: {
+    marginTop: -6,
+    marginBottom: 16,
+  },
+  suggestionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  suggestionWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  suggestionChip: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  suggestionChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
   memberItem: {
     flexDirection: 'row',
     alignItems: 'center',

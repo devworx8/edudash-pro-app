@@ -30,6 +30,10 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import SkeletonLoader from '@/components/ui/SkeletonLoader';
 import { toast } from '@/components/ui/ToastProvider';
 import {
+  getGroupCreationCopy,
+  getReplyPolicyCopy,
+} from '@/lib/messaging/groupCreationSuggestions';
+import {
   useOrgMembers,
   useOrgClasses,
   useCreateClassGroup,
@@ -130,9 +134,11 @@ export function CreateGroupModal({
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [audience, setAudience] = useState<'all_parents' | 'all_teachers' | 'all_staff' | 'everyone'>('all_parents');
+  const [allowReplies, setAllowReplies] = useState(true);
   const [groupEmoji, setGroupEmoji] = useState<string>('📚');
+  const memberRoleFilter = groupType === 'parent_group' ? ['parent'] : undefined;
 
-  const { data: members = [], isLoading: membersLoading } = useOrgMembers();
+  const { data: members = [], isLoading: membersLoading } = useOrgMembers(memberRoleFilter);
   const { data: classes = [], isLoading: classesLoading } = useOrgClasses();
 
   const createClassGroup = useCreateClassGroup();
@@ -148,7 +154,8 @@ export function CreateGroupModal({
     const q = searchQuery.toLowerCase();
     return members.filter(
       (m) =>
-        `${m.first_name} ${m.last_name}`.toLowerCase().includes(q) ||
+        m.display_name.toLowerCase().includes(q) ||
+        (m.email || '').toLowerCase().includes(q) ||
         m.role.toLowerCase().includes(q),
     );
   }, [members, searchQuery]);
@@ -168,6 +175,7 @@ export function CreateGroupModal({
     setSelectedMembers([]);
     setSearchQuery('');
     setAudience('all_parents');
+    setAllowReplies(true);
     setGroupEmoji('📚');
   }, []);
 
@@ -259,6 +267,7 @@ export function CreateGroupModal({
           groupName: groupName.trim(),
           parentIds: selectedMembers,
           description: description.trim() || undefined,
+          allowReplies,
         });
       } else if (groupType === 'announcement') {
         threadId = await createAnnouncement.mutateAsync({
@@ -284,6 +293,7 @@ export function CreateGroupModal({
     selectedMembers,
     description,
     audience,
+    allowReplies,
     createClassGroup,
     createParentGroup,
     createAnnouncement,
@@ -294,7 +304,20 @@ export function CreateGroupModal({
   const selectedClassName = classes.find((c) => c.id === selectedClassId)?.name;
   const selectedMemberNames = members
     .filter((m) => selectedMembers.includes(m.id))
-    .map((m) => `${m.first_name ?? ''} ${m.last_name ?? ''}`.trim());
+    .map((m) => m.display_name);
+  const groupCopy = useMemo(
+    () => getGroupCreationCopy({
+      groupType,
+      audience,
+      className: selectedClassName,
+      allowReplies,
+    }),
+    [allowReplies, audience, groupType, selectedClassName],
+  );
+  const replyPolicy = useMemo(
+    () => getReplyPolicyCopy({ groupType, allowReplies }),
+    [allowReplies, groupType],
+  );
 
   const bg = isDark ? '#0f172a' : '#f8fafc';
   const cardBg = isDark ? '#1e293b' : '#ffffff';
@@ -302,6 +325,34 @@ export function CreateGroupModal({
   const subtextColor = isDark ? '#94a3b8' : '#64748b';
   const borderColor = isDark ? '#334155' : '#e2e8f0';
   const accentColor = '#06b6d4';
+  const formatRoleLabel = (role: string) =>
+    role.split('_').filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+  const renderSuggestionChips = (
+    suggestions: string[],
+    onSelect: (value: string) => void,
+  ) => {
+    if (suggestions.length === 0) return null;
+
+    return (
+      <View style={styles.suggestionSection}>
+        <Text style={[styles.suggestionLabel, { color: subtextColor }]}>Quick ideas</Text>
+        <View style={styles.suggestionWrap}>
+          {suggestions.map((suggestion) => (
+            <TouchableOpacity
+              key={suggestion}
+              style={[styles.suggestionChip, { borderColor, backgroundColor: cardBg }]}
+              onPress={() => onSelect(suggestion)}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.suggestionChipText, { color: textColor }]}>
+                {suggestion}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+    );
+  };
 
   const stepTitle =
     step === 'type'
@@ -417,16 +468,13 @@ export function CreateGroupModal({
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: cardBg, color: textColor, borderColor }]}
-                placeholder={
-                  groupType === 'announcement'
-                    ? 'e.g. School Updates'
-                    : 'e.g. Fundraising Committee'
-                }
+                placeholder={groupCopy.namePlaceholder}
                 placeholderTextColor={subtextColor}
                 value={groupName}
                 onChangeText={setGroupName}
                 autoFocus
               />
+              {renderSuggestionChips(groupCopy.nameSuggestions, setGroupName)}
 
               <Text style={[styles.sectionTitle, { color: subtextColor }]}>
                 Description (optional)
@@ -437,12 +485,34 @@ export function CreateGroupModal({
                   styles.multilineInput,
                   { backgroundColor: cardBg, color: textColor, borderColor },
                 ]}
-                placeholder="What is this group for?"
+                placeholder={groupCopy.descriptionPlaceholder}
                 placeholderTextColor={subtextColor}
                 value={description}
                 onChangeText={setDescription}
                 multiline
               />
+              {renderSuggestionChips(groupCopy.descriptionSuggestions, setDescription)}
+
+              {groupType === 'parent_group' && (
+                <>
+                  <View style={styles.toggleRow}>
+                    <Text style={[styles.toggleLabel, { color: textColor }]}>Allow Replies</Text>
+                    <TouchableOpacity onPress={() => setAllowReplies((value) => !value)}>
+                      <Ionicons
+                        name={allowReplies ? 'toggle' : 'toggle-outline'}
+                        size={40}
+                        color={allowReplies ? accentColor : subtextColor}
+                      />
+                    </TouchableOpacity>
+                  </View>
+                  {replyPolicy ? (
+                    <View style={[styles.infoCard, { backgroundColor: cardBg, borderColor }]}>
+                      <Text style={[styles.infoCardTitle, { color: textColor }]}>{replyPolicy.title}</Text>
+                      <Text style={[styles.infoCardText, { color: subtextColor }]}>{replyPolicy.body}</Text>
+                    </View>
+                  ) : null}
+                </>
+              )}
 
               {groupType === 'announcement' && (
                 <>
@@ -482,6 +552,12 @@ export function CreateGroupModal({
                       </Text>
                     </TouchableOpacity>
                   ))}
+                  {replyPolicy ? (
+                    <View style={[styles.infoCard, { backgroundColor: cardBg, borderColor }]}>
+                      <Text style={[styles.infoCardTitle, { color: textColor }]}>{replyPolicy.title}</Text>
+                      <Text style={[styles.infoCardText, { color: subtextColor }]}>{replyPolicy.body}</Text>
+                    </View>
+                  ) : null}
                 </>
               )}
             </>
@@ -541,11 +617,12 @@ export function CreateGroupModal({
               </Text>
               <TextInput
                 style={[styles.input, { backgroundColor: cardBg, color: textColor, borderColor }]}
-                placeholder="e.g. Grade 1 Parents"
+                placeholder={groupCopy.namePlaceholder}
                 placeholderTextColor={subtextColor}
                 value={groupName}
                 onChangeText={setGroupName}
               />
+              {renderSuggestionChips(groupCopy.nameSuggestions, setGroupName)}
 
               <Text style={[styles.sectionTitle, { color: subtextColor, marginTop: 8 }]}>
                 Group Emoji
@@ -597,7 +674,7 @@ export function CreateGroupModal({
               </Text>
               <TextInput
                 style={[styles.searchInput, { backgroundColor: cardBg, color: textColor, borderColor }]}
-                placeholder="Search by name..."
+                placeholder="Search by name or email..."
                 placeholderTextColor={subtextColor}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -628,16 +705,17 @@ export function CreateGroupModal({
                         ]}
                       >
                         <Text style={[styles.avatarText, { color: accentColor }]}>
-                          {(member.first_name?.[0] || '') +
-                            (member.last_name?.[0] || '')}
+                          {member.initials}
                         </Text>
                       </View>
                       <View style={styles.memberInfo}>
                         <Text style={[styles.memberName, { color: textColor }]}>
-                          {member.first_name} {member.last_name}
+                          {member.display_name}
                         </Text>
                         <Text style={[styles.memberRole, { color: subtextColor }]}>
-                          {member.role.charAt(0).toUpperCase() + member.role.slice(1)}
+                          {member.email
+                            ? `${formatRoleLabel(member.role)} • ${member.email}`
+                            : formatRoleLabel(member.role)}
                         </Text>
                       </View>
                       <Ionicons
@@ -711,6 +789,17 @@ export function CreateGroupModal({
                   </>
                 )}
 
+                {groupType === 'parent_group' && replyPolicy && (
+                  <>
+                    <Text style={[styles.summaryLabel, { color: subtextColor, marginTop: 12 }]}>
+                      Replies
+                    </Text>
+                    <Text style={[styles.summaryValue, { color: textColor }]}>
+                      {replyPolicy.title}
+                    </Text>
+                  </>
+                )}
+
                 {groupType === 'announcement' && (
                   <>
                     <Text style={[styles.summaryLabel, { color: subtextColor, marginTop: 12 }]}>
@@ -725,6 +814,16 @@ export function CreateGroupModal({
                             ? 'All Staff'
                             : 'Everyone'}
                     </Text>
+                    {replyPolicy ? (
+                      <>
+                        <Text style={[styles.summaryLabel, { color: subtextColor, marginTop: 12 }]}>
+                          Replies
+                        </Text>
+                        <Text style={[styles.summaryValue, { color: textColor }]}>
+                          {replyPolicy.title}
+                        </Text>
+                      </>
+                    ) : null}
                   </>
                 )}
               </View>
@@ -805,6 +904,30 @@ const styles = StyleSheet.create({
     minHeight: 60,
     textAlignVertical: 'top',
   },
+  suggestionSection: {
+    marginTop: -6,
+    marginBottom: 16,
+  },
+  suggestionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  suggestionWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  suggestionChip: {
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  suggestionChipText: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
   searchInput: {
     borderWidth: 1,
     borderRadius: 10,
@@ -824,6 +947,21 @@ const styles = StyleSheet.create({
   },
   selectItemText: { fontSize: 15, fontWeight: '500' },
   classSubtext: { fontSize: 12, marginTop: 2 },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  toggleLabel: { fontSize: 15, fontWeight: '500' },
+  infoCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  infoCardTitle: { fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  infoCardText: { fontSize: 13, lineHeight: 18 },
   emojiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

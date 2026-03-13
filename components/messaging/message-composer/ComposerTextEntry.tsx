@@ -16,6 +16,7 @@ interface ComposerTextEntryProps {
   placeholder: string;
   showEmojiPicker: boolean;
   showAssistBar: boolean;
+  enableDashAssist: boolean;
   failedMessageCount: number;
   onCancelReply?: () => void;
   onToggleEmojiPicker: () => void;
@@ -37,6 +38,7 @@ export function ComposerTextEntry({
   placeholder,
   showEmojiPicker,
   showAssistBar,
+  enableDashAssist,
   failedMessageCount,
   onCancelReply,
   onToggleEmojiPicker,
@@ -139,7 +141,7 @@ export function ComposerTextEntry({
         </View>
       </View>
 
-      {text.trim() && (
+      {enableDashAssist && text.trim() && (
         <TouchableOpacity
           style={styles.sparkleButton}
           onPress={onToggleAssistBar}

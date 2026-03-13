@@ -19,6 +19,16 @@ type ParticipantQuickAction = {
   onPress: () => void;
 };
 
+type ParticipantSheetMember = {
+  id: string;
+  name: string;
+  role?: string | null;
+  online?: boolean;
+  isAdmin?: boolean;
+  canSendMessages?: boolean;
+  isSelf?: boolean;
+};
+
 interface UseThreadParticipantInteractionsProps {
   isGroup: boolean;
   recipientId: string;
@@ -54,7 +64,7 @@ export function useThreadParticipantInteractions({
   const [participantSheetLoading, setParticipantSheetLoading] = useState(false);
   const [participantSheetDetails, setParticipantSheetDetails] = useState<ParticipantSheetDetails | null>(null);
 
-  const participantSheetMembers = useMemo(() => (
+  const participantSheetMembers = useMemo<ParticipantSheetMember[]>(() => (
     groupParticipants.map((participant, index) => {
       const first = participant.user_profile?.first_name || '';
       const last = participant.user_profile?.last_name || '';
@@ -63,9 +73,12 @@ export function useThreadParticipantInteractions({
         name: `${first} ${last}`.trim() || `Member ${index + 1}`,
         role: participant.user_profile?.role || participant.role || 'member',
         online: participant.user_id ? isUserOnline(participant.user_id) : false,
+        isAdmin: participant.is_admin === true,
+        canSendMessages: participant.can_send_messages !== false,
+        isSelf: participant.user_id === currentUserId,
       };
     })
-  ), [groupParticipants, isUserOnline]);
+  ), [currentUserId, groupParticipants, isUserOnline]);
 
   const openParticipantSheet = useCallback(async () => {
     setShowParticipantSheet(true);

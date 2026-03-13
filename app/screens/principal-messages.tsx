@@ -348,17 +348,25 @@ export default function PrincipalMessagesScreen() {
       toggleThreadSelection(thread.id);
       return;
     }
+    const effectiveThreadType = String((thread as any).group_type || thread.type || '');
+    const isGroupThread = Boolean(
+      thread.is_group ||
+      ['class_group', 'parent_group', 'teacher_group', 'announcement'].includes(effectiveThreadType)
+    );
     const otherParticipant = thread.participants?.find((p: MessageParticipant) => p.user_id !== user?.id);
     const participantName = formatParticipantName(
       otherParticipant?.user_profile,
       t('principal.contactLabel', { defaultValue: 'Contact' }),
     );
+    const groupName = (thread as any).group_name || thread.subject || t('common.group', { defaultValue: 'Group' });
 
     router.push({
       pathname: '/screens/principal-message-thread',
       params: {
         threadId: thread.id,
-        title: participantName,
+        title: isGroupThread ? groupName : participantName,
+        isGroup: isGroupThread ? '1' : '0',
+        threadType: isGroupThread ? effectiveThreadType : '',
       },
     });
   }, [selectionMode, t, toggleThreadSelection, user?.id]);

@@ -27,6 +27,12 @@ import { useParentMessageThread, type ChatRow } from '@/hooks/useParentMessageTh
 import { useAutoTranslateTranscribe } from '@/hooks/messaging/useAutoTranslateTranscribe';
 import { parseThemeFromMessage } from '@/lib/messaging/parseThemeFromMessage';
 import {
+  useAddGroupParticipants,
+  useOrgMembers,
+  useRemoveGroupParticipant,
+  useUpdateGroupReplyPolicy,
+} from '@/hooks/useGroupMessaging';
+import {
   messageThreadStyles as styles, defaultTheme,
   COMPOSER_FLOAT_GAP, COMPOSER_OVERLAY_HEIGHT,
 } from '@/lib/screen-styles/parent-message-thread.styles';
@@ -60,9 +66,10 @@ export default function ParentMessageThreadScreen() {
     threadType?: string;
   }>();
   const threadId = params.threadId || '';
-  const contactName = params.teacherName || params.parentName || params.title || '';
-  const isGroup = params.isGroup === '1';
-  const threadType = params.threadType || '';
+  const routeTitle = params.title || '';
+  const routeContactName = params.teacherName || params.parentName || routeTitle || '';
+  const routeIsGroup = params.isGroup === '1';
+  const routeThreadType = params.threadType || '';
   const theme = useTheme().theme || defaultTheme;
   const { user, profile } = useAuth();
 
@@ -73,16 +80,30 @@ export default function ParentMessageThreadScreen() {
     showAlert({ title, message, buttons, type: 'warning' });
   }, [showAlert]);
   const h = useParentMessageThread(threadId, user?.id, user?.email);
+  const { data: orgParents = [] } = useOrgMembers(['parent']);
+  const updateGroupReplyPolicy = useUpdateGroupReplyPolicy();
+  const addGroupParticipants = useAddGroupParticipants();
+  const removeGroupParticipant = useRemoveGroupParticipant();
   const att = useAutoTranslateTranscribe({
     threadId, userId: user?.id,
     preferredLanguage: (profile?.language as any) || 'en',
     messages: h.allMessages,
   });
 
+  const effectiveThreadType = String(h.threadInfo?.group_type || routeThreadType || h.threadInfo?.type || '');
+  const isGroup = Boolean(
+    routeIsGroup ||
+    h.threadInfo?.is_group === true ||
+    h.threadInfo?.group_name ||
+    ['class_group', 'parent_group', 'teacher_group', 'announcement'].includes(effectiveThreadType),
+  );
   const displayName = useMemo(() => {
-    try { return contactName ? decodeURIComponent(contactName) : t('parent.teacher', { defaultValue: 'Contact' }); }
-    catch { return contactName || 'Contact'; }
-  }, [contactName, t]);
+    const rawName = isGroup
+      ? h.threadInfo?.group_name || routeTitle || h.threadInfo?.subject || routeContactName
+      : routeContactName || h.threadInfo?.subject || '';
+    try { return rawName ? decodeURIComponent(rawName) : t('parent.teacher', { defaultValue: 'Contact' }); }
+    catch { return rawName || 'Contact'; }
+  }, [h.threadInfo?.group_name, h.threadInfo?.subject, isGroup, routeContactName, routeTitle, t]);
 
   const actions = useMessageActions({
     selectedMessage: h.selectedMessage, user, refetch: h.refetch,
@@ -191,13 +212,13 @@ export default function ParentMessageThreadScreen() {
   const isOnline = recipientId && callContext ? callContext.isUserOnline(recipientId) : false;
   const groupTypeLabel = isGroup
     ? (
-      threadType === 'class_group'
+      effectiveThreadType === 'class_group'
         ? 'Class group'
-        : threadType === 'announcement'
+        : effectiveThreadType === 'announcement'
           ? 'Announcement channel'
-          : threadType === 'parent_group'
+          : effectiveThreadType === 'parent_group'
             ? 'Parent group'
-            : threadType === 'teacher_group'
+            : effectiveThreadType === 'teacher_group'
               ? 'Teacher group'
               : 'Group'
     )
@@ -323,7 +344,52 @@ export default function ParentMessageThreadScreen() {
   // Announcement channels: only admins/principals can post
   const userRole = (profile as any)?.role || '';
   const isAdmin = ['principal', 'admin', 'principal_admin', 'super_admin', 'superadmin'].includes(userRole);
-  const isAnnouncementReadOnly = threadType === 'announcement' && !isAdmin;
+  const canUsePrincipalDashAssist = ['principal', 'principal_admin'].includes(userRole);
+  const isUserGroupAdmin = h.currentParticipant?.is_admin === true;
+  const currentParticipantCanSend = h.currentParticipant?.is_admin === true || h.currentParticipant?.can_send_messages === true;
+  const canManageParentGroup =
+    effectiveThreadType === 'parent_group' &&
+    isAdmin &&
+    (isUserGroupAdmin || h.threadInfo?.created_by === user?.id);
+  const isAnnouncementReadOnly = Boolean(
+    isGroup &&
+    effectiveThreadType === 'announcement' &&
+    ((h.currentParticipant && !currentParticipantCanSend) || (!h.currentParticipant && !isAdmin))
+  );
+  const isGroupReplyReadOnly = Boolean(
+    isGroup &&
+    effectiveThreadType !== 'announcement' &&
+    (
+      (h.currentParticipant && !currentParticipantCanSend)
+      || (!h.currentParticipant && h.threadInfo?.allow_replies === false && !isAdmin)
+    )
+  );
+  const isComposerReadOnly = isAnnouncementReadOnly || isGroupReplyReadOnly;
+  const availableParentCandidates = useMemo(() => {
+    if (!canManageParentGroup) return [];
+    const existingIds = new Set(h.threadParticipants.map((participant) => participant.user_id));
+    return orgParents
+      .filter((member) => !existingIds.has(member.id))
+      .map((member) => ({
+        id: member.id,
+        name: member.display_name,
+        role: member.role,
+        email: member.email || null,
+      }));
+  }, [canManageParentGroup, h.threadParticipants, orgParents]);
+  const dashAssistRecipientRole = isGroup
+    ? (
+      effectiveThreadType === 'announcement'
+        ? 'parents and staff in an announcement channel'
+        : effectiveThreadType === 'parent_group'
+          ? 'a parent group'
+          : effectiveThreadType === 'class_group'
+            ? 'class parents and staff'
+            : effectiveThreadType === 'teacher_group'
+              ? 'a teacher group'
+              : 'a school group'
+    )
+    : recipientRole || undefined;
   const announcementBannerStyle = {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -332,11 +398,70 @@ export default function ParentMessageThreadScreen() {
     borderTopWidth: 1,
     paddingHorizontal: 16,
   };
+  const composerReadOnlyLabel = isAnnouncementReadOnly
+    ? 'Only admins can post in this channel'
+    : 'Replies are turned off for this group';
+
+  const handleToggleGroupReplies = useCallback(async (nextValue: boolean) => {
+    try {
+      await updateGroupReplyPolicy.mutateAsync({
+        threadId,
+        allowReplies: nextValue,
+      });
+      h.refreshThreadMeta();
+      toast.success(nextValue ? 'Replies enabled for parents.' : 'Parents are now read-only.');
+    } catch (error: any) {
+      showThreadAlert('Reply controls', error?.message || 'Could not update reply permissions.', [{ text: 'OK' }]);
+    }
+  }, [h.refreshThreadMeta, showThreadAlert, threadId, updateGroupReplyPolicy]);
+
+  const handleAddGroupMembers = useCallback(async (userIds: string[]) => {
+    if (userIds.length === 0) return;
+    try {
+      await addGroupParticipants.mutateAsync({ threadId, userIds });
+      h.refreshThreadMeta();
+      toast.success(userIds.length === 1 ? 'Parent added to group.' : 'Parents added to group.');
+    } catch (error: any) {
+      showThreadAlert('Add members', error?.message || 'Could not add members to this group.', [{ text: 'OK' }]);
+    }
+  }, [addGroupParticipants, h.refreshThreadMeta, showThreadAlert, threadId]);
+
+  const handleRemoveGroupMember = useCallback((participantUserId: string) => {
+    const participant = h.threadParticipants.find((entry) => entry.user_id === participantUserId);
+    const participantName = [
+      participant?.user_profile?.first_name || '',
+      participant?.user_profile?.last_name || '',
+    ].join(' ').trim() || 'this member';
+
+    showThreadAlert(
+      'Remove member',
+      `Remove ${participantName} from this group?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await removeGroupParticipant.mutateAsync({
+                threadId,
+                userId: participantUserId,
+              });
+              h.refreshThreadMeta();
+              toast.success('Member removed from the group.');
+            } catch (error: any) {
+              showThreadAlert('Remove member', error?.message || 'Could not remove this member.', [{ text: 'OK' }]);
+            }
+          },
+        },
+      ],
+    );
+  }, [h.refreshThreadMeta, h.threadParticipants, removeGroupParticipant, showThreadAlert, threadId]);
 
   // Layout calculations
   const composerBottomInset = Platform.OS === 'ios' ? insets.bottom : Math.max(insets.bottom, 2);
   const keyboardUp = h.keyboardHeight > 0;
-  const safeComposerHeight = isAnnouncementReadOnly
+  const safeComposerHeight = isComposerReadOnly
     ? 52
     : Math.max(h.composerHeight, COMPOSER_OVERLAY_HEIGHT);
   // When keyboard is up: move safe-area from padding → bottom offset (clears nav bar).
@@ -450,12 +575,12 @@ export default function ParentMessageThreadScreen() {
         )}
 
         {/* Composer — hidden for announcement channel subscribers */}
-        <View style={[styles.composerArea, { bottom: h.keyboardHeight + COMPOSER_FLOAT_GAP + composerExtraBottom, paddingBottom: keyboardUp ? 0 : composerBottomInset }]} onLayout={isAnnouncementReadOnly ? undefined : h.handleComposerLayout}>
-          {isAnnouncementReadOnly ? (
+        <View style={[styles.composerArea, { bottom: h.keyboardHeight + COMPOSER_FLOAT_GAP + composerExtraBottom, paddingBottom: keyboardUp ? 0 : composerBottomInset }]} onLayout={isComposerReadOnly ? undefined : h.handleComposerLayout}>
+          {isComposerReadOnly ? (
             <View style={[announcementBannerStyle, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Ionicons name="megaphone-outline" size={16} color={theme.textSecondary} />
+              <Ionicons name={isAnnouncementReadOnly ? 'megaphone-outline' : 'chatbox-ellipses-outline'} size={16} color={theme.textSecondary} />
               <Text style={{ color: theme.textSecondary, fontSize: 13, marginLeft: 8 }}>
-                Only admins can post in this channel
+                {composerReadOnlyLabel}
               </Text>
             </View>
           ) : (
@@ -464,6 +589,8 @@ export default function ParentMessageThreadScreen() {
               onVoiceRecording={h.handleVoiceRecording} onImageAttach={h.handleImageAttach}
               sending={h.sending} replyingTo={h.replyingTo} onCancelReply={() => h.setReplyingTo(null)}
               onTyping={h.setTyping} editingMessage={actions.editingMessage} onCancelEdit={actions.cancelEdit}
+              enableDashAssist={canUsePrincipalDashAssist}
+              dashAssistRecipientRole={dashAssistRecipientRole}
               showAlert={(config) => showThreadAlert(config.title, config.message, config.buttons)}
               onSchedule={(text) => { h.setPendingScheduleText(text); h.setShowScheduler(true); }}
               onOpenTemplates={() => setShowTemplatePicker(true)}
@@ -537,6 +664,19 @@ export default function ParentMessageThreadScreen() {
         onlineCount={groupOnlineCount}
         participants={participantSheetMembers}
         quickActions={participantQuickActions}
+        groupDescription={h.threadInfo?.group_description || null}
+        adminControls={canManageParentGroup ? {
+          canManageMembers: true,
+          canToggleReplies: true,
+          allowReplies: h.threadInfo?.allow_replies ?? true,
+          isUpdatingReplies: updateGroupReplyPolicy.isPending,
+          onToggleReplies: handleToggleGroupReplies,
+          addCandidates: availableParentCandidates,
+          isAddingMembers: addGroupParticipants.isPending,
+          onAddMembers: handleAddGroupMembers,
+          onRemoveParticipant: handleRemoveGroupMember,
+          removingParticipantId: removeGroupParticipant.isPending ? (removeGroupParticipant.variables?.userId ?? null) : null,
+        } : null}
       />
       <AlertModal {...alertProps} />
     </KeyboardAvoidingView>

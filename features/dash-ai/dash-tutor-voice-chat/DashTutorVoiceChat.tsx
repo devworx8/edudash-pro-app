@@ -42,6 +42,7 @@ import { cleanForTTS, splitForTTS, TTS_CHUNK_MAX_LEN } from '@/lib/dash-voice-ut
 import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
 import { SUPPORTED_LANGUAGES } from '@/components/super-admin/voice-orb/useVoiceSTT';
 import type { VoiceTranscriptMeta } from '@/components/super-admin/voice-orb';
+import { resolveEffectiveTier } from '@/lib/tiers/resolveEffectiveTier';
 
 import {
   PHONICS_TARGET_STALE_MS, CHAT_HISTORY_KEY, MAX_STORED_MESSAGES,
@@ -77,16 +78,28 @@ const ORB_SIZE = Math.min(Dimensions.get('window').width * 0.68, 300);
 export default function DashTutorVoiceChat() {
   const { theme } = useTheme();
   const { profile } = useAuth();
-  const { capabilityTier } = useSubscription();
+  const {
+    tier: subscriptionTier,
+    capabilityTier: subscriptionCapabilityTier,
+  } = useSubscription();
   const insets = useSafeAreaInsets();
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const normalizedRole = String(profile?.role || 'parent').toLowerCase();
   const isStudent = ['student', 'learner'].includes(normalizedRole);
+  const effectiveCapabilityTier = useMemo(
+    () => resolveEffectiveTier({
+      role: normalizedRole,
+      profileTier: String((profile as any)?.subscription_tier || '').trim() || null,
+      candidates: [subscriptionTier, subscriptionCapabilityTier],
+    }).capabilityTier,
+    [normalizedRole, profile, subscriptionCapabilityTier, subscriptionTier]
+  );
   // Tier-based orb: students always get at least starter orb UI
-  // For testing: treat all non-free tiers as premium for orb display
-  const effectiveOrbTier = isStudent && capabilityTier === 'free' ? 'starter' : capabilityTier;
+  const effectiveOrbTier = isStudent && effectiveCapabilityTier === 'free'
+    ? 'starter'
+    : effectiveCapabilityTier;
   // Check if user should see premium orb (premium, pro, or enterprise)
-  const isPremiumOrb = ['premium', 'pro', 'enterprise'].includes(effectiveOrbTier);
+  const isPremiumOrb = ['premium', 'enterprise'].includes(effectiveOrbTier);
   const isEnhancedOrb = effectiveOrbTier !== 'free';
   const aiScope = useMemo(() => resolveAIProxyScopeFromRole(normalizedRole), [normalizedRole]);
   const orgType = getOrganizationType(profile);
