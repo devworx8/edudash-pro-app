@@ -85,7 +85,6 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
       let endConfidenceTicks = 0;
       let lastPositionMs = 0;
       let peakDurationMs = 0;
-      let lastSnapshot = { durationMs: 0, positionMs: 0, playing: false };
       const playbackId = playbackIdRef.current + 1;
       playbackIdRef.current = playbackId;
       clearPlaybackTimers();
@@ -121,12 +120,12 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
       playbackIntervalRef.current = setInterval(() => {
         if (playbackIdRef.current !== playbackId) { finalize(); return; }
         if (!player) { finalize(new Error('AUDIO_PLAYER_MISSING')); return; }
+
         let playing = false, durationMs = 0, positionMs = 0;
         try {
           playing = player.playing;
           durationMs = (player.duration || 0) * 1000;
           positionMs = (player.currentTime || 0) * 1000;
-          lastSnapshot = { durationMs, positionMs, playing };
         } catch {
           finalize(new Error('AUDIO_PLAYER_STATUS_ERROR'));
           return;
@@ -135,10 +134,13 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
         if (durationMs > peakDurationMs) peakDurationMs = durationMs;
 
         if (playing) {
-          hasStarted = true; stallTicks = 0; endConfidenceTicks = 0;
+          hasStarted = true;
+          stallTicks = 0;
+          endConfidenceTicks = 0;
           if (positionMs > lastPositionMs) lastPositionMs = positionMs;
           return;
         }
+
         if (!hasStarted) return;
         const hasProgressed = positionMs > lastPositionMs + 15;
         if (hasProgressed) { lastPositionMs = positionMs; stallTicks = 0; endConfidenceTicks = 0; } else { stallTicks += 1; }
@@ -153,9 +155,9 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
 
       playbackTimeoutRef.current = setTimeout(() => {
         if (!hasStarted) { finalize(new Error('AUDIO_PLAYBACK_TIMEOUT')); return; }
-        if (lastSnapshot.playing) { finalize(new Error('AUDIO_PLAYBACK_TIMEOUT')); return; }
-        const unfinished = lastSnapshot.durationMs > 0 && lastSnapshot.positionMs < lastSnapshot.durationMs * 0.8;
-        finalize(unfinished ? new Error('AUDIO_PLAYBACK_STALL') : undefined);
+        // If we've made significant progress, treat timeout as natural end
+        const progress = peakDurationMs > 0 ? lastPositionMs / peakDurationMs : 0;
+        finalize(progress < 0.7 ? new Error('AUDIO_PLAYBACK_STALL') : undefined);
       }, timeoutMs);
     });
   }, [clearPlaybackTimers, cleanupPlayer]);

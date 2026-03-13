@@ -744,22 +744,22 @@ export class DashVoiceService {
   }
 
   /**
-   * Speak text using TTS with intelligent text normalization
-   * Note: TTS is a premium feature - free tier users will get an error callback
+   * Speak text using Azure TTS with chunked prefetch pipeline.
+   * Long text is split into chunks that are synthesized in parallel with playback,
+   * ensuring fluent speech with no pauses between segments.
+   * Note: TTS is a premium feature - free tier users will get an error callback.
    */
   public async speakText(text: string, callbacks?: SpeechCallbacks, options?: { language?: string }): Promise<void> {
     try {
       const voiceSettings = this.config.voiceSettings;
-      
-      // Check tier access for TTS (premium feature), cached for chunked playback.
+
       const canUseTTS = await this.canCurrentUserUseTTS();
       if (!canUseTTS) {
         console.log('[DashVoice] TTS blocked for free tier user');
         callbacks?.onError?.(new Error('TTS_FREE_TIER_BLOCKED'));
         return;
       }
-      
-      // Normalize text first (legacy readability + SSOT TTS normalization).
+
       const legacyNormalizedText = this.normalizeTextForSpeech(text);
       const phonicsMode = shouldUsePhonicsMode(text) || shouldUsePhonicsMode(legacyNormalizedText);
       const normalizedText = normalizeForTTS(legacyNormalizedText, {
@@ -772,7 +772,6 @@ export class DashVoiceService {
         return;
       }
 
-      // Short language code for Edge Function (af, zu, xh, nso, en)
       let shortLang: SupportedLanguage = 'en';
       const requestedLang = options?.language || voiceSettings.language || 'en';
       try {
@@ -781,17 +780,11 @@ export class DashVoiceService {
         const ui = getCurrentLanguage?.();
         shortLang = normalizeLanguageCode(requestedLang || ui || voiceSettings.language) as SupportedLanguage;
 
-        // Check if TTS is supported for this language
         if (!this.isTTSSupported(shortLang)) {
           const langNames: Record<string, string> = {
-            'xh': 'isiXhosa',
-            'xh-ZA': 'isiXhosa',
-            'nso': 'Sepedi',
-            'nso-ZA': 'Sepedi',
-            'st': 'Sesotho',
-            'zu': 'isiZulu',
-            'af': 'Afrikaans',
-            'en': 'English',
+            'xh': 'isiXhosa', 'xh-ZA': 'isiXhosa', 'nso': 'Sepedi',
+            'nso-ZA': 'Sepedi', 'st': 'Sesotho', 'zu': 'isiZulu',
+            'af': 'Afrikaans', 'en': 'English',
           };
           const langName = langNames[shortLang] || shortLang;
           console.warn(`[DashVoice] TTS not supported for ${langName}.`);
@@ -799,7 +792,6 @@ export class DashVoiceService {
           return;
         }
 
-        // Resolve voice ID preference
         const prefs = await this.getCachedVoicePreferences();
         const { voiceService } = await import('@/lib/voice/client');
         const voice_id = resolveSelectedVoiceId({
@@ -809,10 +801,8 @@ export class DashVoiceService {
           preferenceLanguage: prefs?.language,
         });
 
-        // Convert rate/pitch (1.0 baseline) to -50..+50 scale expected by Edge Function
         const baseRate = Number.isFinite(voiceSettings.rate) && voiceSettings.rate > 0
-          ? voiceSettings.rate
-          : 1.0;
+          ? voiceSettings.rate : 1.0;
         const profileSpeakingRate = Math.round((baseRate - 1.0) * 100);
         const speaking_rate = phonicsMode
           ? Math.min(profileSpeakingRate, AZURE_RATE_PHONICS)
@@ -862,12 +852,34 @@ export class DashVoiceService {
         callbacks?.onError?.(mapErr instanceof Error ? mapErr : new Error('TTS unavailable right now.'));
         return;
       }
-      return;
     } catch (error) {
       console.error('[DashVoice] Failed to speak text:', error);
       callbacks?.onError?.(error);
       throw error;
     }
+  }
+
+  private splitForPrefetch(
+    text: string, phonicsMode: boolean, firstMax: number, followMax: number,
+  ): string[] {
+    const trimmed = text.trim();
+    if (!trimmed) return [];
+    if (phonicsMode || trimmed.length <= firstMax) return [trimmed];
+
+    const sentences = trimmed.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+    if (sentences.length <= 1) return [trimmed];
+
+    const chunks: string[] = [];
+    let current = '';
+    for (const sentence of sentences) {
+      const max = chunks.length === 0 ? firstMax : followMax;
+      const candidate = current ? `${current} ${sentence}` : sentence;
+      if (candidate.length <= max) { current = candidate; continue; }
+      if (current.trim()) chunks.push(current.trim());
+      current = sentence;
+    }
+    if (current.trim()) chunks.push(current.trim());
+    return chunks.filter(Boolean);
   }
 
   /**
