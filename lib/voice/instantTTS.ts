@@ -92,7 +92,15 @@ export function splitIntoSpeechChunks(text: string): string[] {
     chunks.push(current.trim());
   }
 
-  return chunks.filter((c) => c.length >= MIN_CHUNK_LENGTH || chunks.length === 1);
+  if (chunks.length === 0) return trimmed.length > 0 ? [trimmed] : [];
+
+  // Merge any trailing short chunk into the previous one instead of dropping it
+  if (chunks.length > 1 && chunks[chunks.length - 1].length < MIN_CHUNK_LENGTH) {
+    const short = chunks.pop()!;
+    chunks[chunks.length - 1] = `${chunks[chunks.length - 1]} ${short}`;
+  }
+
+  return chunks;
 }
 
 async function preSynthesizeChunk(
