@@ -88,9 +88,9 @@ describe('ttsNormalize', () => {
     expect(out).not.toContain('/a/');
   });
 
-  it('normalizes EduDash brand variants so TTS says one product name', () => {
+  it('normalizes EduDash brand variants into one speakable product name', () => {
     const out = normalizeForTTS('Welcome to E D U DashPro platform.');
-    expect(out).toContain('EduDash Pro');
+    expect(out).toContain('Edyoo-dash Pro');
     expect(out).not.toContain('E D U');
   });
 

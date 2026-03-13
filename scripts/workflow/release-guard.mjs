@@ -8,7 +8,7 @@ const modes = {
   ota: {
     label: 'production OTA publish',
     requireClean: true,
-    allowedBranches: ['main'],
+    allowedBranches: ['development'],
     strictBranch: true,
   },
   'prod-build': {
@@ -98,6 +98,9 @@ console.log(`Repo: ${context.repoRoot}`);
 console.log(`Branch: ${context.branch} @ ${context.commit}`);
 console.log(
   `App version: ${context.appVersion} (Android ${context.androidVersionCode}), runtime: ${runtime.label}`,
+);
+console.log(
+  `Architecture: Expo new architecture ${context.newArchEnabled ? 'enabled' : 'disabled'}, appVersionSource=${context.appVersionSource}`,
 );
 
 for (const warning of warnings) {

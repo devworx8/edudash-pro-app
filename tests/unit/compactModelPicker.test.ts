@@ -18,6 +18,7 @@ jest.mock('react-native', () => {
     Dimensions: { get: () => ({ width: 390, height: 844 }) },
     View: makeElement('View'),
     Text: makeElement('Text'),
+    ScrollView: makeElement('ScrollView'),
     TouchableOpacity: makeElement('TouchableOpacity'),
     Pressable: makeElement('Pressable'),
     Modal: ({ visible, children }: { visible: boolean; children?: React.ReactNode }) =>
@@ -43,6 +44,10 @@ jest.mock('@expo/vector-icons', () => ({
     const { Text } = require('react-native');
     return React.createElement(Text, null, name || 'icon');
   },
+}));
+
+jest.mock('@/components/dash-orb/CosmicOrb', () => ({
+  CosmicOrb: () => null,
 }));
 
 describe('CompactModelPicker', () => {
