@@ -179,34 +179,25 @@ export function DashVoiceOrbSection({
         )}
       </View>
 
-      {/* Single mic button: reflects mute + listening state. Tap = unmute or toggle listening. Long press = toggle mute. */}
+      {/* Mic mute toggle — prevents background conversations from triggering Dash. Does NOT stop TTS. */}
       {(showFreeOrb || showStarterOrb || showPremiumOrb) && VoiceOrb && (
         <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 12 }}>
           <TouchableOpacity
             style={[
               hiddenOrbStyle.micBtn,
               {
-                borderColor: isMuted ? '#f59e0b' : isListening ? theme.primary : 'rgba(255,255,255,0.2)',
-                backgroundColor: isMuted ? 'rgba(245,158,11,0.12)' : 'transparent',
+                borderColor: isMuted ? '#ef4444' : 'rgba(255,255,255,0.2)',
+                backgroundColor: isMuted ? 'rgba(239,68,68,0.15)' : 'transparent',
               },
             ]}
-            onPress={() => {
-              if (isMuted) {
-                voiceOrbRef.current?.setMuted(false);
-              } else {
-                handleVisibleOrbPress();
-              }
-            }}
-            onLongPress={() => voiceOrbRef.current?.setMuted(!isMuted)}
-            delayLongPress={400}
+            onPress={() => voiceOrbRef.current?.setMuted(!isMuted)}
             activeOpacity={0.7}
-            accessibilityLabel={isMuted ? 'Tap to unmute' : isListening ? 'Tap to stop listening' : 'Tap to start listening'}
-            accessibilityHint="Long press to toggle mute"
+            accessibilityLabel={isMuted ? 'Unmute microphone' : 'Mute microphone'}
           >
             <Ionicons
-              name={isMuted ? 'mic-off' : isListening ? 'mic' : 'mic-outline'}
+              name={isMuted ? 'mic-off' : 'mic'}
               size={22}
-              color={isMuted ? '#f59e0b' : isListening ? theme.primary : 'rgba(255,255,255,0.6)'}
+              color={isMuted ? '#ef4444' : 'rgba(255,255,255,0.6)'}
             />
           </TouchableOpacity>
         </View>

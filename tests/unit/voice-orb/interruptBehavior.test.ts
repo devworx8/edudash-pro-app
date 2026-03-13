@@ -12,7 +12,7 @@ describe('voice orb interrupt restart behavior', () => {
     })).toBe(true);
   });
 
-  it('does not treat barge-in mute as a hard stop', () => {
+  it('blocks restart when muted', () => {
     expect(canAutoRestartAfterInterrupt({
       isMuted: true,
       isProcessing: false,
@@ -20,25 +20,16 @@ describe('voice orb interrupt restart behavior', () => {
       usingLiveSTT: false,
       isSpeaking: false,
       ttsIsSpeaking: false,
-    })).toBe(true);
+    })).toBe(false);
   });
 
-  it('blocks restart while speaking, recording, processing, or live stt is active', () => {
+  it('blocks restart while recording, processing, or live stt is active', () => {
     expect(canAutoRestartAfterInterrupt({
       isMuted: false,
       isProcessing: false,
       isRecording: true,
       usingLiveSTT: false,
       isSpeaking: false,
-      ttsIsSpeaking: false,
-    })).toBe(false);
-
-    expect(canAutoRestartAfterInterrupt({
-      isMuted: false,
-      isProcessing: false,
-      isRecording: false,
-      usingLiveSTT: false,
-      isSpeaking: true,
       ttsIsSpeaking: false,
     })).toBe(false);
 
@@ -59,5 +50,25 @@ describe('voice orb interrupt restart behavior', () => {
       isSpeaking: false,
       ttsIsSpeaking: false,
     })).toBe(false);
+  });
+
+  it('allows restart even if isSpeaking/ttsIsSpeaking passed as true (caller gates these)', () => {
+    expect(canAutoRestartAfterInterrupt({
+      isMuted: false,
+      isProcessing: false,
+      isRecording: false,
+      usingLiveSTT: false,
+      isSpeaking: true,
+      ttsIsSpeaking: false,
+    })).toBe(true);
+
+    expect(canAutoRestartAfterInterrupt({
+      isMuted: false,
+      isProcessing: false,
+      isRecording: false,
+      usingLiveSTT: false,
+      isSpeaking: false,
+      ttsIsSpeaking: true,
+    })).toBe(true);
   });
 });
