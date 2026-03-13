@@ -809,62 +809,43 @@ export class DashVoiceService {
           : profileSpeakingRate;
         const pitch = Math.round(((voiceSettings.pitch ?? 1.0) - 1.0) * 100);
 
-        const synthesizeRequest = (chunkText: string) =>
-          voiceService.synthesize({
-            text: chunkText,
-            language: shortLang as any,
-            voice_id,
-            speaking_rate,
-            pitch,
-            phonics_mode: phonicsMode,
-          });
 
-        // Split into chunks for prefetch pipeline (skip chunking for phonics or short text)
-        const FIRST_CHUNK = 120;
-        const FOLLOW_UP_CHUNK = 350;
-        const chunks = this.splitForPrefetch(normalizedText, phonicsMode, FIRST_CHUNK, FOLLOW_UP_CHUNK);
+        // Try Edge Function (Azure) with retry for transient errors
+        const MAX_TTS_RETRIES = 2;
+        const TTS_RETRY_BASE_MS = 400;
+        let lastTTSError: unknown = null;
 
-        const { audioManager } = await import('@/lib/voice/audio');
-        callbacks?.onStart?.();
+        for (let attempt = 0; attempt <= MAX_TTS_RETRIES; attempt += 1) {
+          try {
+            const resp = await voiceService.synthesize({
+              text: normalizedText,
+              language: shortLang as any,
+              voice_id,
+              speaking_rate,
+              pitch,
+              phonics_mode: phonicsMode,
+            });
 
-        // Prefetch pipeline: synthesize next chunk while current one plays
-        type SynthResult = { audioUrl: string | null; promise: Promise<void> };
-        const prefetchMap = new Map<number, SynthResult>();
+            if (!resp?.audio_url) {
+              throw new Error((resp as any)?.error || 'TTS returned no audio');
+            }
 
-        const startPrefetch = (idx: number): void => {
-          if (idx >= chunks.length || prefetchMap.has(idx)) return;
-          const entry: SynthResult = { audioUrl: null, promise: Promise.resolve() };
-          entry.promise = synthesizeRequest(chunks[idx])
-            .then((resp) => { entry.audioUrl = resp?.audio_url || null; })
-            .catch(() => { entry.audioUrl = null; });
-          prefetchMap.set(idx, entry);
-        };
-
-        // Start first two chunks in parallel
-        startPrefetch(0);
-        if (chunks.length > 1) startPrefetch(1);
-
-        let anyPlayed = false;
-        for (let i = 0; i < chunks.length; i++) {
-          const entry = prefetchMap.get(i);
-          if (entry) await entry.promise;
-
-          const audioUrl = entry?.audioUrl;
-          if (!audioUrl) continue;
-
-          // Kick off next prefetch before playing
-          startPrefetch(i + 1);
-          if (i + 2 < chunks.length) startPrefetch(i + 2);
-
-          await audioManager.play(audioUrl);
-          anyPlayed = true;
+            const { audioManager } = await import('@/lib/voice/audio');
+            callbacks?.onStart?.();
+            await audioManager.play(resp.audio_url);
+            callbacks?.onDone?.();
+            return;
+          } catch (edgeError: any) {
+            lastTTSError = edgeError;
+            const errMsg = String(edgeError instanceof Error ? edgeError.message : edgeError || '').toLowerCase();
+            const isRetryable = errMsg.includes('429') || errMsg.includes('network') || errMsg.includes('timeout') || errMsg.includes('503') || errMsg.includes('504');
+            if (!isRetryable || attempt === MAX_TTS_RETRIES) break;
+            await new Promise(r => setTimeout(r, TTS_RETRY_BASE_MS * Math.pow(1.5, attempt)));
+          }
         }
 
-        if (anyPlayed) {
-          callbacks?.onDone?.();
-        } else {
-          callbacks?.onError?.(new Error('TTS unavailable right now.'));
-        }
+        console.warn('[DashVoice] Azure TTS failed after retries');
+        callbacks?.onError?.(lastTTSError instanceof Error ? lastTTSError : new Error('TTS unavailable right now.'));
         return;
       } catch (mapErr) {
         console.warn('[DashVoice] Language normalization failed');

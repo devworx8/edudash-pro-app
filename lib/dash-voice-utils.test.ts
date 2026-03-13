@@ -9,8 +9,8 @@ import {
 
 describe('dash-voice-utils', () => {
   describe('TTS_CHUNK_MAX_LEN', () => {
-    it('is 1800', () => {
-      expect(TTS_CHUNK_MAX_LEN).toBe(1800);
+    it('is 900', () => {
+      expect(TTS_CHUNK_MAX_LEN).toBe(900);
     });
   });
 

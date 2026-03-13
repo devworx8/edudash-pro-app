@@ -435,20 +435,26 @@ export function cleanRawJSON(text: string): string {
 
 // ── TTS Chunking ─────────────────────────────────────────────────────
 
-/** Canonical max chunk length for TTS. Tuned higher to reduce chunk round-trips. */
-export const TTS_CHUNK_MAX_LEN = 1800;
-/** Optional smaller first chunk for faster playback start without fragmenting the full response. */
-export const TTS_FAST_START_FIRST_CHUNK_MAX_LEN = 220;
+/**
+ * Canonical max chunk length for TTS. Large enough to keep Azure requests
+ * low (1-2 per response) while staying within synthesis limits.
+ */
+export const TTS_CHUNK_MAX_LEN = 900;
+/**
+ * First chunk kept shorter so playback starts quickly (~1-2 sentences).
+ * Pre-fetch overlap means longer follow-up chunks don't cause pauses.
+ */
+export const TTS_FAST_START_FIRST_CHUNK_MAX_LEN = 250;
 
 /**
  * Split text into sentence-aligned chunks for TTS.
  * Ensures speech never cuts off mid-sentence.
  * Each chunk ≤ maxLen characters, split at sentence boundaries.
+ * Falls back to clause boundaries (comma, semicolon) for very long sentences.
  */
 export function splitForTTS(text: string, maxLen = TTS_CHUNK_MAX_LEN): string[] {
   if (!text || text.length <= maxLen) return text ? [text] : [];
 
-  // Split at sentence boundaries
   const sentences: string[] = [];
   let buf = '';
   for (const ch of text) {
@@ -460,10 +466,27 @@ export function splitForTTS(text: string, maxLen = TTS_CHUNK_MAX_LEN): string[] 
   }
   if (buf.trim()) sentences.push(buf.trim());
 
-  // Group sentences into chunks under maxLen
   const chunks: string[] = [];
   let current = '';
   for (const s of sentences) {
+    // If a single sentence exceeds maxLen, split at clause boundaries
+    if (s.length > maxLen) {
+      if (current.trim()) { chunks.push(current.trim()); current = ''; }
+      const clauses = s.split(/(?<=[,;:])\s+/).filter(Boolean);
+      let clauseGroup = '';
+      for (const clause of clauses) {
+        const candidate = clauseGroup ? `${clauseGroup} ${clause}` : clause;
+        if (candidate.length > maxLen && clauseGroup.trim()) {
+          chunks.push(clauseGroup.trim());
+          clauseGroup = clause;
+        } else {
+          clauseGroup = candidate;
+        }
+      }
+      if (clauseGroup.trim()) current = clauseGroup.trim();
+      continue;
+    }
+
     if ((current + ' ' + s).trim().length > maxLen) {
       if (current.trim()) chunks.push(current.trim());
       current = s;
@@ -477,9 +500,9 @@ export function splitForTTS(text: string, maxLen = TTS_CHUNK_MAX_LEN): string[] 
 }
 
 /**
- * Build TTS chunks with an optional smaller first chunk.
- * Unlike naively re-splitting the first base chunk, this keeps the
- * remainder grouped at the normal max length so playback stays fluent.
+ * Build TTS chunks with a shorter first chunk for fast playback start.
+ * The remainder is grouped at the normal max length. Pre-fetch overlap
+ * in the playback pipeline ensures fluent transitions between chunks.
  */
 export function splitForTTSWithFastStart(
   text: string,
