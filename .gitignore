@@ -112,3 +112,4 @@ web/.next.bak*
 # Security backup artifacts (never commit)
 *.INSECURE_BACKUP
 *.deno-backup
+edudashpro_playbook.md
