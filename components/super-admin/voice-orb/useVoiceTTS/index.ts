@@ -43,13 +43,11 @@ import { useVoiceTTSPlayback } from './useVoiceTTSPlayback';
 export { resolveEffectiveVoiceId } from './ttsUtils';
 export type { TTSOptions, UseVoiceTTSReturn, TTSErrorCategory, EffectiveVoiceResolution } from './types';
 
-// Chunk sizes tuned for fast start + fluency:
-// - First chunk is small (~150 chars, ~1 sentence) so audio begins quickly
-// - Follow-up chunks are larger since prefetch hides their synthesis latency
-const FIRST_CHUNK_TARGET_CHARS = 150;
-const FOLLOW_UP_CHUNK_MAX_CHARS = 600;
-const MAX_AZURE_RETRIES = 1;
-const RETRY_BASE_DELAY_MS = 250;
+// Increased chunk sizes to reduce the number of Azure TTS requests per response.
+// Fewer requests = fewer potential timeouts. First chunk ~200 gives fast initial audio;
+// follow-up chunks up to 700 chars keep total request count to 1-2 for most responses.
+const FIRST_CHUNK_TARGET_CHARS = 200;
+const FOLLOW_UP_CHUNK_MAX_CHARS = 700;
 
 const normalizeChunkWhitespace = (text: string): string =>
   String(text || '').replace(/\s+/g, ' ').trim();

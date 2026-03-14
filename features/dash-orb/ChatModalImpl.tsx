@@ -66,6 +66,7 @@ interface ChatModalProps {
   onBackToQuickActions?: () => void; // Navigate back to quick actions
   onSendPrompt?: (prompt: string, displayLabel?: string) => void;
   isSpeaking?: boolean;
+  isMicMuted?: boolean;
   voiceEnabled?: boolean;
   onToggleVoice?: () => void;
   whisperModeEnabled?: boolean;
@@ -117,6 +118,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   onBackToQuickActions,
   onSendPrompt,
   isSpeaking = false,
+  isMicMuted = false,
   voiceEnabled = true,
   onToggleVoice,
   whisperModeEnabled = true,
@@ -838,11 +840,18 @@ export const ChatModal: React.FC<ChatModalProps> = ({
                     onMicPress();
                   }}
                 >
-                  <CosmicOrb size={36} isProcessing={isListeningForCommand || isProcessing} isSpeaking={isSpeaking} />
+                  {isSpeaking && isMicMuted ? (
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#ef4444', alignItems: 'center', justifyContent: 'center' }}>
+                      <Ionicons name="mic-off" size={20} color="#ffffff" />
+                    </View>
+                  ) : (
+                    <CosmicOrb size={36} isProcessing={isListeningForCommand || isProcessing} isSpeaking={isSpeaking} />
+                  )}
                   <View
                     style={[
                       styles.orbControlRing,
-                      { borderColor: isListeningForCommand ? '#ef4444' : theme.primary },
+                      { borderColor: isSpeaking && isMicMuted ? '#ef4444' : isListeningForCommand ? '#ef4444' : theme.primary },
+                      isSpeaking && isMicMuted && { opacity: 0.5 },
                     ]}
                   />
                 </TouchableOpacity>
