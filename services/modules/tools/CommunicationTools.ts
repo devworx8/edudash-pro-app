@@ -115,6 +115,43 @@ function buildPdfToolPayload(
   };
 }
 
+function buildEducationalPrompt(
+  rawPrompt: string,
+  audience?: string,
+  style?: string,
+): string {
+  const prefix: string[] = [];
+  const suffix: string[] = [];
+
+  const aud = String(audience || '').toLowerCase();
+  if (aud === 'preschool' || aud === 'primary') {
+    prefix.push(
+      'Child-friendly educational illustration.',
+      'Bright, cheerful colours. Simple, clear shapes.',
+      'No text overlays. Safe for young children.',
+    );
+    if (aud === 'preschool') {
+      prefix.push('Suitable for ages 3-6. Cartoon style with rounded edges.');
+    } else {
+      prefix.push('Suitable for primary school learners ages 6-12.');
+    }
+  } else if (aud === 'high_school') {
+    prefix.push('Educational diagram or illustration for high school learners.');
+  } else {
+    prefix.push('High-quality educational illustration.');
+  }
+
+  if (style === 'natural') {
+    suffix.push('Photorealistic style, professional lighting, sharp detail.');
+  } else {
+    suffix.push('Vibrant digital illustration style with clean lines.');
+  }
+
+  suffix.push('No watermarks. No logos. No text unless explicitly requested.');
+
+  return [...prefix, rawPrompt, ...suffix].join(' ');
+}
+
 export function registerCommunicationTools(register: (tool: AgentTool) => void): void {
   
   // Message composition tool
@@ -332,46 +369,66 @@ export function registerCommunicationTools(register: (tool: AgentTool) => void):
   // ── Generate Image tool ──────────────────────────────────────────────
   register({
     name: 'generate_image',
-    description: 'Generate an educational image or illustration from a text prompt. Returns a signed URL and storage path.',
+    description:
+      'Generate a high-quality educational image or illustration from a text prompt. ' +
+      'The prompt is automatically enhanced for educational context, bright child-friendly colours, and safety. ' +
+      'Use this whenever the user asks you to draw, illustrate, create a picture, make a poster, or generate visual content.',
     parameters: {
       type: 'object',
       properties: {
         prompt: {
           type: 'string',
-          description: 'Detailed description of the image to generate (e.g. "A colorful poster of the solar system for preschoolers")'
+          description: 'Detailed description of the image to generate (e.g. "A colorful poster of the solar system for preschoolers")',
         },
         size: {
           type: 'string',
           enum: ['1024x1024', '1536x1024', '1024x1536'],
-          description: 'Image dimensions (default: 1024x1024)'
+          description: 'Image dimensions. 1024x1024 (square, default), 1536x1024 (landscape), 1024x1536 (portrait)',
         },
         style: {
           type: 'string',
           enum: ['natural', 'vivid'],
-          description: 'Image style: natural (realistic) or vivid (artistic). Default: vivid'
-        }
+          description: 'Image style: natural (realistic photo) or vivid (artistic illustration). Default: vivid',
+        },
+        quality: {
+          type: 'string',
+          enum: ['medium', 'high'],
+          description: 'Image quality: medium (faster, ~3s) or high (best detail, ~8s). Default: high',
+        },
+        audience: {
+          type: 'string',
+          enum: ['preschool', 'primary', 'high_school', 'adult'],
+          description: 'Target audience for age-appropriate styling. Default: inferred from context',
+        },
       },
-      required: ['prompt']
+      required: ['prompt'],
     },
     risk: 'low',
     execute: async (args) => {
       try {
         const { generateDashImage } = await import('@/lib/services/dashImageService');
 
+        const rawPrompt = String(args.prompt || '').trim();
+        if (!rawPrompt) {
+          return { success: false, error: 'Please describe what image you would like me to create.' };
+        }
+
+        const enhancedPrompt = buildEducationalPrompt(rawPrompt, args.audience, args.style);
+
         const result = await generateDashImage({
-          prompt: String(args.prompt),
+          prompt: enhancedPrompt,
           size: args.size || '1024x1024',
           style: args.style || 'vivid',
-          costMode: 'balanced',
+          quality: args.quality || 'high',
+          costMode: args.quality === 'high' ? 'premium' : 'balanced',
           providerPreference: 'auto',
         });
 
         const firstImage = result.generatedImages?.[0];
         if (!firstImage) {
-          return { success: false, error: 'No image was generated' };
+          return { success: false, error: 'No image was generated. Please try a different description.' };
         }
 
-        // Post image link into Dash chat
         try {
           const { DashAIAssistant } = await import('@/services/dash-ai/DashAICompat');
           const dash = DashAIAssistant.getInstance();
@@ -380,10 +437,11 @@ export function registerCommunicationTools(register: (tool: AgentTool) => void):
             await dash.addMessageToConversation(convId, {
               id: `img_${Date.now()}`,
               type: 'assistant',
-              content: `Here's your generated image:\n\n![${args.prompt}](${firstImage.signed_url})`,
+              content: `Here is the image I created for you.`,
               timestamp: Date.now(),
               metadata: {
                 tool_results: { tool: 'generate_image', ...firstImage },
+                generated_images: [firstImage],
               },
             } as any);
           }
@@ -400,13 +458,20 @@ export function registerCommunicationTools(register: (tool: AgentTool) => void):
           model: firstImage.model,
           width: firstImage.width,
           height: firstImage.height,
-          message: 'Image generated successfully',
+          message: 'Image generated successfully. The image is displayed in the chat.',
         };
       } catch (e: any) {
         logger.error('[generate_image] Error:', e);
-        return { success: false, error: e?.message || 'Image generation failed' };
+        const msg = String(e?.message || '');
+        if (msg.includes('content_policy') || msg.includes('safety')) {
+          return { success: false, error: 'That image could not be created because it did not meet safety guidelines. Please try a different description.' };
+        }
+        if (msg.includes('quota') || msg.includes('rate_limit')) {
+          return { success: false, error: 'Image generation limit reached. Please try again in a few minutes.' };
+        }
+        return { success: false, error: e?.message || 'Image generation failed. Please try again.' };
       }
-    }
+    },
   });
 
   // ── Generate Worksheet tool ──────────────────────────────────────────

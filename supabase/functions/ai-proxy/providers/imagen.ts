@@ -242,7 +242,7 @@ export async function callImagenImageGeneration(params: {
   const serviceAccount = getGoogleServiceAccount();
   const projectId = getEnv('GOOGLE_CLOUD_PROJECT_ID') || serviceAccount?.project_id || null;
   const location = getEnv('GOOGLE_CLOUD_LOCATION') || 'us-central1';
-  const model = requestedModel || getEnv('IMAGEN_MODEL') || 'imagen-4-fast-generate-preview-06-06';
+  const model = requestedModel || getEnv('IMAGEN_MODEL') || 'imagen-4-generate-001';
 
   if (!serviceAccount || !projectId) {
     throw createImagenError({
@@ -273,6 +273,8 @@ export async function callImagenImageGeneration(params: {
     parameters: {
       sampleCount: 1,
       aspectRatio: mapAspectRatio(options?.size),
+      personGeneration: 'allow_adult',
+      safetyFilterLevel: 'block_medium_and_above',
     },
   };
 
