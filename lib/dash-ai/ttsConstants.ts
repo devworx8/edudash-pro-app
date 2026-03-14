@@ -12,8 +12,8 @@
 // ── Azure Speech Rates ──────────────────────────────────────────────
 // Azure SSML <prosody rate="X%"> where 0 = normal, negative = slower.
 
-/** Normal speech rate — slightly faster than Azure default for snappier responses */
-export const AZURE_RATE_NORMAL = 8;
+/** Normal speech rate — moderately faster than Azure default for snappier responses */
+export const AZURE_RATE_NORMAL = 14;
 
 /** Phonics sentence-level rate: keep full sentence delivery at normal pace */
 export const AZURE_RATE_PHONICS = 0;

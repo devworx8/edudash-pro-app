@@ -68,10 +68,10 @@ export function useVoiceOrbTTSHandlers({
   postTTSSilentUntilRef,
 }: TTSHandlerParams) {
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Delay before re-enabling mic after TTS ends — long enough for speaker echo to die down
-  const AUTO_RESTART_DELAY_MS = 1500;
-  // How long (ms) to gate onTranscript after TTS ends to prevent echo self-interruption
-  const POST_TTS_ECHO_GATE_MS = 2000;
+  // Delay before re-enabling mic after TTS ends
+  const AUTO_RESTART_DELAY_MS = 600;
+  // Gate transcripts briefly after TTS ends to prevent speaker echo self-interruption
+  const POST_TTS_ECHO_GATE_MS = 800;
 
   const suspendListeningForTTS = useCallback(async () => {
     if (recorderState.isRecording) {
