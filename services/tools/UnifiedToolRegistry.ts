@@ -54,7 +54,7 @@ const TOOL_ACCESS_RULES: Record<string, { roles?: ToolRole[]; minTier?: ToolTier
   // Communication + PDF + navigation + visual generation
   compose_message: { roles: ['teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
   export_pdf: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
-  generate_image: { roles: ['teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
+  generate_image: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
   generate_worksheet: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
   generate_chart: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
   generate_pdf_from_prompt: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },

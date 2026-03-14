@@ -105,8 +105,13 @@ export function shouldEnableVoiceTurnTools(input: string, options?: {
   const explicitPdfIntent = /\b(export|generate|create|make|download)\b/i.test(text) && /\bpdf\b/i.test(text);
   if (explicitPdfIntent) return true;
 
-  const explicitToolIntent = /\b(export[_\s-]*pdf|generate[_\s-]*(pdf|worksheet|chart)|open\s+pdf|send email|email this|navigate|open screen)\b/i.test(text);
+  const explicitToolIntent = /\b(export[_\s-]*pdf|generate[_\s-]*(pdf|worksheet|chart|image)|open\s+pdf|send email|email this|navigate|open screen)\b/i.test(text);
   if (explicitToolIntent) return true;
+
+  const imageIntent = /\b(draw|sketch|illustrate|picture|poster|image|photo|artwork|diagram|visual)\b/i.test(text) &&
+    /\b(make|create|generate|show|draw|give|can you|please)\b/i.test(text);
+  if (imageIntent) return true;
+
   if (needsWebSearch(text)) return true;
 
   // Attachments can usually be handled directly in the model context without tool overhead.
@@ -183,6 +188,12 @@ export function buildSystemPrompt(
     'If unclear, say "Could you say that again?"',
     'Group replies into 1-2 medium sentences per thought for smooth TTS.',
     'PHONICS: Always use slash markers /s/, /m/, /b/ for letter sounds. Never write "sss" or "s s s".',
+    '',
+    'IMAGE GENERATION:',
+    'You can create images! If the user asks you to draw, illustrate, make a picture, create a poster, or show something visually, use the generate_image tool.',
+    'Describe the image in detail in the prompt field. After generating, tell the user: "I have created the image for you. You can see it in the chat."',
+    'For preschoolers, always set audience to "preschool" for age-appropriate, colourful images.',
+    'For school learners, set audience to "primary" or "high_school" as appropriate.',
     '',
   );
 

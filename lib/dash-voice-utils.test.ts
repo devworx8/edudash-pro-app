@@ -141,5 +141,15 @@ describe('dash-voice-utils', () => {
     it('keeps tools deferred when OCR mode is active', () => {
       expect(shouldEnableVoiceTurnTools('Read this worksheet image', { ocrMode: true })).toBe(false);
     });
+
+    it('enables tools for image generation prompts', () => {
+      expect(shouldEnableVoiceTurnTools('Can you draw me a picture of a lion')).toBe(true);
+      expect(shouldEnableVoiceTurnTools('Create an image of the solar system')).toBe(true);
+      expect(shouldEnableVoiceTurnTools('Please make a poster about healthy eating')).toBe(true);
+    });
+
+    it('does not enable tools for incidental image-word usage', () => {
+      expect(shouldEnableVoiceTurnTools('What is the image of success')).toBe(false);
+    });
   });
 });
