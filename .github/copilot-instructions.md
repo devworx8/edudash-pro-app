@@ -1,5 +1,7 @@
 # Copilot Instructions for EduDash Pro
 
+> **Full playbook**: See `edudashpro_playbook.md` in the repo root for the complete engineering & architecture reference (data models, AI system, RBAC, quota, voice, deployment).
+
 ## Project Overview
 
 **EduDash Pro** is a multi-tenant, mobile-first educational platform (preschool/ECD sector, South Africa) with agentic AI, strict RBAC, and 5 user roles.

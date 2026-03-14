@@ -106,8 +106,8 @@ export function normalizeToBCP47(code?: string): SouthAfricanLanguage {
 /**
  * Get Azure voice for language and gender
  */
-export function getAzureVoice(bcp47: SouthAfricanLanguage, gender: 'male' | 'female' = 'female'): string {
-  return AZURE_VOICE_MAP[bcp47]?.[gender] || AZURE_VOICE_MAP['en-ZA'].female;
+export function getAzureVoice(bcp47: SouthAfricanLanguage, gender: 'male' | 'female' = 'male'): string {
+  return AZURE_VOICE_MAP[bcp47]?.[gender] || AZURE_VOICE_MAP['en-ZA'].male;
 }
 
 // ==================== TANSTACK QUERY HOOKS ====================
@@ -213,7 +213,7 @@ export function useUpdateLanguagePreference() {
         throw new Error('User not authenticated');
       }
       
-      const voice_id = getAzureVoice(language, gender || 'female');
+      const voice_id = getAzureVoice(language, gender || 'male');
       
       const { error } = await getSupabase()
         .from('voice_preferences')

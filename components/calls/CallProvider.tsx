@@ -371,7 +371,7 @@ export function CallProvider({ children }: CallProviderProps) {
       }
       const { data: call } = await getSupabase()
         .from('active_calls')
-        .select('*')
+        .select('id, call_id, caller_id, callee_id, call_type, status, meeting_url, started_at, ended_at, duration_seconds, caller_name')
         .eq('call_id', callId)
         .maybeSingle();
       if (!call) return;
@@ -383,11 +383,12 @@ export function CallProvider({ children }: CallProviderProps) {
       const callerName = profile
         ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || 'Unknown'
         : (payload?.caller_name as string) || 'Unknown';
-      setAnsweringCall({
+      const activeCall: ActiveCall = {
         ...call,
         caller_name: callerName,
         meeting_url: call.meeting_url || (payload?.meeting_url as string),
-      });
+      };
+      setAnsweringCall(activeCall);
       setIsCallInterfaceOpen(true);
       setCallState('connecting');
     });
@@ -438,7 +439,7 @@ export function CallProvider({ children }: CallProviderProps) {
         } else {
           const { data: call } = await getSupabase()
             .from('active_calls')
-            .select('*')
+            .select('id, call_id, caller_id, callee_id, call_type, status, meeting_url, started_at, ended_at, duration_seconds, caller_name')
             .eq('call_id', callId)
             .maybeSingle();
           if (call) {
@@ -627,7 +628,7 @@ export function CallProvider({ children }: CallProviderProps) {
               await new Promise((resolve) => setTimeout(resolve, 300));
               const { data: fullCall } = await getSupabase()
                 .from('active_calls')
-                .select('*')
+                .select('call_id, meeting_url')
                 .eq('call_id', call.call_id)
                 .maybeSingle();
               if (fullCall?.meeting_url) {

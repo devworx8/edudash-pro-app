@@ -40,12 +40,24 @@ export function measure(name: string, startMark?: string): { name: string; durat
 }
 
 /**
- * Time an async operation
+ * Time an async operation. If sentryOp is provided, wraps in a Sentry span.
  */
 export async function timeAsync<T>(
   name: string, 
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  sentryOp?: string,
 ): Promise<{ result: T; duration: number }> {
+  if (sentryOp) {
+    try {
+      const { traceOperation } = await import('@/lib/monitoring');
+      const start = (global.performance?.now) ? global.performance.now() : Date.now();
+      const result = await traceOperation(sentryOp, name, fn);
+      const duration = ((global.performance?.now) ? global.performance.now() : Date.now()) - start;
+      return { result, duration };
+    } catch {
+      // Fall through to untraced version
+    }
+  }
   mark(name);
   const result = await fn();
   const { duration } = measure(name);
@@ -135,6 +147,13 @@ export function initPerformanceMonitoring() {
         console.log(`🚀 App ready in ${duration.toFixed(2)}ms`);
       }
       
+      // Report cold start to Sentry as a span
+      import('@/lib/monitoring').then(({ trackPerformance }) => {
+        trackPerformance('app.cold_start', duration, {
+          platform: require('react-native').Platform.OS,
+        });
+      }).catch(() => {});
+
       // Track cold start performance
       import('@/lib/analytics').then(({ track }) => {
         track('edudash.app.cold_start', {

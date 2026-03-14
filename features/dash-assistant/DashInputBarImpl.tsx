@@ -397,7 +397,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       style={[
         styles.inputContainer,
         {
-          backgroundColor: 'transparent',
+          backgroundColor: theme.surface + 'F2',
           paddingBottom: Math.max(12, bottomInset),
         }
       ]}
@@ -502,9 +502,13 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
           style={[
             styles.inputWrapper,
             {
-              backgroundColor: 'transparent',
-              shadowOpacity: 0,
-              elevation: 0,
+              backgroundColor: theme.surfaceVariant + 'F2',
+              borderColor: isFocused ? theme.primary : theme.border + 'AA',
+              shadowColor: '#020617',
+              shadowOpacity: Platform.OS === 'android' ? 0.25 : 0.18,
+              shadowRadius: 10,
+              shadowOffset: { width: 0, height: 6 },
+              elevation: 6,
             },
           ]}
         >
@@ -584,14 +588,15 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
             onContentSizeChange={
               Platform.OS === 'web'
                 ? undefined
-                : (e) =>
+                : (e) => {
+                    const measuredHeight = (e?.nativeEvent?.contentSize?.height ?? 0) + 16;
                     setInputHeight((prev) => {
-                      const measuredHeight = (e?.nativeEvent?.contentSize?.height ?? 0) + 16;
                       const nextHeight = measuredHeight <= FULL_CHAT_GROW_THRESHOLD
                         ? FULL_CHAT_COMPACT_HEIGHT
                         : Math.min(measuredHeight, FULL_CHAT_MAX_HEIGHT);
                       return prev === nextHeight ? prev : nextHeight;
-                    })
+                    });
+                  }
             }
             onFocus={() => { setIsFocused(true); onInputFocus?.(); }}
             onBlur={() => setIsFocused(false)}

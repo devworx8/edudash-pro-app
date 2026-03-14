@@ -179,7 +179,7 @@ async function fetchNotifications(
   try {
     const { data: inAppNotifs, error: inAppError } = await client
       .from('in_app_notifications')
-      .select('*')
+      .select('id, type, title, body, message, data, read, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(30);
@@ -208,7 +208,7 @@ async function fetchNotifications(
   try {
     const { data: pushNotifs, error: pushError } = await client
       .from('push_notifications')
-      .select('*')
+      .select('id, notification_type, title, body, data, created_at')
       .eq('recipient_user_id', userId)
       .in('status', ['sent', 'delivered'])
       .order('created_at', { ascending: false })
@@ -241,7 +241,7 @@ async function fetchNotifications(
   try {
     const { data: generalNotifs, error: generalError } = await client
       .from('notifications')
-      .select('*')
+      .select('id, type, title, message, metadata, is_read, created_at')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(30);
@@ -389,7 +389,7 @@ async function fetchNotifications(
     // so we fetch calls first, then separately fetch caller profiles
     const { data: calls } = await client
       .from('active_calls')
-      .select('*')
+      .select('call_id, caller_id, call_type, status, started_at, caller_name')
       .eq('callee_id', userId)
       .or('status.eq.missed,and(status.eq.ended,duration_seconds.is.null),and(status.eq.ended,duration_seconds.eq.0)')
       .order('started_at', { ascending: false })

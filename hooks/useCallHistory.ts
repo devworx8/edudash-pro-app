@@ -43,7 +43,7 @@ export const useCallHistory = () => {
       // Fetch call records for current user
       const { data, error } = await client
         .from('active_calls')
-        .select('*')
+        .select('id, call_id, call_type, status, caller_id, callee_id, started_at, ended_at, duration_seconds, meeting_url, caller_name')
         .or(`caller_id.eq.${user.id},callee_id.eq.${user.id}`)
         .order('started_at', { ascending: false })
         .limit(50);

@@ -286,3 +286,42 @@ export function trackPerformance(eventName: string, duration: number, context?: 
     }
   }
 }
+
+/**
+ * Run a callback inside a Sentry performance span.
+ * Falls back to running the callback untraced if Sentry is unavailable.
+ */
+export async function traceOperation<T>(
+  op: string,
+  name: string,
+  fn: () => Promise<T>,
+  attributes?: Record<string, string | number | boolean>,
+): Promise<T> {
+  try {
+    return await Sentry.startSpan(
+      { op, name, attributes },
+      async () => fn(),
+    );
+  } catch {
+    return fn();
+  }
+}
+
+/**
+ * Synchronous version of traceOperation for non-async code.
+ */
+export function traceSync<T>(
+  op: string,
+  name: string,
+  fn: () => T,
+  attributes?: Record<string, string | number | boolean>,
+): T {
+  try {
+    return Sentry.startSpan(
+      { op, name, attributes },
+      () => fn(),
+    );
+  } catch {
+    return fn();
+  }
+}

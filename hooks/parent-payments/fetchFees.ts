@@ -22,7 +22,7 @@ export async function fetchPaymentFees(
   const childPreschoolId = selectedChild?.preschool_id || preschoolId;
   // POP uploads
   const { data: uploads } = await supabase
-    .from('pop_uploads').select('*')
+    .from('pop_uploads').select('id, student_id, upload_type, title, description, category_code, file_path, file_name, status, payment_amount, payment_date, payment_for_month, payment_reference, created_at')
     .eq('student_id', selectedChildId).eq('upload_type', 'proof_of_payment')
     .order('created_at', { ascending: false });
   const popUploadsData = (uploads || []) as POPUpload[];
@@ -116,7 +116,7 @@ export async function fetchPaymentFees(
   if (childPreschoolId) {
     let resolvedFees: any[] = [];
     const { data: schoolFees } = await supabase
-      .from('school_fee_structures').select('*').eq('preschool_id', childPreschoolId).eq('is_active', true);
+      .from('school_fee_structures').select('id, name, fee_category, amount_cents, description, billing_frequency, age_group, grade_level').eq('preschool_id', childPreschoolId).eq('is_active', true);
     if (schoolFees && schoolFees.length > 0) {
       resolvedFees = schoolFees.map((f: any) => ({
         id: f.id, name: f.name, fee_type: f.fee_category || f.name,
@@ -125,7 +125,7 @@ export async function fetchPaymentFees(
       }));
     } else {
       const { data: legacyFees } = await supabase
-        .from('fee_structures').select('*').eq('preschool_id', childPreschoolId).eq('is_active', true);
+        .from('fee_structures').select('id, name, fee_type, amount, description, frequency, grade_levels').eq('preschool_id', childPreschoolId).eq('is_active', true);
       if (legacyFees && legacyFees.length > 0) {
         resolvedFees = legacyFees.map((f: any) => ({
           id: f.id, name: f.name, fee_type: f.fee_type || f.name, amount: f.amount,
@@ -177,7 +177,7 @@ export async function fetchPaymentFees(
       }
     }
     const { data: paymentMethodsData } = await supabase
-      .from('organization_payment_methods').select('*')
+      .from('organization_payment_methods').select('id, method_name, display_name, processing_fee, fee_type, description, instructions, bank_name, account_number, branch_code, preferred')
       .eq('organization_id', childPreschoolId).eq('active', true)
       .order('preferred', { ascending: false });
     if (paymentMethodsData) paymentMethodsResult = paymentMethodsData as PaymentMethod[];
