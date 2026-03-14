@@ -134,7 +134,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   }, [onTranscript]);
 
   const bargeInGraceMsRef = useRef(
-    Number.parseInt(String(process.env.EXPO_PUBLIC_VOICE_BARGE_IN_GRACE_MS || '2000'), 10) || 2000
+    Number.parseInt(String(process.env.EXPO_PUBLIC_VOICE_BARGE_IN_GRACE_MS || '1200'), 10) || 1200
   );
   const shouldTriggerBargeIn = useCallback((text: string) => {
     const spoken = String(text || '').trim();
@@ -143,13 +143,13 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     if (bargeInTriggeredRef.current) return false;
     const ttsStartedAt = ttsStartedAtRef.current;
     if (ttsStartedAt != null && Date.now() - ttsStartedAt < bargeInGraceMsRef.current) return false;
-    return spoken.length >= 10;
+    return spoken.length >= 4;
   }, [isMuted]);
 
   const triggerBargeIn = useCallback(async (text: string) => {
     if (!shouldTriggerBargeIn(text)) return;
     bargeInTriggeredRef.current = true;
-    console.log('[VoiceOrb] 🎙️ Auto barge-in detected - stopping TTS');
+    console.log('[VoiceOrb] 🎙️ Auto barge-in detected - stopping TTS, continuing to listen');
     try {
       await stopSpeaking();
     } catch (stopError) {

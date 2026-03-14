@@ -43,12 +43,13 @@ import { useVoiceTTSPlayback } from './useVoiceTTSPlayback';
 export { resolveEffectiveVoiceId } from './ttsUtils';
 export type { TTSOptions, UseVoiceTTSReturn, TTSErrorCategory, EffectiveVoiceResolution } from './types';
 
-// Chunk sizes tuned for fluency: a short first chunk starts audio fast,
-// larger follow-up chunks reduce round-trips and rely on pre-fetch overlap.
-const FIRST_CHUNK_TARGET_CHARS = 250;
-const FOLLOW_UP_CHUNK_MAX_CHARS = 900;
-const MAX_AZURE_RETRIES = 2;
-const RETRY_BASE_DELAY_MS = 350;
+// Chunk sizes tuned for fast start + fluency:
+// - First chunk is small (~150 chars, ~1 sentence) so audio begins quickly
+// - Follow-up chunks are larger since prefetch hides their synthesis latency
+const FIRST_CHUNK_TARGET_CHARS = 150;
+const FOLLOW_UP_CHUNK_MAX_CHARS = 600;
+const MAX_AZURE_RETRIES = 1;
+const RETRY_BASE_DELAY_MS = 250;
 
 const normalizeChunkWhitespace = (text: string): string =>
   String(text || '').replace(/\s+/g, ' ').trim();
@@ -98,7 +99,7 @@ const splitTextForCloudTTS = (text: string, phonicsMode: boolean): string[] => {
     const maxChars = chunks.length === 0 ? FIRST_CHUNK_TARGET_CHARS : FOLLOW_UP_CHUNK_MAX_CHARS;
     const candidate = current ? `${current} ${sentence}` : sentence;
 
-    if (candidate.length <= maxChars || (chunks.length === 0 && current.length < 120)) {
+    if (candidate.length <= maxChars || (chunks.length === 0 && current.length < 80)) {
       current = candidate;
       continue;
     }
