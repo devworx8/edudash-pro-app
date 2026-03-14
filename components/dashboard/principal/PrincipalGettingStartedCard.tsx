@@ -7,6 +7,7 @@
 
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { ratioToPercent } from '@/lib/progress/clampPercent';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
@@ -124,7 +125,7 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
       {/* Progress bar */}
       <View style={styles.progressRow}>
         <View style={[styles.progressTrack, { backgroundColor: `${theme.primary}12` }]}>
-          <View style={[styles.progressFill, { width: `${(completedCount / totalSteps) * 100}%`, backgroundColor: theme.success || '#10B981' }]} />
+          <View style={[styles.progressFill, { width: ratioToPercent(completedCount, totalSteps), backgroundColor: theme.success || '#10B981' }]} />
         </View>
         <Text style={[styles.progressText, { color: theme.textSecondary }]}>{completedCount}/{totalSteps}</Text>
       </View>
