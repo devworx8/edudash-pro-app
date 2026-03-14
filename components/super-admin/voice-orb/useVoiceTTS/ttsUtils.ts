@@ -71,9 +71,11 @@ export function resolveEffectiveVoiceId(input: {
   aiSettingsVoice?: unknown;
   fallbackGender?: 'male' | 'female';
 }): EffectiveVoiceResolution {
+  // Always default to male (AndrewMultilingual) regardless of language —
+  // consistent with voiceMapping.ts VOICES_BY_LANG and getDefaultVoiceGenderForLanguage.
   const fallbackGender = input.fallbackGender
     ? normalizeVoiceGender(input.fallbackGender)
-    : normalizeLanguageBase(input.language) === 'en' ? 'male' : 'female';
+    : 'male';
   const localeDefault = resolveLocaleDefaultVoice(input.language, fallbackGender);
   const base = normalizeLanguageBase(input.language);
 

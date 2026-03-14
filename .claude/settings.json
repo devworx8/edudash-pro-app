@@ -53,7 +53,12 @@
       "Bash(mkdir -p /home/edp/Desktop/dashpro/features/super-admin/voice-orb)",
       "Bash(npx tsc --noEmit --project tsconfig.json)",
       "Bash(grep -E \"\\\\.\\(tsx?|jsx?\\)$\")",
-      "Bash(grep -l \"homework\\\\|exam\\\\|grading\\\\|submission\" /home/edp/Desktop/dashpro/app/screens/*.tsx)"
+      "Bash(grep -l \"homework\\\\|exam\\\\|grading\\\\|submission\" /home/edp/Desktop/dashpro/app/screens/*.tsx)",
+      "Bash(grep -n \"MAX.*BASE64\\\\|MAX.*IMAGE\\\\|truncate\\\\|slice\" /home/edp/Desktop/dashpro/lib/dash-ai/*.ts)",
+      "Bash(grep -rn \"isNearBottom\\\\|unreadCount\\\\|scrollDown\\\\|chevron-down\\\\|arrow-down\\\\|ScrollToBottom\\\\|scroll.*button\\\\|scrollButton\" /home/edp/Desktop/dashpro --include=*.tsx --include=*.ts -l)",
+      "Bash(npx tsc:*)",
+      "Bash(grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(grep -r \"haiku\\\\|defaultModel\\\\|getDefaultModel\\\\|tier.*model\\\\|model.*tier\" /home/edp/Desktop/dashpro/supabase/functions --include=*.ts -l)"
     ],
     "additionalDirectories": [
       "/home/edp/.claude/projects/-home-edp-Desktop-dashpro",

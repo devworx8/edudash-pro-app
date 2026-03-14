@@ -109,7 +109,16 @@ export function buildConversationContext(
 
     const content = normalizeMessageContent(message.content);
     const artifactCue = role === 'assistant' ? extractArtifactCue(message) : null;
-    const contextualContent = [content, artifactCue].filter(Boolean).join('\n');
+
+    // Add image cue so AI knows an image was shared in this turn of the conversation
+    const imageCue = role === 'user' && (message.attachments || []).some((a) => {
+      const kind = String(a?.kind || '').toLowerCase();
+      return kind === 'image';
+    })
+      ? `[Image attached: ${(message.attachments || []).filter((a) => String(a?.kind || '').toLowerCase() === 'image').map((a) => a.name || 'image').join(', ')}]`
+      : null;
+
+    const contextualContent = [content, imageCue, artifactCue].filter(Boolean).join('\n');
     if (!contextualContent) continue;
 
     const messageTokens = estimateTokenCount(contextualContent) + MESSAGE_OVERHEAD_TOKENS;

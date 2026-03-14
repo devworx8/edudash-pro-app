@@ -266,9 +266,10 @@ interface UseDashAssistantReturn {
   // Refs
   flashListRef: React.RefObject<any>;
   inputRef: React.RefObject<any>;
+  webScrollNodeRef: { current: any };
   
   // Actions
-  sendMessage: (text?: string) => Promise<void>;
+  sendMessage: (text?: string, overrideAttachments?: any[]) => Promise<void>;
   sendTutorAnswer: (answer: string, sourceMessageId?: string) => Promise<void>;
   cancelGeneration: () => void;
   stopAllActivity: (reason?: string) => Promise<void>;
@@ -490,6 +491,8 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   // Refs
   const flashListRef = useRef<any>(null);
   const inputRef = useRef<any>(null);
+  // Caches the actual DOM scroll container on web (populated by DashAssistantMessages onScroll)
+  const webScrollNodeRef = useRef<any>(null);
   const voiceSessionRef = useRef<VoiceSession | null>(null);
   const voiceProviderRef = useRef<VoiceProvider | null>(null);
   const voiceInputStartAtRef = useRef<number | null>(null);
@@ -941,27 +944,53 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
 
       if (Platform.OS === 'web') {
         try {
-          const scrollNode = list.getScrollableNode?.() ?? list.getNativeScrollRef?.();
+          // Priority 1: cached DOM scroll node captured from onScroll event
+          const scrollNode: any =
+            webScrollNodeRef.current ??
+            list.getScrollableNode?.() ??
+            list.getNativeScrollRef?.() ??
+            (list as any)._listRef?.getScrollableNode?.() ??
+            (list as any)._listRef?.current?.getScrollableNode?.() ??
+            (list as any).rlvRef?.current?._scrollComponent?.getScrollableNode?.() ??
+            (list as any).rlvRef?.current?.scrollComponent?.getScrollableNode?.();
+
           if (scrollNode) {
+            // Cache it for future calls
+            if (!webScrollNodeRef.current) webScrollNodeRef.current = scrollNode;
             if (typeof scrollNode.scrollTo === 'function') {
-              try {
-                scrollNode.scrollTo({
-                  top: scrollNode.scrollHeight ?? 999999,
-                  behavior: animatedPass ? 'smooth' : 'auto',
-                });
-                didScroll = true;
-              } catch {
-                scrollNode.scrollTo({ y: 999999, animated: animatedPass });
-                didScroll = true;
-              }
+              scrollNode.scrollTo({
+                top: (scrollNode.scrollHeight ?? 0) + 9999,
+                behavior: animatedPass ? 'smooth' : 'auto',
+              });
+              didScroll = true;
             } else if (typeof scrollNode.scrollTop === 'number') {
-              scrollNode.scrollTop = scrollNode.scrollHeight ?? 999999;
+              scrollNode.scrollTop = (scrollNode.scrollHeight ?? 0) + 9999;
+              didScroll = true;
+            }
+          }
+
+          // Sentinel-based fallback: scroll a known element at the bottom into view
+          if (!didScroll) {
+            const sentinel =
+              typeof document !== 'undefined'
+                ? document.getElementById('dash-scroll-sentinel')
+                : null;
+            if (sentinel) {
+              sentinel.scrollIntoView({ behavior: animatedPass ? 'smooth' : 'auto', block: 'end' });
               didScroll = true;
             }
           }
         } catch (e) {
           console.debug('[useDashAssistant] web DOM scroll failed:', e);
         }
+
+        // Last resort: FlashList scrollToEnd (capped at estimated height, better than nothing)
+        if (!didScroll) {
+          try { list.scrollToEnd?.({ animated: animatedPass }); didScroll = true; } catch {}
+        }
+
+        if (didScroll) lastAutoScrollAtRef.current = Date.now();
+        return;
       }
 
       try {
@@ -1354,7 +1383,22 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
         scrollToBottom({ animated: true, delay: 120 });
       }
       
-      if (attachments.length > 0) {
+      // If no attachments on this turn, re-use the most recent image from the conversation
+      // (within last 10 messages). This preserves vision context for follow-up questions
+      // like "try again", "explain it", "what does it say" without requiring re-upload.
+      let effectiveAttachments = attachments;
+      if (effectiveAttachments.length === 0) {
+        const priorMessages = (conversation?.messages || []).slice(-10);
+        for (let mi = priorMessages.length - 1; mi >= 0; mi -= 1) {
+          const priorImg = priorMessages[mi]?.attachments?.find((a: any) => a.kind === 'image');
+          if (priorImg) {
+            effectiveAttachments = [priorImg];
+            break;
+          }
+        }
+      }
+
+      if (effectiveAttachments.length > 0) {
         setLoadingStatus('uploading');
         setStatusStartTime(Date.now());
       } else {
@@ -1376,13 +1420,18 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
         }
       }
 
-      // Upload attachments using dashAttachments hook
-      const uploadedAttachments = await dashAttachments.uploadAttachments(attachments, conversationIdForUpload);
+      // Upload attachments (skip already-uploaded ones from prior messages re-used for context)
+      const attachmentsNeedingUpload = effectiveAttachments.filter((a: any) => a.status !== 'uploaded');
+      const alreadyUploaded = effectiveAttachments.filter((a: any) => a.status === 'uploaded');
+      const freshUploaded = attachmentsNeedingUpload.length > 0
+        ? await dashAttachments.uploadAttachments(attachmentsNeedingUpload, conversationIdForUpload)
+        : [];
       if (!isCurrentRequest()) return;
-      if (attachments.length > 0 && uploadedAttachments.length === 0) {
+      if (attachmentsNeedingUpload.length > 0 && freshUploaded.length === 0) {
         throw new Error('All selected attachments failed to upload. Please retry; Dash can auto-compress JPG/PNG images.');
       }
-      const hasAttachmentPayload = uploadedAttachments.length > 0 || attachments.length > 0;
+      const uploadedAttachments = [...alreadyUploaded, ...freshUploaded];
+      const hasAttachmentPayload = uploadedAttachments.length > 0;
       setLoadingStatus(hasAttachmentPayload ? 'analyzing' : 'thinking');
       setStatusStartTime(Date.now());
       if (isNearBottomRef.current) {
@@ -1559,7 +1608,9 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
         type: 'user',
         content: displayText,
         timestamp: Date.now(),
-        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+        // Use aiAttachments so image_base64/previewUri data-URI are stored on the message
+        // (enables retry and follow-up re-use without re-uploading)
+        attachments: aiAttachments.length > 0 ? aiAttachments : undefined,
         metadata: {
           turn_id: turnId,
         },
@@ -2592,7 +2643,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   }, [cancelVoiceAutoSend, cancelGeneration, isRecording, stopSpeaking, stopVoiceRecording]);
 
   // Public send message
-  const sendMessage = useCallback(async (text: string = inputText.trim()) => {
+  const sendMessage = useCallback(async (text: string = inputText.trim(), overrideAttachments?: any[]) => {
     cancelVoiceAutoSend();
     // If voice capture is active, stop listening before sending.
     if (isRecording) {
@@ -2600,7 +2651,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     }
 
     const normalizedText = typeof text === 'string' ? text.trim() : '';
-    const requestAttachments = [...dashAttachments.selectedAttachments];
+    const requestAttachments = overrideAttachments ?? [...dashAttachments.selectedAttachments];
     if ((!normalizedText && requestAttachments.length === 0) || !dashInstance) return;
     
     if (user?.id) {
@@ -3378,6 +3429,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     // Refs
     flashListRef,
     inputRef,
+    webScrollNodeRef,
     
     // Actions
     sendMessage,

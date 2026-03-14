@@ -45,8 +45,8 @@ const formatTierLabel = (tier: string): string => {
 
 export const formatModelUsageLabel = (relativeCost: number): string => {
   if (relativeCost <= 2) return 'Light usage';
-  if (relativeCost <= 5) return 'Balanced usage';
-  if (relativeCost <= 8) return 'Deep reasoning';
+  if (relativeCost <= 4) return 'Balanced';
+  if (relativeCost <= 7) return 'Deep reasoning';
   return 'Heavy usage';
 };
 
@@ -108,9 +108,9 @@ export function CompactModelPicker({
   if (!selectedModel) return null;
 
   const selectedColor = getDashModelColor(selectedModel.id, theme.primary);
-  const popoverWidth = Math.min(maxPopoverWidth, Math.max(280, windowWidth - 24));
+  const popoverWidth = Math.min(maxPopoverWidth, Math.max(300, windowWidth - 20));
   const preferredTop = anchor.y + anchor.height + 10;
-  const webMaxHeight = Math.min(windowHeight * 0.66, 420);
+  const webMaxHeight = Math.min(windowHeight * 0.7, 520);
   const showAbove = preferredTop + webMaxHeight > windowHeight - 12;
   const left = Math.min(
     Math.max(12, anchor.x + anchor.width - popoverWidth),
@@ -145,6 +145,13 @@ export function CompactModelPicker({
     const modelColor = getDashModelColor(model.id, theme.primary);
     const active = model.id === selectedModelId;
     const legacy = isLegacyModel(model);
+    const usageLabel = formatModelUsageLabel(model.relativeCost);
+    const rowBackground = active
+      ? `${modelColor}35`
+      : lockedRow
+        ? theme.background
+        : theme.surfaceVariant;
+    const rowBorder = active ? `${modelColor}99` : theme.border;
 
     return (
       <TouchableOpacity
@@ -152,8 +159,8 @@ export function CompactModelPicker({
         style={[
           styles.row,
           {
-            borderColor: active ? `${modelColor}D6` : theme.border,
-            backgroundColor: active ? `${modelColor}1E` : theme.surfaceVariant,
+            borderColor: rowBorder,
+            backgroundColor: rowBackground,
           },
           active && styles.activeRow,
           lockedRow && styles.lockedRow,
@@ -184,7 +191,7 @@ export function CompactModelPicker({
               {model.displayName}
             </Text>
             {active ? (
-              <View style={[styles.badge, { backgroundColor: `${modelColor}26`, borderColor: `${modelColor}66` }]}>
+              <View style={[styles.badge, { backgroundColor: `${modelColor}30`, borderColor: `${modelColor}88` }]}>
                 <Text style={[styles.badgeText, { color: modelColor }]}>Current</Text>
               </View>
             ) : null}
@@ -198,16 +205,23 @@ export function CompactModelPicker({
             {model.description}
           </Text>
           <View style={styles.metaRow}>
-            <View style={[styles.metaPill, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <View style={[styles.metaPill, { backgroundColor: theme.surface, borderColor: theme.border }]}>
               <Text style={[styles.metaText, { color: theme.textSecondary }]}>
-                {formatModelUsageLabel(model.relativeCost)}
+                {usageLabel} • x{model.relativeCost.toFixed(1)}
               </Text>
             </View>
-            <View style={[styles.metaPill, { backgroundColor: `${modelColor}16`, borderColor: `${modelColor}4A` }]}>
+            <View style={[styles.metaPill, { backgroundColor: `${modelColor}25`, borderColor: `${modelColor}55` }]}>
               <Text style={[styles.metaText, { color: active ? modelColor : theme.textSecondary }]}>
                 {lockedRow ? `Requires ${formatTierLabel(model.minTier)}` : formatTierLabel(model.minTier)}
               </Text>
             </View>
+            {model.notes ? (
+              <View style={[styles.metaPill, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+                <Text style={[styles.metaText, { color: theme.textSecondary }]} numberOfLines={1}>
+                  {model.notes}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
         <Ionicons
@@ -239,15 +253,15 @@ export function CompactModelPicker({
         </TouchableOpacity>
       </View>
 
-      <View
-        style={[
-          styles.selectedCard,
-          {
-            borderColor: `${selectedColor}9A`,
-            backgroundColor: `${selectedColor}16`,
-          },
-        ]}
-      >
+        <View
+          style={[
+            styles.selectedCard,
+            {
+              borderColor: `${selectedColor}AA`,
+              backgroundColor: `${selectedColor}3A`,
+            },
+          ]}
+        >
         <View style={styles.selectedOrbWrap}>
           <CosmicOrb size={42} isProcessing={false} isSpeaking={false} />
         </View>
@@ -257,6 +271,18 @@ export function CompactModelPicker({
           <Text style={[styles.selectedDescription, { color: theme.textSecondary }]} numberOfLines={2}>
             {selectedModel.description}
           </Text>
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+            <View style={[styles.metaPill, { backgroundColor: `${selectedColor}28`, borderColor: `${selectedColor}66` }]}>
+              <Text style={[styles.metaText, { color: selectedColor }]}>
+                {formatModelUsageLabel(selectedModel.relativeCost)} • x{selectedModel.relativeCost.toFixed(1)}
+              </Text>
+            </View>
+            <View style={[styles.metaPill, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
+              <Text style={[styles.metaText, { color: theme.textSecondary }]}>
+                {formatTierLabel(selectedModel.minTier)}
+              </Text>
+            </View>
+          </View>
         </View>
       </View>
 
@@ -271,9 +297,13 @@ export function CompactModelPicker({
         {available.map((model) => renderModelRow(model, false))}
 
         {locked.length > 0 ? (
-          <Text style={[styles.sectionLabel, styles.sectionLabelLocked, { color: theme.textSecondary }]}>
-            Upgrade for more power
-          </Text>
+          <View style={styles.sectionDivider}>
+            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+            <Text style={[styles.sectionLabel, styles.sectionLabelLocked, { color: theme.textSecondary }]}>
+              Upgrade for more power
+            </Text>
+            <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
+          </View>
         ) : null}
         {locked.map((model) => renderModelRow(model, true))}
       </ScrollView>
@@ -348,20 +378,21 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.62)',
+    backgroundColor: 'rgba(2, 6, 23, 0.92)',
   },
   sheetBackdrop: {
     justifyContent: 'flex-end',
-    paddingHorizontal: 8,
-    paddingBottom: 12,
+    paddingHorizontal: 10,
+    paddingBottom: 14,
   },
   popover: {
     position: 'absolute',
     borderRadius: 20,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 10,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.28,
@@ -375,9 +406,10 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 12,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 18,
+    overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -6 },
     shadowOpacity: 0.3,
@@ -412,11 +444,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   selectedCard: {
-    marginTop: 14,
+    marginTop: 16,
     borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -447,11 +479,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   scroll: {
-    marginTop: 12,
+    marginTop: 14,
   },
   scrollContent: {
-    paddingBottom: 4,
-    gap: 10,
+    paddingBottom: 10,
+    gap: 14,
   },
   sectionLabel: {
     fontSize: 11,
@@ -463,12 +495,24 @@ const styles = StyleSheet.create({
   sectionLabelLocked: {
     marginTop: 4,
   },
+  sectionDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 6,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    opacity: 0.55,
+    borderRadius: 1,
+  },
   row: {
-    minHeight: 86,
+    minHeight: 90,
     borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -516,7 +560,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 4.5,
   },
   metaText: {
     fontSize: 10,

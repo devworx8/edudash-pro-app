@@ -107,4 +107,46 @@ describe('ttsNormalize', () => {
     expect(out).toContain('Great plan');
     expect(out.toLowerCase()).not.toContain('tokens used');
   });
+
+  it('strips bold markdown (**text**) from spoken output', () => {
+    const out = normalizeForTTS('This is **important** information');
+    expect(out).toContain('This is important information');
+    expect(out).not.toContain('**');
+  });
+
+  it('strips bold+italic markdown (***text***) from spoken output', () => {
+    const out = normalizeForTTS('This is ***very important*** to know');
+    expect(out).toContain('very important');
+    expect(out).not.toContain('***');
+    expect(out).not.toContain('**');
+  });
+
+  it('strips header markers (## Heading) from spoken output', () => {
+    const out = normalizeForTTS('## Important Topic\nHere is some content');
+    expect(out).toContain('Important Topic');
+    expect(out).not.toContain('##');
+  });
+
+  it('strips header markers without trailing space (##Heading)', () => {
+    const out = normalizeForTTS('##Heading\nContent follows');
+    expect(out).toContain('Heading');
+    expect(out).not.toContain('##');
+  });
+
+  it('strips unclosed bold markers (**text without closing)', () => {
+    const out = normalizeForTTS('Here is **important information about learning');
+    expect(out).toContain('important information');
+    expect(out).not.toContain('**');
+  });
+
+  it('strips multiple markdown elements in a single response', () => {
+    const out = normalizeForTTS('## Topic\n\n**Key points:**\n- First item\n- *Second* item');
+    expect(out).toContain('Topic');
+    expect(out).toContain('Key points:');
+    expect(out).toContain('First item');
+    expect(out).toContain('Second item');
+    expect(out).not.toContain('##');
+    expect(out).not.toContain('**');
+    expect(out).not.toContain('*');
+  });
 });

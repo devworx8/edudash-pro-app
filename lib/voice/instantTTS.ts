@@ -165,7 +165,9 @@ export class InstantTTSPlayer {
   async addText(text: string): Promise<void> {
     if (this.isStopped) return;
 
-    const textChunks = splitIntoSpeechChunks(text);
+    const { normalizeForTTS } = await import('@/lib/dash-ai/ttsNormalize');
+    const normalized = normalizeForTTS(text);
+    const textChunks = splitIntoSpeechChunks(normalized);
     for (const chunkText of textChunks) {
       this.chunks.push({
         id: `chunk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

@@ -54,7 +54,7 @@ interface DashMessageFooterProps {
   inlineActionUrl: string | null;
   inlineActionIsPdf: boolean;
   onSpeak: (message: DashMessage) => void;
-  onRetry: (content: string) => void;
+  onRetry: (content: string, attachments?: any[]) => void;
   onInlineAction: () => void;
 }
 
@@ -76,8 +76,7 @@ export const DashMessageFooter: React.FC<DashMessageFooterProps> = ({
     isUser &&
     isLastUserMessage &&
     !isLoading &&
-    !(message.attachments?.length > 0) &&
-    String(message.content || '').trim().length > 0;
+    (String(message.content || '').trim().length > 0 || (message.attachments?.length ?? 0) > 0);
 
   return (
     <>
@@ -119,7 +118,7 @@ export const DashMessageFooter: React.FC<DashMessageFooterProps> = ({
         {canRetryLastUserMessage && (
           <TouchableOpacity
             style={[styles.inlineFooterRetryButton, { backgroundColor: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.32)' }]}
-            onPress={() => onRetry(message.content)}
+            onPress={() => onRetry(message.content, message.attachments)}
             accessibilityLabel="Retry last message"
             activeOpacity={0.78}
           >

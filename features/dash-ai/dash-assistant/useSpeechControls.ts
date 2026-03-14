@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { resolveSpeechControlsLayoutState } from '@/features/dash-ai/speechControls';
 import type { DashMessage } from '@/services/dash-ai/types';
 import { splitSpeechSegments } from './utils';
@@ -22,20 +22,12 @@ export function useSpeechControls({
 }: UseSpeechControlsParams) {
   const [lastSpokenMessageId, setLastSpokenMessageId] = useState<string | null>(null);
   const [speechSegmentIndex, setSpeechSegmentIndex] = useState(0);
-  const [speechControlsExpanded, setSpeechControlsExpanded] = useState(false);
-  const wasSpeakingRef = useRef(false);
 
   useEffect(() => {
     if (!speakingMessageId) return;
     setLastSpokenMessageId(speakingMessageId);
     setSpeechSegmentIndex(0);
   }, [speakingMessageId]);
-
-  useEffect(() => {
-    if (isSpeaking) { setSpeechControlsExpanded(true); }
-    else if (wasSpeakingRef.current) { setSpeechControlsExpanded(false); }
-    wasSpeakingRef.current = isSpeaking;
-  }, [isSpeaking]);
 
   useEffect(() => {
     if (!speechChunkProgress || speechChunkProgress.chunkCount <= 0) return;
@@ -51,10 +43,6 @@ export function useSpeechControls({
     return match;
   }, [messages, activeSpeechMessageId]);
 
-  useEffect(() => {
-    if (!activeSpeechMessage) setSpeechControlsExpanded(false);
-  }, [activeSpeechMessage]);
-
   const speechSegments = useMemo(
     () => splitSpeechSegments(activeSpeechMessage?.content || ''),
     [activeSpeechMessage?.content],
@@ -66,7 +54,7 @@ export function useSpeechControls({
   const canSeekBack = displaySpeechIndex > 0 && speechSegments.length > 0;
   const canSeekForward = displaySpeechIndex < speechSegments.length - 1;
   const layout = resolveSpeechControlsLayoutState({
-    isSpeaking, hasSpeechMessage: Boolean(activeSpeechMessage), chunkCount, expanded: speechControlsExpanded,
+    isSpeaking, hasSpeechMessage: Boolean(activeSpeechMessage), chunkCount,
   });
 
   const speakFromSegment = useCallback(async (requestedIndex: number) => {
@@ -96,8 +84,7 @@ export function useSpeechControls({
   }, [displaySpeechIndex, isSpeaking, speakFromSegment, stopSpeaking]);
 
   return {
-    showMiniSpeechControls: layout.showMiniControls,
-    showFullSpeechControls: layout.showFullControls,
+    showSpeechControls: layout.showControls,
     displaySpeechIndex,
     chunkCount,
     canSeekBack,

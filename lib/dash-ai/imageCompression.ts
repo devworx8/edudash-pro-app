@@ -39,13 +39,15 @@ function loadLegacyFileSystem(): LegacyFileSystemModule {
   }
 }
 
-export const MAX_IMAGE_BASE64_LEN = 4_000_000; // ~3MB payload after base64 encoding
+export const MAX_IMAGE_BASE64_LEN = 5_000_000; // ~3.75MB payload — headroom for handwritten docs
 
+// Compression steps — minimum 1024px / 0.72 quality to preserve handwritten text detail.
+// Dropping below 768px or 0.65 makes fractions, digits, and small text unreadable by the AI.
 export const IMAGE_COMPRESS_STEPS = [
-  { width: 1280, compress: 0.75 },
-  { width: 1024, compress: 0.7 },
-  { width: 768, compress: 0.6 },
-  { width: 512, compress: 0.5 },
+  { width: 1600, compress: 0.85 },
+  { width: 1280, compress: 0.80 },
+  { width: 1024, compress: 0.75 },
+  { width: 768, compress: 0.72 },
 ];
 
 export interface CompressedImage {

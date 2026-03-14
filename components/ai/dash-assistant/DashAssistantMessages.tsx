@@ -33,6 +33,7 @@ export interface DashAssistantMessagesProps {
   bottomInset?: number;
   onScroll?: (scrollY: number) => void;
   compactBottomPadding?: boolean;
+  webScrollNodeRef?: { current: any };
   /** Parent-specific: list of children */
   parentChildren?: ParentChild[];
   /** Parent-specific: currently selected child */
@@ -76,6 +77,7 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
   lastConversationId,
   userRole,
   tutorMode,
+  webScrollNodeRef,
 }) => {
   const contentHeightRef = React.useRef(0);
   const lastAutoScrollAtRef = React.useRef(0);
@@ -214,7 +216,17 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
         try {
           const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent as any;
           const currentScrollY = contentOffset.y;
-          
+
+          // Cache the actual DOM scroll container on first scroll (web only)
+          if (Platform.OS === 'web' && webScrollNodeRef && !webScrollNodeRef.current) {
+            try {
+              const target = e.nativeEvent?.target ?? e.nativeEvent?.currentTarget;
+              if (target?.scrollHeight !== undefined) {
+                webScrollNodeRef.current = target;
+              }
+            } catch {}
+          }
+
           // Call parent scroll handler for header auto-hide
           if (onScroll) {
             onScroll(currentScrollY);
@@ -273,7 +285,14 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
         ) : null
       }
       ListEmptyComponent={messages.length === 0 ? renderEmptyState : null}
-      ListFooterComponent={renderSuggestedActions()}
+      ListFooterComponent={
+        <>
+          {renderSuggestedActions()}
+          {Platform.OS === 'web' && (
+            <View nativeID="dash-scroll-sentinel" style={{ height: 1 }} />
+          )}
+        </>
+      }
     />
   );
 };

@@ -1086,6 +1086,11 @@ export class DashVoiceService {
    */
   private removeMarkdownFormatting(text: string): string {
     return text
+      // Remove code blocks first
+      .replace(/```[\s\S]*?```/g, '')     // Remove code blocks
+      .replace(/`([^`]+)`/g, '$1')        // `code` -> code
+      // Remove bold+italic (***text***) — must precede bold/italic
+      .replace(/\*{3}([\s\S]*?)\*{3}/g, '$1')
       // Remove bold/italic markers (**, *, __, _)
       .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** -> bold
       .replace(/\*([^*]+)\*/g, '$1')      // *italic* -> italic
@@ -1093,19 +1098,18 @@ export class DashVoiceService {
       .replace(/_([^_]+)_/g, '$1')        // _italic_ -> italic
       // Remove answer blanks (_____ or ____)
       .replace(/_{3,}/g, 'blank')         // _____ -> blank
-      // Remove code blocks
-      .replace(/```[\s\S]*?```/g, '')     // Remove code blocks
-      .replace(/`([^`]+)`/g, '$1')        // `code` -> code
       // Remove strikethrough
       .replace(/~~([^~]+)~~/g, '$1')      // ~~strike~~ -> strike
-      // Remove headers (# ## ###)
-      .replace(/^#{1,6}\s+/gm, '')        // # Header -> Header
+      // Remove headers — \s* (not \s+) so ##Heading without space is also stripped
+      .replace(/^#{1,6}\s*/gm, '')        // # Header -> Header, ##Header -> Header
       // Remove horizontal rules
       .replace(/^[-*_]{3,}$/gm, '')       // --- -> (removed)
       // Remove blockquotes
       .replace(/^>\s+/gm, '')             // > quote -> quote
       // Remove link formatting but keep text
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')  // [text](url) -> text
+      // Catch-all: strip remaining consecutive asterisks (unclosed/malformed bold markers)
+      .replace(/\*{2,}/g, '')
       .trim();
   }
 

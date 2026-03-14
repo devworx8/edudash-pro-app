@@ -10,7 +10,7 @@ interface DashMessageImagesProps {
   message: DashMessage;
   isUser: boolean;
   generatedImages: Array<{ signed_url: string; width?: number; height?: number }>;
-  onSendFollowUp: (text: string) => void;
+  onSendFollowUp: (text: string, attachments?: any[]) => void;
   onRetakeForClarity?: ((msg: DashMessage) => void) | undefined;
   onExpandVisual: (state: ExpandedVisualState) => void;
   flushTop?: boolean;
@@ -45,7 +45,7 @@ export const DashMessageImages: React.FC<DashMessageImagesProps> = ({
           {isUser && (
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
               <TouchableOpacity
-                onPress={() => onSendFollowUp('Please try analyzing the image again')}
+                onPress={() => onSendFollowUp('Please try analyzing the image again', imageAttachments)}
                 style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)' }}
               >
                 <Ionicons name="refresh" size={13} color="rgba(255,255,255,0.8)" />

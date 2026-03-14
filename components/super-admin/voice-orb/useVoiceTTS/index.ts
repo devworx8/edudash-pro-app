@@ -363,6 +363,8 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
       const phonicsMode = typeof options.phonicsMode === 'boolean' ? options.phonicsMode : shouldUsePhonicsMode(text);
       const resolvedVoice = await resolveSessionVoice(language, options.voice);
       const effectiveOptions: TTSOptions = { ...options, voice: resolvedVoice.voiceId, phonicsMode };
+      const cleanText = normalizeForTTS(text, { phonicsMode, preservePhonicsMarkers: phonicsMode });
+      if (!cleanText) { setIsSpeaking(false); return; }
 
       const voiceSignature = `${language}|${resolvedVoice.source}|${resolvedVoice.voiceId}`;
       if (lastAppliedVoiceSignatureRef.current !== voiceSignature) {
@@ -372,12 +374,9 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
 
       if (!SUPPORTED_TTS_LANGS.includes(baseLang)) {
         fallbackUsed = 'device';
-        await speakWithDeviceTTS(text, language, effectiveOptions);
+        await speakWithDeviceTTS(cleanText, language, effectiveOptions);
         return;
       }
-
-      const cleanText = normalizeForTTS(text, { phonicsMode, preservePhonicsMarkers: phonicsMode });
-      if (!cleanText) { setIsSpeaking(false); return; }
 
       const speechStartedAt = Date.now();
       const azureRate = Number.isFinite(effectiveOptions.rate as number)
