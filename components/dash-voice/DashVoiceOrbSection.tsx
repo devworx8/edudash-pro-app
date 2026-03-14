@@ -179,44 +179,15 @@ export function DashVoiceOrbSection({
         )}
       </View>
 
-      {/* Mic / mute controls for non-free tiers (VoiceOrb is hidden, so show separate controls) */}
+      {/* Mic mute toggle — prevents background conversations from triggering Dash. Does NOT stop TTS. */}
       {(showFreeOrb || showStarterOrb || showPremiumOrb) && VoiceOrb && (
         <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 12 }}>
-          {/* Tap mic to start/stop listening */}
           <TouchableOpacity
             style={[
               hiddenOrbStyle.micBtn,
               {
-                borderColor: isMuted ? '#f59e0b' : isListening ? theme.primary : 'rgba(255,255,255,0.2)',
-                backgroundColor: isMuted ? 'rgba(245,158,11,0.12)' : 'transparent',
-              },
-            ]}
-            onPress={() => {
-              if (isMuted) {
-                voiceOrbRef.current?.setMuted(false);
-              } else {
-                handleVisibleOrbPress();
-              }
-            }}
-            onLongPress={() => voiceOrbRef.current?.setMuted(!isMuted)}
-            delayLongPress={400}
-            activeOpacity={0.7}
-            accessibilityLabel={isMuted ? 'Tap to unmute' : isListening ? 'Tap to stop listening' : 'Tap to start listening'}
-            accessibilityHint="Long press to toggle mute"
-          >
-            <Ionicons
-              name={isMuted ? 'mic-off' : isListening ? 'mic' : 'mic-outline'}
-              size={22}
-              color={isMuted ? '#f59e0b' : isListening ? theme.primary : 'rgba(255,255,255,0.6)'}
-            />
-          </TouchableOpacity>
-          {/* Mute toggle — suppresses mic so background conversations don’t trigger Dash */}
-          <TouchableOpacity
-            style={[
-              hiddenOrbStyle.micBtn,
-              {
-                borderColor: isMuted ? '#f59e0b' : 'rgba(255,255,255,0.2)',
-                backgroundColor: isMuted ? 'rgba(245,158,11,0.12)' : 'transparent',
+                borderColor: isMuted ? '#ef4444' : 'rgba(255,255,255,0.2)',
+                backgroundColor: isMuted ? 'rgba(239,68,68,0.15)' : 'transparent',
               },
             ]}
             onPress={() => voiceOrbRef.current?.setMuted(!isMuted)}
@@ -224,9 +195,9 @@ export function DashVoiceOrbSection({
             accessibilityLabel={isMuted ? 'Unmute microphone' : 'Mute microphone'}
           >
             <Ionicons
-              name={isMuted ? 'mic-off' : 'mic-off-outline'}
+              name={isMuted ? 'mic-off' : 'mic'}
               size={22}
-              color={isMuted ? '#f59e0b' : 'rgba(255,255,255,0.4)'}
+              color={isMuted ? '#ef4444' : 'rgba(255,255,255,0.6)'}
             />
           </TouchableOpacity>
         </View>
