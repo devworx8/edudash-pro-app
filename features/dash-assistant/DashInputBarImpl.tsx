@@ -397,7 +397,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       style={[
         styles.inputContainer,
         {
-          backgroundColor: theme.surface + 'F2',
+          backgroundColor: 'transparent',
           paddingBottom: Math.max(12, bottomInset),
         }
       ]}
