@@ -12,11 +12,11 @@ import { useCallback, useEffect, useRef } from 'react';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import * as Speech from 'expo-speech';
 
-// Faster polling detects end-of-playback sooner, reducing inter-chunk gap.
-const POLL_INTERVAL_MS = 60;
-const END_CONFIDENCE_REQUIRED = 2;
-const NEAR_END_STALL_TICKS = 3;
-const MIN_RELIABLE_DURATION_MS = 300;
+// Aggressive polling for minimal inter-chunk gap.
+const POLL_INTERVAL_MS = 40;
+const END_CONFIDENCE_REQUIRED = 1;
+const NEAR_END_STALL_TICKS = 2;
+const MIN_RELIABLE_DURATION_MS = 200;
 
 export interface VoiceTTSPlaybackHandle {
   playerRef: React.MutableRefObject<AudioPlayer | null>;
