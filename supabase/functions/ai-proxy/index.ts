@@ -255,9 +255,7 @@ serve(async (req) => {
         ]);
         const tierIsStarterOrAbove = !normalizeTierName(quotaDataForRequest.current_tier).includes('free');
         const tierIsPremiumOrAbove = isPremiumTier(normalizeTierName(quotaDataForRequest.current_tier));
-        if (tierIsPremiumOrAbove && HAIKU_MODELS.has(requestedModel)) {
-          requestedModel = tierDefault;
-        } else if (tierIsStarterOrAbove && requestedModel === 'claude-3-haiku-20240307') {
+        if (tierIsStarterOrAbove && HAIKU_MODELS.has(requestedModel)) {
           requestedModel = tierDefault;
         }
       }
