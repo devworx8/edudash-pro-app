@@ -121,7 +121,7 @@ function zonedToUtc(z: ZonedDateTime, timeZone: string): Date {
 async function generateWithAnthropic(systemPrompt: string, userPrompt: string) {
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY') || '';
   if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
-  const modelName = (Deno.env.get('SOCIAL_AGENT_MODEL') || Deno.env.get('ANTHROPIC_MODEL') || 'claude-3-5-haiku-20241022').trim();
+  const modelName = (Deno.env.get('SOCIAL_AGENT_MODEL') || Deno.env.get('ANTHROPIC_MODEL') || 'claude-haiku-4-5-20251001').trim();
 
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

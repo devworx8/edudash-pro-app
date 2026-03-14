@@ -12,6 +12,8 @@ import { track } from '@/lib/analytics';
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { getQuotaStatus, extractAPIError } from './api';
 import type { AIQuotaFeature } from './limits';
+import type { AIModelId } from './models';
+import type { QuotaFallbackAction } from './quotaFallback';
 
 export interface QuotaGuardOptions {
   serviceType: AIQuotaFeature;
@@ -152,7 +154,11 @@ export function withAIQuotaGuard<T extends (...args: any[]) => any>(
 }
 
 /**
- * Show standardized quota exceeded alert with upgrade options
+ * Show quota exceeded alert with graduated fallback actions.
+ *
+ * For paid tiers using a non-Swift model → offers model downgrade.
+ * For free tier on Android → offers rewarded ad.
+ * Always includes upgrade CTA as final option.
  */
 export function showQuotaExceededAlert(
   serviceType: AIQuotaFeature,
@@ -165,52 +171,80 @@ export function showQuotaExceededAlert(
       cancelText?: string;
     };
     onUpgradePressed?: () => void;
+    /** Called when user accepts model downgrade; receives the fallback model ID */
+    onModelDowngrade?: (targetModel: AIModelId) => void;
+    /** Called when user wants to watch a rewarded ad */
+    onRewardedAd?: () => void;
+    /** Fallback actions available for this user (from getQuotaFallbackActions) */
+    fallbackActions?: QuotaFallbackAction[];
   } = {}
 ) {
-  const { customMessages = {}, onUpgradePressed } = options;
+  const { customMessages = {}, onUpgradePressed, onModelDowngrade, onRewardedAd, fallbackActions } = options;
   
   const serviceName = serviceType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-  
   const title = customMessages.title || `${serviceName} Limit Reached`;
-  const message = customMessages.message || 
-    `You've used all your ${serviceName.toLowerCase()} quota for this month${quotaInfo?.limit ? ` (${quotaInfo.used}/${quotaInfo.limit})` : ''}. Upgrade to continue using AI features.`;
-  
-  const upgradeText = customMessages.upgradeText || 'View Plans';
   const cancelText = customMessages.cancelText || 'Cancel';
+
+  // Build alert buttons from fallback chain
+  const buttons: Array<{ text: string; style?: 'cancel' | 'default' | 'destructive'; onPress?: () => void }> = [
+    {
+      text: cancelText,
+      style: 'cancel',
+      onPress: () => {
+        track('edudash.ai.quota.alert_dismissed', { service_type: serviceType, action: 'cancel' });
+      },
+    },
+  ];
+
+  const downgradeAction = fallbackActions?.find((a): a is Extract<QuotaFallbackAction, { type: 'model_downgrade' }> => a.type === 'model_downgrade');
+  const adAction = fallbackActions?.find((a): a is Extract<QuotaFallbackAction, { type: 'rewarded_ad' }> => a.type === 'rewarded_ad');
+
+  // Rewarded ad button (free tier)
+  if (adAction && onRewardedAd) {
+    buttons.push({
+      text: '▶ Watch Ad',
+      onPress: () => {
+        track('edudash.ai.quota.fallback_chosen', { service_type: serviceType, action: 'rewarded_ad' });
+        onRewardedAd();
+      },
+    });
+  }
+
+  // Model downgrade button (paid tiers)
+  if (downgradeAction && onModelDowngrade) {
+    buttons.push({
+      text: 'Use Dash Swift',
+      onPress: () => {
+        track('edudash.ai.quota.fallback_chosen', {
+          service_type: serviceType,
+          action: 'model_downgrade',
+          target_model: downgradeAction.targetModel,
+        });
+        onModelDowngrade(downgradeAction.targetModel);
+      },
+    });
+  }
+
+  // Upgrade button (always)
+  buttons.push({
+    text: customMessages.upgradeText || 'View Plans',
+    onPress: () => {
+      track('edudash.ai.upsell.shown', {
+        trigger: 'quota_exceeded_alert',
+        quota_percentage: quotaInfo?.limit ? (quotaInfo.used / quotaInfo.limit) * 100 : 100,
+      });
+      if (onUpgradePressed) { onUpgradePressed(); }
+      else { navigateToUpgrade({ source: 'quota_exceeded_alert' }); }
+    },
+  });
+
+  // Choose the primary message based on available fallbacks
+  const alertMessage = customMessages.message
+    || downgradeAction?.message
+    || adAction?.message
+    || `You've used all your ${serviceName.toLowerCase()} quota for this month${quotaInfo?.limit ? ` (${quotaInfo.used}/${quotaInfo.limit})` : ''}.`;
   
-  Alert.alert(
-    title,
-    message,
-    [
-      { 
-        text: cancelText, 
-        style: 'cancel',
-        onPress: () => {
-          track('edudash.ai.quota.alert_dismissed', {
-            service_type: serviceType,
-            action: 'cancel',
-          });
-        }
-      },
-      {
-        text: upgradeText,
-        onPress: () => {
-          track('edudash.ai.upsell.shown', {
-            trigger: 'quota_exceeded_alert',
-            current_tier: 'free', // Will be determined by context
-            target_tier: 'pro',
-            quota_percentage: quotaInfo?.limit ? (quotaInfo.used / quotaInfo.limit) * 100 : 100,
-          });
-          
-          if (onUpgradePressed) {
-            onUpgradePressed();
-          } else {
-            navigateToUpgrade({ source: 'quota_exceeded_alert' });
-          }
-        },
-      },
-    ]
-  );
+  Alert.alert(title, alertMessage, buttons);
 }
 
 /**

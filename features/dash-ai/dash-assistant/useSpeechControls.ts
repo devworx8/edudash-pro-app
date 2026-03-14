@@ -50,9 +50,12 @@ export function useSpeechControls({
   const chunkCount = speechChunkProgress?.chunkCount || speechSegments.length;
   const rawChunkIndex = typeof speechChunkProgress?.chunkIndex === 'number'
     ? speechChunkProgress.chunkIndex : speechSegmentIndex;
-  const displaySpeechIndex = Math.max(0, Math.min(rawChunkIndex, Math.max(0, chunkCount - 1)));
-  const canSeekBack = displaySpeechIndex > 0 && speechSegments.length > 0;
-  const canSeekForward = displaySpeechIndex < speechSegments.length - 1;
+  // Cap displaySpeechIndex to speechSegments bounds — speakFromSegment clips to
+  // speechSegments, so seek UI must agree on the same bounds.
+  const segmentMax = Math.max(0, speechSegments.length - 1);
+  const displaySpeechIndex = Math.max(0, Math.min(rawChunkIndex, segmentMax));
+  const canSeekBack = displaySpeechIndex > 0 && speechSegments.length > 1;
+  const canSeekForward = speechSegments.length > 1 && displaySpeechIndex < segmentMax;
   const layout = resolveSpeechControlsLayoutState({
     isSpeaking, hasSpeechMessage: Boolean(activeSpeechMessage), chunkCount,
   });

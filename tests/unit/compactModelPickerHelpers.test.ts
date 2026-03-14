@@ -27,18 +27,18 @@ describe('CompactModelPicker helpers', () => {
     const models = getDefaultModels();
     const { available, locked } = splitModelsForPicker(
       models,
-      'claude-3-5-sonnet-20241022',
+      'claude-3-7-sonnet-20250219',
       (modelId) => modelId !== 'claude-sonnet-4-5-20250514',
     );
 
-    expect(available[0]?.id).toBe('claude-3-5-sonnet-20241022');
+    expect(available[0]?.id).toBe('claude-3-7-sonnet-20250219');
     expect(locked.some((model) => model.id === 'claude-sonnet-4-5-20250514')).toBe(true);
   });
 
   it('maps model cost into readable usage labels', () => {
     expect(formatModelUsageLabel(1)).toBe('Light usage');
     expect(formatModelUsageLabel(3)).toBe('Balanced');
-    expect(formatModelUsageLabel(5)).toBe('Deep reasoning');
+    expect(formatModelUsageLabel(6)).toBe('Deep reasoning');
     expect(formatModelUsageLabel(8)).toBe('Heavy usage');
   });
 });

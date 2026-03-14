@@ -21,7 +21,7 @@ import {
 
 // Default Claude configuration
 const DEFAULT_CONFIG: Omit<ClaudeConfig, 'apiKey'> = {
-  model: process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
+  model: process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
   maxTokens: 4000,
   temperature: 0.7,
 };

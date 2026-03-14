@@ -174,7 +174,7 @@ Return as a JSON array: [{"problem": "...", "difficulty": "...", "objective": ".
 
 IMPORTANT: Return ONLY the JSON array, no other text.`
               }],
-              model: 'claude-3-5-haiku-20241022',
+              model: 'claude-haiku-4-5-20251001',
               maxTokens: 2000
             }
           });
@@ -395,7 +395,7 @@ Write a clear, respectful message that:
 
 Keep it concise (under 200 words).`
               }],
-              model: 'claude-3-5-haiku-20241022',
+              model: 'claude-haiku-4-5-20251001',
               maxTokens: 500
             }
           });

@@ -242,13 +242,12 @@ const MathAwareContent: React.FC<{ content: string; theme: any; markdownStyles?:
         if (seg.type === 'inline') {
           return <MathRenderer key={i} expression={seg.value} displayMode={false} />;
         }
-        if (isWeb) {
-          return <WebMarkdownRenderer key={i} content={seg.value} theme={theme} />;
-        }
+        // Text segments: prefer react-native-markdown-display, fall back to
+        // WebMarkdownRenderer (pure RN primitives — works on native too).
         if (Markdown) {
           return <Markdown key={i} style={markdownStyles}>{seg.value}</Markdown>;
         }
-        return <Text key={i} style={[styles.assistantText, { color: theme.text }]}>{seg.value}</Text>;
+        return <WebMarkdownRenderer key={i} content={seg.value} theme={theme} />;
       })}
     </View>
   );
@@ -317,14 +316,12 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
           <Text style={styles.userText}>{message.content}</Text>
         ) : containsMathSyntax(message.content) ? (
           <MathAwareContent content={message.content} theme={theme} markdownStyles={markdownStyles} />
+        ) : Markdown ? (
+          <Markdown style={markdownStyles}>{message.content}</Markdown>
         ) : (
-          isWeb ? (
-            <WebMarkdownRenderer content={message.content} theme={theme} />
-          ) : Markdown ? (
-            <Markdown style={markdownStyles}>{message.content}</Markdown>
-          ) : (
-            <Text style={[styles.assistantText, { color: theme.text }]}>{message.content}</Text>
-          )
+          // WebMarkdownRenderer uses only View/Text/ScrollView — safe on native.
+          // Handles ##, **bold**, bullet lists, code blocks without showing backticks.
+          <WebMarkdownRenderer content={message.content} theme={theme} />
         )}
         
         {/* Tools used indicator */}

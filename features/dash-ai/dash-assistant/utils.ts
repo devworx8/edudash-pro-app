@@ -5,9 +5,23 @@ export const COMPOSER_ANDROID_NAV_LIFT = 14;
 export const splitSpeechSegments = (content: string): string[] => {
   const cleaned = String(content || '').trim();
   if (!cleaned) return [];
-  return cleaned
-    .split(/(?<=[.?!])\s+/)
-    .map((segment) => segment.trim())
+  // Strip markdown syntax (headings, bold, bullets, backticks) before splitting,
+  // so TTS doesn't read `##` or `**` aloud.
+  const stripped = cleaned
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/\*(.+?)\*/g, '$1')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^\s*[-*]\s+/gm, '')
+    .replace(/\$\$[\s\S]*?\$\$/g, '')
+    .replace(/\$[^$\n]+?\$/g, '')
+    .trim();
+  if (!stripped) return [cleaned]; // fallback to original if everything was stripped
+  // Split on sentence boundaries OR paragraph breaks (blank lines / heading lines).
+  return stripped
+    .split(/(?<=[.?!])\s+|\n{2,}/)
+    .map((s) => s.trim())
     .filter(Boolean);
 };
 

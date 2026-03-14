@@ -67,15 +67,15 @@ describe('CompactModelPicker', () => {
     const { getByText } = render(
       React.createElement(CompactModelPicker, {
         models,
-        selectedModelId: 'claude-3-haiku-20240307',
+        selectedModelId: 'claude-haiku-4-5-20251001',
         canSelectModel: () => true,
         onSelectModel,
       })
     );
 
     fireEvent.press(getByText('hardware-chip-outline'));
-    fireEvent.press(getByText('Dash Smart'));
-    expect(onSelectModel).toHaveBeenCalledWith('claude-3-5-sonnet-20241022');
+    fireEvent.press(getByText('Dash Advanced'));
+    expect(onSelectModel).toHaveBeenCalledWith('claude-3-7-sonnet-20250219');
   });
 
   it('routes locked model press to upgrade callback', () => {
@@ -84,7 +84,7 @@ describe('CompactModelPicker', () => {
     const { getByText } = render(
       React.createElement(CompactModelPicker, {
         models,
-        selectedModelId: 'claude-3-haiku-20240307',
+        selectedModelId: 'claude-haiku-4-5-20251001',
         canSelectModel: (id: AIModelId) => id !== 'claude-sonnet-4-20250514',
         onSelectModel,
         onLockedPress,

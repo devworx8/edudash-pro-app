@@ -24,6 +24,9 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
   const [impersonating, setImpersonating] = useState(false);
   const [creatingTempPassword, setCreatingTempPassword] = useState(false);
   const [updatingTier, setUpdatingTier] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [filters, setFilters] = useState<UserFilters>({
     role: 'all', status: 'all', school: '', schoolId: '', search: '',
   });
@@ -71,6 +74,21 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
       }
 
       if (usersData) {
+        // Fetch real-time presence for accurate "last seen"
+        const userIds = usersData.map((u: any) => u.id).filter(Boolean);
+        let presenceMap: Record<string, string | null> = {};
+        if (userIds.length > 0) {
+          const { data: presenceData } = await assertSupabase()
+            .from('user_presence')
+            .select('user_id, last_seen_at, status')
+            .in('user_id', userIds);
+          if (presenceData) {
+            presenceMap = Object.fromEntries(
+              presenceData.map((p: any) => [p.user_id, p.last_seen_at]),
+            );
+          }
+        }
+
         const records: UserRecord[] = usersData.map((u: any) => ({
           id: u.id,
           auth_user_id: u.auth_user_id || null,
@@ -80,7 +98,7 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
           school_id: u.preschool_id || u.organization_id,
           school_name: u.preschool_id ? preschoolMap[u.preschool_id] : null,
           created_at: u.created_at,
-          last_sign_in_at: u.last_login_at,
+          last_sign_in_at: presenceMap[u.id] || u.last_login_at,
           is_active: u.is_active !== false,
           avatar_url: u.avatar_url,
           subscription_tier: u.subscription_tier || null,
@@ -128,14 +146,41 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
     setFilteredUsers(filtered);
   }, [users, filters]);
 
+  // ─── Bulk selection helpers ─────────────────────────────────────────────
+  const toggleSelectionMode = useCallback(() => {
+    setSelectionMode(prev => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const toggleUserSelection = useCallback((userId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  }, []);
+
+  const selectAllFiltered = useCallback(() => {
+    setSelectedIds(new Set(filteredUsers.map(u => u.id)));
+  }, [filteredUsers]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+  }, []);
+
   // ─── Action dependencies ──────────────────────────────────────────────
   const deps: ActionDeps = {
     showAlert,
     profileId: profile?.id,
     fetchUsers,
+    closeUserModal: () => { setShowUserModal(false); setSelectedUser(null); },
     setImpersonating,
     setCreatingTempPassword,
     setUpdatingTier,
+    setBulkDeleting,
   };
 
   const onRefresh = useCallback(async () => {
@@ -173,5 +218,19 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
     createTempPassword: (user) => actions.createTempPassword(user, deps),
     openTierPicker: (user) => actions.openTierPicker(user, deps),
     openRolePicker: (user) => actions.openRolePicker(user, deps),
+    selectionMode,
+    selectedIds,
+    toggleSelectionMode,
+    toggleUserSelection,
+    selectAllFiltered,
+    clearSelection,
+    bulkDeleting,
+    bulkDeleteSelected: () => {
+      const usersToDelete = users.filter(u => selectedIds.has(u.id));
+      actions.bulkDeleteUsers(usersToDelete, deps, () => {
+        setSelectedIds(new Set());
+        setSelectionMode(false);
+      });
+    },
   };
 }

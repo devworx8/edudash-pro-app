@@ -89,7 +89,7 @@ export function useHomeworkGenerator() {
             action: 'homework_help',
             messages,
             system: systemPrompt,
-            model: opts.model || 'claude-3-haiku-20240307' // Use haiku by default for speed
+            model: opts.model || 'claude-haiku-4-5-20251001' // Use haiku by default for speed
           }
         });
 
@@ -107,7 +107,7 @@ export function useHomeworkGenerator() {
               scope: 'parent',
               service_type: 'homework_help',
               payload: {
-                model: opts.model || 'claude-3-haiku-20240307',
+                model: opts.model || 'claude-haiku-4-5-20251001',
                 messages: [
                   { role: 'system', content: systemPrompt },
                   ...messages,
@@ -170,7 +170,7 @@ export function useHomeworkGenerator() {
       incrementUsage('homework_help', 1).catch(() => {});
       logUsageEvent({
         feature: 'homework_help_agentic',
-        model: data.model || opts.model || 'claude-3-haiku-20240307',
+        model: data.model || opts.model || 'claude-haiku-4-5-20251001',
         tokensIn: data.usage?.input_tokens || 0,
         tokensOut: data.usage?.output_tokens || 0,
         estCostCents: data.cost || 0,

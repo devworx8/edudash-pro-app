@@ -6,7 +6,7 @@ const mockGetPreferredModel = jest.fn();
 const mockSetPreferredModel = jest.fn();
 const mockSetSelectedModel = jest.fn();
 
-let selectedModel: AIModelId = 'claude-3-haiku-20240307';
+let selectedModel: AIModelId = 'claude-haiku-4-5-20251001';
 let availableModels: AIModelInfo[] = [];
 let tier: SubscriptionTier = 'free';
 let isLoading = false;
@@ -31,34 +31,34 @@ jest.mock('@/lib/ai/preferences', () => ({
 describe('useDashChatModelPreference', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    selectedModel = 'claude-3-haiku-20240307';
+    selectedModel = 'claude-haiku-4-5-20251001';
     tier = 'starter';
     isLoading = false;
     canSelectModel = () => true;
     availableModels = [
       {
-        id: 'claude-3-haiku-20240307',
-        name: 'Claude 3 Haiku',
-        displayName: 'Dash Quick',
+        id: 'claude-haiku-4-5-20251001',
+        name: 'Claude Haiku 4.5',
+        displayName: 'Dash Swift',
         provider: 'claude',
-        relativeCost: 1,
+        relativeCost: 2,
         minTier: 'free',
-        description: 'Fastest',
+        description: 'Fast daily tutoring',
       },
       {
-        id: 'claude-3-5-sonnet-20241022',
-        name: 'Claude 3.5 Sonnet',
-        displayName: 'Dash Smart',
+        id: 'claude-3-7-sonnet-20250219',
+        name: 'Claude 3.7 Sonnet',
+        displayName: 'Dash Advanced',
         provider: 'claude',
-        relativeCost: 5,
+        relativeCost: 6,
         minTier: 'starter',
-        description: 'Balanced',
+        description: 'Accurate lesson planning',
       },
     ] as AIModelInfo[];
   });
 
   it('applies a stored preferred model when tier allows it', async () => {
-    mockGetPreferredModel.mockResolvedValue('claude-3-5-sonnet-20241022');
+    mockGetPreferredModel.mockResolvedValue('claude-3-7-sonnet-20250219');
 
     renderHook(() => useDashChatModelPreference());
 
@@ -67,13 +67,13 @@ describe('useDashChatModelPreference', () => {
     });
 
     await waitFor(() => {
-      expect(mockSetSelectedModel).toHaveBeenCalledWith('claude-3-5-sonnet-20241022');
+      expect(mockSetSelectedModel).toHaveBeenCalledWith('claude-3-7-sonnet-20250219');
     });
   });
 
   it('does not apply a stored model when it is locked for the tier', async () => {
-    mockGetPreferredModel.mockResolvedValue('claude-3-7-sonnet-20250219');
-    canSelectModel = (modelId: AIModelId) => modelId !== 'claude-3-7-sonnet-20250219';
+    mockGetPreferredModel.mockResolvedValue('claude-sonnet-4-20250514');
+    canSelectModel = (modelId: AIModelId) => modelId !== 'claude-sonnet-4-20250514';
 
     renderHook(() => useDashChatModelPreference());
 
@@ -81,7 +81,7 @@ describe('useDashChatModelPreference', () => {
       expect(mockGetPreferredModel).toHaveBeenCalledWith('chat_message');
     });
 
-    expect(mockSetSelectedModel).not.toHaveBeenCalledWith('claude-3-7-sonnet-20250219');
+    expect(mockSetSelectedModel).not.toHaveBeenCalledWith('claude-sonnet-4-20250514');
   });
 
   it('persists the selected chat model after initial preference load', async () => {
@@ -90,12 +90,12 @@ describe('useDashChatModelPreference', () => {
     renderHook(() => useDashChatModelPreference());
 
     await waitFor(() => {
-      expect(mockSetPreferredModel).toHaveBeenCalledWith('claude-3-haiku-20240307', 'chat_message');
+      expect(mockSetPreferredModel).toHaveBeenCalledWith('claude-haiku-4-5-20251001', 'chat_message');
     });
   });
 
   it('waits for model availability before hydrating the stored preference', async () => {
-    mockGetPreferredModel.mockResolvedValue('claude-3-5-sonnet-20241022');
+    mockGetPreferredModel.mockResolvedValue('claude-3-7-sonnet-20250219');
     isLoading = true;
 
     const { rerender } = renderHook(() => useDashChatModelPreference());
@@ -110,7 +110,7 @@ describe('useDashChatModelPreference', () => {
     });
 
     await waitFor(() => {
-      expect(mockSetSelectedModel).toHaveBeenCalledWith('claude-3-5-sonnet-20241022');
+      expect(mockSetSelectedModel).toHaveBeenCalledWith('claude-3-7-sonnet-20250219');
     });
   });
 });

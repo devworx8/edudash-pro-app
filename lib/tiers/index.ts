@@ -342,6 +342,7 @@ export function getAvailableTiersForRole(role: string): TierNameAligned[] {
     case 'private_teacher':
       return ['free', 'teacher_starter', 'teacher_pro'];
     case 'learner':
+    case 'student':
       // Adult learner (18+) subscribes independently for self-study access
       return ['free', 'learner_starter', 'learner_pro'];
     case 'principal':

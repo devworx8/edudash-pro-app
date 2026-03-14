@@ -31,16 +31,16 @@ describe('CompactModelPicker', () => {
     const { getByLabelText, getByText } = render(
       <CompactModelPicker
         models={models}
-        selectedModelId="claude-3-haiku-20240307"
+        selectedModelId="claude-haiku-4-5-20251001"
         canSelectModel={() => true}
         onSelectModel={onSelectModel}
       />
     );
 
     fireEvent.press(getByLabelText(/Model selector/i));
-    fireEvent.press(getByText('Dash Smart'));
+    fireEvent.press(getByText('Dash Advanced'));
 
-    expect(onSelectModel).toHaveBeenCalledWith('claude-3-5-sonnet-20241022');
+    expect(onSelectModel).toHaveBeenCalledWith('claude-3-7-sonnet-20250219');
   });
 
   it('routes locked models to locked callback', () => {
@@ -49,7 +49,7 @@ describe('CompactModelPicker', () => {
     const { getByLabelText, getByText } = render(
       <CompactModelPicker
         models={models}
-        selectedModelId="claude-3-haiku-20240307"
+        selectedModelId="claude-haiku-4-5-20251001"
         canSelectModel={(id) => id !== 'claude-sonnet-4-20250514'}
         onSelectModel={onSelectModel}
         onLockedPress={onLockedPress}

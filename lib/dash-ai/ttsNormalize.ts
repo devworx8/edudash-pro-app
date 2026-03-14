@@ -238,6 +238,45 @@ function normalizeSouthAfricanLanguageNames(text: string): string {
 }
 
 /**
+ * Convert LaTeX math notation to plain text BEFORE normalizeMathExpressions runs.
+ * Strips $...$ and $$...$$ delimiters, converts LaTeX commands to Unicode symbols
+ * (which normalizeMathExpressions then converts to spoken words).
+ */
+function normalizeLatexMath(text: string): string {
+  // Strip display math blocks $$...$$ first (greedy match)
+  let result = text.replace(/\$\$([\s\S]*?)\$\$/g, '$1');
+  // Strip inline math $...$  — but not lone $ for currency (handled earlier)
+  result = result.replace(/\$([^$]+?)\$/g, '$1');
+
+  // LaTeX fractions: \frac{a}{b} → "a over b"
+  result = result.replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, '$1 over $2');
+  // Square root: \sqrt{x} → "square root of x"
+  result = result.replace(/\\sqrt\{([^}]*)\}/g, 'square root of $1');
+
+  // LaTeX commands → Unicode symbols (normalizeMathExpressions converts these to words)
+  result = result
+    .replace(/\\div\b/g, '÷')
+    .replace(/\\times\b/g, '×')
+    .replace(/\\cdot\b/g, '×')
+    .replace(/\\pm\b/g, '±')
+    .replace(/\\neq\b/g, '≠')
+    .replace(/\\leq\b/g, '≤')
+    .replace(/\\geq\b/g, '≥')
+    .replace(/\\approx\b/g, '≈')
+    .replace(/\\infty\b/g, 'infinity')
+    .replace(/\\pi\b/g, 'pi')
+    .replace(/\\sum\b/g, 'sum of')
+    .replace(/\\text\{([^}]*)\}/g, '$1')
+    // Clean up remaining backslash commands (e.g. \left, \right, \;, \,, \quad)
+    .replace(/\\(?:left|right|quad|qquad)\b/g, ' ')
+    .replace(/\\[,;!]/g, ' ')
+    // Strip curly braces leftover from LaTeX grouping
+    .replace(/[{}]/g, '');
+
+  return result;
+}
+
+/**
  * Convert inline math symbols to spoken words so TTS engines don't guess.
  * Azure TTS reads "9-1" as "9 to 1" (a range) and may drop decimal points.
  * Must run AFTER currency normalization so "R 1.50" is already handled.
@@ -259,7 +298,13 @@ function normalizeMathExpressions(text: string, phonicsMode: boolean): string {
     // Multiplication: × and * between digits
     .replace(/(\d)\s*[×*]\s*(\d)/g, '$1 times $2')
     // Division: ÷ between digits
-    .replace(/(\d)\s*÷\s*(\d)/g, '$1 divided by $2');
+    .replace(/(\d)\s*÷\s*(\d)/g, '$1 divided by $2')
+    // Additional math symbols (from LaTeX normalization or direct use)
+    .replace(/±/g, 'plus or minus')
+    .replace(/≠/g, 'not equal to')
+    .replace(/≤/g, 'less than or equal to')
+    .replace(/≥/g, 'greater than or equal to')
+    .replace(/≈/g, 'approximately');
 }
 
 function normalizeAcronymsForNaturalSpeech(text: string, phonicsMode: boolean): string {
@@ -373,6 +418,7 @@ export function normalizeForTTS(input: string, options: TTSNormalizeOptions = {}
   text = normalizeChoiceLabels(text);
   text = normalizeEduDashBrandForms(text);
   text = normalizeSouthAfricanCurrency(text);
+  text = normalizeLatexMath(text);
   text = normalizeMathExpressions(text, phonicsMode);
 
   // Apply pronunciation dictionary (brand names, SA languages, acronyms)

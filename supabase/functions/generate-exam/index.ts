@@ -324,7 +324,7 @@ serve(async (req: Request) => {
       ? [...new Set([
           normalizeAnthropicModel(preferredModel),
           STARTER_HAIKU_MODEL,
-          'claude-3-haiku-20240307',
+          FREE_HAIKU_MODEL,
         ])]
       : buildModelFallbackChain(preferredModel, ANTHROPIC_EXAM_MODEL_FALLBACKS);
     const userPrompt = buildUserPrompt({

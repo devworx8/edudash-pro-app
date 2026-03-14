@@ -1,8 +1,5 @@
 export type AIModelId =
-  | 'claude-3-haiku-20240307'
   | 'claude-haiku-4-5-20251001'
-  | 'claude-3-5-haiku-20241022'
-  | 'claude-3-5-sonnet-20241022'
   | 'claude-3-7-sonnet-20250219'
   | 'claude-sonnet-4-20250514'
   | 'claude-sonnet-4-5-20250514'
@@ -21,10 +18,7 @@ export type AIModelInfo = {
 
 // Central place to tune model weights for UI hints and rough cost estimates
 export const MODEL_WEIGHTS: Record<AIModelId, number> = {
-  'claude-3-haiku-20240307': 1,
   'claude-haiku-4-5-20251001': 2,
-  'claude-3-5-haiku-20241022': 3,
-  'claude-3-5-sonnet-20241022': 5,
   'claude-3-7-sonnet-20250219': 6,
   'claude-sonnet-4-20250514': 8,
   'claude-sonnet-4-5-20250514': 10,
@@ -49,44 +43,14 @@ export const TIER_QUOTAS: Record<SubscriptionTier, { ai_requests: number; priori
 export function getDefaultModels(): AIModelInfo[] {
   return [
     {
-      id: 'claude-3-haiku-20240307',
-      name: 'Claude 3 Haiku',
-      displayName: 'Dash Quick',
-      provider: 'claude',
-      relativeCost: MODEL_WEIGHTS['claude-3-haiku-20240307'],
-      minTier: 'free',
-      description: 'Lightning-fast responses for quick questions and basic lesson planning',
-      notes: 'Available on all plans'
-    },
-    {
       id: 'claude-haiku-4-5-20251001',
       name: 'Claude Haiku 4.5',
       displayName: 'Dash Swift',
       provider: 'claude',
       relativeCost: MODEL_WEIGHTS['claude-haiku-4-5-20251001'],
       minTier: 'free',
-      description: 'Fast, modern baseline model for daily tutoring and routine generation',
-      notes: 'Default for Free tier'
-    },
-    {
-      id: 'claude-3-5-haiku-20241022',
-      name: 'Claude 3.5 Haiku',
-      displayName: 'Dash Swift (Legacy)',
-      provider: 'claude',
-      relativeCost: MODEL_WEIGHTS['claude-3-5-haiku-20241022'],
-      minTier: 'starter',
-      description: 'Faster reasoning with better explanations for everyday tutoring',
-      notes: 'Starter plan and above'
-    },
-    {
-      id: 'claude-3-5-sonnet-20241022',
-      name: 'Claude 3.5 Sonnet',
-      displayName: 'Dash Smart',
-      provider: 'claude',
-      relativeCost: MODEL_WEIGHTS['claude-3-5-sonnet-20241022'],
-      minTier: 'starter',
-      description: 'Balanced intelligence for detailed lesson planning and feedback',
-      notes: 'Starter plan and above'
+      description: 'Fast daily tutoring, quick answers, and routine generation',
+      notes: 'Available on all plans'
     },
     {
       id: 'claude-3-7-sonnet-20250219',
@@ -95,7 +59,7 @@ export function getDefaultModels(): AIModelInfo[] {
       provider: 'claude',
       relativeCost: MODEL_WEIGHTS['claude-3-7-sonnet-20250219'],
       minTier: 'starter',
-      description: 'Higher accuracy for lesson and routine planning with strong instruction-following',
+      description: 'Accurate lesson planning, detailed feedback and strong instruction-following',
       notes: 'Default for Starter tier'
     },
     {
@@ -105,7 +69,7 @@ export function getDefaultModels(): AIModelInfo[] {
       provider: 'claude',
       relativeCost: MODEL_WEIGHTS['claude-sonnet-4-20250514'],
       minTier: 'premium',
-      description: 'Top-tier reasoning for premium tutoring and generation workflows',
+      description: 'Top-tier reasoning for premium tutoring, grading and generation',
       notes: 'Default for Premium/Plus/Trial tiers'
     },
     {
@@ -115,8 +79,8 @@ export function getDefaultModels(): AIModelInfo[] {
       provider: 'claude',
       relativeCost: MODEL_WEIGHTS['claude-sonnet-4-5-20250514'],
       minTier: 'enterprise',
-      description: 'Fastest, strongest Sonnet tier for heavy autonomy tasks',
-      notes: 'Enterprise only (requires availability)'
+      description: 'Fastest and strongest model for advanced autonomy tasks',
+      notes: 'Enterprise only'
     },
   ]
 }
@@ -148,10 +112,10 @@ export function getDefaultModelForTier(tier: SubscriptionTier): AIModelId {
     premium: 'claude-sonnet-4-20250514',
     enterprise: 'claude-sonnet-4-5-20250514',
   }
-  const preferred = costSafeDefaults[tier] || 'claude-3-haiku-20240307'
+  const preferred = costSafeDefaults[tier] || 'claude-haiku-4-5-20251001'
   if (canAccessModel(tier, preferred)) return preferred
   const availableModels = getModelsForTier(tier)
-  return availableModels[0]?.id || 'claude-3-haiku-20240307'
+  return availableModels[0]?.id || 'claude-haiku-4-5-20251001'
 }
 
 /**

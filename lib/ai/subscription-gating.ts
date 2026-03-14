@@ -39,7 +39,7 @@ export async function getUserSubscriptionContext(
     // Get user profile and organization
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, organization_id, preschool_id, role')
+      .select('id, organization_id, preschool_id, role, subscription_tier')
       .eq('id', userId)
       .maybeSingle()
 
@@ -57,11 +57,18 @@ export async function getUserSubscriptionContext(
 
     const organizationId = profile.organization_id || profile.preschool_id
     if (!organizationId) {
-      // Individual user - default to free tier
+      // Individual user (parent/learner) — resolve their personal subscription tier.
+      // Check user_ai_tiers first (most authoritative), then profile.subscription_tier.
+      const { data: tierRow } = await supabase
+        .from('user_ai_tiers')
+        .select('tier')
+        .eq('user_id', userId)
+        .maybeSingle()
+      const rawTier = tierRow?.tier || (profile as any).subscription_tier || 'free'
       return {
         userId,
         organizationId: null,
-        tier: 'free',
+        tier: normalizeToNewTier(rawTier),
         role: profile.role
       }
     }
@@ -138,17 +145,24 @@ async function getOrganizationTier(
  * Normalize legacy tier names to new tier system
  */
 function normalizeToNewTier(legacyTier: string): SubscriptionTier {
-  const tier = legacyTier.toLowerCase()
-  
-  // Map legacy tiers to new system
+  const tier = (legacyTier || '').toLowerCase().replace(/-/g, '_')
   switch (tier) {
     case 'parent_starter':
+    case 'teacher_starter':
+    case 'learner_starter':
+    case 'school_starter':
     case 'starter':
+    case 'trial':
       return 'starter'
     case 'parent_plus':
+    case 'teacher_pro':
+    case 'learner_pro':
+    case 'school_premium':
+    case 'school_pro':
     case 'premium':
     case 'pro':
       return 'premium'
+    case 'school_enterprise':
     case 'enterprise':
       return 'enterprise'
     default:
@@ -272,12 +286,12 @@ export async function getAvailableModelsForUser(
 ): Promise<AIModelId[]> {
   try {
     const context = await getUserSubscriptionContext(supabase, userId)
-    if (!context) return ['claude-3-haiku-20240307'] // fallback
+    if (!context) return ['claude-haiku-4-5-20251001'] // fallback
 
     return getModelsForTier(context.tier).map(m => m.id)
   } catch (error) {
     console.error('Error getting available models for user:', error)
-    return ['claude-3-haiku-20240307'] // fallback
+    return ['claude-haiku-4-5-20251001'] // fallback
   }
 }
 
@@ -290,12 +304,12 @@ export async function getDefaultModelForUser(
 ): Promise<AIModelId> {
   try {
     const context = await getUserSubscriptionContext(supabase, userId)
-    if (!context) return 'claude-3-haiku-20240307' // fallback
+    if (!context) return 'claude-haiku-4-5-20251001' // fallback
 
     return getDefaultModelForTier(context.tier)
   } catch (error) {
     console.error('Error getting default model for user:', error)
-    return 'claude-3-haiku-20240307' // fallback
+    return 'claude-haiku-4-5-20251001' // fallback
   }
 }
 

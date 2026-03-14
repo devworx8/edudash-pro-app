@@ -34,6 +34,16 @@ import { DASH_TELEMETRY_EVENTS, trackDashTelemetry } from '@/lib/telemetry/event
 import { buildDashTurnTelemetry, createDashTurnId } from '@/lib/dash-ai/turnTelemetry';
 import { checkAIQuota, showQuotaExceededAlert } from '@/lib/ai/guards';
 import type { AIQuotaFeature } from '@/lib/ai/limits';
+import {
+  getQuotaFallbackActions,
+  shouldAutoDowngrade,
+  getFallbackModel,
+  isRewardedAdAvailable,
+  QUOTA_EXTENSION_FEATURE_KEY,
+  QUOTA_EXTENSION_DURATION_MS,
+  QUOTA_AD_TAG,
+} from '@/lib/ai/quotaFallback';
+import { useAds } from '@/contexts/AdsContext';
 import { type VoiceSession, type VoiceProvider } from '@/lib/voice/unifiedProvider';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import {
@@ -360,6 +370,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
   const { conversationId, initialMessage, handoffSource, onClose, onAutoScanConsumed, externalTutorMode, tutorConfig } = options;
   const { setLayout } = useDashboardPreferences();
   const { tier, ready: subReady, refresh: refreshTier } = useSubscription();
+  const { offerRewarded, unlockFeature, isFeatureUnlocked, canShowBanner } = useAds();
   const { user, profile } = useAuth();
   const autoScanUserId = String(user?.id || profile?.id || '').trim() || null;
   const { can, ready: capsReady } = useCapability();
@@ -2656,24 +2667,67 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     
     if (user?.id) {
       try {
-        const quotaCheck = await checkAIQuota(DASH_AI_SERVICE_TYPE, user.id, 1);
-        
-        if (!quotaCheck.allowed) {
-          track('edudash.ai.quota.blocked', {
-            service_type: DASH_AI_SERVICE_TYPE,
-            quota_used: quotaCheck.quotaInfo?.used,
-            quota_limit: quotaCheck.quotaInfo?.limit,
-            user_tier: tier || 'free',
-            upgrade_shown: true,
-          });
-          
-          showQuotaExceededAlert(DASH_AI_SERVICE_TYPE, quotaCheck.quotaInfo, {
-            customMessages: {
-              title: 'AI Chat Limit Reached',
-              message: 'You\'ve used all your AI chat messages for this month.',
-            },
-          });
-          return;
+        // Check for active ad-based quota extension first
+        if (isFeatureUnlocked(QUOTA_EXTENSION_FEATURE_KEY)) {
+          // Ad-based extension is active — skip quota check, proceed
+        } else {
+          const quotaCheck = await checkAIQuota(DASH_AI_SERVICE_TYPE, user.id, 1);
+
+          if (!quotaCheck.allowed) {
+            const userTier = (capabilityTier || 'free') as import('@/lib/ai/models').SubscriptionTier;
+
+            // Fallback 1: Auto-downgrade for paid tiers on a non-Swift model
+            if (shouldAutoDowngrade(userTier, selectedModel)) {
+              const fallback = getFallbackModel();
+              track('edudash.ai.quota.auto_downgrade', {
+                service_type: DASH_AI_SERVICE_TYPE,
+                from_model: selectedModel,
+                to_model: fallback,
+                user_tier: userTier,
+              });
+              setSelectedModel(fallback);
+              // Don't return — let the message send with the downgraded model.
+              // The server-side ai-proxy will still enforce its own quota, but
+              // Swift messages cost fewer weighted units so they're more likely to pass.
+            } else {
+              // Fallback 2 & 3: Show alert with rewarded ad / upgrade options
+              const fallbackActions = getQuotaFallbackActions({
+                tier: userTier,
+                currentModel: selectedModel,
+                canShowRewardedAd: canShowBanner && isRewardedAdAvailable(userTier),
+                hasActiveExtension: false,
+              });
+
+              track('edudash.ai.quota.blocked', {
+                service_type: DASH_AI_SERVICE_TYPE,
+                quota_used: quotaCheck.quotaInfo?.used,
+                quota_limit: quotaCheck.quotaInfo?.limit,
+                user_tier: userTier,
+                fallback_options: fallbackActions.map(a => a.type),
+              });
+
+              showQuotaExceededAlert(DASH_AI_SERVICE_TYPE, quotaCheck.quotaInfo, {
+                customMessages: {
+                  title: 'AI Chat Limit Reached',
+                },
+                fallbackActions,
+                onModelDowngrade: (targetModel) => {
+                  setSelectedModel(targetModel);
+                },
+                onRewardedAd: async () => {
+                  const result = await offerRewarded(QUOTA_AD_TAG);
+                  if (result.rewarded) {
+                    unlockFeature(QUOTA_EXTENSION_FEATURE_KEY, QUOTA_EXTENSION_DURATION_MS);
+                    track('edudash.ai.quota.ad_extension_granted', {
+                      service_type: DASH_AI_SERVICE_TYPE,
+                      user_tier: userTier,
+                    });
+                  }
+                },
+              });
+              return;
+            }
+          }
         }
       } catch (quotaError) {
         console.warn('[useDashAssistant] Quota check failed:', quotaError);
@@ -2736,7 +2790,7 @@ export function useDashAssistant(options: UseDashAssistantOptions): UseDashAssis
     setInputText('');
     dashAttachments.setSelectedAttachments([]);
     processQueue();
-  }, [cancelVoiceAutoSend, inputText, dashAttachments, dashInstance, user?.id, tier, processQueue, wantsLessonGenerator, isRecording, stopVoiceRecording]);
+  }, [cancelVoiceAutoSend, inputText, dashAttachments, dashInstance, user?.id, tier, processQueue, wantsLessonGenerator, isRecording, stopVoiceRecording, capabilityTier, selectedModel, setSelectedModel, canShowBanner, offerRewarded, unlockFeature, isFeatureUnlocked]);
 
   useEffect(() => {
     sendMessageRef.current = sendMessage;

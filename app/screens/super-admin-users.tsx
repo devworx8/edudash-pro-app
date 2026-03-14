@@ -49,6 +49,14 @@ export default function SuperAdminUsersScreen() {
     createTempPassword,
     openTierPicker,
     openRolePicker,
+    selectionMode,
+    selectedIds,
+    toggleSelectionMode,
+    toggleUserSelection,
+    selectAllFiltered,
+    clearSelection,
+    bulkDeleting,
+    bulkDeleteSelected,
   } = useSuperAdminUsers(showAlert);
 
   React.useEffect(() => {
@@ -88,32 +96,60 @@ export default function SuperAdminUsersScreen() {
       {/* Header */}
       <SafeAreaView style={styles.header}>
         <View style={styles.headerContent}>
-          <TouchableOpacity 
-            onPress={() => router.canGoBack() ? router.back() : router.push('/screens/super-admin-dashboard')} 
+          <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.push('/screens/super-admin-dashboard')} 
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color="#00f5ff" />
           </TouchableOpacity>
           <Text style={styles.title}>User Management</Text>
-          <TouchableOpacity onPress={() => setShowFilters(!showFilters)} style={styles.filterButton}>
-            <Ionicons name="filter" size={24} color="#00f5ff" />
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 4 }}>
+            <TouchableOpacity onPress={toggleSelectionMode} style={styles.filterButton}>
+              <Ionicons
+                name={selectionMode ? 'close-circle' : 'checkbox-outline'}
+                size={24}
+                color={selectionMode ? '#ef4444' : '#00f5ff'}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowFilters(!showFilters)} style={styles.filterButton}>
+              <Ionicons name="filter" size={24} color="#00f5ff" />
+            </TouchableOpacity>
+          </View>
         </View>
         
-        {/* Stats */}
+        {/* Stats / Selection bar */}
         <View style={styles.statsContainer}>
-          <Text style={styles.statsText}>
-            Showing {filteredUsers.length} of {totalUsers} users
-          </Text>
-          {!!filters.schoolId && (
-            <TouchableOpacity
-              style={styles.scopeBadge}
-              onPress={() => setFilters(prev => ({ ...prev, schoolId: '', role: 'all' }))}
-            >
-              <Text style={styles.scopeBadgeText}>
-                Scoped to org {String(params.scopeLabel || 'selection')} • Tap to clear
+          {selectionMode ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text style={[styles.statsText, { color: '#00f5ff' }]}>
+                {selectedIds.size} selected
               </Text>
-            </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <TouchableOpacity onPress={selectAllFiltered}>
+                  <Text style={{ color: '#00f5ff', fontSize: 14, fontWeight: '600' }}>Select All</Text>
+                </TouchableOpacity>
+                {selectedIds.size > 0 && (
+                  <TouchableOpacity onPress={clearSelection}>
+                    <Text style={{ color: '#9ca3af', fontSize: 14, fontWeight: '600' }}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          ) : (
+            <>
+              <Text style={styles.statsText}>
+                Showing {filteredUsers.length} of {totalUsers} users
+              </Text>
+              {!!filters.schoolId && (
+                <TouchableOpacity
+                  style={styles.scopeBadge}
+                  onPress={() => setFilters(prev => ({ ...prev, schoolId: '', role: 'all' }))}
+                >
+                  <Text style={styles.scopeBadgeText}>
+                    Scoped to org {String(params.scopeLabel || 'selection')} • Tap to clear
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </View>
       </SafeAreaView>
@@ -173,14 +209,42 @@ export default function SuperAdminUsersScreen() {
             {filteredUsers.map((user) => (
               <TouchableOpacity
                 key={user.id}
-                style={styles.userCard}
+                style={[
+                  styles.userCard,
+                  selectionMode && selectedIds.has(user.id) && {
+                    borderColor: '#00f5ff',
+                    borderWidth: 2,
+                  },
+                ]}
                 onPress={() => {
-                  setSelectedUser(user);
-                  setShowUserModal(true);
+                  if (selectionMode) {
+                    toggleUserSelection(user.id);
+                  } else {
+                    setSelectedUser(user);
+                    setShowUserModal(true);
+                  }
+                }}
+                onLongPress={() => {
+                  if (!selectionMode) {
+                    toggleSelectionMode();
+                    toggleUserSelection(user.id);
+                  }
                 }}
               >
                 <View style={styles.userHeader}>
                   <View style={styles.userInfo}>
+                    {selectionMode && (
+                      <View style={{
+                        width: 28, height: 28, borderRadius: 6,
+                        backgroundColor: selectedIds.has(user.id) ? '#00f5ff' : 'transparent',
+                        borderWidth: 2, borderColor: selectedIds.has(user.id) ? '#00f5ff' : '#6b7280',
+                        justifyContent: 'center', alignItems: 'center', marginRight: 10,
+                      }}>
+                        {selectedIds.has(user.id) && (
+                          <Ionicons name="checkmark" size={18} color="#0b1220" />
+                        )}
+                      </View>
+                    )}
                     <View style={styles.avatarContainer}>
                       {user.avatar_url ? (
                         <Text style={styles.avatarText}>{user.name?.charAt(0) || user.email.charAt(0)}</Text>
@@ -209,6 +273,16 @@ export default function SuperAdminUsersScreen() {
                 </View>
 
                 <View style={styles.userFooter}>
+                  {user.subscription_tier && user.subscription_tier !== 'free' && (
+                    <View style={{
+                      backgroundColor: '#3b82f620', borderRadius: 8, paddingHorizontal: 6,
+                      paddingVertical: 2, borderWidth: 1, borderColor: '#3b82f640',
+                    }}>
+                      <Text style={{ color: '#60a5fa', fontSize: 10, fontWeight: '600' }}>
+                        {formatTierLabel(user.subscription_tier)}
+                      </Text>
+                    </View>
+                  )}
                   {user.school_name && (
                     <Text style={styles.schoolText}>
                       <Ionicons name="school" size={12} color={theme.textTertiary} />
@@ -231,6 +305,40 @@ export default function SuperAdminUsersScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Floating Bulk Action Bar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <View style={{
+          position: 'absolute', bottom: 32, left: 16, right: 16,
+          backgroundColor: '#1f2937', borderRadius: 16, borderWidth: 1,
+          borderColor: '#ef4444', flexDirection: 'row', alignItems: 'center',
+          justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14,
+          shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: 0.5, shadowRadius: 8, elevation: 8,
+        }}>
+          <Text style={{ color: '#ffffff', fontSize: 15, fontWeight: '600' }}>
+            {selectedIds.size} user{selectedIds.size !== 1 ? 's' : ''} selected
+          </Text>
+          <TouchableOpacity
+            onPress={bulkDeleteSelected}
+            disabled={bulkDeleting}
+            style={{
+              backgroundColor: '#dc2626', borderRadius: 10, paddingHorizontal: 18,
+              paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 6,
+              opacity: bulkDeleting ? 0.5 : 1,
+            }}
+          >
+            {bulkDeleting ? (
+              <EduDashSpinner size="small" color="#ffffff" />
+            ) : (
+              <Ionicons name="trash" size={18} color="#ffffff" />
+            )}
+            <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 14 }}>
+              {bulkDeleting ? 'Deleting...' : 'Delete All'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* User Details Modal */}
       <Modal
