@@ -37,8 +37,8 @@ describe('CompactModelPicker helpers', () => {
 
   it('maps model cost into readable usage labels', () => {
     expect(formatModelUsageLabel(1)).toBe('Light usage');
-    expect(formatModelUsageLabel(5)).toBe('Balanced usage');
-    expect(formatModelUsageLabel(8)).toBe('Deep reasoning');
-    expect(formatModelUsageLabel(9)).toBe('Heavy usage');
+    expect(formatModelUsageLabel(3)).toBe('Balanced');
+    expect(formatModelUsageLabel(5)).toBe('Deep reasoning');
+    expect(formatModelUsageLabel(8)).toBe('Heavy usage');
   });
 });

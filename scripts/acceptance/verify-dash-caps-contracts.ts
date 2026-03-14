@@ -186,46 +186,61 @@ function checkClientToolsMetadataBoundary() {
 }
 
 function checkAiProxyToolsAndExecution() {
-  const file = 'supabase/functions/ai-proxy/index.ts';
+  // ai-proxy was modularised — checks now target the specific module files.
+  // config.ts owns the server-tool allow-list and CAPS tool name constants.
+  const config = 'supabase/functions/ai-proxy/config.ts';
+  expectContains(config, 'const SERVER_TOOL_NAMES = new Set([', 'server tool allow-list');
+  expectContains(config, "'search_caps_curriculum'");
+  expectContains(config, "'get_caps_documents'");
+  expectContains(config, "'get_caps_subjects'");
+  expectContains(config, "'caps_curriculum_query'");
 
-  expectContains(file, 'const SERVER_TOOL_NAMES = new Set([', 'server tool allow-list');
-  expectContains(file, "'search_caps_curriculum'");
-  expectContains(file, "'get_caps_documents'");
-  expectContains(file, "'get_caps_subjects'");
-  expectContains(file, "'caps_curriculum_query'");
+  // tools/builders.ts owns the OpenAI + Anthropic tool-schema definitions.
+  const builders = 'supabase/functions/ai-proxy/tools/builders.ts';
+  expectCountAtLeast(builders, "name: 'search_caps_curriculum'", 2, 'OpenAI + Anthropic tool definitions');
+  expectCountAtLeast(builders, "name: 'get_caps_documents'", 2, 'OpenAI + Anthropic tool definitions');
+  expectCountAtLeast(builders, "name: 'get_caps_subjects'", 2, 'OpenAI + Anthropic tool definitions');
+  expectCountAtLeast(builders, "name: 'caps_curriculum_query'", 2, 'OpenAI + Anthropic alias definitions');
 
-  expectCountAtLeast(file, "name: 'search_caps_curriculum'", 2, 'OpenAI + Anthropic tool definitions');
-  expectCountAtLeast(file, "name: 'get_caps_documents'", 2, 'OpenAI + Anthropic tool definitions');
-  expectCountAtLeast(file, "name: 'get_caps_subjects'", 2, 'OpenAI + Anthropic tool definitions');
-  expectCountAtLeast(file, "name: 'caps_curriculum_query'", 2, 'OpenAI + Anthropic alias definitions');
+  // tools/caps.ts owns CAPS search execution; dispatch for get_caps_documents
+  // and get_caps_subjects is spread across providers and streaming modules.
+  const capsTools = 'supabase/functions/ai-proxy/tools/caps.ts';
+  expectContains(capsTools, 'search_caps_curriculum', 'server execution for CAPS search/alias');
 
-  expectCountAtLeast(
-    file,
-    "if (toolName === 'search_caps_curriculum' || toolName === 'caps_curriculum_query')",
-    3,
-    'server execution for CAPS search/alias across providers'
-  );
-  expectCountAtLeast(file, "if (toolName === 'get_caps_documents')", 3, 'server execution for CAPS documents');
-  expectCountAtLeast(file, "if (toolName === 'get_caps_subjects')", 3, 'server execution for CAPS subjects');
+  // Verify get_caps_documents and get_caps_subjects are dispatched in at least
+  // one provider or streaming file (counts across the whole ai-proxy tree).
+  const proxyFiles = walkFiles('supabase/functions/ai-proxy');
+  const docsHits = proxyFiles.reduce((sum, f) => sum + count(read(f), 'get_caps_documents'), 0);
+  const subsHits = proxyFiles.reduce((sum, f) => sum + count(read(f), 'get_caps_subjects'), 0);
+  if (docsHits < 3) failures.push('ai-proxy: expected at least 3 occurrences of get_caps_documents across modules');
+  if (subsHits < 3) failures.push('ai-proxy: expected at least 3 occurrences of get_caps_subjects across modules');
 
-  expectContains(file, 'if (!SERVER_TOOL_NAMES.has(toolName)) {', 'unknown tools deferred to pending');
+  // providers/openai.ts defers unknown tools to pending.
+  const openai = 'supabase/functions/ai-proxy/providers/openai.ts';
+  expectContains(openai, 'if (!SERVER_TOOL_NAMES.has(toolName)) {', 'unknown tools deferred to pending');
+
+  // providers/anthropic.ts separates server vs client tool uses.
+  const anthropic = 'supabase/functions/ai-proxy/providers/anthropic.ts';
   expectContains(
-    file,
+    anthropic,
     'const serverToolUses = toolUses.filter((tu) => SERVER_TOOL_NAMES.has(String(tu.name || \'\')));',
     'Anthropic server tool separation'
   );
   expectContains(
-    file,
+    anthropic,
     'const clientToolUses = toolUses.filter((tu) => !SERVER_TOOL_NAMES.has(String(tu.name || \'\')));',
     'Anthropic client tool separation'
   );
+
+  // streaming/anthropic.ts separates server vs client pending tools.
+  const streamingAnthropic = 'supabase/functions/ai-proxy/streaming/anthropic.ts';
   expectContains(
-    file,
+    streamingAnthropic,
     'const serverTools = pendingToolCalls.filter((t) => SERVER_TOOL_NAMES.has(String(t.name || \'\')));',
     'streaming server tool separation'
   );
   expectContains(
-    file,
+    streamingAnthropic,
     'const clientPendingTools = pendingToolCalls.filter((t) => !SERVER_TOOL_NAMES.has(String(t.name || \'\')));',
     'streaming pending-tool separation'
   );
