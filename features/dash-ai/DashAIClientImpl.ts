@@ -565,9 +565,12 @@ export class DashAIClient {
       // If streaming requested, use streaming endpoint
       if (params.stream && params.onChunk) {
         // Build prompt from messages and delegate to streaming path
+        // Use only the last user message as promptText — the full messages array is sent
+        // separately as structured messages. Flattening to "User:/Assistant:" text causes
+        // Claude to role-play both sides of the conversation.
         const messagesArr = Array.isArray(params.messages) ? params.messages : [];
         const promptText = messagesArr.length > 0
-          ? messagesArr.map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content || ''}`).join('\n')
+          ? String(messagesArr.filter((m: any) => m.role === 'user').at(-1)?.content || params.content || params.userInput || '')
           : String(params.content || params.userInput || '');
         const enableToolsForStreaming = this.shouldEnableToolsForStreaming({
           promptText,
@@ -635,9 +638,10 @@ export class DashAIClient {
       }
       
       // Non-streaming call to ai-proxy
+      // Use only the last user message as promptText — same reasoning as streaming path above.
       const messagesArr = Array.isArray(params.messages) ? params.messages : [];
       const promptText = messagesArr.length > 0
-        ? messagesArr.map((m: any) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content || ''}`).join('\n')
+        ? String(messagesArr.filter((m: any) => m.role === 'user').at(-1)?.content || params.content || params.userInput || '')
         : String(params.content || params.userInput || '');
       const attachmentContext = params.context?.includes('ATTACHMENTS RECEIVED')
         ? null

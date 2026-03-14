@@ -337,6 +337,23 @@ function mapRequestTypeToService(rawRequestType?: string | null): string {
   return requestType;
 }
 
+// Weight multipliers per model to charge heavier usage for higher-tier models
+const MODEL_WEIGHT_TABLE: Record<string, number> = {
+  'claude-3-haiku-20240307': 1,
+  'claude-haiku-4-5-20251001': 2,
+  'claude-3-5-haiku-20241022': 3,
+  'claude-3-5-sonnet-20241022': 5,
+  'claude-3-7-sonnet-20250219': 6,
+  'claude-sonnet-4-20250514': 8,   // Dash Pro
+  'claude-sonnet-4-5-20250514': 10, // Dash Pro+
+};
+
+function getModelWeight(modelId?: string | null): number {
+  if (!modelId) return 1;
+  const weight = MODEL_WEIGHT_TABLE[String(modelId).trim().toLowerCase()];
+  return Number.isFinite(weight) && weight > 0 ? weight : 1;
+}
+
 async function getSchoolUserIds(supabase: any, preschoolId: string): Promise<string[]> {
   const ids = new Set<string>();
   const { data: byOrganization, error: byOrganizationError } = await supabase
@@ -422,14 +439,15 @@ serve(async (req: Request) => {
 
         const { data: usage } = await supabase
           .from('ai_request_log')
-          .select('request_type')
+          .select('request_type, metadata')
           .eq('user_id', user.id)
           .gte('created_at', monthStart);
 
         const counts: Record<string, number> = {};
         for (const row of usage || []) {
           const key = mapRequestTypeToService(row.request_type);
-          counts[key] = (counts[key] || 0) + 1;
+          const weight = getModelWeight((row as any)?.metadata?.model);
+          counts[key] = (counts[key] || 0) + (Number.isFinite(weight) ? weight : 1);
         }
 
         return respond({
@@ -465,6 +483,8 @@ serve(async (req: Request) => {
         const requestType = getRequestTypesForService(serviceType)[0] || 'chat_message';
         const tokensIn = Number(event.tokens_in || 0);
         const tokensOut = Number(event.tokens_out || 0);
+        const modelWeight = getModelWeight(event.model);
+        const weightedTokens = Math.max(1, Math.round(modelWeight));
 
         await supabase.from('ai_request_log').insert({
           user_id: user.id,
@@ -472,13 +492,15 @@ serve(async (req: Request) => {
           function_name: event.function_name || null,
           status: event.status || 'success',
           response_time_ms: event.response_time_ms || null,
-          tokens_used: Number.isFinite(tokensIn + tokensOut) ? tokensIn + tokensOut : null,
+          tokens_used: weightedTokens,
           metadata: {
             ...(event.metadata || {}),
             service_type: serviceType,
             model: event.model || 'unknown',
             tokens_in: tokensIn,
             tokens_out: tokensOut,
+            tokens_used_raw: tokensIn + tokensOut,
+            model_weight: modelWeight,
           },
           created_at: event.timestamp || new Date().toISOString(),
         });
@@ -521,14 +543,15 @@ serve(async (req: Request) => {
 
         const { data: usage } = await supabase
           .from('ai_request_log')
-          .select('request_type')
+          .select('request_type, metadata')
           .eq('user_id', targetUserId)
           .gte('created_at', monthStart);
 
         const currentUsage: Record<string, number> = {};
         for (const row of usage || []) {
           const key = mapRequestTypeToService(row.request_type);
-          currentUsage[key] = (currentUsage[key] || 0) + 1;
+          const weight = getModelWeight((row as any)?.metadata?.model);
+          currentUsage[key] = (currentUsage[key] || 0) + (Number.isFinite(weight) ? weight : 1);
         }
 
         return respond({
@@ -589,7 +612,7 @@ serve(async (req: Request) => {
 
         const { data: usage } = await supabase
           .from('ai_request_log')
-          .select('request_type, user_id, created_at')
+          .select('request_type, user_id, created_at, metadata')
           .in('user_id', schoolUserIds)
           .gte('created_at', monthStart)
           .limit(5000);
@@ -599,17 +622,22 @@ serve(async (req: Request) => {
         const byDay: Record<string, number> = {};
 
         for (const row of usage || []) {
+          const weight = getModelWeight((row as any)?.metadata?.model);
           const serviceKey = mapRequestTypeToService(row.request_type);
-          byService[serviceKey] = (byService[serviceKey] || 0) + 1;
-          byUser[row.user_id] = (byUser[row.user_id] || 0) + 1;
+          const increment = Number.isFinite(weight) ? weight : 1;
+          byService[serviceKey] = (byService[serviceKey] || 0) + increment;
+          byUser[row.user_id] = (byUser[row.user_id] || 0) + increment;
           const day = (row.created_at || '').slice(0, 10);
-          byDay[day] = (byDay[day] || 0) + 1;
+          byDay[day] = (byDay[day] || 0) + increment;
         }
 
         return respond({
           preschool_id,
           period_start: monthStart,
-          total_requests: (usage || []).length,
+          total_requests: (usage || []).reduce((sum: number, row: any) => {
+            const weight = getModelWeight(row?.metadata?.model);
+            return sum + (Number.isFinite(weight) ? weight : 1);
+          }, 0),
           by_service: byService,
           by_user: byUser,
           by_day: byDay,
@@ -667,14 +695,18 @@ serve(async (req: Request) => {
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-        const { count } = await supabase
+        const { data: usageRows } = await supabase
           .from('ai_request_log')
-          .select('id', { count: 'exact', head: true })
+          .select('tokens_used, metadata')
           .eq('user_id', targetUserId)
           .in('request_type', requestTypes)
-          .gte('created_at', monthStart);
+          .gte('created_at', monthStart)
+          .limit(5000);
 
-        const current = count || 0;
+        const current = (usageRows || []).reduce((total: number, row: any) => {
+          const weight = Number.isFinite(row?.tokens_used) ? Number(row.tokens_used) : getModelWeight(row?.metadata?.model);
+          return total + (Number.isFinite(weight) ? Math.max(1, Math.round(weight)) : 1);
+        }, 0);
         const remaining = Math.max(0, limit - current);
 
         return respond({

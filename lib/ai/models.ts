@@ -23,11 +23,11 @@ export type AIModelInfo = {
 export const MODEL_WEIGHTS: Record<AIModelId, number> = {
   'claude-3-haiku-20240307': 1,
   'claude-haiku-4-5-20251001': 2,
-  'claude-3-5-haiku-20241022': 2,
+  'claude-3-5-haiku-20241022': 3,
   'claude-3-5-sonnet-20241022': 5,
   'claude-3-7-sonnet-20250219': 6,
   'claude-sonnet-4-20250514': 8,
-  'claude-sonnet-4-5-20250514': 9,
+  'claude-sonnet-4-5-20250514': 10,
 }
 
 // Tier hierarchy for access checks

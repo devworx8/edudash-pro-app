@@ -38,7 +38,8 @@ export function useAIModelSelection(
   initialModel?: AIModelId
 ): AIModelSelectionState {
   const { tier: subscriptionTier, ready } = useSubscription()
-  const [selectedModel, setSelectedModelState] = useState<AIModelId>('claude-3-haiku-20240307')
+  // Start with Haiku 4.5 as a safe placeholder; upgraded to tier default once subscription loads.
+  const [selectedModel, setSelectedModelState] = useState<AIModelId>('claude-haiku-4-5-20251001')
   const [isLoading, setIsLoading] = useState(true)
 
   // Normalize tier for consistency
@@ -59,14 +60,18 @@ export function useAIModelSelection(
     return getTierQuotas(tier)
   }, [tier])
 
-  // Set default model when tier changes
+  // Set default model when tier loads or changes
   useEffect(() => {
     if (!ready) return
 
     const defaultModel = initialModel || getDefaultModelForTier(tier)
-    
-    // If current selection is not available in this tier, switch to default
+
     if (!canAccessModel(tier, selectedModel)) {
+      // Current model is above this tier — downgrade to tier default
+      setSelectedModelState(defaultModel)
+    } else if (selectedModel === 'claude-haiku-4-5-20251001' || selectedModel === 'claude-3-haiku-20240307') {
+      // Still on the initial placeholder — upgrade to the tier's proper default.
+      // (Stored user preferences are restored later by useDashChatModelPreference.)
       setSelectedModelState(defaultModel)
     } else if (initialModel && canAccessModel(tier, initialModel)) {
       setSelectedModelState(initialModel)

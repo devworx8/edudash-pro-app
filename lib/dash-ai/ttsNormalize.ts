@@ -237,6 +237,31 @@ function normalizeSouthAfricanLanguageNames(text: string): string {
     .replace(/\bse\s+sotho\b/gi, 'Sesotho');
 }
 
+/**
+ * Convert inline math symbols to spoken words so TTS engines don't guess.
+ * Azure TTS reads "9-1" as "9 to 1" (a range) and may drop decimal points.
+ * Must run AFTER currency normalization so "R 1.50" is already handled.
+ */
+function normalizeMathExpressions(text: string, phonicsMode: boolean): string {
+  if (phonicsMode) return text;
+
+  return text
+    // "=" between digits → "equals"  (e.g. "9-1=8" → step 2 below converts to "9 minus 1 equals 8")
+    .replace(/(\d)\s*=\s*(\d)/g, '$1 equals $2')
+    // Leading equals: "=0.7" → "equals 0.7"
+    .replace(/=\s*(\d)/g, 'equals $1')
+    // Subtraction "-" tightly bound between digits → "minus"
+    // Covers "9-1" but NOT "2024 - 2025" (year ranges with spaces stay as-is for TTS)
+    .replace(/(\d)-(\d)/g, '$1 minus $2')
+    // Decimal numbers: "1.3534" → "1 point 3534" (≥2 decimal digits, avoids list-item markers)
+    // Single decimal digits like "3.5" are generally handled correctly by TTS — skip those
+    .replace(/\b(\d+)\.(\d{2,})\b/g, '$1 point $2')
+    // Multiplication: × and * between digits
+    .replace(/(\d)\s*[×*]\s*(\d)/g, '$1 times $2')
+    // Division: ÷ between digits
+    .replace(/(\d)\s*÷\s*(\d)/g, '$1 divided by $2');
+}
+
 function normalizeAcronymsForNaturalSpeech(text: string, phonicsMode: boolean): string {
   if (phonicsMode) return text;
 
@@ -275,15 +300,20 @@ function stripMarkdownAndMeta(text: string, preservePhonicsMarkers: boolean): st
   next = next
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`[^`]+`/g, '')
+    // Bold+italic (***text***) — must precede bold/italic
+    .replace(/\*{3}([\s\S]*?)\*{3}/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/__([^_]+)__/g, '$1')
     .replace(/_([^_]+)_/g, '$1')
-    .replace(/^#{1,6}\s+/gm, '')
+    // Headers — \s* (not \s+) so ##Heading without space is also stripped
+    .replace(/^#{1,6}\s*/gm, '')
     .replace(/^\s*[-*+\u2022\u25e6\u25aa\u00b7]\s*/gm, '')
     .replace(/^\s*\d+[.)]\s*/gm, '')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
-    .replace(/^>\s*/gm, '');
+    .replace(/^>\s*/gm, '')
+    // Catch-all: strip remaining consecutive asterisks (unclosed/malformed bold markers)
+    .replace(/\*{2,}/g, '');
 
   if (!preservePhonicsMarkers) {
     next = next.replace(/\[.*?\]/g, '');
@@ -340,6 +370,7 @@ export function normalizeForTTS(input: string, options: TTSNormalizeOptions = {}
   text = normalizeChoiceLabels(text);
   text = normalizeEduDashBrandForms(text);
   text = normalizeSouthAfricanCurrency(text);
+  text = normalizeMathExpressions(text, phonicsMode);
 
   // Apply pronunciation dictionary (brand names, SA languages, acronyms)
   text = applyPronunciationPlainText(text);

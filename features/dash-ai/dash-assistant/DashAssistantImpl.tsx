@@ -85,7 +85,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
     bottomScrollRequestId,
     isRecording, recordingVoiceActivity, partialTranscript, speechChunkProgress,
     voiceAutoSendCountdownActive, voiceAutoSendCountdownMs, tutorSession, alertState, hideAlert,
-    flashListRef, inputRef, sendMessage, speakResponse, stopSpeaking, stopAllActivity,
+    flashListRef, inputRef, webScrollNodeRef, sendMessage, speakResponse, stopSpeaking, stopAllActivity,
     startNewConversation, scrollToBottom, handlePickImages, handlePickDocuments,
     handleInputMicPress, cancelVoiceAutoSend, handleRemoveAttachment, addAttachments, runTool,
     tier, cancelGeneration, selectedModel, setSelectedModel,
@@ -179,8 +179,8 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
     <DashMessageBubble
       key={message.id} message={message} index={index} totalMessages={messages.length}
       speakingMessageId={speakingMessageId} isLoading={isLoading} voiceEnabled={effectiveVoiceEnabled}
-      onSpeak={speech.handleSpeakMessage} onRetry={(content) => sendMessage(content)}
-      onSendFollowUp={(text) => sendMessage(text)} assistantLabel={roleCopy.assistantLabel}
+      onSpeak={speech.handleSpeakMessage} onRetry={(content, attachments) => sendMessage(content, attachments as any)}
+      onSendFollowUp={(text, attachments) => sendMessage(text, attachments as any)} assistantLabel={roleCopy.assistantLabel}
       onRetakeForClarity={scanner.handleRetakeForClarity}
     />
   ), [messages.length, speakingMessageId, isLoading, effectiveVoiceEnabled, speech.handleSpeakMessage, sendMessage, roleCopy.assistantLabel, scanner.handleRetakeForClarity]);
@@ -236,13 +236,12 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
             theme={theme} tierStatus={tierStatus} shellSubtitle={shellSubtitle}
             isTutorUiActive={isTutorUiActive} useMinimalNextGenLayout={useMinimalNextGenLayout}
             tutorModeLabel={tutorModeLabel} effectiveVoiceEnabled={effectiveVoiceEnabled}
-            showMiniSpeechControls={speech.showMiniSpeechControls} showFullSpeechControls={speech.showFullSpeechControls}
+            showSpeechControls={speech.showSpeechControls}
             speech={{
               isSpeaking, chunkCount: speech.chunkCount, displaySpeechIndex: speech.displaySpeechIndex,
               canSeekBack: speech.canSeekBack, canSeekForward: speech.canSeekForward,
               onToggle: speech.handleSpeechToggle,
               onSeek: speech.speakFromSegment,
-              onExpand: () => {},
             }}
             isTypingActive={isTypingActive} isLoading={isLoading} isUploading={isUploading} isRecording={isRecording}
             allModels={allModels} selectedModel={selectedModel} canSelectModel={canSelectHeaderModel}
@@ -262,6 +261,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
               onSendMessage={(text) => sendMessage(text)} bottomInset={0}
               keyboardVisible={keyboardVisible} compactBottomPadding
               tutorMode={activeTutorMode || null} userRole={normalizedRole}
+              webScrollNodeRef={webScrollNodeRef}
             />
           </View>
 

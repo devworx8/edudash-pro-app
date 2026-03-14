@@ -10,6 +10,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { assertSupabase } from '@/lib/supabase';
+import { normalizeForTTS } from '@/lib/dash-ai/ttsNormalize';
 import { splitIntoSpeechChunks, InstantTTSPlayer } from '@/lib/voice/instantTTS';
 
 interface UseInstantTTSOptions {
@@ -51,7 +52,7 @@ export function useInstantTTS(options: UseInstantTTSOptions = {}): UseInstantTTS
             setIsSpeaking(true);
             options.onStart?.();
             
-            const utterance = new SpeechSynthesisUtterance(text);
+            const utterance = new SpeechSynthesisUtterance(normalizeForTTS(text));
             utterance.lang = options.language || 'en-ZA';
             utterance.rate = 0.9;
             

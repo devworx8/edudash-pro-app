@@ -15,7 +15,6 @@ interface SpeechControlsProps {
   canSeekForward: boolean;
   onToggle: () => void;
   onSeek: (index: number) => void;
-  onExpand: (expanded: boolean) => void;
 }
 
 interface DashAssistantHeaderProps {
@@ -26,8 +25,7 @@ interface DashAssistantHeaderProps {
   useMinimalNextGenLayout: boolean;
   tutorModeLabel: string;
   effectiveVoiceEnabled: boolean;
-  showMiniSpeechControls: boolean;
-  showFullSpeechControls: boolean;
+  showSpeechControls: boolean;
   speech: SpeechControlsProps;
   isTypingActive: boolean;
   isLoading: boolean;
@@ -46,7 +44,7 @@ interface DashAssistantHeaderProps {
 
 export const DashAssistantHeader: React.FC<DashAssistantHeaderProps> = ({
   theme, tierStatus, shellSubtitle, isTutorUiActive, useMinimalNextGenLayout,
-  tutorModeLabel, effectiveVoiceEnabled, showMiniSpeechControls, showFullSpeechControls,
+  tutorModeLabel, effectiveVoiceEnabled, showSpeechControls,
   speech, isTypingActive, isLoading, isUploading, isRecording,
   allModels, selectedModel, canSelectModel, onSelectModel,
   onStopAllActivity, onOpenOptions, onOpenOrb, onClose, onClosePress,
@@ -126,71 +124,33 @@ export const DashAssistantHeader: React.FC<DashAssistantHeaderProps> = ({
         </View>
       )}
 
-      {effectiveVoiceEnabled && showMiniSpeechControls && (
-        <View style={{ marginTop: 8, borderWidth: 1, borderColor: theme.border, borderRadius: 11, backgroundColor: theme.surfaceVariant + 'C7', paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      {effectiveVoiceEnabled && showSpeechControls && (
+        <View style={{ marginTop: 8, borderWidth: 1, borderColor: theme.border, borderRadius: 10, backgroundColor: theme.surfaceVariant + 'CC', paddingHorizontal: 10, paddingVertical: 6, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <TouchableOpacity
-            style={[headerStyles.iconButton, { backgroundColor: theme.primary + '22', borderColor: theme.primary + '44' }]}
+            style={[headerStyles.iconButton, { backgroundColor: theme.surface, borderColor: theme.border, width: 28, height: 28, borderRadius: 14 }]}
+            onPress={() => speech.onSeek(speech.displaySpeechIndex - 1)} disabled={!speech.canSeekBack}
+            accessibilityLabel="Rewind"
+          >
+            <Ionicons name="play-back" size={13} color={speech.canSeekBack ? theme.text : theme.textTertiary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }}
             onPress={speech.onToggle} accessibilityLabel={speech.isSpeaking ? 'Stop speech' : 'Play speech'}
           >
-            <Ionicons name={speech.isSpeaking ? 'stop' : 'play'} size={14} color={theme.primary} />
+            <Ionicons name={speech.isSpeaking ? 'stop' : 'play'} size={15} color={theme.onPrimary || '#fff'} />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.text, fontSize: 11, fontWeight: '700' }} numberOfLines={1}>Speech controls</Text>
-            <Text style={{ color: theme.textSecondary, fontSize: 10, fontWeight: '600' }}>
-              {speech.chunkCount > 0 ? `${speech.displaySpeechIndex + 1}/${speech.chunkCount}` : '0/0'}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={[headerStyles.iconButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-            onPress={() => speech.onExpand(true)} accessibilityLabel="Expand speech controls"
-          >
-            <Ionicons name="chevron-down" size={15} color={theme.textSecondary} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {effectiveVoiceEnabled && showFullSpeechControls && (
-        <View style={{ marginTop: 8, borderWidth: 1, borderColor: theme.border, borderRadius: 12, backgroundColor: theme.surfaceVariant + 'CC', paddingHorizontal: 10, paddingVertical: 7, gap: 7 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <Text style={{ color: theme.text, fontSize: 11, fontWeight: '700', flex: 1 }} numberOfLines={1}>
-              {speech.isSpeaking ? 'Dash speaking' : 'Speech controls'}
-            </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={{ color: theme.textSecondary, fontSize: 10, fontWeight: '600' }}>
-                {speech.chunkCount > 0 ? `${speech.displaySpeechIndex + 1}/${speech.chunkCount}` : '0/0'}
-              </Text>
-              {!speech.isSpeaking && (
-                <TouchableOpacity
-                  style={[headerStyles.iconButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-                  onPress={() => speech.onExpand(false)} accessibilityLabel="Collapse speech controls"
-                >
-                  <Ionicons name="chevron-up" size={14} color={theme.textSecondary} />
-                </TouchableOpacity>
-              )}
+          <View style={{ flex: 1, justifyContent: 'center', height: 28 }}>
+            <View style={{ height: 4, borderRadius: 2, backgroundColor: theme.border, overflow: 'hidden' }}>
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: theme.primary, width: speech.chunkCount > 0 ? `${Math.round(((speech.displaySpeechIndex + (speech.isSpeaking ? 1 : 0)) / speech.chunkCount) * 100)}%` as any : '0%' as any }} />
             </View>
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <TouchableOpacity
-              style={[headerStyles.iconButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => speech.onSeek(speech.displaySpeechIndex - 1)} disabled={!speech.canSeekBack}
-              accessibilityLabel="Rewind spoken content"
-            >
-              <Ionicons name="play-back" size={16} color={speech.canSeekBack ? theme.text : theme.textTertiary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[headerStyles.iconButton, { backgroundColor: theme.primary + '22', borderColor: theme.primary + '44' }]}
-              onPress={speech.onToggle} accessibilityLabel={speech.isSpeaking ? 'Stop speech' : 'Play speech'}
-            >
-              <Ionicons name={speech.isSpeaking ? 'stop' : 'play'} size={16} color={theme.primary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[headerStyles.iconButton, { backgroundColor: theme.surface, borderColor: theme.border }]}
-              onPress={() => speech.onSeek(speech.displaySpeechIndex + 1)} disabled={!speech.canSeekForward}
-              accessibilityLabel="Fast forward spoken content"
-            >
-              <Ionicons name="play-forward" size={16} color={speech.canSeekForward ? theme.text : theme.textTertiary} />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={[headerStyles.iconButton, { backgroundColor: theme.surface, borderColor: theme.border, width: 28, height: 28, borderRadius: 14 }]}
+            onPress={() => speech.onSeek(speech.displaySpeechIndex + 1)} disabled={!speech.canSeekForward}
+            accessibilityLabel="Fast forward"
+          >
+            <Ionicons name="play-forward" size={13} color={speech.canSeekForward ? theme.text : theme.textTertiary} />
+          </TouchableOpacity>
         </View>
       )}
     </View>

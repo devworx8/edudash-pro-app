@@ -1,33 +1,37 @@
 export const buildMarkdownStyles = (theme: any, isUser: boolean) => ({
   body: {
     color: isUser ? theme.onPrimary : theme.text,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
   },
   paragraph: {
     color: isUser ? theme.onPrimary : theme.text,
-    marginBottom: 6,
+    marginBottom: 8,
+    lineHeight: 22,
   },
   heading1: {
     color: isUser ? theme.onPrimary : theme.text,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700' as const,
-    marginTop: 12,
-    marginBottom: 6,
+    marginTop: 16,
+    marginBottom: 8,
+    lineHeight: 28,
   },
   heading2: {
     color: isUser ? theme.onPrimary : theme.text,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700' as const,
-    marginTop: 10,
+    marginTop: 14,
     marginBottom: 6,
+    lineHeight: 24,
   },
   heading3: {
     color: isUser ? theme.onPrimary : theme.text,
     fontSize: 15,
-    fontWeight: '600' as const,
-    marginTop: 8,
+    fontWeight: '700' as const,
+    marginTop: 10,
     marginBottom: 4,
+    lineHeight: 22,
   },
   strong: {
     fontWeight: '700' as const,
@@ -38,53 +42,122 @@ export const buildMarkdownStyles = (theme: any, isUser: boolean) => ({
     color: isUser ? theme.onPrimary : theme.textSecondary,
   },
   bullet_list: {
-    marginVertical: 4,
+    marginVertical: 6,
   },
   ordered_list: {
-    marginVertical: 4,
+    marginVertical: 6,
   },
   list_item: {
-    marginBottom: 2,
+    marginBottom: 4,
+    flexDirection: 'row' as const,
+    alignItems: 'flex-start' as const,
   },
   bullet_list_icon: {
     color: isUser ? theme.onPrimary : theme.primary,
     marginRight: 8,
+    fontSize: 8,
+    lineHeight: 22,
+  },
+  bullet_list_content: {
+    flex: 1,
   },
   code_inline: {
-    backgroundColor: isUser ? 'rgba(255,255,255,0.18)' : theme.surfaceVariant,
-    color: isUser ? theme.onPrimary : theme.primary,
+    backgroundColor: isUser ? 'rgba(255,255,255,0.18)' : (theme.surfaceVariant || '#1e293b'),
+    color: isUser ? theme.onPrimary : (theme.primary || '#60a5fa'),
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 5,
     fontFamily: 'monospace',
-    fontSize: 12,
+    fontSize: 13,
   },
   code_block: {
-    backgroundColor: isUser ? 'rgba(0,0,0,0.25)' : '#101420',
-    padding: 12,
+    backgroundColor: isUser ? 'rgba(0,0,0,0.3)' : '#0f1219',
+    color: '#e2e8f0',
+    padding: 14,
     borderRadius: 10,
-    marginVertical: 8,
+    marginVertical: 10,
+    fontFamily: 'monospace',
+    fontSize: 13,
+    lineHeight: 20,
+    overflow: 'hidden' as const,
   },
   fence: {
-    backgroundColor: isUser ? 'rgba(0,0,0,0.25)' : '#101420',
-    padding: 12,
+    backgroundColor: isUser ? 'rgba(0,0,0,0.3)' : '#0f1219',
+    color: '#e2e8f0',
+    padding: 14,
     borderRadius: 10,
-    marginVertical: 8,
+    marginVertical: 10,
+    fontFamily: 'monospace',
+    fontSize: 13,
+    lineHeight: 20,
+    overflow: 'hidden' as const,
   },
   blockquote: {
     backgroundColor: (isUser ? theme.onPrimary : theme.primary) + '12',
     borderLeftWidth: 3,
     borderLeftColor: isUser ? theme.onPrimary : theme.primary,
-    paddingLeft: 12,
-    paddingVertical: 8,
-    marginVertical: 8,
+    paddingLeft: 14,
+    paddingVertical: 10,
+    marginVertical: 10,
     borderRadius: 6,
   },
   link: {
-    color: isUser ? theme.onPrimary : theme.primary,
+    color: isUser ? theme.onPrimary : (theme.primary || '#3b82f6'),
     textDecorationLine: 'underline' as const,
   },
+  hr: {
+    backgroundColor: isUser ? 'rgba(255,255,255,0.2)' : (theme.border || '#334155'),
+    height: 1,
+    marginVertical: 12,
+  },
+  table: {
+    borderWidth: 1,
+    borderColor: isUser ? 'rgba(255,255,255,0.2)' : (theme.border || '#334155'),
+    borderRadius: 8,
+    marginVertical: 10,
+    overflow: 'hidden' as const,
+  },
+  thead: {
+    backgroundColor: isUser ? 'rgba(0,0,0,0.15)' : (theme.surfaceVariant || '#1e293b'),
+  },
+  th: {
+    padding: 8,
+    fontWeight: '700' as const,
+    fontSize: 13,
+    color: isUser ? theme.onPrimary : theme.text,
+  },
+  td: {
+    padding: 8,
+    fontSize: 13,
+    color: isUser ? theme.onPrimary : theme.text,
+    borderTopWidth: 1,
+    borderColor: isUser ? 'rgba(255,255,255,0.1)' : (theme.border || '#334155'),
+  },
+  tr: {
+    borderBottomWidth: 0,
+  },
+  strikethrough: {
+    textDecorationLine: 'line-through' as const,
+  },
 });
+
+// Lightweight markdown stripper for web fallback (no markdown renderer available).
+export const stripMarkdownForDisplay = (text: string): string => {
+  return String(text || '')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^\s*[-*+\u2022]\s+/gm, '')
+    .replace(/^\s*\d+[.)]\s+/gm, '')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
+    .replace(/^>\s?/gm, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+};
 
 const toTitleCase = (value: string) =>
   value

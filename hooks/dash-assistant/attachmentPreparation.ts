@@ -9,21 +9,64 @@ import {
 } from '@/lib/dash-ai/imageCompression';
 
 async function encodeImageForWeb(uri: string, fallbackMime: string): Promise<{ base64: string; mediaType: string } | null> {
+  // Already a data URI — extract and return directly (already encoded, EXIF was applied on creation)
+  const dataUriMatch = uri.match(/^data:([^;]+);base64,(.+)$/);
+  if (dataUriMatch) return { base64: dataUriMatch[2], mediaType: dataUriMatch[1] };
+
   try {
-    const dataUriMatch = uri.match(/^data:([^;]+);base64,(.+)$/);
-    if (dataUriMatch) return { base64: dataUriMatch[2], mediaType: dataUriMatch[1] };
-    const resp = await fetch(uri);
-    const blob = await resp.blob();
-    const mediaType = blob.type || fallbackMime;
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve((String(reader.result || '')).split(',')[1] ?? '');
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-    return { base64, mediaType };
+    // Load via HTMLImageElement so the browser applies EXIF orientation before we read pixels.
+    // Drawing to canvas produces correctly-rotated pixels regardless of EXIF flags in the JPEG.
+    const blob = await fetch(uri).then((r) => r.blob());
+    const objectUrl = URL.createObjectURL(blob);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const el = new (window as any).Image() as HTMLImageElement;
+        el.crossOrigin = 'anonymous';
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = objectUrl;
+      });
+
+      // naturalWidth/Height reflect the orientation-corrected dimensions
+      const maxDim = 1600;
+      let w = img.naturalWidth;
+      let h = img.naturalHeight;
+      if (w > maxDim || h > maxDim) {
+        const scale = Math.min(maxDim / w, maxDim / h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const canvas = (document as any).createElement('canvas') as HTMLCanvasElement;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('no 2d context');
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl: string = canvas.toDataURL('image/jpeg', 0.85);
+      const base64 = dataUrl.split(',')[1] ?? '';
+      return { base64, mediaType: 'image/jpeg' };
+    } finally {
+      URL.revokeObjectURL(objectUrl);
+    }
   } catch {
-    return null;
+    // Fallback: raw blob encode (no EXIF correction, but better than nothing)
+    try {
+      const blob = await fetch(uri).then((r) => r.blob());
+      const mediaType = blob.type || fallbackMime;
+      const base64 = await new Promise<string>((resolve, reject) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reader = new (window as any).FileReader();
+        reader.onload = () => resolve((String(reader.result || '')).split(',')[1] ?? '');
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      return { base64, mediaType };
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -34,6 +77,11 @@ export const prepareAttachmentsForAI = async (attachments: DashAttachment[]) => 
   if (Platform.OS === 'web') {
     const prepared: DashAttachment[] = [];
     for (const attachment of attachments) {
+      // Use cached base64 if already prepared (e.g. from a prior call on retry/follow-up)
+      if (attachment.kind === 'image' && attachment.meta?.image_base64) {
+        prepared.push(attachment);
+        continue;
+      }
       if (attachment.kind !== 'image' || !attachment.previewUri) {
         prepared.push(attachment);
         continue;
@@ -58,6 +106,11 @@ export const prepareAttachmentsForAI = async (attachments: DashAttachment[]) => 
   const prepared: DashAttachment[] = [];
 
   for (const attachment of attachments) {
+    // Use cached base64 if already prepared (e.g. from a prior call on retry/follow-up)
+    if (attachment.kind === 'image' && attachment.meta?.image_base64) {
+      prepared.push(attachment);
+      continue;
+    }
     if (attachment.kind !== 'image' || !attachment.previewUri) {
       prepared.push(attachment);
       continue;

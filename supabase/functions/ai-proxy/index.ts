@@ -3569,8 +3569,32 @@ serve(async (req) => {
       parseAllowedModels('ANTHROPIC_ALLOWED_MODELS', DEFAULT_ANTHROPIC_ALLOWED_MODELS)
     );
     let requestedModel = normalizedRequestedModel;
-    if (!requestedModel && quotaDataForRequest?.current_tier != null && serviceType !== 'image_generation') {
-      requestedModel = getDefaultModelIdForTierProxy(normalizeTierName(quotaDataForRequest.current_tier));
+    if (quotaDataForRequest?.current_tier != null && serviceType !== 'image_generation') {
+      const tierDefault = getDefaultModelIdForTierProxy(normalizeTierName(quotaDataForRequest.current_tier));
+      if (!requestedModel) {
+        // No model sent — use tier default
+        requestedModel = tierDefault;
+      } else {
+        // Model sent — enforce minimum: if client sent a haiku-class model but tier deserves
+        // sonnet, upgrade silently so premium/starter users always get the right quality.
+        const HAIKU_MODELS = new Set([
+          'claude-3-haiku-20240307',
+          'claude-haiku-4-5-20251001',
+          'claude-3-5-haiku-20241022',
+        ]);
+        const SONNET37_MODELS = new Set([
+          'claude-3-7-sonnet-20250219',
+          'claude-3-5-sonnet-20241022',
+        ]);
+        const tierIsStarterOrAbove = !normalizeTierName(quotaDataForRequest.current_tier).includes('free');
+        const tierIsPremiumOrAbove = isPremiumTier(normalizeTierName(quotaDataForRequest.current_tier));
+        if (tierIsPremiumOrAbove && HAIKU_MODELS.has(requestedModel)) {
+          requestedModel = tierDefault;
+        } else if (tierIsStarterOrAbove && requestedModel === 'claude-3-haiku-20240307') {
+          // Old Haiku (pre-4.x) — upgrade starter+ to at least sonnet-3.7
+          requestedModel = tierDefault;
+        }
+      }
     }
     const requestedIsOpenAI = requestedModel ? openaiAllowed.includes(requestedModel) : false;
     const requestedIsAnthropic = requestedModel ? anthropicAllowed.includes(requestedModel) : false;
