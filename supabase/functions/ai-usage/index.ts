@@ -465,7 +465,7 @@ serve(async (req: Request) => {
         return respond({
           quotas,
           overageRequiresPrepay: tier === 'free' || tier === 'trial',
-          models: ['claude-3-5-haiku-20241022', 'claude-3-5-sonnet-20241022'],
+          models: ['claude-haiku-4-5-20251001', 'claude-3-7-sonnet-20250219'],
           source: 'server',
           serverReachable: true,
           tier,

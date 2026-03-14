@@ -167,6 +167,7 @@ export async function suspendUser(user: UserRecord, deps: ActionDeps): Promise<v
               new_status: user.is_active ? 'suspended' : 'active',
             });
             showAlert({ title: 'Success', message: `User ${user.is_active ? 'suspended' : 'reactivated'} successfully`, type: 'success' });
+            deps.closeUserModal();
             fetchUsers();
           } catch (error) {
             logger.error('Failed to update user status:', error);
@@ -245,6 +246,7 @@ export async function requestUserDeletion(user: UserRecord, deps: ActionDeps): P
               request_id: data?.request_id,
             });
             showAlert({ title: 'Success', message: 'User deletion request submitted successfully', type: 'success' });
+            deps.closeUserModal();
             fetchUsers();
           } catch (error) {
             logger.error('Failed to request user deletion:', error);
@@ -300,6 +302,7 @@ export async function deleteUserNow(user: UserRecord, deps: ActionDeps): Promise
             });
 
             showAlert({ title: 'Deleted', message: 'User deleted successfully.', type: 'success' });
+            deps.closeUserModal();
             fetchUsers();
           } catch (error: any) {
             logger.error('Failed to delete user immediately:', error);
@@ -478,6 +481,96 @@ export function openRolePicker(user: UserRecord, deps: ActionDeps): void {
       { text: 'Principal', onPress: () => updateUserRole(user, 'principal', deps) },
       { text: 'Teacher', onPress: () => updateUserRole(user, 'teacher', deps) },
       { text: 'Parent', onPress: () => updateUserRole(user, 'parent', deps) },
+    ],
+  });
+}
+
+// ─── Bulk Actions ───────────────────────────────────────────────────────────
+
+export function bulkDeleteUsers(
+  users: UserRecord[],
+  deps: ActionDeps,
+  onComplete: () => void,
+): void {
+  const { showAlert, fetchUsers, profileId, setBulkDeleting } = deps;
+
+  if (users.length === 0) {
+    showAlert({ title: 'No Selection', message: 'Select users to delete first.', type: 'warning' });
+    return;
+  }
+
+  const superAdmins = users.filter(u => u.role === 'superadmin' || u.role === 'super_admin');
+  if (superAdmins.length > 0) {
+    showAlert({ title: 'Not Allowed', message: 'Cannot bulk delete super admin accounts.', type: 'error' });
+    return;
+  }
+
+  showAlert({
+    title: `Delete ${users.length} Users?`,
+    message:
+      `This will permanently delete ${users.length} selected user(s).\n\n` +
+      `This cannot be undone.\n\n` +
+      `Accounts:\n${users.slice(0, 5).map(u => `• ${u.email}`).join('\n')}` +
+      (users.length > 5 ? `\n…and ${users.length - 5} more` : ''),
+    buttons: [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: `Delete ${users.length} Users`,
+        style: 'destructive',
+        onPress: async () => {
+          setBulkDeleting(true);
+          let successCount = 0;
+          let failCount = 0;
+
+          for (const user of users) {
+            try {
+              const targetAuthId = getAuthUserId(user);
+              const { data, error } = await assertSupabase().functions.invoke('superadmin-delete-user', {
+                body: {
+                  confirm: true,
+                  target_user_id: targetAuthId,
+                  reason: 'Bulk deletion by superadmin',
+                },
+              });
+              if (error || !data?.success) {
+                failCount++;
+                logger.error(`Bulk delete failed for ${user.email}:`, error || data?.error);
+              } else {
+                successCount++;
+              }
+            } catch (err) {
+              failCount++;
+              logger.error(`Bulk delete exception for ${user.email}:`, err);
+            }
+          }
+
+          if (successCount > 0) {
+            await writeSuperAdminAudit({
+              actorProfileId: profileId,
+              action: 'bulk_user_deleted',
+              targetId: 'bulk',
+              targetType: 'user',
+              description: `Bulk deleted ${successCount} users (${failCount} failed)`,
+              metadata: { deleted_emails: users.filter((_, i) => i < 20).map(u => u.email) },
+            });
+
+            track('superadmin_bulk_delete', {
+              success_count: successCount,
+              fail_count: failCount,
+              total: users.length,
+            });
+          }
+
+          setBulkDeleting(false);
+
+          const message = failCount === 0
+            ? `Successfully deleted ${successCount} user(s).`
+            : `Deleted ${successCount}, failed ${failCount} of ${users.length} user(s).`;
+          showAlert({ title: 'Bulk Delete Complete', message, type: failCount === 0 ? 'success' : 'warning' });
+          onComplete();
+          fetchUsers();
+        },
+      },
     ],
   });
 }

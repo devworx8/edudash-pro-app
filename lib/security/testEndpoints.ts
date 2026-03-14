@@ -149,7 +149,7 @@ export const aiEndpoint = RouteGuards.aiFeatures()(
         },
         aiCapabilities: {
           maxRequestsPerMinute: 20,
-          availableModels: ['gpt-4o-mini', 'claude-3-haiku-20240307'],
+          availableModels: ['gpt-4o-mini', 'claude-haiku-4-5-20251001'],
           remainingQuota: (profile as any)?.aiQuota || 100,
         },
       }),

@@ -166,9 +166,7 @@ export default function AILessonGeneratorScreen() {
     if (routineCtx) setExplicitRoutineContext(routineCtx);
     if (lang && ['en', 'es', 'fr', 'pt', 'de', 'af', 'zu', 'st'].includes(lang)) setLanguage(lang as LanguageCode);
     if (m && [
-      'claude-3-haiku-20240307',
-      'claude-3-5-haiku-20241022',
-      'claude-3-5-sonnet-20241022',
+      'claude-haiku-4-5-20251001',
       'claude-3-7-sonnet-20250219',
       'claude-sonnet-4-20250514',
       'claude-sonnet-4-5-20250514',

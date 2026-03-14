@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { AIModelId, AIModelInfo } from '@/lib/ai/models';
 import { getDashModelColor } from '@/lib/ai/modelPalette';
-import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
 
 type AnchorFrame = { x: number; y: number; width: number; height: number };
 
@@ -30,16 +29,11 @@ interface CompactModelPickerProps {
 
 const formatTierLabel = (tier: string): string => {
   switch (tier) {
-    case 'free':
-      return 'Free';
-    case 'starter':
-      return 'Starter';
-    case 'premium':
-      return 'Premium';
-    case 'enterprise':
-      return 'Enterprise';
-    default:
-      return tier;
+    case 'free': return 'Free';
+    case 'starter': return 'Starter';
+    case 'premium': return 'Premium';
+    case 'enterprise': return 'Enterprise';
+    default: return tier;
   }
 };
 
@@ -50,7 +44,7 @@ export const formatModelUsageLabel = (relativeCost: number): string => {
   return 'Heavy usage';
 };
 
-const isLegacyModel = (model: AIModelInfo) =>
+export const isLegacyModel = (model: AIModelInfo) =>
   model.displayName.toLowerCase().includes('legacy') || model.name.toLowerCase().includes('3.5');
 
 export function splitModelsForPicker(
@@ -60,22 +54,12 @@ export function splitModelsForPicker(
 ): { available: AIModelInfo[]; locked: AIModelInfo[] } {
   const available: AIModelInfo[] = [];
   const locked: AIModelInfo[] = [];
-
   for (const model of models) {
-    const isAllowed = canSelectModel ? canSelectModel(model.id) : true;
-    if (isAllowed) {
-      available.push(model);
-    } else {
-      locked.push(model);
-    }
+    (canSelectModel ? canSelectModel(model.id) : true)
+      ? available.push(model)
+      : locked.push(model);
   }
-
-  available.sort((left, right) => {
-    if (left.id === selectedModelId) return -1;
-    if (right.id === selectedModelId) return 1;
-    return 0;
-  });
-
+  available.sort((a, b) => (a.id === selectedModelId ? -1 : b.id === selectedModelId ? 1 : 0));
   return { available, locked };
 }
 
@@ -86,7 +70,7 @@ export function CompactModelPicker({
   onSelectModel,
   onLockedPress,
   disabled = false,
-  maxPopoverWidth = 320,
+  maxPopoverWidth = 340,
 }: CompactModelPickerProps) {
   const { theme } = useTheme();
   const { width: windowWidth, height: windowHeight } = Dimensions.get('window');
@@ -96,7 +80,7 @@ export function CompactModelPicker({
   const isNativeSheet = Platform.OS !== 'web';
 
   const selectedModel = useMemo(
-    () => models.find((model) => model.id === selectedModelId) || models[0],
+    () => models.find((m) => m.id === selectedModelId) || models[0],
     [models, selectedModelId],
   );
 
@@ -110,7 +94,7 @@ export function CompactModelPicker({
   const selectedColor = getDashModelColor(selectedModel.id, theme.primary);
   const popoverWidth = Math.min(maxPopoverWidth, Math.max(300, windowWidth - 20));
   const preferredTop = anchor.y + anchor.height + 10;
-  const webMaxHeight = Math.min(windowHeight * 0.7, 520);
+  const webMaxHeight = Math.min(windowHeight * 0.7, 460);
   const showAbove = preferredTop + webMaxHeight > windowHeight - 12;
   const left = Math.min(
     Math.max(12, anchor.x + anchor.width - popoverWidth),
@@ -122,139 +106,66 @@ export function CompactModelPicker({
 
   const openPicker = () => {
     if (disabled) return;
-    if (isNativeSheet) {
-      setOpen(true);
-      return;
-    }
+    if (isNativeSheet) { setOpen(true); return; }
     const node = triggerRef.current as {
       measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
     } | null;
-    if (!node?.measureInWindow) {
-      setOpen(true);
-      return;
-    }
-    node.measureInWindow((x, y, width, height) => {
-      setAnchor({ x, y, width, height });
-      setOpen(true);
-    });
+    if (!node?.measureInWindow) { setOpen(true); return; }
+    node.measureInWindow((x, y, w, h) => { setAnchor({ x, y, width: w, height: h }); setOpen(true); });
   };
 
   const closePicker = () => setOpen(false);
 
-  const renderModelRow = (model: AIModelInfo, lockedRow: boolean) => {
-    const modelColor = getDashModelColor(model.id, theme.primary);
+  const renderRow = (model: AIModelInfo, isLocked: boolean) => {
+    const color = getDashModelColor(model.id, theme.primary);
     const active = model.id === selectedModelId;
-    const legacy = isLegacyModel(model);
-    const usageLabel = formatModelUsageLabel(model.relativeCost);
-    const rowBackground = active
-      ? `${modelColor}35`
-      : lockedRow
-        ? theme.background
-        : theme.surfaceVariant;
-    const rowBorder = active ? `${modelColor}99` : theme.border;
+    const bg = active ? `${color}20` : isLocked ? theme.background : theme.surfaceVariant;
+    const border = active ? `${color}66` : theme.border;
 
     return (
       <TouchableOpacity
         key={model.id}
-        style={[
-          styles.row,
-          {
-            borderColor: rowBorder,
-            backgroundColor: rowBackground,
-          },
-          active && styles.activeRow,
-          lockedRow && styles.lockedRow,
-        ]}
+        style={[styles.row, { backgroundColor: bg, borderColor: border }]}
         accessibilityRole="button"
         accessibilityLabel={
-          lockedRow
+          isLocked
             ? `${model.displayName}. Locked. Requires ${model.minTier} tier.`
             : `${model.displayName}. Select model.`
         }
         onPress={() => {
-          if (lockedRow) {
-            closePicker();
-            onLockedPress?.(model.id);
-            return;
-          }
+          if (isLocked) { closePicker(); onLockedPress?.(model.id); return; }
           onSelectModel(model.id);
           closePicker();
         }}
       >
-        <View style={[styles.rowAccent, { backgroundColor: modelColor }]} />
-        <View style={styles.rowBody}>
+        {/* Color dot */}
+        <View style={[styles.dot, { backgroundColor: color }]} />
+
+        {/* Info */}
+        <View style={styles.rowInfo}>
           <View style={styles.nameRow}>
-            <Text
-              numberOfLines={1}
-              style={[styles.name, { color: active ? modelColor : theme.text }]}
-            >
+            <Text numberOfLines={1} style={[styles.name, { color: active ? color : theme.text }]}>
               {model.displayName}
             </Text>
-            {active ? (
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: `${modelColor}30`, borderColor: `${modelColor}88` },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: modelColor }]}>Current</Text>
-              </View>
-            ) : null}
-            {legacy ? (
-              <View
-                style={[
-                  styles.badge,
-                  { backgroundColor: theme.background, borderColor: theme.border },
-                ]}
-              >
-                <Text style={[styles.badgeText, { color: theme.textSecondary }]}>Legacy</Text>
-              </View>
-            ) : null}
+            <View style={[styles.tierChip, { backgroundColor: `${color}18`, borderColor: `${color}44` }]}>
+              <Text style={[styles.tierChipText, { color }]}>
+                {formatTierLabel(model.minTier)}
+              </Text>
+            </View>
+            <Text style={[styles.weight, { color: theme.textSecondary }]}>
+              x{model.relativeCost}
+            </Text>
           </View>
-          <Text numberOfLines={2} style={[styles.description, { color: theme.textSecondary }]}>
+          <Text numberOfLines={1} style={[styles.desc, { color: theme.textSecondary }]}>
             {model.description}
           </Text>
-          <View style={styles.metaRow}>
-            <View
-              style={[
-                styles.metaPill,
-                { backgroundColor: theme.surface, borderColor: theme.border },
-              ]}
-            >
-              <Text style={[styles.metaText, { color: theme.textSecondary }]}>
-                {usageLabel} • x{model.relativeCost.toFixed(1)}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.metaPill,
-                { backgroundColor: `${modelColor}25`, borderColor: `${modelColor}55` },
-              ]}
-            >
-              <Text style={[styles.metaText, { color: active ? modelColor : theme.textSecondary }]}>
-                {lockedRow
-                  ? `Requires ${formatTierLabel(model.minTier)}`
-                  : formatTierLabel(model.minTier)}
-              </Text>
-            </View>
-            {model.notes ? (
-              <View
-                style={[
-                  styles.metaPill,
-                  { backgroundColor: theme.surface, borderColor: theme.border },
-                ]}
-              >
-                <Text style={[styles.metaText, { color: theme.textSecondary }]} numberOfLines={1}>
-                  {model.notes}
-                </Text>
-              </View>
-            ) : null}
-          </View>
         </View>
+
+        {/* Right icon */}
         <Ionicons
-          name={lockedRow ? 'lock-closed' : active ? 'checkmark-circle' : 'chevron-forward'}
-          size={18}
-          color={lockedRow ? theme.textSecondary : active ? modelColor : theme.textSecondary}
+          name={isLocked ? 'lock-closed' : active ? 'checkmark-circle' : 'radio-button-off'}
+          size={20}
+          color={isLocked ? `${theme.textSecondary}88` : active ? color : `${theme.textSecondary}66`}
         />
       </TouchableOpacity>
     );
@@ -262,104 +173,37 @@ export function CompactModelPicker({
 
   const pickerContent = (
     <>
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <Text style={[styles.title, { color: theme.text }]}>Choose Dash model</Text>
-          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-            {available.length} ready now{locked.length ? ` • ${locked.length} upgrade options` : ''}
-          </Text>
-        </View>
+        <Text style={[styles.title, { color: theme.text }]}>Choose model</Text>
         <TouchableOpacity
           onPress={closePicker}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Close model picker"
-          style={[
-            styles.closeButton,
-            { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
-          ]}
+          style={[styles.closeBtn, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}
         >
-          <Ionicons name="close" size={16} color={theme.textSecondary} />
+          <Ionicons name="close" size={15} color={theme.textSecondary} />
         </TouchableOpacity>
       </View>
 
-      <View
-        style={[
-          styles.selectedCard,
-          {
-            borderColor: `${selectedColor}AA`,
-            backgroundColor: `${selectedColor}3A`,
-          },
-        ]}
-      >
-        <View style={styles.selectedOrbWrap}>
-          <CosmicOrb size={42} isProcessing={false} isSpeaking={false} />
-        </View>
-        <View style={styles.selectedContent}>
-          <Text style={[styles.selectedLabel, { color: theme.textSecondary }]}>Current model</Text>
-          <Text style={[styles.selectedName, { color: theme.text }]}>
-            {selectedModel.displayName}
-          </Text>
-          <Text
-            style={[styles.selectedDescription, { color: theme.textSecondary }]}
-            numberOfLines={2}
-          >
-            {selectedModel.description}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <View
-              style={[
-                styles.metaPill,
-                { backgroundColor: `${selectedColor}28`, borderColor: `${selectedColor}66` },
-              ]}
-            >
-              <Text style={[styles.metaText, { color: selectedColor }]}>
-                {formatModelUsageLabel(selectedModel.relativeCost)} • x
-                {selectedModel.relativeCost.toFixed(1)}
-              </Text>
-            </View>
-            <View
-              style={[
-                styles.metaPill,
-                { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
-              ]}
-            >
-              <Text style={[styles.metaText, { color: theme.textSecondary }]}>
-                {formatTierLabel(selectedModel.minTier)}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
+      {/* Model list */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {available.length > 0 ? (
-          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
-            Included in your plan
-          </Text>
-        ) : null}
-        {available.map((model) => renderModelRow(model, false))}
+        {available.map((m) => renderRow(m, false))}
 
-        {locked.length > 0 ? (
-          <View style={styles.sectionDivider}>
+        {locked.length > 0 && (
+          <View style={styles.divider}>
             <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-            <Text
-              style={[
-                styles.sectionLabel,
-                styles.sectionLabelLocked,
-                { color: theme.textSecondary },
-              ]}
-            >
-              Upgrade for more power
-            </Text>
+            <Ionicons name="sparkles" size={12} color={theme.textSecondary} />
+            <Text style={[styles.dividerLabel, { color: theme.textSecondary }]}>Upgrade</Text>
             <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
           </View>
-        ) : null}
-        {locked.map((model) => renderModelRow(model, true))}
+        )}
+        {locked.map((m) => renderRow(m, true))}
       </ScrollView>
     </>
   );
@@ -394,21 +238,21 @@ export function CompactModelPicker({
         onRequestClose={closePicker}
       >
         <Pressable
-          style={[styles.backdrop, isNativeSheet ? styles.sheetBackdrop : null]}
+          style={[styles.backdrop, isNativeSheet && styles.sheetBackdrop]}
           onPress={closePicker}
         >
           <Pressable
             style={[
               isNativeSheet ? styles.sheet : styles.popover,
               {
-                width: isNativeSheet ? Math.min(windowWidth - 16, 420) : popoverWidth,
-                maxHeight: isNativeSheet ? Math.min(windowHeight * 0.78, 560) : webMaxHeight,
+                width: isNativeSheet ? Math.min(windowWidth - 16, 400) : popoverWidth,
+                maxHeight: isNativeSheet ? Math.min(windowHeight * 0.6, 440) : webMaxHeight,
                 borderColor: theme.border,
                 backgroundColor: theme.surface,
               },
-              !isNativeSheet ? { top, left } : null,
+              !isNativeSheet && { top, left },
             ]}
-            onPress={(event) => event.stopPropagation?.()}
+            onPress={(e) => e.stopPropagation?.()}
           >
             {pickerContent}
           </Pressable>
@@ -432,7 +276,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.92)',
+    backgroundColor: 'rgba(2, 6, 23, 0.88)',
   },
   sheetBackdrop: {
     justifyContent: 'flex-end',
@@ -441,11 +285,11 @@ const styles = StyleSheet.create({
   },
   popover: {
     position: 'absolute',
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -455,14 +299,14 @@ const styles = StyleSheet.create({
   },
   sheet: {
     alignSelf: 'center',
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     borderWidth: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 18,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 14,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -6 },
@@ -474,162 +318,91 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 10,
-  },
-  headerCopy: {
-    flex: 1,
+    marginBottom: 12,
   },
   title: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.1,
   },
-  subtitle: {
-    marginTop: 3,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  closeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  closeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  selectedCard: {
-    marginTop: 16,
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  selectedOrbWrap: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  selectedContent: {
-    flex: 1,
-  },
-  selectedLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  selectedName: {
-    marginTop: 3,
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  selectedDescription: {
-    marginTop: 3,
-    fontSize: 12,
-    lineHeight: 17,
   },
   scroll: {
-    marginTop: 14,
+    flexShrink: 1,
   },
   scrollContent: {
-    paddingBottom: 10,
-    gap: 14,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.55,
-    paddingHorizontal: 2,
-  },
-  sectionLabelLocked: {
-    marginTop: 4,
-  },
-  sectionDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
-    marginVertical: 6,
-  },
-  dividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    opacity: 0.55,
-    borderRadius: 1,
+    paddingBottom: 4,
   },
   row: {
-    minHeight: 90,
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
-  activeRow: {
-    shadowColor: '#020617',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  lockedRow: {
-    opacity: 0.92,
-  },
-  rowAccent: {
+  dot: {
     width: 10,
-    height: 54,
-    borderRadius: 999,
+    height: 10,
+    borderRadius: 5,
   },
-  rowBody: {
+  rowInfo: {
     flex: 1,
-    gap: 6,
+    gap: 2,
   },
   nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 6,
   },
   name: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 14,
+    fontWeight: '700',
     flexShrink: 1,
   },
-  description: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  metaPill: {
+  tierChip: {
     borderRadius: 999,
     borderWidth: 1,
-    paddingHorizontal: 8,
-    paddingVertical: 4.5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
-  metaText: {
+  tierChipText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  weight: {
+    fontSize: 10,
+    fontWeight: '600',
+    opacity: 0.7,
+  },
+  desc: {
+    fontSize: 11.5,
+    lineHeight: 15,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginVertical: 4,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    opacity: 0.5,
+  },
+  dividerLabel: {
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  badge: {
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.25,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
 });

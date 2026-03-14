@@ -947,8 +947,23 @@ export const ChatModal: React.FC<ChatModalProps> = ({
                 placeholderTextColor={theme.textSecondary}
                 value={inputText}
                 onChangeText={setInputText}
-                onSubmitEditing={() => inputText.trim() && onSend(inputText)}
+                onSubmitEditing={() => {
+                  if (inputText.trim() || attachmentCount > 0) {
+                    onSend(inputText);
+                  }
+                }}
+                onKeyPress={(e) => {
+                  if (Platform.OS !== 'web') return;
+                  const nativeEvent = (e as any)?.nativeEvent || {};
+                  if (nativeEvent.key === 'Enter' && !nativeEvent.shiftKey) {
+                    (e as any).preventDefault?.();
+                    if (inputText.trim() || attachmentCount > 0) {
+                      onSend(inputText);
+                    }
+                  }
+                }}
                 returnKeyType="send"
+                blurOnSubmit={false}
                 multiline
                 maxLength={500}
               />
@@ -956,15 +971,15 @@ export const ChatModal: React.FC<ChatModalProps> = ({
             <TouchableOpacity
               style={[
                 styles.sendButton,
-                { backgroundColor: inputText.trim() ? theme.primary : theme.border },
+                { backgroundColor: (inputText.trim() || attachmentCount > 0) ? theme.primary : theme.border },
               ]}
               onPress={() => {
-                if (inputText.trim()) {
+                if (inputText.trim() || attachmentCount > 0) {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                   onSend(inputText);
                 }
               }}
-              disabled={!inputText.trim() || isProcessing}
+              disabled={(!inputText.trim() && attachmentCount === 0) || isProcessing}
             >
               <Ionicons 
                 name={isProcessing ? 'hourglass' : 'send'} 

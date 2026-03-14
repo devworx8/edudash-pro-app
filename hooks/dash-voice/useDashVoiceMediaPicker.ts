@@ -28,7 +28,7 @@ export function useDashVoiceMediaPicker({
   const pickMedia = useCallback(async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'], allowsEditing: true, quality: 0.7, base64: true,
+        mediaTypes: ['images'], allowsEditing: false, quality: 0.7, base64: true,
       });
       if (!result.canceled && result.assets[0]?.base64) {
         setAttachedImage({ uri: result.assets[0].uri, base64: result.assets[0].base64, source: 'library' });

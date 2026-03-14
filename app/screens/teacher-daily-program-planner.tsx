@@ -508,7 +508,7 @@ export default function TeacherDailyProgramPlannerScreen() {
           duration: 45,
           objectives: objectiveList,
           language: 'en',
-          model: process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-3-5-haiku-20241022',
+          model: process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
           context: `Weekly program ${routine.weeklyProgramId} • ${weekdayLabel}\n${routineContext}`,
         };
 

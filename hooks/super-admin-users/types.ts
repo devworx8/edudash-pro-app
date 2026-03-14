@@ -24,9 +24,11 @@ export interface ActionDeps {
   showAlert: ShowAlertFn;
   profileId: string | undefined;
   fetchUsers: () => Promise<void>;
+  closeUserModal: () => void;
   setImpersonating: (v: boolean) => void;
   setCreatingTempPassword: (v: boolean) => void;
   setUpdatingTier: (v: boolean) => void;
+  setBulkDeleting: (v: boolean) => void;
 }
 
 // ─── Hook return type ───────────────────────────────────────────────────────
@@ -55,6 +57,15 @@ export interface UseSuperAdminUsersReturn {
   filters: UserFilters;
   setFilters: Dispatch<SetStateAction<UserFilters>>;
 
+  // Bulk selection
+  selectionMode: boolean;
+  selectedIds: Set<string>;
+  toggleSelectionMode: () => void;
+  toggleUserSelection: (userId: string) => void;
+  selectAllFiltered: () => void;
+  clearSelection: () => void;
+  bulkDeleting: boolean;
+
   // Actions
   onRefresh: () => Promise<void>;
   impersonateUser: (user: UserRecord) => Promise<void>;
@@ -66,4 +77,5 @@ export interface UseSuperAdminUsersReturn {
   createTempPassword: (user: UserRecord) => Promise<void>;
   openTierPicker: (user: UserRecord) => void;
   openRolePicker: (user: UserRecord) => void;
+  bulkDeleteSelected: () => void;
 }

@@ -379,7 +379,7 @@ Keep it practical for a South African home context. ONLY return the JSON.`;
         body: {
           action: 'general_assistance',
           messages: [{ role: 'user', content: prompt }],
-          model: 'claude-3-5-haiku-20241022',
+          model: 'claude-haiku-4-5-20251001',
           maxTokens: 2500,
         },
       });

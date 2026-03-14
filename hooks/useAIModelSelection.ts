@@ -69,7 +69,7 @@ export function useAIModelSelection(
     if (!canAccessModel(tier, selectedModel)) {
       // Current model is above this tier — downgrade to tier default
       setSelectedModelState(defaultModel)
-    } else if (selectedModel === 'claude-haiku-4-5-20251001' || selectedModel === 'claude-3-haiku-20240307') {
+    } else if (selectedModel === 'claude-haiku-4-5-20251001') {
       // Still on the initial placeholder — upgrade to the tier's proper default.
       // (Stored user preferences are restored later by useDashChatModelPreference.)
       setSelectedModelState(defaultModel)

@@ -25,7 +25,8 @@ import { DashMessageAttachments } from './DashMessageAttachments';
 import { DashMessageFooter } from './DashMessageFooter';
 import { parseRichSegments, safeParseQuizJson, safeParseColumnJson, safeParseSpellingJson } from './DashMessageBubble.rich';
 import { openPdfPreview } from './pdfPreviewUtils';
-import { buildMarkdownStyles, stripMarkdownForDisplay, type ExpandedVisualState } from './DashMessageBubble.utils';
+import { buildMarkdownStyles, type ExpandedVisualState } from './DashMessageBubble.utils';
+import { MarkdownFallback } from './MarkdownFallback';
 import { useDashMessageMeta } from '@/hooks/dash-assistant/useDashMessageMeta';
 
 const isWeb = Platform.OS === 'web';
@@ -284,9 +285,7 @@ export const DashMessageBubble: React.FC<DashMessageBubbleProps> = ({
                 return Markdown ? (
                   <Markdown key={`md-${message.id}-${segmentIndex}`} style={markdownStyles}>{segment.content}</Markdown>
                 ) : (
-                  <Text key={`md-fallback-${message.id}-${segmentIndex}`} style={[styles.messageText, { color: theme.text }]} selectable>
-                    {stripMarkdownForDisplay(segment.content)}
-                  </Text>
+                  <MarkdownFallback key={`md-fallback-${message.id}-${segmentIndex}`} content={segment.content} theme={theme} />
                 );
               })}
             </View>
