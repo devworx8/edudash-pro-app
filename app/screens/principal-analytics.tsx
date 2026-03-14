@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, RefreshControl } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -256,29 +256,14 @@ const FinancialSection: React.FC<{ analytics: AnalyticsData; theme: any }> = ({ 
   </View>
 );
 
-const AcademicSection: React.FC<{ theme: any; showAlert: (cfg: { title: string; message: string }) => void }> = ({ theme, showAlert }) => {
-  const handleContactSupport = () => {
-    const message = encodeURIComponent('Hi, I need help setting up academic insights and assessment tracking for my school.');
-    const waUrl = `whatsapp://send?phone=27674770975&text=${message}`;
-    const webUrl = `https://wa.me/27674770975?text=${message}`;
-    
-    Linking.canOpenURL('whatsapp://send').then(supported => {
-      Linking.openURL(supported ? waUrl : webUrl);
-    }).catch(() => {
-      showAlert({ title: 'Error', message: 'Unable to open WhatsApp. Please contact support@edudashpro.com' });
-    });
-  };
+const AcademicSection: React.FC<{ theme: any; showAlert: (cfg: { title: string; message: string }) => void }> = ({ theme }) => {
 
   return (
     <View style={[styles_static.section, { backgroundColor: theme.surface }]}>
       <Text style={[styles_static.sectionTitle, { color: theme.text }]}>Academic Insights</Text>
       <View style={[styles_static.insightCard, { backgroundColor: theme.background, borderLeftColor: theme.primary }]}>
-        <Text style={[styles_static.insightTitle, { color: theme.text }]}>Assessment Data Coming Soon</Text>
-        <Text style={[styles_static.insightText, { color: theme.textSecondary }]}>• Academic assessments and progress tracking are being set up</Text>
-        <Text style={[styles_static.insightText, { color: theme.textSecondary }]}>• Parent engagement metrics will be available once configured</Text>
-        <TouchableOpacity style={[styles_static.insightButton, { backgroundColor: theme.primary }]} onPress={handleContactSupport}>
-          <Text style={styles_static.insightButtonText}>Contact Support</Text>
-        </TouchableOpacity>
+        <Text style={[styles_static.insightTitle, { color: theme.text }]}>School Performance Summary</Text>
+        <Text style={[styles_static.insightText, { color: theme.textSecondary }]}>Detailed academic assessment tracking and parent engagement metrics are being developed. In the meantime, check the Recommended Actions below for data-driven insights based on your current school metrics.</Text>
       </View>
     </View>
   );

@@ -74,7 +74,6 @@ export function splitIntoSpeechChunks(text: string): string[] {
       continue;
     }
 
-    // Long sentence — split by phrase or word boundaries
     const words = sentence.split(' ');
     current = '';
     for (const word of words) {
@@ -94,7 +93,6 @@ export function splitIntoSpeechChunks(text: string): string[] {
 
   if (chunks.length === 0) return trimmed.length > 0 ? [trimmed] : [];
 
-  // Merge any trailing short chunk into the previous one instead of dropping it
   if (chunks.length > 1 && chunks[chunks.length - 1].length < MIN_CHUNK_LENGTH) {
     const short = chunks.pop()!;
     chunks[chunks.length - 1] = `${chunks[chunks.length - 1]} ${short}`;
@@ -176,7 +174,6 @@ export class InstantTTSPlayer {
       });
     }
 
-    // Kick off prefetch for the first N chunks
     for (let i = 0; i < Math.min(PREFETCH_DEPTH, this.chunks.length); i++) {
       this.startSynthesis(this.chunks[i]);
     }
@@ -213,13 +210,11 @@ export class InstantTTSPlayer {
 
       const chunk = this.chunks[i];
 
-      // Wait for this chunk's synthesis to complete
       const synthesisPromise = this.synthesisPromises.get(chunk.id);
       if (synthesisPromise) await synthesisPromise;
 
       if (this.isStopped) break;
 
-      // Prefetch the next chunk before playing this one
       const nextPrefetchIdx = i + PREFETCH_DEPTH;
       if (nextPrefetchIdx < this.chunks.length) {
         this.startSynthesis(this.chunks[nextPrefetchIdx]);
