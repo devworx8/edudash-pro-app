@@ -84,7 +84,7 @@ export function normalizeLanguageCode(input?: string): SupportedLanguage {
 
 // Choose a reasonable provider voice per language and gender.
 // Delegates to canonical voiceMapping (single source of truth).
-export function resolveDefaultVoiceId(lang: SupportedLanguage, gender: 'male' | 'female' = 'female'): string {
+export function resolveDefaultVoiceId(lang: SupportedLanguage, gender: 'male' | 'female' = 'male'): string {
   return getVoiceIdForLanguage(lang, gender);
 }
 
@@ -267,7 +267,7 @@ export async function initAndMigrate(): Promise<void> {
     } catch { /* Intentional: personality read failure is non-fatal */ }
 
     // Resolve a default voice_id for the language
-    const gender = 'female';
+    const gender = 'male';
     if (language) voiceId = resolveDefaultVoiceId(language, gender);
 
     if (language) {

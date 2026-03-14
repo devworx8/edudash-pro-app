@@ -140,7 +140,7 @@ export const useRecentMissedCalls = (limit: number = 5) => {
         // so we fetch calls first, then separately fetch caller profiles
         const { data: calls, error } = await client
           .from('active_calls')
-          .select('*')
+          .select('id, call_id, call_type, status, caller_id, callee_id, caller_name, started_at, duration_seconds')
           .eq('callee_id', user.id)
           .in('status', ['missed', 'ended'])
           .order('started_at', { ascending: false })

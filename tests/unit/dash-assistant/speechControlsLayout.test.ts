@@ -1,39 +1,33 @@
 import { resolveSpeechControlsLayoutState } from '@/features/dash-ai/speechControls';
 
 describe('speechControlsLayout', () => {
-  it('shows mini controls when idle and speech chunks exist', () => {
+  it('shows controls when speech message exists with chunks', () => {
     const state = resolveSpeechControlsLayoutState({
       isSpeaking: false,
       hasSpeechMessage: true,
       chunkCount: 6,
-      expanded: false,
     });
 
-    expect(state.showMiniControls).toBe(true);
-    expect(state.showFullControls).toBe(false);
+    expect(state.showControls).toBe(true);
   });
 
-  it('shows full controls while speaking', () => {
+  it('shows controls while speaking', () => {
     const state = resolveSpeechControlsLayoutState({
       isSpeaking: true,
       hasSpeechMessage: true,
       chunkCount: 6,
-      expanded: false,
     });
 
-    expect(state.showMiniControls).toBe(false);
-    expect(state.showFullControls).toBe(true);
+    expect(state.showControls).toBe(true);
   });
 
-  it('shows full controls when expanded manually', () => {
+  it('hides controls when no speech message', () => {
     const state = resolveSpeechControlsLayoutState({
       isSpeaking: false,
-      hasSpeechMessage: true,
-      chunkCount: 3,
-      expanded: true,
+      hasSpeechMessage: false,
+      chunkCount: 0,
     });
 
-    expect(state.showMiniControls).toBe(false);
-    expect(state.showFullControls).toBe(true);
+    expect(state.showControls).toBe(false);
   });
 });

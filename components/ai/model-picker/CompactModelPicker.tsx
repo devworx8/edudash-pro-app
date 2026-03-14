@@ -191,12 +191,22 @@ export function CompactModelPicker({
               {model.displayName}
             </Text>
             {active ? (
-              <View style={[styles.badge, { backgroundColor: `${modelColor}30`, borderColor: `${modelColor}88` }]}>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: `${modelColor}30`, borderColor: `${modelColor}88` },
+                ]}
+              >
                 <Text style={[styles.badgeText, { color: modelColor }]}>Current</Text>
               </View>
             ) : null}
             {legacy ? (
-              <View style={[styles.badge, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <View
+                style={[
+                  styles.badge,
+                  { backgroundColor: theme.background, borderColor: theme.border },
+                ]}
+              >
                 <Text style={[styles.badgeText, { color: theme.textSecondary }]}>Legacy</Text>
               </View>
             ) : null}
@@ -205,18 +215,35 @@ export function CompactModelPicker({
             {model.description}
           </Text>
           <View style={styles.metaRow}>
-            <View style={[styles.metaPill, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+            <View
+              style={[
+                styles.metaPill,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+            >
               <Text style={[styles.metaText, { color: theme.textSecondary }]}>
                 {usageLabel} • x{model.relativeCost.toFixed(1)}
               </Text>
             </View>
-            <View style={[styles.metaPill, { backgroundColor: `${modelColor}25`, borderColor: `${modelColor}55` }]}>
+            <View
+              style={[
+                styles.metaPill,
+                { backgroundColor: `${modelColor}25`, borderColor: `${modelColor}55` },
+              ]}
+            >
               <Text style={[styles.metaText, { color: active ? modelColor : theme.textSecondary }]}>
-                {lockedRow ? `Requires ${formatTierLabel(model.minTier)}` : formatTierLabel(model.minTier)}
+                {lockedRow
+                  ? `Requires ${formatTierLabel(model.minTier)}`
+                  : formatTierLabel(model.minTier)}
               </Text>
             </View>
             {model.notes ? (
-              <View style={[styles.metaPill, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+              <View
+                style={[
+                  styles.metaPill,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
                 <Text style={[styles.metaText, { color: theme.textSecondary }]} numberOfLines={1}>
                   {model.notes}
                 </Text>
@@ -247,37 +274,56 @@ export function CompactModelPicker({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Close model picker"
-          style={[styles.closeButton, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}
+          style={[
+            styles.closeButton,
+            { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
+          ]}
         >
           <Ionicons name="close" size={16} color={theme.textSecondary} />
         </TouchableOpacity>
       </View>
 
-        <View
-          style={[
-            styles.selectedCard,
-            {
-              borderColor: `${selectedColor}AA`,
-              backgroundColor: `${selectedColor}3A`,
-            },
-          ]}
-        >
+      <View
+        style={[
+          styles.selectedCard,
+          {
+            borderColor: `${selectedColor}AA`,
+            backgroundColor: `${selectedColor}3A`,
+          },
+        ]}
+      >
         <View style={styles.selectedOrbWrap}>
           <CosmicOrb size={42} isProcessing={false} isSpeaking={false} />
         </View>
         <View style={styles.selectedContent}>
           <Text style={[styles.selectedLabel, { color: theme.textSecondary }]}>Current model</Text>
-          <Text style={[styles.selectedName, { color: theme.text }]}>{selectedModel.displayName}</Text>
-          <Text style={[styles.selectedDescription, { color: theme.textSecondary }]} numberOfLines={2}>
+          <Text style={[styles.selectedName, { color: theme.text }]}>
+            {selectedModel.displayName}
+          </Text>
+          <Text
+            style={[styles.selectedDescription, { color: theme.textSecondary }]}
+            numberOfLines={2}
+          >
             {selectedModel.description}
           </Text>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
-            <View style={[styles.metaPill, { backgroundColor: `${selectedColor}28`, borderColor: `${selectedColor}66` }]}>
+            <View
+              style={[
+                styles.metaPill,
+                { backgroundColor: `${selectedColor}28`, borderColor: `${selectedColor}66` },
+              ]}
+            >
               <Text style={[styles.metaText, { color: selectedColor }]}>
-                {formatModelUsageLabel(selectedModel.relativeCost)} • x{selectedModel.relativeCost.toFixed(1)}
+                {formatModelUsageLabel(selectedModel.relativeCost)} • x
+                {selectedModel.relativeCost.toFixed(1)}
               </Text>
             </View>
-            <View style={[styles.metaPill, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
+            <View
+              style={[
+                styles.metaPill,
+                { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
+              ]}
+            >
               <Text style={[styles.metaText, { color: theme.textSecondary }]}>
                 {formatTierLabel(selectedModel.minTier)}
               </Text>
@@ -292,14 +338,22 @@ export function CompactModelPicker({
         showsVerticalScrollIndicator={false}
       >
         {available.length > 0 ? (
-          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>Included in your plan</Text>
+          <Text style={[styles.sectionLabel, { color: theme.textSecondary }]}>
+            Included in your plan
+          </Text>
         ) : null}
         {available.map((model) => renderModelRow(model, false))}
 
         {locked.length > 0 ? (
           <View style={styles.sectionDivider}>
             <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-            <Text style={[styles.sectionLabel, styles.sectionLabelLocked, { color: theme.textSecondary }]}>
+            <Text
+              style={[
+                styles.sectionLabel,
+                styles.sectionLabelLocked,
+                { color: theme.textSecondary },
+              ]}
+            >
               Upgrade for more power
             </Text>
             <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />

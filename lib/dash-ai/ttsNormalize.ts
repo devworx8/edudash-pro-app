@@ -331,10 +331,13 @@ function stripEmojiAndSymbols(text: string): string {
   return text
     .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
     .replace(/[\u{1FA00}-\u{1FAFF}]/gu, '')
+    .replace(/[\u{2300}-\u{23FF}]/gu, '')  // Misc Technical (⏩⏳⌛ etc.)
     .replace(/[\u{2600}-\u{26FF}]/gu, '')
     .replace(/[\u{2700}-\u{27BF}]/gu, '')
+    .replace(/[\u{2B00}-\u{2BFF}]/gu, '')  // Misc Symbols and Arrows (⭐⬆⬇ etc.)
     .replace(/[\u{FE00}-\u{FE0F}]/gu, '')
-    .replace(/[\u{200D}]/gu, '');
+    .replace(/[\u{200D}]/gu, '')
+    .replace(/[\u{20E3}]/gu, '');           // Combining enclosing keycap
 }
 
 export function normalizeForTTS(input: string, options: TTSNormalizeOptions = {}): string {

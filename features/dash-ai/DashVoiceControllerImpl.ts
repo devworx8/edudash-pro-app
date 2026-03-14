@@ -387,13 +387,14 @@ export class DashVoiceController {
       .replace(/^\s*\d+[.)]\s+/gm, '')       // Numbered lists
       // Comprehensive emoji removal
       .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+      .replace(/[\u{1FA00}-\u{1FAFF}]/gu, '')
+      .replace(/[\u{2300}-\u{23FF}]/gu, '')
       .replace(/[\u{2600}-\u{26FF}]/gu, '')
       .replace(/[\u{2700}-\u{27BF}]/gu, '')
+      .replace(/[\u{2B00}-\u{2BFF}]/gu, '')
       .replace(/[\u{FE00}-\u{FE0F}]/gu, '')
       .replace(/[\u{200D}]/gu, '')
-      .replace(/[\u{1FA00}-\u{1FA6F}]/gu, '')
-      .replace(/[\u{1FA70}-\u{1FAFF}]/gu, '')
-      .replace(/[✅❌⚠️✨🎯📊💡🚀⚡🔍📝🔧📈👋🎤🔇🔊🌟⭐💫📖🎓📚💯❤️✔️✖️👍👎🤔😊🙂🤗🙏]/g, '')
+      .replace(/[\u{20E3}]/gu, '')
       // Bracketed meta info
       .replace(/\[.*?\]/g, '')
       .replace(/_Tools used:.*?_/gi, '')

@@ -2,6 +2,8 @@
 
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
 
+**Important**: Also read `edudashpro_playbook.md` at the repository root for the full engineering & architecture playbook covering conventions, data models, AI system, RBAC, quota, voice, and deployment workflows.
+
 ## Project Overview
 
 EduDash Pro is a React Native (Expo) mobile-first educational platform for South African learners, parents, and educators. It supports multiple organization types (schools, preschools, districts, tutoring centers) and independent users (parents without school affiliation). Multi-tenant SaaS with a cloud-hosted Supabase (PostgreSQL) backend.

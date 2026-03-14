@@ -1035,8 +1035,10 @@ export class DashVoiceService {
     
     // Remove emojis and special characters (simplified for ES5 compatibility)
     normalized = normalized
+      .replace(/[\u2300-\u23FF]/g, '')  // Misc Technical
       .replace(/[\u2600-\u26FF]/g, '')  // Misc symbols
       .replace(/[\u2700-\u27BF]/g, '')  // Dingbats
+      .replace(/[\u2B00-\u2BFF]/g, '')  // Misc Symbols and Arrows (⭐⬆⬇)
       .replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, '') // Surrogate pairs (emojis)
       // Remove extra whitespace
       .replace(/\s+/g, ' ')

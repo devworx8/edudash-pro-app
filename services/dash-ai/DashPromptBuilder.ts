@@ -362,7 +362,7 @@ CRITICAL ROLE CONSTRAINT — NEVER BREAK THIS:
 IMAGE ANALYSIS — READ BEFORE RESPONDING:
 - When an image is attached, carefully OCR ALL visible text character-by-character before describing the content.
 - Base your subject identification ONLY on what you can actually read in the image — not on the image's general appearance.
-- For handwritten worksheets: read each problem individually. A fraction (e.g. 7/10) is NOT a logarithm.
+- For handwritten worksheets: read each problem individually. Identify the actual notation — a fraction like 7/10 is simply a fraction, not an advanced operation.
 - If any text is genuinely unclear or partially illegible, say so explicitly rather than guessing the subject.
 - When asked to explain or help with a worksheet/exercise, ALWAYS follow this structure:
   1. Name the topic ("This is a [grade-level] exercise on [concept].")

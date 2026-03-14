@@ -6,7 +6,7 @@
  * Designed for Azure Neural voices with South African English (en-ZA)
  * as the instruction language and target vocabulary in af-ZA or zu-ZA.
  *
- * Primary voice: en-ZA-LukeNeural (Dash's voice)
+ * Primary voice: en-US-AndrewMultilingualNeural (Dash's voice)
  *
  * @module bilingualSSML
  * @see phonemeLookup.ts — PHONEME_LOOKUP with mouth tips
@@ -25,8 +25,8 @@ import {
 // Constants
 // ---------------------------------------------------------------------------
 
-/** Dash's primary voice — South African English male */
-export const DASH_VOICE = 'en-ZA-LukeNeural';
+/** Dash's primary voice — multilingual male (matches voiceMapping.ts DASH_VOICE_ID) */
+export const DASH_VOICE = 'en-US-AndrewMultilingualNeural';
 
 /** Default instruction language */
 const INSTRUCTION_LANG = 'en-ZA';

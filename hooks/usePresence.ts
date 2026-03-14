@@ -116,7 +116,7 @@ export function usePresence(
       const supabase = assertSupabase();
       const { data, error } = await supabase
         .from('user_presence')
-        .select('*');
+        .select('user_id, status, last_seen_at');
 
       if (error) {
         console.warn('[usePresence] Failed to load presence:', error.message);
