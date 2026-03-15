@@ -77,35 +77,52 @@ export const EnhancedRegistrationForm: React.FC<EnhancedRegistrationFormProps> =
     onError
   });
 
-  const stepGuidance = React.useMemo(
-    () => ({
+  const stepGuidance = React.useMemo(() => {
+    const roleLabel =
+      role === ‘parent’ ? ‘parent’ :
+      role === ‘teacher’ ? ‘teacher’ :
+      role === ‘principal’ ? ‘principal’ :
+      role === ‘student’ ? ‘student’ :
+      ‘your’;
+
+    const orgLabel =
+      role === ‘parent’ ? ‘your child\’s school’ :
+      role === ‘student’ ? ‘your school’ :
+      ‘your organisation’;
+
+    const personalTitle =
+      role === ‘parent’ ? ‘Step 1: Your details’ :
+      role === ‘teacher’ ? ‘Step 1: Your details’ :
+      role === ‘principal’ ? ‘Step 1: Your details’ :
+      ‘Step 1: Your details’;
+
+    return {
       personal_info: {
-        title: 'Step 1: Parent details',
-        description: 'Enter your legal name, email, and phone so the school can identify and contact you.',
-        nextAction: 'Next you will confirm which school your child belongs to.',
-        ctaLabel: 'Save Details',
+        title: personalTitle,
+        description: `Enter your legal name, email, and phone so ${orgLabel} can identify and contact you.`,
+        nextAction: `Next you will link ${orgLabel}.`,
+        ctaLabel: ‘Save Details’,
       },
       organization_selection: {
-        title: 'Step 2: School link',
-        description: 'Search for your child’s school, tap to select, then confirm. This links your dashboard, messaging, and child records.',
-        nextAction: 'Next you will set your password and accept terms.',
-        ctaLabel: 'Confirm School',
+        title: ‘Step 2: Link your school’,
+        description: `Search for ${orgLabel}, tap to select, then confirm. This connects your dashboard, messaging, and records.`,
+        nextAction: ‘Next you will set your password and accept terms.’,
+        ctaLabel: ‘Confirm School’,
       },
       security_setup: {
-        title: 'Step 3: Secure account',
-        description: 'Create a strong password and accept terms to finish parent account setup.',
-        nextAction: 'Next you can register your child.',
-        ctaLabel: 'Create Parent Account',
+        title: ‘Step 3: Secure your account’,
+        description: `Create a strong password and accept terms to finish your ${roleLabel} account setup.`,
+        nextAction: role === ‘parent’ ? ‘Next you can register your child.’ : ‘You\’re almost done.’,
+        ctaLabel: role === ‘parent’ ? ‘Create Parent Account’ : `Create ${roleLabel.charAt(0).toUpperCase() + roleLabel.slice(1)} Account`,
       },
       child_registration: {
-        title: 'Step 4: Register your child',
-        description: 'Add your child so you can track their progress from day one. You can always add more children later.',
-        nextAction: 'Review and confirm your details.',
-        ctaLabel: 'Continue',
+        title: ‘Step 4: Register your child’,
+        description: ‘Add your child so you can track their progress from day one. You can always add more children later.’,
+        nextAction: ‘Review and confirm your details.’,
+        ctaLabel: ‘Continue’,
       },
-    }),
-    []
-  );
+    };
+  }, [role]);
 
   const activeGuidance = (stepGuidance as Record<string, { title: string; description: string; nextAction: string; ctaLabel: string }>)[currentStep] || {
     title: 'Complete your registration',

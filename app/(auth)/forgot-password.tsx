@@ -21,11 +21,23 @@ export default function ForgotPassword() {
   const [emailSent, setEmailSent] = useState(false);
   const { showAlert, alertProps } = useAlertModal();
 
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value.trim());
+
   const handleResetPassword = async () => {
-    if (!email) {
+    const trimmed = email.trim();
+    if (!trimmed) {
       showAlert({
         title: t('common.error', { defaultValue: 'Error' }),
-        message: t('auth.forgot_password.enter_email', { defaultValue: 'Please enter your email address' }),
+        message: t('auth.forgot_password.enter_email', { defaultValue: 'Please enter your email address.' }),
+        type: 'error',
+        buttons: [{ text: 'OK', style: 'default' }],
+      });
+      return;
+    }
+    if (!isValidEmail(trimmed)) {
+      showAlert({
+        title: t('common.error', { defaultValue: 'Error' }),
+        message: t('auth.forgot_password.invalid_email', { defaultValue: 'Please enter a valid email address (e.g. jane@school.co.za).' }),
         type: 'error',
         buttons: [{ text: 'OK', style: 'default' }],
       });
@@ -33,36 +45,33 @@ export default function ForgotPassword() {
     }
 
     setLoading(true);
-    
+
     try {
       const platform = Platform.OS === 'web' ? 'web' : (Platform.OS as 'ios' | 'android');
       const webOrigin = Platform.OS === 'web' && typeof window !== 'undefined' ? window.location.origin : undefined;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
         redirectTo: getPasswordResetRedirectUrl(platform, webOrigin),
       });
 
       if (error) {
+        // Map Supabase technical errors to user-friendly messages
+        const friendlyMessage =
+          error.message.toLowerCase().includes('rate limit') || error.message.toLowerCase().includes('too many')
+            ? t('auth.forgot_password.rate_limited', { defaultValue: 'Too many attempts. Please wait a few minutes before trying again.' })
+            : t('auth.forgot_password.send_failed', { defaultValue: 'Unable to send the reset email. Please check your connection and try again.' });
         showAlert({
           title: t('common.error', { defaultValue: 'Error' }),
-          message: error.message,
+          message: friendlyMessage,
           type: 'error',
           buttons: [{ text: 'OK', style: 'default' }],
         });
       } else {
         setEmailSent(true);
-        showAlert({
-          title: t('common.success', { defaultValue: 'Success' }),
-          message: t('auth.forgot_password.email_sent_web', { 
-            defaultValue: 'Password reset email sent! Open the link in your email — it will open the app (if installed) or the web reset page.' 
-          }),
-          type: 'success',
-          buttons: [{ text: 'OK', style: 'default' }],
-        });
       }
-    } catch (error: any) {
+    } catch {
       showAlert({
         title: t('common.error', { defaultValue: 'Error' }),
-        message: error?.message || t('common.unexpected_error', { defaultValue: 'An unexpected error occurred' }),
+        message: t('common.unexpected_error', { defaultValue: 'Something went wrong. Please check your connection and try again.' }),
         type: 'error',
         buttons: [{ text: 'OK', style: 'default' }],
       });
@@ -174,6 +183,9 @@ export default function ForgotPassword() {
       backgroundColor: theme.inputBackground,
       fontSize: 16,
     },
+    inputError: {
+      borderColor: '#EF4444',
+    },
     successContainer: {
       alignItems: 'center',
       gap: 16,
@@ -246,14 +258,16 @@ export default function ForgotPassword() {
               {!emailSent ? (
                 <View style={styles.form}>
                   <TextInput
-                    style={styles.input}
-                    placeholder={t('auth.email', { defaultValue: 'Email' })}
+                    style={[styles.input, email.length > 0 && !isValidEmail(email) ? styles.inputError : null]}
+                    placeholder={t('auth.email', { defaultValue: 'Email address' })}
                     placeholderTextColor={theme.inputPlaceholder}
                     value={email}
                     onChangeText={setEmail}
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
+                    autoComplete="email"
+                    autoFocus
                     returnKeyType="go"
                     onSubmitEditing={handleResetPassword}
                   />
