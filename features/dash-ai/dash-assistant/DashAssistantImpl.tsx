@@ -217,7 +217,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
 
   useEffect(() => {
     void scanner.refreshScanBudget(tier);
-  }, [scanner.refreshScanBudget, tier]);
+  }, [scanner, tier]);
 
   useEffect(() => {
     if (!singleThinkingIndicatorEnabled) return;

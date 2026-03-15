@@ -1209,6 +1209,7 @@ export default function PrincipalDailyProgramPlannerScreen() {
     pairedStaggerMinutes,
     classOptions,
     confirmedAssumptions,
+    loadPrograms,
     refreshLessonQuota,
     showAlert,
   ]);

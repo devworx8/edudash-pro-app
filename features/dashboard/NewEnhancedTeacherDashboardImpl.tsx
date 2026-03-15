@@ -101,7 +101,7 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
   });
   const pendingLinkRequestCount = pendingLinkRequests?.length ?? 0;
 
-  const hasBirthdaysThisMonth = useMemo(() => {
+  const _hasBirthdaysThisMonth = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     return allTeacherStudents.some((s) => {

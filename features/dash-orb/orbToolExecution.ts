@@ -97,7 +97,7 @@ function isMinorAgeBand(ageBand: string): boolean {
 
 function buildToolContext(ctx: ToolExecutionContext, traceId: string, source: string, toolName?: string) {
   let supabaseClient: any = null;
-  try { supabaseClient = assertSupabase(); } catch {}
+  try { supabaseClient = assertSupabase(); } catch { /* fallback to null */ }
   return {
     profile: ctx.profile,
     user: ctx.user,
