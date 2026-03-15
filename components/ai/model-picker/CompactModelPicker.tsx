@@ -271,8 +271,8 @@ export function CompactModelPicker({
               {
                 width: isNativeSheet ? Math.min(windowWidth - 16, 400) : popoverWidth,
                 maxHeight: isNativeSheet ? Math.min(windowHeight * 0.6, 440) : webMaxHeight,
-                borderColor: theme.border,
-                backgroundColor: theme.surface,
+                borderColor: isNativeSheet ? theme.borderLight : theme.border,
+                backgroundColor: isNativeSheet ? theme.surfaceVariant : theme.surface,
               },
               !isNativeSheet && { top, left },
             ]}
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.88)',
+    backgroundColor: 'rgba(2, 6, 23, 0.96)',
   },
   sheetBackdrop: {
     justifyContent: 'flex-end',
