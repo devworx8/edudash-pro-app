@@ -149,4 +149,64 @@ describe('ttsNormalize', () => {
     expect(out).not.toContain('**');
     expect(out).not.toContain('*');
   });
+
+  it('strips strikethrough (~~text~~) from spoken output', () => {
+    const out = normalizeForTTS('This is ~~wrong~~ correct');
+    expect(out).toContain('wrong');
+    expect(out).toContain('correct');
+    expect(out).not.toContain('~~');
+  });
+
+  it('converts answer blanks (___) to "blank"', () => {
+    const out = normalizeForTTS('Fill in: The cat sat on the _____.');
+    expect(out).toContain('blank');
+    expect(out).not.toContain('_____');
+  });
+
+  it('strips horizontal rules (---) from spoken output', () => {
+    const out = normalizeForTTS('Section one\n---\nSection two');
+    expect(out).toContain('Section one');
+    expect(out).toContain('Section two');
+    expect(out).not.toContain('---');
+  });
+
+  it('strips HTML tags from spoken output', () => {
+    const out = normalizeForTTS('This is <b>bold</b> and <em>italic</em> text');
+    expect(out).toContain('bold');
+    expect(out).toContain('italic');
+    expect(out).not.toContain('<b>');
+    expect(out).not.toContain('</b>');
+    expect(out).not.toContain('<em>');
+  });
+
+  it('converts single-digit decimal numbers to "point" form for TTS clarity', () => {
+    const out = normalizeForTTS('The answer is 0.5 and also 7.5');
+    expect(out).toContain('0 point 5');
+    expect(out).toContain('7 point 5');
+    expect(out).not.toContain('0.5');
+    expect(out).not.toContain('7.5');
+  });
+
+  it('separates numbered list items with a pause boundary', () => {
+    const out = normalizeForTTS('1. 5÷10=0.5\n2. 23÷100=0.23');
+    // Each item should get an "Item N" prefix
+    expect(out).toContain('Item 1');
+    expect(out).toContain('Item 2');
+    // Decimal values should be spoken as "point" — no raw periods to confuse TTS
+    expect(out).toContain('0 point 5');
+    expect(out).toContain('0 point 23');
+    // Items should be clearly separated with a sentence boundary
+    expect(out).toMatch(/point 5\.\s+Item 2/);
+  });
+
+  it('does not confuse decimal period with sentence boundary in list items', () => {
+    const out = normalizeForTTS('1. Calculate 3.7 + 2.3\n2. Calculate 8.1 - 4.6');
+    expect(out).toContain('3 point 7');
+    expect(out).toContain('2 point 3');
+    expect(out).toContain('8 point 1');
+    expect(out).toContain('4 point 6');
+    // Items should be clearly separated — "Item 2" must not be
+    // stuck to the end of the first item's decimal value
+    expect(out).toMatch(/Item 1.*\.\s+Item 2/);
+  });
 });

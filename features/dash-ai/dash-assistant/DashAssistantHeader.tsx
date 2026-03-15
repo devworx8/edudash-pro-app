@@ -92,8 +92,8 @@ export const DashAssistantHeader: React.FC<DashAssistantHeaderProps> = ({
             {shellSubtitle}
           </Text>
         </View>
-        {/* Quota ring + ORB button grouped together */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        {/* Quota ring + ORB button grouped together — shifted left */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 'auto', marginLeft: -2 }}>
           {tierStatus && tierStatus.quotaLimit > 0 && (
             <CircularQuotaRing
               used={tierStatus.quotaUsed}
@@ -105,19 +105,23 @@ export const DashAssistantHeader: React.FC<DashAssistantHeaderProps> = ({
             />
           )}
           <TouchableOpacity
-            style={[
-              headerStyles.iconButton,
-              headerStyles.orbIconButton,
-              {
-                backgroundColor: theme.primary + '22',
-                borderColor: 'transparent',
-                borderWidth: 0,
-              },
-            ]}
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 24,
+              justifyContent: 'center',
+              alignItems: 'center',
+              backgroundColor: theme.primary + '22',
+              shadowColor: '#60A5FA',
+              shadowOpacity: 0.45,
+              shadowRadius: 12,
+              shadowOffset: { width: 0, height: 4 },
+              elevation: 8,
+            }}
             accessibilityLabel="Open Dash Orb"
             onPress={onOpenOrb}
           >
-            <Ionicons name="planet" size={17} color={theme.primary} />
+            <Ionicons name="planet" size={26} color={theme.primary} />
           </TouchableOpacity>
         </View>
 

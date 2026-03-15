@@ -143,7 +143,7 @@ export function DashTutorWhiteboardEnhanced({
 
           {hasDiagram && diagram?.type === 'fraction' && diagram.data && (
             <View style={styles.diagramWrap}>
-              <FractionDiagram data={diagram.data as any} revealed={diagramRevealed >= 1} />
+              <FractionDiagram data={diagram.data as any} revealed={diagramRevealed} />
             </View>
           )}
 

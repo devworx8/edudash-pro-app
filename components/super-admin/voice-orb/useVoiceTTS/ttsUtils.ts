@@ -246,6 +246,12 @@ export const splitIntoChunks = (text: string, maxLength: number): string[] => {
     const char = text[i];
     buffer += char;
     if ((char === '.' || char === '!' || char === '?') && buffer.trim()) {
+      // Don't split on "." when it's a list marker like "Item 1. ..." or
+      // a decimal remnant like "1. 5" — peek ahead for a digit or "Item"
+      if (char === '.') {
+        const rest = text.slice(i + 1);
+        if (/^\s*\d/.test(rest) || /^\s*Item\b/i.test(rest)) continue;
+      }
       sentences.push(buffer.trim());
       buffer = '';
     }

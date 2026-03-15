@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MathRenderer from './dash-assistant/MathRenderer';
+import { normalizeForTTS } from '@/lib/dash-ai/ttsNormalize';
 
 // ── Inline math segment splitter (shared with DashTutorWhiteboard) ───────────
 // Splits a string like "The area is $A = \pi r^2$ here" into
@@ -146,17 +147,12 @@ function parseContentSegments(text: string): ContentSegment[] {
  * Strip content for TTS reading (removes math delimiters, markdown)
  */
 export function stripContentForTTS(text: string): string {
-  return text
-    .replace(/\$\$([\s\S]*?)\$\$/g, '$1')  // Display math
-    .replace(/\$([^$\n]+?)\$/g, '$1')       // Inline math
-    .replace(/^#{1,3}\s+/gm, '')            // Headings
-    .replace(/\*\*(.+?)\*\*/g, '$1')        // Bold
-    .replace(/\*(.+?)\*/g, '$1')            // Italic
-    .replace(/`([^`]+)`/g, '$1')            // Code
-    .replace(/^\d+[.)]\s+/gm, 'Step: ')     // Step numbers
-    .replace(/^Step\s*\d+:\s*/gm, 'Step: ')
-    .replace(/\n+/g, ' ')                    // Newlines to spaces
-    .trim();
+  // Delegates to the main TTS normalization pipeline, with math delimiter
+  // pre-stripping since whiteboard content uses raw $/$$ delimiters.
+  const preMath = text
+    .replace(/\$\$([\s\S]*?)\$\$/g, '$1')
+    .replace(/\$([^$\n]+?)\$/g, '$1');
+  return normalizeForTTS(preMath);
 }
 
 interface DashBoardContentProps {
