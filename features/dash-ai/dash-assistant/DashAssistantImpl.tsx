@@ -659,7 +659,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
             onOpenHistory={() => router.push('/screens/dash-conversations-history')}
             onOpenSearch={() => router.push('/screens/app-search?scope=dash&q=dash')}
             onOpenOrb={handleOpenOrb}
-            onOpenSettings={() => router.push('/screens/ai-settings' as any)}
+            onOpenSettings={() => router.push('/screens/dash-ai-settings' as any)}
             onOpenScanner={scanner.openScanner}
             onRunScheduleTool={handleRunScheduleTool}
             onRunAssignmentsTool={canRunAssignmentsTool ? handleRunAssignmentsTool : undefined}
