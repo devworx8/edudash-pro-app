@@ -37,7 +37,7 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
 // Tier quota definitions
 const TIER_QUOTAS: Record<string, Record<string, number>> = {
   free: {
-    chat_messages: 300,
+    chat_messages: 100,
     lesson_generation: 10,
     grading_assistance: 10,
     homework_help: 20,
@@ -47,7 +47,7 @@ const TIER_QUOTAS: Record<string, Record<string, number>> = {
     exam_generation: 3,
   },
   trial: {
-    chat_messages: 300,
+    chat_messages: 100,
     lesson_generation: 10,
     grading_assistance: 20,
     homework_help: 40,
@@ -57,7 +57,7 @@ const TIER_QUOTAS: Record<string, Record<string, number>> = {
     exam_generation: 5,
   },
   starter: {
-    chat_messages: 1500,
+    chat_messages: 150,
     lesson_generation: 30,
     grading_assistance: 60,
     homework_help: 120,
@@ -67,7 +67,7 @@ const TIER_QUOTAS: Record<string, Record<string, number>> = {
     exam_generation: 15,
   },
   basic: {
-    chat_messages: 3000,
+    chat_messages: 300,
     lesson_generation: 60,
     grading_assistance: 120,
     homework_help: 240,
@@ -77,7 +77,7 @@ const TIER_QUOTAS: Record<string, Record<string, number>> = {
     exam_generation: 30,
   },
   premium: {
-    chat_messages: 6000,
+    chat_messages: 500,
     lesson_generation: 120,
     grading_assistance: 240,
     homework_help: 480,
@@ -87,7 +87,7 @@ const TIER_QUOTAS: Record<string, Record<string, number>> = {
     exam_generation: 60,
   },
   pro: {
-    chat_messages: 15000,
+    chat_messages: 1500,
     lesson_generation: 300,
     grading_assistance: 600,
     homework_help: 1200,
@@ -715,6 +715,7 @@ serve(async (req: Request) => {
           tier,
           limit,
           current,
+          used: current,   // alias — useRealtimeTier reads 'used'
           remaining,
           allowed: remaining > 0 || limit >= 999999,
         });

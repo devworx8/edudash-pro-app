@@ -142,12 +142,18 @@ export const ImageViewer: React.FC<ImageViewerProps> = ({
         return;
       }
       
-      // Download the image
-      const fileUri = FileSystem.documentDirectory + (imageName || 'image.jpg');
-      const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
-      
+      // If already a local file, use it directly; otherwise download from remote URL
+      let localUri: string;
+      if (imageUrl.startsWith('file://') || imageUrl.startsWith('/')) {
+        localUri = imageUrl;
+      } else {
+        const fileUri = FileSystem.documentDirectory + (imageName || 'image.jpg');
+        const downloadResult = await FileSystem.downloadAsync(imageUrl, fileUri);
+        localUri = downloadResult.uri;
+      }
+
       // Share the image (which allows saving on most devices)
-      await Sharing.shareAsync(downloadResult.uri, {
+      await Sharing.shareAsync(localUri, {
         mimeType: 'image/jpeg',
         dialogTitle: 'Save or share image',
       });

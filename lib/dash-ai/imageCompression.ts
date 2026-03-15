@@ -42,8 +42,10 @@ function loadLegacyFileSystem(): LegacyFileSystemModule {
 export const MAX_IMAGE_BASE64_LEN = 5_000_000; // ~3.75MB payload — headroom for handwritten docs
 
 // Compression steps — minimum 1024px / 0.72 quality to preserve handwritten text detail.
+// Starts at 2048px so OCR (fractions, small digits, rotated text) has maximum pixel fidelity.
 // Dropping below 768px or 0.65 makes fractions, digits, and small text unreadable by the AI.
 export const IMAGE_COMPRESS_STEPS = [
+  { width: 2048, compress: 0.88 },
   { width: 1600, compress: 0.85 },
   { width: 1280, compress: 0.80 },
   { width: 1024, compress: 0.75 },

@@ -84,6 +84,9 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
   const forceAlignUntilRef = React.useRef(0);
   const lastBottomScrollRequestRef = React.useRef(0);
   const forceAlignTimersRef = React.useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  // True when user deliberately scrolled away from bottom mid-stream.
+  // Prevents bottomScrollRequestId effect from re-hijacking the viewport.
+  const userScrolledAwayRef = React.useRef(false);
   const getTutorPhase = (message: any) => {
     const explicitPhase = message?.metadata?.tutor_phase || message?.metadata?.phase;
     if (explicitPhase) {
@@ -183,6 +186,10 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
     if (bottomScrollRequestId === lastBottomScrollRequestRef.current) return;
 
     lastBottomScrollRequestRef.current = bottomScrollRequestId;
+
+    // Don't force-scroll if the user deliberately scrolled away during streaming.
+    if (userScrolledAwayRef.current) return;
+
     forceAlignUntilRef.current = Date.now() + 1800;
 
     if (forceAlignTimersRef.current.length > 0) {
@@ -236,7 +243,19 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
           const near = distanceFromBottom <= 200;
           if (near !== isNearBottom) {
             setIsNearBottom(near);
-            if (near) setUnreadCount(0);
+            if (near) {
+              setUnreadCount(0);
+              userScrolledAwayRef.current = false;
+            } else {
+              // User deliberately scrolled up — cancel any pending force-align window
+              // so onContentSizeChange and bottomScrollRequestId effect don't spring them back.
+              userScrolledAwayRef.current = true;
+              forceAlignUntilRef.current = 0;
+              if (forceAlignTimersRef.current.length > 0) {
+                forceAlignTimersRef.current.forEach((t) => clearTimeout(t));
+                forceAlignTimersRef.current = [];
+              }
+            }
           }
         } catch {}
       }}

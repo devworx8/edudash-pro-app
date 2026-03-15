@@ -92,16 +92,35 @@ export const DashAssistantHeader: React.FC<DashAssistantHeaderProps> = ({
             {shellSubtitle}
           </Text>
         </View>
-        {tierStatus && tierStatus.quotaLimit > 0 && (
-          <CircularQuotaRing
-            used={tierStatus.quotaUsed}
-            limit={tierStatus.quotaLimit}
-            size={44}
-            strokeWidth={3.5}
-            showPercentage={false}
-            percentageMode="used"
-          />
-        )}
+        {/* Quota ring + ORB button grouped together */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {tierStatus && tierStatus.quotaLimit > 0 && (
+            <CircularQuotaRing
+              used={tierStatus.quotaUsed}
+              limit={tierStatus.quotaLimit}
+              size={44}
+              strokeWidth={3.5}
+              showPercentage={false}
+              percentageMode="used"
+            />
+          )}
+          <TouchableOpacity
+            style={[
+              headerStyles.iconButton,
+              headerStyles.orbIconButton,
+              {
+                backgroundColor: theme.primary + '22',
+                borderColor: 'transparent',
+                borderWidth: 0,
+              },
+            ]}
+            accessibilityLabel="Open Dash Orb"
+            onPress={onOpenOrb}
+          >
+            <Ionicons name="planet" size={17} color={theme.primary} />
+          </TouchableOpacity>
+        </View>
+
         <View style={headerStyles.headerRight}>
           <View
             style={[
@@ -151,25 +170,10 @@ export const DashAssistantHeader: React.FC<DashAssistantHeaderProps> = ({
                   borderWidth: 0,
                 },
               ]}
-              accessibilityLabel="Open Dash options"
+              accessibilityLabel="Open Dash settings"
               onPress={onOpenOptions}
             >
-              <Ionicons name="ellipsis-horizontal" size={16} color={theme.text} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                headerStyles.iconButton,
-                headerStyles.orbIconButton,
-                {
-                  backgroundColor: theme.primary + '22',
-                  borderColor: 'transparent',
-                  borderWidth: 0,
-                },
-              ]}
-              accessibilityLabel="Open Dash Orb"
-              onPress={onOpenOrb}
-            >
-              <Ionicons name="planet" size={17} color={theme.primary} />
+              <Ionicons name="settings-outline" size={16} color={theme.text} />
             </TouchableOpacity>
             {onClose && (
               <TouchableOpacity

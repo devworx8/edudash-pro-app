@@ -1,8 +1,9 @@
 import React from 'react';
-import { Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { MermaidRenderer } from './MermaidRenderer';
+import { ImageViewer } from '@/components/messaging/ImageViewer';
 import type { ExpandedVisualState } from './DashMessageBubble.utils';
 
 interface ExpandedVisualModalProps {
@@ -12,6 +13,18 @@ interface ExpandedVisualModalProps {
 
 export const ExpandedVisualModal: React.FC<ExpandedVisualModalProps> = ({ expandedVisual, onClose }) => {
   const { theme } = useTheme();
+
+  // Images get their own full-screen lightbox with pinch-zoom and swipe-to-dismiss
+  if (expandedVisual?.type === 'image') {
+    return (
+      <ImageViewer
+        visible
+        imageUrl={expandedVisual.uri}
+        imageName={expandedVisual.title}
+        onClose={onClose}
+      />
+    );
+  }
 
   return (
     <Modal
@@ -61,14 +74,6 @@ export const ExpandedVisualModal: React.FC<ExpandedVisualModalProps> = ({ expand
               <Ionicons name="close" size={18} color={theme.text} />
             </TouchableOpacity>
           </View>
-
-          {expandedVisual?.type === 'image' && (
-            <Image
-              source={{ uri: expandedVisual.uri }}
-              style={{ width: '100%', minHeight: 260, maxHeight: 540, borderRadius: 12 }}
-              resizeMode="contain"
-            />
-          )}
 
           {expandedVisual?.type === 'mermaid' && (
             <ScrollView showsVerticalScrollIndicator={false}>

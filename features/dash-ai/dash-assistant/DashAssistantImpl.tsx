@@ -28,7 +28,7 @@ import { useDashAssistant } from '@/hooks/useDashAssistant';
 import { useAuth } from '@/contexts/AuthContext';
 import { getDashAIRoleCopy } from '@/lib/ai/dashRoleCopy';
 import { getOrganizationType } from '@/lib/tenant/compat';
-import { canAccessModel, getDefaultModels, type AIModelId } from '@/lib/ai/models';
+import { canAccessModel, getDefaultModels, MODEL_WEIGHTS, type AIModelId } from '@/lib/ai/models';
 import { normalizeTierToSubscription } from '@/lib/ai/modelForTier';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { DASH_TELEMETRY_EVENTS, trackDashTelemetry } from '@/lib/telemetry/events';
@@ -92,7 +92,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
     [],
   );
 
-  const { tierStatus, refresh: refreshTierStatus } = useRealtimeTier();
+  const { tierStatus, refresh: refreshTierStatus, incrementQuota } = useRealtimeTier();
   const prevIsLoadingRef = useRef(false);
 
   useEffect(() => {
@@ -163,6 +163,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
     handleInputMicPress,
     cancelVoiceAutoSend,
     handleRemoveAttachment,
+    updateAttachmentUri,
     addAttachments,
     runTool,
     tier,
@@ -256,6 +257,15 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
             ? 'Orb Companion Mode'
             : 'Your AI assistant';
 
+  const handleSend = useCallback(
+    (text?: string, attachments?: any[]) => {
+      const weight = MODEL_WEIGHTS[selectedModel as AIModelId] ?? 1;
+      incrementQuota(weight);
+      return sendMessage(text as any, attachments as any);
+    },
+    [sendMessage, selectedModel, incrementQuota],
+  );
+
   const handleNewChat = useCallback(async () => {
     await stopAllActivity();
     await startNewConversation();
@@ -324,8 +334,8 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
         isLoading={isLoading}
         voiceEnabled={effectiveVoiceEnabled}
         onSpeak={speech.handleSpeakMessage}
-        onRetry={(content, attachments) => sendMessage(content, attachments as any)}
-        onSendFollowUp={(text, attachments) => sendMessage(text, attachments as any)}
+        onRetry={(content, attachments) => handleSend(content, attachments as any)}
+        onSendFollowUp={(text, attachments) => handleSend(text, attachments as any)}
         assistantLabel={roleCopy.assistantLabel}
         onRetakeForClarity={scanner.handleRetakeForClarity}
       />
@@ -336,7 +346,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
       isLoading,
       effectiveVoiceEnabled,
       speech.handleSpeakMessage,
-      sendMessage,
+      handleSend,
       roleCopy.assistantLabel,
       scanner.handleRetakeForClarity,
     ],
@@ -482,7 +492,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
               bottomScrollRequestId={bottomScrollRequestId}
               scrollToBottom={scrollToBottom}
               renderSuggestedActions={() => null}
-              onSendMessage={(text) => sendMessage(text)}
+              onSendMessage={(text) => handleSend(text)}
               bottomInset={0}
               keyboardVisible={keyboardVisible}
               compactBottomPadding
@@ -568,14 +578,15 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
               voiceAutoSendCountdownMs={voiceAutoSendCountdownMs}
               placeholder="Message Dash..."
               messages={messages}
-              onSend={() => sendMessage()}
+              onSend={() => handleSend()}
               onMicPress={handleInputMicPress}
               onCancelVoiceAutoSend={cancelVoiceAutoSend}
               onInterrupt={stopAllActivity}
               onTakePhoto={scanner.openScanner}
               onAttachFile={openAttachmentSheet}
               onRemoveAttachment={handleRemoveAttachment}
-              onQuickAction={(text) => sendMessage(text)}
+              onUpdateAttachmentUri={updateAttachmentUri}
+              onQuickAction={(text) => handleSend(text)}
               onCancel={cancelGeneration}
               bottomInset={0}
               hideQuickChips={disableQuickChips || true}
@@ -648,6 +659,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
             onOpenHistory={() => router.push('/screens/dash-conversations-history')}
             onOpenSearch={() => router.push('/screens/app-search?scope=dash&q=dash')}
             onOpenOrb={handleOpenOrb}
+            onOpenSettings={() => router.push('/screens/ai-settings' as any)}
             onOpenScanner={scanner.openScanner}
             onRunScheduleTool={handleRunScheduleTool}
             onRunAssignmentsTool={canRunAssignmentsTool ? handleRunAssignmentsTool : undefined}
