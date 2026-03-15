@@ -37,6 +37,9 @@ interface UseDashVoiceStreamingParams {
   conversationHistoryRef: React.MutableRefObject<ConversationEntry[]>;
   activeRequestRef: React.MutableRefObject<{ abort: () => void } | null>;
   enqueueSpeech: (text: string) => void;
+  maybeEnqueueStreamingSpeech?: (text: string) => void;
+  flushStreamingSpeechFinal?: (text: string) => void;
+  streamingTTSEnabled?: boolean;
   logDashTrace: (event: string, payload?: Record<string, unknown>) => void;
   persistOrbMessages: (msgs: ConversationEntry[]) => Promise<void>;
   setConversationHistory: (v: ConversationEntry[]) => void;
@@ -59,7 +62,9 @@ export function useDashVoiceStreaming({
   role, profile, user, activeTier,
   setWhiteboardContent, setLastResponse, setStreamingText, setIsProcessing,
   setLatestPdfArtifact, conversationHistoryRef, activeRequestRef,
-  enqueueSpeech, logDashTrace,
+  enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal,
+  streamingTTSEnabled = false,
+  logDashTrace,
   persistOrbMessages, setConversationHistory,
 }: UseDashVoiceStreamingParams) {
   const normalizedToolTier = getCapabilityTier(normalizeTierName(activeTier || 'free'));
@@ -108,14 +113,23 @@ export function useDashVoiceStreaming({
     const { url, accessToken, body, trimmed, shouldAutoExportPdf, turnId, turnStartedAt, turnTelemetryBase, updatedHistory, applyCriteriaGuardrails } = params;
     let firstChunkAt: number | null = null;
     let lastProgressLogAt = 0;
+    let firstPhraseLoggedAt: number | null = null;
     const req = createStreamingRequest(url, accessToken, body,
       (accumulated) => {
         if (firstChunkAt === null) { firstChunkAt = Date.now(); logDashTrace('stream_first_chunk', { turnId, firstTokenLatencyMs: firstChunkAt - turnStartedAt }); }
         const now = Date.now();
         if (now - lastProgressLogAt > 900) { lastProgressLogAt = now; logDashTrace('stream_progress', { turnId, chars: accumulated.length, elapsedMs: now - turnStartedAt }); }
-        // Update display text immediately as tokens stream in — no streaming TTS
         if (accumulated && !/^\s*data:\s*(\[DONE\])?\s*$/i.test(accumulated)) {
-          setStreamingText(stripWhiteboardFromDisplay(accumulated));
+          const displayText = stripWhiteboardFromDisplay(accumulated);
+          setStreamingText(displayText);
+          // Phrase-streaming TTS: enqueue phrases as tokens arrive
+          if (streamingTTSEnabled && displayText) {
+            if (firstPhraseLoggedAt === null) {
+              firstPhraseLoggedAt = Date.now();
+              logDashTrace('tts_first_phrase_ms', { turnId, latencyMs: firstPhraseLoggedAt - turnStartedAt });
+            }
+            maybeEnqueueStreamingSpeech?.(displayText);
+          }
         }
       },
       (finalText) => {
@@ -142,9 +156,18 @@ export function useDashVoiceStreaming({
             conversationHistoryRef.current = withResponse;
             setConversationHistory(withResponse);
             persistOrbMessages(withResponse);
-            // When Dash Board is shown, read the board content; otherwise read the response
+            // Speak the response — in streaming mode, flush only the unspoken tail
             const ttsText = wb2 ? getWhiteboardTTSContent(wb2) : resolvedSpeechText;
-            if (ttsText) enqueueSpeech(ttsText);
+            if (ttsText) {
+              if (streamingTTSEnabled) {
+                // Flush any buffered tail of the streamed response text
+                flushStreamingSpeechFinal?.(resolvedSpeechText);
+                // If Dash Board is shown, append its TTS as a separate chunk
+                if (wb2) enqueueSpeech(getWhiteboardTTSContent(wb2));
+              } else {
+                enqueueSpeech(ttsText);
+              }
+            }
           }
           track('dash.turn.completed', buildDashTurnTelemetry({ ...turnTelemetryBase, latencyMs: Date.now() - turnStartedAt }));
           activeRequestRef.current = null;
@@ -171,7 +194,8 @@ export function useDashVoiceStreaming({
     exportPdfFromVoiceResponse, logDashTrace,
     setStreamingText, setWhiteboardContent, setLastResponse, setIsProcessing, setConversationHistory,
     conversationHistoryRef, activeRequestRef,
-    enqueueSpeech, persistOrbMessages,
+    enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal,
+    streamingTTSEnabled, persistOrbMessages,
   ]);
 
   return { runStreamingRequest, exportPdfFromVoiceResponse };

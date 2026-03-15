@@ -29,11 +29,16 @@ interface CompactModelPickerProps {
 
 const formatTierLabel = (tier: string): string => {
   switch (tier) {
-    case 'free': return 'Free';
-    case 'starter': return 'Starter';
-    case 'premium': return 'Premium';
-    case 'enterprise': return 'Enterprise';
-    default: return tier;
+    case 'free':
+      return 'Free';
+    case 'starter':
+      return 'Starter';
+    case 'premium':
+      return 'Premium';
+    case 'enterprise':
+      return 'Enterprise';
+    default:
+      return tier;
   }
 };
 
@@ -55,9 +60,7 @@ export function splitModelsForPicker(
   const available: AIModelInfo[] = [];
   const locked: AIModelInfo[] = [];
   for (const model of models) {
-    (canSelectModel ? canSelectModel(model.id) : true)
-      ? available.push(model)
-      : locked.push(model);
+    (canSelectModel ? canSelectModel(model.id) : true) ? available.push(model) : locked.push(model);
   }
   available.sort((a, b) => (a.id === selectedModelId ? -1 : b.id === selectedModelId ? 1 : 0));
   return { available, locked };
@@ -106,12 +109,21 @@ export function CompactModelPicker({
 
   const openPicker = () => {
     if (disabled) return;
-    if (isNativeSheet) { setOpen(true); return; }
+    if (isNativeSheet) {
+      setOpen(true);
+      return;
+    }
     const node = triggerRef.current as {
       measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
     } | null;
-    if (!node?.measureInWindow) { setOpen(true); return; }
-    node.measureInWindow((x, y, w, h) => { setAnchor({ x, y, width: w, height: h }); setOpen(true); });
+    if (!node?.measureInWindow) {
+      setOpen(true);
+      return;
+    }
+    node.measureInWindow((x, y, w, h) => {
+      setAnchor({ x, y, width: w, height: h });
+      setOpen(true);
+    });
   };
 
   const closePicker = () => setOpen(false);
@@ -133,7 +145,11 @@ export function CompactModelPicker({
             : `${model.displayName}. Select model.`
         }
         onPress={() => {
-          if (isLocked) { closePicker(); onLockedPress?.(model.id); return; }
+          if (isLocked) {
+            closePicker();
+            onLockedPress?.(model.id);
+            return;
+          }
           onSelectModel(model.id);
           closePicker();
         }}
@@ -147,10 +163,13 @@ export function CompactModelPicker({
             <Text numberOfLines={1} style={[styles.name, { color: active ? color : theme.text }]}>
               {model.displayName}
             </Text>
-            <View style={[styles.tierChip, { backgroundColor: `${color}18`, borderColor: `${color}44` }]}>
-              <Text style={[styles.tierChipText, { color }]}>
-                {formatTierLabel(model.minTier)}
-              </Text>
+            <View
+              style={[
+                styles.tierChip,
+                { backgroundColor: `${color}18`, borderColor: `${color}44` },
+              ]}
+            >
+              <Text style={[styles.tierChipText, { color }]}>{formatTierLabel(model.minTier)}</Text>
             </View>
             <Text style={[styles.weight, { color: theme.textSecondary }]}>
               x{model.relativeCost}
@@ -165,7 +184,9 @@ export function CompactModelPicker({
         <Ionicons
           name={isLocked ? 'lock-closed' : active ? 'checkmark-circle' : 'radio-button-off'}
           size={20}
-          color={isLocked ? `${theme.textSecondary}88` : active ? color : `${theme.textSecondary}66`}
+          color={
+            isLocked ? `${theme.textSecondary}88` : active ? color : `${theme.textSecondary}66`
+          }
         />
       </TouchableOpacity>
     );
@@ -181,7 +202,10 @@ export function CompactModelPicker({
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="Close model picker"
-          style={[styles.closeBtn, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}
+          style={[
+            styles.closeBtn,
+            { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
+          ]}
         >
           <Ionicons name="close" size={15} color={theme.textSecondary} />
         </TouchableOpacity>

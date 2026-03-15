@@ -4,7 +4,15 @@
  * @module app/screens/ai-lesson-generator
  */
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, TextInput } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  RefreshControl,
+  TextInput,
+} from 'react-native';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,20 +79,32 @@ export default function AILessonGeneratorScreen() {
   const { theme } = useTheme();
   const { showAlert, alertProps } = useAlertModal();
   const { profile, user } = useAuth();
-  const palette = useMemo(() => ({
-    bg: theme.background, text: theme.text, textSec: theme.textSecondary,
-    outline: theme.border, surface: theme.surface, primary: theme.primary, accent: theme.accent,
-  }), [theme]);
+  const palette = useMemo(
+    () => ({
+      bg: theme.background,
+      text: theme.text,
+      textSec: theme.textSecondary,
+      outline: theme.border,
+      surface: theme.surface,
+      primary: theme.primary,
+      accent: theme.accent,
+    }),
+    [theme],
+  );
   // Form state
   const [topic, setTopic] = useState('Fractions');
   const [subject, setSubject] = useState('Mathematics');
   const [gradeLevel, setGradeLevel] = useState('3');
   const [duration, setDuration] = useState('45');
-  const [objectives, setObjectives] = useState('Understand proper fractions; Compare simple fractions');
+  const [objectives, setObjectives] = useState(
+    'Understand proper fractions; Compare simple fractions',
+  );
   const [language, setLanguage] = useState<LanguageCode>('en');
   const [saving, setSaving] = useState(false);
   const [resultViewMode, setResultViewMode] = useState<'cards' | 'raw'>('cards');
-  const [quickLessonContext, setQuickLessonContext] = useState<QuickLessonThemeContext | null>(null);
+  const [quickLessonContext, setQuickLessonContext] = useState<QuickLessonThemeContext | null>(
+    null,
+  );
   const [quickLessonContextLoading, setQuickLessonContextLoading] = useState(false);
   const [explicitRoutineContext, setExplicitRoutineContext] = useState('');
   const [showFullscreenLesson, setShowFullscreenLesson] = useState(false);
@@ -108,10 +128,34 @@ export default function AILessonGeneratorScreen() {
   const isQuickMode = modeParam === 'quick';
   const schoolId = profile?.organization_id || profile?.preschool_id || null;
   // Hooks
-  const { generated, setGenerated, pending, progress, progressPhase, progressMessage, errorMsg, lastPayload, usage, quotaStatus, isQuotaExhausted, onGenerate, onCancel, refreshUsage } = useAILessonGeneration();
-  const { availableModels, selectedModel, setSelectedModel, isLoading: modelsLoading } = useLessonGeneratorModels();
+  const {
+    generated,
+    setGenerated,
+    pending,
+    progress,
+    progressPhase,
+    progressMessage,
+    errorMsg,
+    lastPayload,
+    usage,
+    quotaStatus,
+    isQuotaExhausted,
+    onGenerate,
+    onCancel,
+    refreshUsage,
+  } = useAILessonGeneration();
+  const {
+    availableModels,
+    selectedModel,
+    setSelectedModel,
+    isLoading: modelsLoading,
+  } = useLessonGeneratorModels();
   const { tierInfo } = useTierInfo();
-  const { isUnlocked: isLessonUnlocked, offerRewardedUnlock: offerLessonUnlock, canShowRewardedAd } = useRewardedFeature('lesson_generation');
+  const {
+    isUnlocked: isLessonUnlocked,
+    offerRewardedUnlock: offerLessonUnlock,
+    canShowRewardedAd,
+  } = useRewardedFeature('lesson_generation');
   const generatedContentText = useMemo(() => {
     if (typeof generated?.content === 'string' && generated.content.trim()) {
       return generated.content.trim();
@@ -147,7 +191,10 @@ export default function AILessonGeneratorScreen() {
     await refreshUsage();
     await categoriesQuery.refetch();
   }, [refreshUsage, categoriesQuery]);
-  const { refreshing, onRefreshHandler } = useSimplePullToRefresh(handleRefresh, 'ai_lesson_generator');
+  const { refreshing, onRefreshHandler } = useSimplePullToRefresh(
+    handleRefresh,
+    'ai_lesson_generator',
+  );
   // Apply prefill from search params
   useEffect(() => {
     const t = (searchParams?.topic || '').trim();
@@ -164,13 +211,17 @@ export default function AILessonGeneratorScreen() {
     if (d && /^\d+$/.test(d)) setDuration(d);
     if (o) setObjectives(o);
     if (routineCtx) setExplicitRoutineContext(routineCtx);
-    if (lang && ['en', 'es', 'fr', 'pt', 'de', 'af', 'zu', 'st'].includes(lang)) setLanguage(lang as LanguageCode);
-    if (m && [
-      'claude-haiku-4-5-20251001',
-      'claude-3-7-sonnet-20250219',
-      'claude-sonnet-4-20250514',
-      'claude-sonnet-4-5-20250514',
-    ].includes(m)) {
+    if (lang && ['en', 'es', 'fr', 'pt', 'de', 'af', 'zu', 'st'].includes(lang))
+      setLanguage(lang as LanguageCode);
+    if (
+      m &&
+      [
+        'claude-haiku-4-5-20251001',
+        'claude-3-7-sonnet-20250219',
+        'claude-sonnet-4-20250514',
+        'claude-sonnet-4-5-20250514',
+      ].includes(m)
+    ) {
       setSelectedModel(m as typeof selectedModel);
     }
   }, [searchParams, setSelectedModel]);
@@ -204,7 +255,10 @@ export default function AILessonGeneratorScreen() {
     };
   }, [schoolId, user?.id]);
   const buildDashPrompt = useCallback(() => {
-    const objs = (objectives || '').split(';').map(s => s.trim()).filter(Boolean);
+    const objs = (objectives || '')
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean);
     const langSuffix = language && language !== 'en' ? `\nPlease respond in ${language}.` : '';
     const quickHint = isQuickMode
       ? '\nThis is QUICK MODE: keep prep minimal, use common classroom materials, and deliver in compact timed steps.'
@@ -214,25 +268,50 @@ export default function AILessonGeneratorScreen() {
       ? `\nRoutine Execution Context (must align to timings/flow):\n${explicitRoutineContext}`
       : '';
     return `Generate a ${Number(duration) || 45} minute lesson plan for Grade ${Number(gradeLevel) || 3} in ${subject} on "${topic}". Learning objectives: ${objs.join('; ') || 'derive objectives'}. Provide objectives, warm-up, activities, assessment, and closure.${quickHint}${planningHint ? `\nPlanning Alignment Context:\n${planningHint}` : ''}${routineHint}.${langSuffix}`;
-  }, [topic, subject, gradeLevel, duration, objectives, language, isQuickMode, quickLessonContext, explicitRoutineContext]);
+  }, [
+    topic,
+    subject,
+    gradeLevel,
+    duration,
+    objectives,
+    language,
+    isQuickMode,
+    quickLessonContext,
+    explicitRoutineContext,
+  ]);
   const onOpenWithDash = useCallback(() => {
     const initialMessage = buildDashPrompt();
-    try { const { safeRouter } = require('@/lib/navigation/safeRouter'); safeRouter.push({ pathname: '/screens/dash-assistant', params: { initialMessage } }); }
-    catch { router.push({ pathname: '/screens/dash-assistant', params: { initialMessage } }); }
+    try {
+      const { safeRouter } = require('@/lib/navigation/safeRouter');
+      safeRouter.push({ pathname: '/screens/dash-assistant', params: { initialMessage } });
+    } catch {
+      router.push({ pathname: '/screens/dash-assistant', params: { initialMessage } });
+    }
   }, [buildDashPrompt]);
   const onExportPDF = useCallback(async () => {
     const content = generatedContentText;
-    if (!content) { showAlert({ title: 'Export PDF', message: 'Generate a lesson first.', type: 'info' }); return; }
-    try { await EducationalPDFService.generateTextPDF(`${subject}: ${topic}`, content); toast.success('PDF generated'); }
-    catch { toast.error('Failed to generate PDF'); }
+    if (!content) {
+      showAlert({ title: 'Export PDF', message: 'Generate a lesson first.', type: 'info' });
+      return;
+    }
+    try {
+      await EducationalPDFService.generateTextPDF(`${subject}: ${topic}`, content);
+      toast.success('PDF generated');
+    } catch {
+      toast.error('Failed to generate PDF');
+    }
   }, [subject, topic, generatedContentText]);
   const handleGenerate = useCallback(async () => {
     if (isQuotaExhausted && !isLessonUnlocked) {
       if (canShowRewardedAd) {
         const unlocked = await offerLessonUnlock();
-        if (!unlocked) { navigateToUpgrade({ source: 'lesson_generator' }); return; }
+        if (!unlocked) {
+          navigateToUpgrade({ source: 'lesson_generator' });
+          return;
+        }
       } else {
-        navigateToUpgrade({ source: 'lesson_generator' }); return;
+        navigateToUpgrade({ source: 'lesson_generator' });
+        return;
       }
     }
     if (lessonFullscreenEnabled) {
@@ -283,8 +362,15 @@ export default function AILessonGeneratorScreen() {
       setSaving(true);
       const { data: auth } = await assertSupabase().auth.getUser();
       // Use auth_user_id to lookup profile (NOT profiles.id!)
-      const { data: profile } = await assertSupabase().from('profiles').select('id,preschool_id,organization_id').eq('auth_user_id', auth?.user?.id || '').maybeSingle();
-      if (!profile) { toast.error('Not signed in'); return; }
+      const { data: profile } = await assertSupabase()
+        .from('profiles')
+        .select('id,preschool_id,organization_id')
+        .eq('auth_user_id', auth?.user?.id || '')
+        .maybeSingle();
+      if (!profile) {
+        toast.error('Not signed in');
+        return;
+      }
       const schoolId = profile.preschool_id || profile.organization_id;
       // Get or create a default category if none exists
       let categoryId = categoriesQuery.data?.[0]?.id;
@@ -302,16 +388,19 @@ export default function AILessonGeneratorScreen() {
         }
         categoryId = newCat.id;
       }
-      const res = await LessonGeneratorService.saveGeneratedLesson({ 
-        lesson: generated, 
-        teacherId: profile.id, 
+      const res = await LessonGeneratorService.saveGeneratedLesson({
+        lesson: generated,
+        teacherId: profile.id,
         preschoolId: schoolId || profile.id, // Fallback to teacher ID if no school
-        ageGroupId: 'n/a', 
-        categoryId, 
-        template: { duration: parseInt(duration) || 30, complexity: 'moderate' }, 
-        isPublished: true 
+        ageGroupId: 'n/a',
+        categoryId,
+        template: { duration: parseInt(duration) || 30, complexity: 'moderate' },
+        isPublished: true,
       });
-      if (!res.success) { toast.error(`Save failed: ${res.error || 'Unknown error'}`); return; }
+      if (!res.success) {
+        toast.error(`Save failed: ${res.error || 'Unknown error'}`);
+        return;
+      }
       toast.success(`Lesson saved! View in My Lessons`);
       // Optionally navigate to Browse Lessons
       showAlert({
@@ -320,31 +409,59 @@ export default function AILessonGeneratorScreen() {
         type: 'success',
         buttons: [
           { text: 'Stay Here', style: 'cancel' },
-          { text: 'Browse Lessons', onPress: () => router.push('/screens/teacher-lessons') }
-        ]
+          { text: 'Browse Lessons', onPress: () => router.push('/screens/teacher-lessons') },
+        ],
       });
-    } catch (e: unknown) { toast.error(`Save error: ${e instanceof Error ? e.message : 'Failed'}`); }
-    finally { setSaving(false); }
+    } catch (e: unknown) {
+      toast.error(`Save error: ${e instanceof Error ? e.message : 'Failed'}`);
+    } finally {
+      setSaving(false);
+    }
   }, [categoriesQuery.data, generated, duration]);
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: palette.bg }]}>
-      <ScreenHeader title="AI Lesson Generator" subtitle="Create AI-powered lesson plans" showBackButton />
+      <ScreenHeader
+        title="AI Lesson Generator"
+        subtitle="Create AI-powered lesson plans"
+        showBackButton
+      />
       <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
         <ModelInUseIndicator modelId={selectedModel} label="Using" showCostDots compact />
       </View>
       <View style={styles.headerRow}>
-        <View style={[styles.avatar, { backgroundColor: theme.primary }]}><Ionicons name="sparkles" size={16} color={theme.onPrimary} /></View>
+        <View style={[styles.avatar, { backgroundColor: theme.primary }]}>
+          <Ionicons name="sparkles" size={16} color={theme.onPrimary} />
+        </View>
         <Text style={[styles.headerText, { color: palette.text }]}>Dash • Lesson Generator</Text>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity style={[styles.actionBtn, { borderColor: palette.outline, marginRight: 8 }]} onPress={onExportPDF}><Ionicons name="document-outline" size={16} color={palette.text} /><Text style={[styles.actionBtnText, { color: palette.text }]}>PDF</Text></TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, { borderColor: palette.outline }]} onPress={onOpenWithDash}><Ionicons name="chatbubbles-outline" size={16} color={palette.text} /><Text style={[styles.actionBtnText, { color: palette.text }]}>Dash</Text></TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionBtn, { borderColor: palette.outline, marginRight: 8 }]}
+          onPress={onExportPDF}
+        >
+          <Ionicons name="document-outline" size={16} color={palette.text} />
+          <Text style={[styles.actionBtnText, { color: palette.text }]}>PDF</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.actionBtn, { borderColor: palette.outline }]}
+          onPress={onOpenWithDash}
+        >
+          <Ionicons name="chatbubbles-outline" size={16} color={palette.text} />
+          <Text style={[styles.actionBtnText, { color: palette.text }]}>Dash</Text>
+        </TouchableOpacity>
       </View>
       {(isQuickMode || quickLessonContextLoading || !!quickLessonContext) && (
-        <View style={[styles.quickModeBanner, { backgroundColor: theme.primary + '20', borderColor: theme.primary }]}>
+        <View
+          style={[
+            styles.quickModeBanner,
+            { backgroundColor: theme.primary + '20', borderColor: theme.primary },
+          ]}
+        >
           <Ionicons name="flash" size={16} color={theme.primary} />
           <View style={styles.quickModeTextWrap}>
             <Text style={[styles.quickModeText, { color: theme.primary }]}>
-              {isQuickMode ? 'Quick Lesson Mode • Low prep • Fast classroom recovery' : 'Weekly Alignment Mode • Planning context active'}
+              {isQuickMode
+                ? 'Quick Lesson Mode • Low prep • Fast classroom recovery'
+                : 'Weekly Alignment Mode • Planning context active'}
             </Text>
             <Text style={[styles.quickModeSubText, { color: palette.textSec }]}>
               {quickLessonContextLoading
@@ -354,21 +471,69 @@ export default function AILessonGeneratorScreen() {
           </View>
         </View>
       )}
-      <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefreshHandler} tintColor="#3B82F6" />}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefreshHandler}
+            tintColor="#3B82F6"
+          />
+        }
+      >
         {/* Parameters Card */}
-        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline, marginTop: 16 }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: palette.surface, borderColor: palette.outline, marginTop: 16 },
+          ]}
+        >
           <Text style={[styles.cardTitle, { color: palette.text }]}>Lesson Parameters</Text>
           <Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>Topic</Text>
-          <TextInput style={[styles.input, { color: palette.text, borderColor: palette.outline }]} value={topic} onChangeText={setTopic} placeholder="e.g., Fractions" />
+          <TextInput
+            style={[styles.input, { color: palette.text, borderColor: palette.outline }]}
+            value={topic}
+            onChangeText={setTopic}
+            placeholder="e.g., Fractions"
+          />
           <Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>Subject</Text>
-          <TextInput style={[styles.input, { color: palette.text, borderColor: palette.outline }]} value={subject} onChangeText={setSubject} placeholder="e.g., Mathematics" />
+          <TextInput
+            style={[styles.input, { color: palette.text, borderColor: palette.outline }]}
+            value={subject}
+            onChangeText={setSubject}
+            placeholder="e.g., Mathematics"
+          />
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <View style={{ flex: 1 }}><Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>Grade</Text><TextInput style={[styles.input, { color: palette.text, borderColor: palette.outline }]} value={gradeLevel} onChangeText={setGradeLevel} keyboardType="numeric" /></View>
-            <View style={{ flex: 1 }}><Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>Duration</Text><TextInput style={[styles.input, { color: palette.text, borderColor: palette.outline }]} value={duration} onChangeText={setDuration} keyboardType="numeric" /></View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>Grade</Text>
+              <TextInput
+                style={[styles.input, { color: palette.text, borderColor: palette.outline }]}
+                value={gradeLevel}
+                onChangeText={setGradeLevel}
+                keyboardType="numeric"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>Duration</Text>
+              <TextInput
+                style={[styles.input, { color: palette.text, borderColor: palette.outline }]}
+                value={duration}
+                onChangeText={setDuration}
+                keyboardType="numeric"
+              />
+            </View>
           </View>
-          <Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>Objectives (;)</Text>
-          <TextInput style={[styles.input, { color: palette.text, borderColor: palette.outline }]} value={objectives} onChangeText={setObjectives} />
-          <Text style={{ color: palette.textSec, marginTop: 12 }}>This month: {usage.lesson_generation} lessons</Text>
+          <Text style={[styles.label, { color: palette.textSec, marginTop: 8 }]}>
+            Objectives (;)
+          </Text>
+          <TextInput
+            style={[styles.input, { color: palette.text, borderColor: palette.outline }]}
+            value={objectives}
+            onChangeText={setObjectives}
+          />
+          <Text style={{ color: palette.textSec, marginTop: 12 }}>
+            This month: {usage.lesson_generation} lessons
+          </Text>
           <QuotaBar used={usage.lesson_generation} limit={quotaStatus?.limit || 5} />
         </View>
         {/* Model Selector */}
@@ -378,76 +543,236 @@ export default function AILessonGeneratorScreen() {
             selectedModel={selectedModel}
             onSelect={setSelectedModel}
             feature="lesson_generation"
-            onPersist={async (modelId, feat) => { await setPreferredModel(modelId, feat as 'lesson_generation'); }}
+            onPersist={async (modelId, feat) => {
+              await setPreferredModel(modelId, feat as 'lesson_generation');
+            }}
             title="AI Model"
           />
         )}
         {/* Buttons */}
         <View style={{ flexDirection: 'row', gap: 12 }}>
-          <TouchableOpacity onPress={handleGenerate} style={[styles.btn, { backgroundColor: isQuotaExhausted ? '#9CA3AF' : theme.primary, flex: 1 }]} disabled={pending}>
-            {pending ? <EduDashSpinner color={theme.onPrimary} /> : <Text style={[styles.btnText, { color: theme.onPrimary }]}>{isQuotaExhausted ? 'Upgrade' : 'Generate'}</Text>}
+          <TouchableOpacity
+            onPress={handleGenerate}
+            style={[
+              styles.btn,
+              { backgroundColor: isQuotaExhausted ? '#9CA3AF' : theme.primary, flex: 1 },
+            ]}
+            disabled={pending}
+          >
+            {pending ? (
+              <EduDashSpinner color={theme.onPrimary} />
+            ) : (
+              <Text style={[styles.btnText, { color: theme.onPrimary }]}>
+                {isQuotaExhausted ? 'Upgrade' : 'Generate'}
+              </Text>
+            )}
           </TouchableOpacity>
-          <TouchableOpacity onPress={onSave} style={[styles.btn, { backgroundColor: generatedContentText ? theme.accent : palette.outline, flex: 1 }]} disabled={saving || !generatedContentText}>
-            {saving ? <EduDashSpinner color={theme.onAccent} /> : <Text style={[styles.btnText, { color: generatedContentText ? theme.onAccent : palette.textSec }]}>Save</Text>}
+          <TouchableOpacity
+            onPress={onSave}
+            style={[
+              styles.btn,
+              { backgroundColor: generatedContentText ? theme.accent : palette.outline, flex: 1 },
+            ]}
+            disabled={saving || !generatedContentText}
+          >
+            {saving ? (
+              <EduDashSpinner color={theme.onAccent} />
+            ) : (
+              <Text
+                style={[
+                  styles.btnText,
+                  { color: generatedContentText ? theme.onAccent : palette.textSec },
+                ]}
+              >
+                Save
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
         {lessonFullscreenEnabled && !!generatedContentText && (
           <TouchableOpacity
             onPress={() => setShowFullscreenLesson(true)}
-            style={[styles.btn, { backgroundColor: theme.primary + '20', borderWidth: 1, borderColor: theme.primary, marginTop: 8 }]}
+            style={[
+              styles.btn,
+              {
+                backgroundColor: theme.primary + '20',
+                borderWidth: 1,
+                borderColor: theme.primary,
+                marginTop: 8,
+              },
+            ]}
           >
             <Ionicons name="expand-outline" size={16} color={theme.primary} />
-            <Text style={[styles.btnText, { color: theme.primary, marginLeft: 8 }]}>Open Fullscreen Lesson</Text>
+            <Text style={[styles.btnText, { color: theme.primary, marginLeft: 8 }]}>
+              Open Fullscreen Lesson
+            </Text>
           </TouchableOpacity>
         )}
         {/* Progress */}
         {showInlineProgress && (
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: theme.primary, marginTop: 16 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}><EduDashSpinner color={theme.primary} /><Text style={{ color: theme.primary, marginLeft: 8, fontWeight: '600' }}>Generating...</Text></View>
-              <TouchableOpacity style={{ backgroundColor: '#EF4444', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }} onPress={onCancel}><Text style={{ color: '#FFF', fontSize: 12 }}>Cancel</Text></TouchableOpacity>
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: palette.surface, borderColor: theme.primary, marginTop: 16 },
+            ]}
+          >
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 8,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <EduDashSpinner color={theme.primary} />
+                <Text style={{ color: theme.primary, marginLeft: 8, fontWeight: '600' }}>
+                  Generating...
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#EF4444',
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                }}
+                onPress={onCancel}
+              >
+                <Text style={{ color: '#FFF', fontSize: 12 }}>Cancel</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={{ color: palette.textSec, fontSize: 13 }}>{progressMessage || 'Generating lesson...'}</Text>
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', marginTop: 8 }}><View style={{ width: percentWidth(safeProgress), height: 6, borderRadius: 3, backgroundColor: theme.primary }} /></View>
-            <Text style={{ color: palette.textSec, fontSize: 11, textAlign: 'center', marginTop: 4 }}>{Math.round(safeProgress)}% • {progressPhase.replace('_', ' ')}</Text>
+            <Text style={{ color: palette.textSec, fontSize: 13 }}>
+              {progressMessage || 'Generating lesson...'}
+            </Text>
+            <View style={{ height: 6, borderRadius: 3, backgroundColor: '#E5E7EB', marginTop: 8 }}>
+              <View
+                style={{
+                  width: percentWidth(safeProgress),
+                  height: 6,
+                  borderRadius: 3,
+                  backgroundColor: theme.primary,
+                }}
+              />
+            </View>
+            <Text
+              style={{ color: palette.textSec, fontSize: 11, textAlign: 'center', marginTop: 4 }}
+            >
+              {Math.round(safeProgress)}% • {progressPhase.replace('_', ' ')}
+            </Text>
           </View>
         )}
         {/* Error */}
         {errorMsg && !pending && (
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: '#EF4444', borderWidth: 1, marginTop: 16 }]}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: palette.surface,
+                borderColor: '#EF4444',
+                borderWidth: 1,
+                marginTop: 16,
+              },
+            ]}
+          >
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <Ionicons name="warning-outline" size={18} color="#EF4444" style={{ marginRight: 8 }} />
+              <Ionicons
+                name="warning-outline"
+                size={18}
+                color="#EF4444"
+                style={{ marginRight: 8 }}
+              />
               <Text style={{ color: '#EF4444', fontWeight: '600', flex: 1 }}>Failed</Text>
-              {lastPayload && <TouchableOpacity onPress={() => onGenerate({ topic, subject, gradeLevel, duration, objectives, language, selectedModel }, lastPayload)} style={{ paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: '#EF4444' }}><Text style={{ color: '#EF4444', fontSize: 12 }}>Retry</Text></TouchableOpacity>}
+              {lastPayload && (
+                <TouchableOpacity
+                  onPress={() =>
+                    onGenerate(
+                      { topic, subject, gradeLevel, duration, objectives, language, selectedModel },
+                      lastPayload,
+                    )
+                  }
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 6,
+                    borderWidth: 1,
+                    borderColor: '#EF4444',
+                  }}
+                >
+                  <Text style={{ color: '#EF4444', fontSize: 12 }}>Retry</Text>
+                </TouchableOpacity>
+              )}
             </View>
             <Text style={{ color: palette.textSec, fontSize: 13 }}>{errorMsg}</Text>
           </View>
         )}
         {/* Generated Content - No maxHeight to allow full scrolling */}
         {showInlineGenerated && (
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: theme.success, borderWidth: 2, marginTop: 16, marginBottom: 100 }]}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}><Ionicons name="checkmark-circle" size={18} color={theme.success} /><Text style={{ color: theme.success, fontWeight: '600', marginLeft: 8 }}>Lesson Generated!</Text></View>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: palette.surface,
+                borderColor: theme.success,
+                borderWidth: 2,
+                marginTop: 16,
+                marginBottom: 100,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <Ionicons name="checkmark-circle" size={18} color={theme.success} />
+              <Text style={{ color: theme.success, fontWeight: '600', marginLeft: 8 }}>
+                Lesson Generated!
+              </Text>
+            </View>
             <View style={styles.resultViewToggleRow}>
               <TouchableOpacity
                 onPress={() => setResultViewMode('cards')}
                 style={[
                   styles.resultViewPill,
-                  { borderColor: resultViewMode === 'cards' ? theme.primary : palette.outline, backgroundColor: resultViewMode === 'cards' ? theme.primary + '20' : 'transparent' },
+                  {
+                    borderColor: resultViewMode === 'cards' ? theme.primary : palette.outline,
+                    backgroundColor:
+                      resultViewMode === 'cards' ? theme.primary + '20' : 'transparent',
+                  },
                 ]}
               >
-                <Text style={{ color: resultViewMode === 'cards' ? theme.primary : palette.textSec, fontSize: 12, fontWeight: '700' }}>Card View</Text>
+                <Text
+                  style={{
+                    color: resultViewMode === 'cards' ? theme.primary : palette.textSec,
+                    fontSize: 12,
+                    fontWeight: '700',
+                  }}
+                >
+                  Card View
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => setResultViewMode('raw')}
                 style={[
                   styles.resultViewPill,
-                  { borderColor: resultViewMode === 'raw' ? theme.primary : palette.outline, backgroundColor: resultViewMode === 'raw' ? theme.primary + '20' : 'transparent' },
+                  {
+                    borderColor: resultViewMode === 'raw' ? theme.primary : palette.outline,
+                    backgroundColor:
+                      resultViewMode === 'raw' ? theme.primary + '20' : 'transparent',
+                  },
                 ]}
               >
-                <Text style={{ color: resultViewMode === 'raw' ? theme.primary : palette.textSec, fontSize: 12, fontWeight: '700' }}>Raw View</Text>
+                <Text
+                  style={{
+                    color: resultViewMode === 'raw' ? theme.primary : palette.textSec,
+                    fontSize: 12,
+                    fontWeight: '700',
+                  }}
+                >
+                  Raw View
+                </Text>
               </TouchableOpacity>
             </View>
-            <View style={{ backgroundColor: palette.bg, borderRadius: 8, padding: 10, minHeight: 100 }}>
+            <View
+              style={{ backgroundColor: palette.bg, borderRadius: 8, padding: 10, minHeight: 100 }}
+            >
               {(() => {
                 const contentText = generatedContentText || 'No content generated';
                 if (resultViewMode === 'cards') {
@@ -457,10 +782,20 @@ export default function AILessonGeneratorScreen() {
                       {sections.map((section, idx) => (
                         <View
                           key={`${section.title}-${idx}`}
-                          style={[styles.resultCardItem, { borderColor: theme.primary + '33', backgroundColor: theme.primary + '10' }]}
+                          style={[
+                            styles.resultCardItem,
+                            {
+                              borderColor: theme.primary + '33',
+                              backgroundColor: theme.primary + '10',
+                            },
+                          ]}
                         >
-                          <Text style={[styles.resultCardTitle, { color: theme.primary }]}>{section.title}</Text>
-                          <Text style={[styles.resultCardBody, { color: palette.text }]}>{section.body}</Text>
+                          <Text style={[styles.resultCardTitle, { color: theme.primary }]}>
+                            {section.title}
+                          </Text>
+                          <Text style={[styles.resultCardBody, { color: palette.text }]}>
+                            {section.body}
+                          </Text>
                         </View>
                       ))}
                     </View>
@@ -474,8 +809,26 @@ export default function AILessonGeneratorScreen() {
               })()}
             </View>
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-              <TouchableOpacity onPress={onSave} style={[styles.btn, { backgroundColor: theme.primary, flex: 1 }]} disabled={saving}>{saving ? <EduDashSpinner color={theme.onPrimary} size="small" /> : <Text style={[styles.btnText, { color: theme.onPrimary }]}>Save</Text>}</TouchableOpacity>
-              <TouchableOpacity onPress={() => { setGenerated(null); toast.info('Cleared'); }} style={[styles.btn, { backgroundColor: palette.outline, paddingHorizontal: 12 }]}><Ionicons name="refresh-outline" size={16} color={palette.text} /></TouchableOpacity>
+              <TouchableOpacity
+                onPress={onSave}
+                style={[styles.btn, { backgroundColor: theme.primary, flex: 1 }]}
+                disabled={saving}
+              >
+                {saving ? (
+                  <EduDashSpinner color={theme.onPrimary} size="small" />
+                ) : (
+                  <Text style={[styles.btnText, { color: theme.onPrimary }]}>Save</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setGenerated(null);
+                  toast.info('Cleared');
+                }}
+                style={[styles.btn, { backgroundColor: palette.outline, paddingHorizontal: 12 }]}
+              >
+                <Ionicons name="refresh-outline" size={16} color={palette.text} />
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -522,7 +875,13 @@ export default function AILessonGeneratorScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: 16 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 8, marginTop: 16 },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+    marginTop: 16,
+  },
   quickModeBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -537,14 +896,34 @@ const styles = StyleSheet.create({
   quickModeTextWrap: { flex: 1 },
   quickModeText: { fontSize: 12, fontWeight: '700' },
   quickModeSubText: { fontSize: 11, marginTop: 3, lineHeight: 16 },
-  avatar: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginRight: 8 },
+  avatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
   headerText: { fontSize: 14, fontWeight: '700' },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   actionBtnText: { fontSize: 12, marginLeft: 6, fontWeight: '600' },
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 12, marginBottom: 16 },
   cardTitle: { fontSize: 14, fontWeight: '700', marginBottom: 8 },
   label: { fontSize: 12, fontWeight: '600' },
-  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: 'transparent' },
+  input: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'transparent',
+  },
   resultViewToggleRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   resultViewPill: {
     borderWidth: 1,
@@ -561,8 +940,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
-  resultCardTitle: { fontSize: 12, fontWeight: '800', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 },
+  resultCardTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   resultCardBody: { fontSize: 13, lineHeight: 20 },
-  btn: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row' },
+  btn: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
   btnText: { fontWeight: '700' },
 });

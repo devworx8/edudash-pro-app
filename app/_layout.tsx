@@ -38,6 +38,7 @@ import { QueryProvider } from '../lib/query/queryClient';
 import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { SubscriptionProvider } from '../contexts/SubscriptionContext';
 import { AdsProvider } from '../contexts/AdsContext';
+import { DashAIProvider } from '../contexts/DashAIContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DashboardPreferencesProvider } from '../contexts/DashboardPreferencesContext';
 import { UpdatesProvider } from '../contexts/UpdatesProvider';
@@ -148,18 +149,18 @@ function LayoutContent() {
   const { isDark, theme } = useTheme();
   const loadingOverlay = useLoadingOverlay();
   const pushRegistrationRef = useRef<{ userId: string; attempted: boolean } | null>(null);
-  
+
   // App preferences for FAB visibility
   const { showDashFAB, powerUserModeEnabled, tutorialCompleted } = useAppPreferencesSafe();
-  
+
   // Route guards (auth + mobile web)
   useAuthGuard();
   useMobileWebGuard();
   useRouteInterstitial();
-  
+
   // FAB visibility logic
   const { shouldHideFAB } = useFABVisibility(pathname);
-  
+
   // Determine if on auth route for FAB delay logic
   const isAuthRoute =
     typeof pathname === 'string' &&
@@ -173,7 +174,8 @@ function LayoutContent() {
       pathname.includes('signup') ||
       pathname.includes('register'));
 
-  const shouldShowOverlay = (!isAuthRoute && (authLoading || profileLoading)) || loadingOverlay.visible;
+  const shouldShowOverlay =
+    (!isAuthRoute && (authLoading || profileLoading)) || loadingOverlay.visible;
   const isReadyForFAB = !authLoading && !profileLoading && !isAuthRoute && !!user;
 
   useEffect(() => {
@@ -196,13 +198,14 @@ function LayoutContent() {
       registerPushDevice(supabase, user).catch(() => {});
     });
   }, [user?.id]);
-  
+
   // Determine if FAB should be visible (user pref + route logic + must be logged in)
   const normalizedRole = String(profile?.role || '').toLowerCase();
   const isPrincipalRole = normalizedRole === 'principal' || normalizedRole === 'principal_admin';
   const hasExplicitSchoolType = Boolean(resolveExplicitSchoolTypeFromProfile(profile));
   const hasAdminCenterDashTab = normalizedRole === 'admin' && hasExplicitSchoolType;
-  const shouldShowFAB = isReadyForFAB && !shouldHideFAB && powerUserModeEnabled && showDashFAB && !!user;
+  const shouldShowFAB =
+    isReadyForFAB && !shouldHideFAB && powerUserModeEnabled && showDashFAB && !!user;
   const hasCenterDashTab = roleHasCenterDashTab(normalizedRole) || hasAdminCenterDashTab;
   const shouldRenderFAB = shouldShowFAB && (!hasCenterDashTab || isPrincipalRole);
   const shouldReserveBottomNavSpace =
@@ -210,24 +213,22 @@ function LayoutContent() {
     Boolean(user) &&
     Boolean(profile) &&
     !shouldHideBottomNavForPath(pathname);
-  
+
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       <StatusBar style={isDark ? 'light' : 'dark'} animated />
-      
+
       {/* App Tutorial - shows on first launch */}
-      {Platform.OS !== 'web' && !tutorialCompleted && (
-        <AppTutorial />
-      )}
-      
+      {Platform.OS !== 'web' && !tutorialCompleted && <AppTutorial />}
+
       {/* OTA Update Banner - shows when update is downloaded */}
       {Platform.OS !== 'web' && <GlobalUpdateBanner />}
-      
+
       {/* Play Store Update Checker - prompts for native app updates */}
       {Platform.OS !== 'web' && <PlayStoreUpdateChecker />}
-      
+
       {Platform.OS !== 'web' && <DashWakeWordListener />}
-      
+
       {/* Main content area - leave space for bottom nav */}
       <View
         style={[
@@ -241,16 +242,14 @@ function LayoutContent() {
           {/* Let Expo Router auto-discover screens */}
         </Stack>
       </View>
-      
+
       {/* Draggable Dash Chat FAB - visible on dashboards and main screens */}
       {/* Hidden for center-tab roles, except principal power users */}
-      {shouldRenderFAB && (
-        <DraggableDashFAB />
-      )}
-      
+      {shouldRenderFAB && <DraggableDashFAB />}
+
       {/* Persistent Bottom Navigation - positioned at bottom */}
       <BottomTabBar />
-      
+
       {/* Floating Call Overlay - persists across all screens and when backgrounded */}
       <FloatingCallOverlay />
 
@@ -259,9 +258,12 @@ function LayoutContent() {
 
       <GlobalLoadingOverlay
         visible={shouldShowOverlay}
-        message={loadingOverlay.message || (authLoading || profileLoading ? 'Loading your dashboard...' : undefined)}
+        message={
+          loadingOverlay.message ||
+          (authLoading || profileLoading ? 'Loading your dashboard...' : undefined)
+        }
       />
-      
+
       {/* Call Interfaces are rendered by CallProvider - no duplicates needed here */}
     </View>
   );
@@ -271,7 +273,7 @@ export default function RootLayout() {
   const [resetKey, setResetKey] = useState(0);
 
   if (__DEV__) logger.debug(TAG, 'Rendering...');
-  
+
   // Setup PWA meta tags on web
   useEffect(() => {
     initPerformanceMonitoring();
@@ -288,50 +290,52 @@ export default function RootLayout() {
       setResetKey((prev) => prev + 1);
     });
   }, []);
-  
+
   return (
     <ErrorBoundary>
-    <SafeAreaProvider key={resetKey}>
-      <QueryProvider>
-        <ThemeProvider>
-          <AuthProvider>
-            <SubscriptionProvider>
-              <AdsProvider>
-                <UpdatesProvider>
-                  <AppPreferencesProvider>
-                    <ActiveChildProvider>
-                    <NotificationProvider>
-                      <CallProvider>
-                        <SpotlightTourBridge>
-                        <OnboardingProvider>
-                          <OrganizationBrandingProvider>
-                          <DashboardPreferencesProvider>
-                          <TermsProvider>
-                            <ToastProvider>
-                              <LoadingOverlayProvider>
-                                <AlertProvider>
-                                  <GestureHandlerRootView style={{ flex: 1 }}>
-                                    <RootLayoutContent />
-                                  </GestureHandlerRootView>
-                                </AlertProvider>
-                              </LoadingOverlayProvider>
-                            </ToastProvider>
-                          </TermsProvider>
-                        </DashboardPreferencesProvider>
-                        </OrganizationBrandingProvider>
-                        </OnboardingProvider>
-                        </SpotlightTourBridge>
-                      </CallProvider>
-                    </NotificationProvider>
-                    </ActiveChildProvider>
-                  </AppPreferencesProvider>
-                </UpdatesProvider>
-              </AdsProvider>
-            </SubscriptionProvider>
-          </AuthProvider>
-        </ThemeProvider>
-      </QueryProvider>
-    </SafeAreaProvider>
+      <SafeAreaProvider key={resetKey}>
+        <QueryProvider>
+          <ThemeProvider>
+            <AuthProvider>
+              <SubscriptionProvider>
+                <AdsProvider>
+                  <DashAIProvider>
+                    <UpdatesProvider>
+                      <AppPreferencesProvider>
+                        <ActiveChildProvider>
+                          <NotificationProvider>
+                            <CallProvider>
+                              <SpotlightTourBridge>
+                                <OnboardingProvider>
+                                  <OrganizationBrandingProvider>
+                                    <DashboardPreferencesProvider>
+                                      <TermsProvider>
+                                        <ToastProvider>
+                                          <LoadingOverlayProvider>
+                                            <AlertProvider>
+                                              <GestureHandlerRootView style={{ flex: 1 }}>
+                                                <RootLayoutContent />
+                                              </GestureHandlerRootView>
+                                            </AlertProvider>
+                                          </LoadingOverlayProvider>
+                                        </ToastProvider>
+                                      </TermsProvider>
+                                    </DashboardPreferencesProvider>
+                                  </OrganizationBrandingProvider>
+                                </OnboardingProvider>
+                              </SpotlightTourBridge>
+                            </CallProvider>
+                          </NotificationProvider>
+                        </ActiveChildProvider>
+                      </AppPreferencesProvider>
+                    </UpdatesProvider>
+                  </DashAIProvider>
+                </AdsProvider>
+              </SubscriptionProvider>
+            </AuthProvider>
+          </ThemeProvider>
+        </QueryProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
@@ -341,16 +345,16 @@ function RootLayoutContent() {
   const [showSplash, setShowSplash] = useState(true);
   const { session } = useAuth();
   const lastDashSessionTokenRef = useRef<string | null>(null);
-  
+
   if (__DEV__) logger.debug(TAG, 'RootLayoutContent Rendering...');
-  
+
   // Setup notification router on native (once per app lifecycle)
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    
+
     logger.debug(TAG, 'Setting up notification router...');
     const cleanup = setupNotificationRouter();
-    
+
     return () => {
       logger.debug(TAG, 'Cleaning up notification router');
       cleanup();
@@ -375,8 +379,14 @@ function RootLayoutContent() {
             search.set(k, String(v));
           }
           logger.info(TAG, 'Password reset deep link detected - routing to native reset flow');
-          try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
-          router.replace(`/reset-password${search.toString() ? `?${search.toString()}` : ''}` as `/${string}`);
+          try {
+            setPasswordRecoveryInProgress(true);
+          } catch {
+            /* non-fatal */
+          }
+          router.replace(
+            `/reset-password${search.toString() ? `?${search.toString()}` : ''}` as `/${string}`,
+          );
           return;
         }
 
@@ -390,9 +400,15 @@ function RootLayoutContent() {
           logger.info(TAG, 'Auth callback deep link (warm start)');
           const flow = String(params.flow || params.type || '').toLowerCase();
           if (flow === 'recovery') {
-            try { setPasswordRecoveryInProgress(true); } catch { /* non-fatal */ }
+            try {
+              setPasswordRecoveryInProgress(true);
+            } catch {
+              /* non-fatal */
+            }
           }
-          router.replace(`/auth-callback${search.toString() ? `?${search.toString()}` : ''}` as `/${string}`);
+          router.replace(
+            `/auth-callback${search.toString() ? `?${search.toString()}` : ''}` as `/${string}`,
+          );
           return;
         }
 
@@ -411,7 +427,10 @@ function RootLayoutContent() {
         }
 
         // Handle direct custom-scheme links (edudashpro://screens/payments/return?...).
-        if (normalized.startsWith('/screens/payments/return') || normalized.startsWith('/screens/payments/cancel')) {
+        if (
+          normalized.startsWith('/screens/payments/return') ||
+          normalized.startsWith('/screens/payments/cancel')
+        ) {
           const search = new URLSearchParams();
           for (const [k, v] of Object.entries(params)) {
             if (v === undefined || v === null || v === '') continue;
@@ -428,13 +447,13 @@ function RootLayoutContent() {
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
     return () => sub.remove();
   }, []);
-  
+
   // Register service worker for PWA (web-only)
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    
+
     const n = typeof navigator !== 'undefined' ? navigator : undefined;
-    
+
     if (n?.serviceWorker) {
       n.serviceWorker
         .register('/sw.js')
@@ -448,7 +467,7 @@ function RootLayoutContent() {
       logger.debug(TAG, 'PWA Service workers not supported in this browser');
     }
   }, []);
-  
+
   // Initialize Dash AI Assistant at root level and sync context
   useEffect(() => {
     // Skip Dash AI on web platform
@@ -456,7 +475,7 @@ function RootLayoutContent() {
       logger.debug(TAG, 'Skipping Dash AI on web');
       return;
     }
-    
+
     // Skip initialization if no session (unauthenticated)
     if (!session) {
       lastDashSessionTokenRef.current = null;
@@ -474,11 +493,14 @@ function RootLayoutContent() {
       return;
     }
     lastDashSessionTokenRef.current = currentToken ?? null;
-    
+
     (async () => {
       try {
         const module = await import('../services/dash-ai/DashAICompat');
-        type DashModule = { DashAIAssistant?: { getInstance?: () => IDashAIAssistant }; default?: { getInstance?: () => IDashAIAssistant } };
+        type DashModule = {
+          DashAIAssistant?: { getInstance?: () => IDashAIAssistant };
+          default?: { getInstance?: () => IDashAIAssistant };
+        };
         const typedModule = module as DashModule;
         const DashClass = typedModule.DashAIAssistant || typedModule.default;
         const dash: IDashAIAssistant | null = DashClass?.getInstance?.() || null;
@@ -495,14 +517,15 @@ function RootLayoutContent() {
             const profile = await getCurrentProfile().catch(() => null);
             const role = profile?.role as string | undefined;
             const language = getCurrentLanguage();
-            const tier = (profile as any)?.plan_tier || (profile as any)?.subscription_tier || 'free';
+            const tier =
+              (profile as any)?.plan_tier || (profile as any)?.subscription_tier || 'free';
             const caps = role
               ? await getAgenticCapabilitiesForContext({
                   userId: profile?.id || session?.user?.id || '',
                   profile: profile || undefined,
                   role: role || '',
                   tier,
-                  language
+                  language,
                 })
               : {
                   mode: 'assistant',
@@ -510,7 +533,7 @@ function RootLayoutContent() {
                   canMakeCodeChanges: false,
                   canAccessSystemLevel: false,
                   canAutoExecuteHighRisk: false,
-                  autonomyLevel: 'limited'
+                  autonomyLevel: 'limited',
                 };
             await syncDashContext({ language, traits: { agentic: caps, role: role || null } });
           } catch (syncErr) {
@@ -522,7 +545,7 @@ function RootLayoutContent() {
       }
     })();
   }, [session]); // Re-run when session changes
-  
+
   // Inject web-specific styles (Expo dev nav hiding, full viewport height)
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -530,12 +553,12 @@ function RootLayoutContent() {
       return cleanup;
     }
   }, []);
-  
+
   // Show splash screen only on native
   if (showSplash && Platform.OS !== 'web') {
     return <AnimatedSplash onFinish={() => setShowSplash(false)} />;
   }
-  
+
   return <LayoutContent />;
 }
 
