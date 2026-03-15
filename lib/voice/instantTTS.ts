@@ -1,23 +1,19 @@
 /**
  * Instant TTS Service
- *
- * Provides fluent, pause-free TTS through a prefetch pipeline:
- * 1. Text is split into sentence-boundary-aware chunks
- * 2. Multiple chunks are synthesized in parallel (prefetch depth = 2)
- * 3. Playback of chunk N overlaps with synthesis of chunk N+1 and N+2
- * 4. No gap between chunks — the next audio starts immediately
- *
- * Used by web TTS paths and as a shared chunking utility.
+ * 
+ * Provides instant, ChatGPT-like TTS response times through:
+ * - Pre-buffering first audio chunk while text is being generated
+ * - Streaming audio playback for reduced latency
+ * - Intelligent chunking for natural speech flow
  */
 
-import { useRef, useCallback } from 'react';
 import { assertSupabase } from '../supabase';
 
 interface TTSChunk {
   id: string;
   text: string;
   audioUrl?: string;
-  status: 'pending' | 'loading' | 'ready' | 'playing' | 'completed' | 'failed';
+  status: 'pending' | 'loading' | 'ready' | 'playing' | 'completed';
 }
 
 interface InstantTTSOptions {
@@ -30,115 +26,104 @@ interface InstantTTSOptions {
 
 const EDGE_FUNCTION_URL = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/tts-proxy';
 
-const MIN_CHUNK_LENGTH = 20;
-const FIRST_CHUNK_SIZE = 120;
-const FOLLOW_UP_CHUNK_SIZE = 300;
-const PREFETCH_DEPTH = 2;
-const SYNTHESIS_TIMEOUT_MS = 10000;
+const MIN_CHUNK_LENGTH = 30;
+const IDEAL_CHUNK_SIZE = 250;
+const MAX_CHUNK_SIZE = 400;
 
 /**
- * Split text into natural speech chunks optimized for prefetch pipeline.
- * First chunk is small for fast time-to-first-audio; subsequent chunks are larger.
+ * Split text into speech-friendly chunks aligned with sentence boundaries.
+ * Larger chunks reduce Azure round-trips; pre-fetch overlap keeps speech fluent.
  */
 export function splitIntoSpeechChunks(text: string): string[] {
-  const trimmed = text.trim();
-  if (!trimmed) return [];
-  if (trimmed.length <= FIRST_CHUNK_SIZE) return [trimmed];
-
-  const sentences = trimmed
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  if (sentences.length === 0) return [trimmed];
-
   const chunks: string[] = [];
-  let current = '';
+  let remaining = text.trim();
 
-  for (const sentence of sentences) {
-    const isFirstChunk = chunks.length === 0;
-    const maxSize = isFirstChunk ? FIRST_CHUNK_SIZE : FOLLOW_UP_CHUNK_SIZE;
-    const candidate = current ? `${current} ${sentence}` : sentence;
-
-    if (candidate.length <= maxSize) {
-      current = candidate;
-      continue;
+  while (remaining.length > 0) {
+    if (remaining.length <= IDEAL_CHUNK_SIZE) {
+      chunks.push(remaining);
+      break;
     }
 
-    if (current.trim()) {
-      chunks.push(current.trim());
-    }
-
-    if (sentence.length <= FOLLOW_UP_CHUNK_SIZE) {
-      current = sentence;
-      continue;
-    }
-
-    const words = sentence.split(' ');
-    current = '';
-    for (const word of words) {
-      const wordCandidate = current ? `${current} ${word}` : word;
-      if (wordCandidate.length <= FOLLOW_UP_CHUNK_SIZE) {
-        current = wordCandidate;
-      } else {
-        if (current.trim()) chunks.push(current.trim());
-        current = word;
+    const window = remaining.slice(0, MAX_CHUNK_SIZE);
+    const sentenceMatches = [...window.matchAll(/[.!?]+\s*/g)];
+    if (sentenceMatches.length > 0) {
+      let bestIdx = -1;
+      for (const m of sentenceMatches) {
+        const endPos = (m.index ?? 0) + m[0].length;
+        if (endPos >= MIN_CHUNK_LENGTH && endPos <= MAX_CHUNK_SIZE) {
+          bestIdx = endPos;
+        }
+      }
+      if (bestIdx > MIN_CHUNK_LENGTH) {
+        chunks.push(remaining.slice(0, bestIdx).trim());
+        remaining = remaining.slice(bestIdx).trim();
+        continue;
       }
     }
+
+    const clauseMatches = [...window.matchAll(/[,;:]\s+/g)];
+    if (clauseMatches.length > 0) {
+      let bestIdx = -1;
+      for (const m of clauseMatches) {
+        const endPos = (m.index ?? 0) + m[0].length;
+        if (endPos >= MIN_CHUNK_LENGTH && endPos <= MAX_CHUNK_SIZE) {
+          bestIdx = endPos;
+        }
+      }
+      if (bestIdx > MIN_CHUNK_LENGTH) {
+        chunks.push(remaining.slice(0, bestIdx).trim());
+        remaining = remaining.slice(bestIdx).trim();
+        continue;
+      }
+    }
+
+    const wordBoundary = remaining.slice(0, IDEAL_CHUNK_SIZE).lastIndexOf(' ');
+    if (wordBoundary > MIN_CHUNK_LENGTH) {
+      chunks.push(remaining.slice(0, wordBoundary).trim());
+      remaining = remaining.slice(wordBoundary + 1).trim();
+    } else {
+      chunks.push(remaining.slice(0, MAX_CHUNK_SIZE).trim());
+      remaining = remaining.slice(MAX_CHUNK_SIZE).trim();
+    }
   }
 
-  if (current.trim()) {
-    chunks.push(current.trim());
-  }
-
-  if (chunks.length === 0) return trimmed.length > 0 ? [trimmed] : [];
-
-  if (chunks.length > 1 && chunks[chunks.length - 1].length < MIN_CHUNK_LENGTH) {
-    const short = chunks.pop()!;
-    chunks[chunks.length - 1] = `${chunks[chunks.length - 1]} ${short}`;
-  }
-
-  return chunks;
+  return chunks.filter(c => c.trim().length > 0);
 }
 
+/**
+ * Pre-synthesize a chunk for instant playback
+ */
 async function preSynthesizeChunk(
   text: string,
   language: string,
-  accessToken: string,
+  accessToken: string
 ): Promise<string> {
   const shortLang = (language.split('-')[0] as 'en' | 'af' | 'zu') ?? 'en';
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), SYNTHESIS_TIMEOUT_MS);
+  
+  const response = await fetch(EDGE_FUNCTION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      action: 'synthesize',
+      text,
+      language: shortLang,
+    }),
+  });
 
-  try {
-    const response = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({
-        action: 'synthesize',
-        text,
-        language: shortLang,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`TTS synthesis failed: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.audio_url || data.audioUrl;
-  } finally {
-    clearTimeout(timeoutId);
+  if (!response.ok) {
+    throw new Error(`TTS synthesis failed: ${response.status}`);
   }
+
+  const data = await response.json();
+  return data.audio_url || data.audioUrl;
 }
 
 /**
- * Instant TTS Player — manages a prefetch pipeline for seamless audio playback.
- * Synthesizes chunks ahead of playback so there's zero gap between segments.
+ * Instant TTS Player Class
+ * Manages pre-buffering and sequential playback
  */
 export class InstantTTSPlayer {
   private chunks: TTSChunk[] = [];
@@ -151,7 +136,7 @@ export class InstantTTSPlayer {
   private onChunkReady?: (chunkId: string) => void;
   private onComplete?: () => void;
   private onError?: (error: Error) => void;
-  private synthesisPromises = new Map<string, Promise<void>>();
+  private preBufferQueue: Promise<void>[] = [];
 
   constructor(accessToken: string, options: InstantTTSOptions = {}) {
     this.accessToken = accessToken;
@@ -162,6 +147,10 @@ export class InstantTTSPlayer {
     this.onError = options.onError;
   }
 
+  /**
+   * Add text to the TTS queue
+   * Starts pre-buffering immediately
+   */
   async addText(text: string): Promise<void> {
     if (this.isStopped) return;
 
@@ -169,75 +158,86 @@ export class InstantTTSPlayer {
     const normalized = normalizeForTTS(text);
     const textChunks = splitIntoSpeechChunks(normalized);
     for (const chunkText of textChunks) {
-      this.chunks.push({
+      const chunk: TTSChunk = {
         id: `chunk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text: chunkText,
         status: 'pending',
-      });
+      };
+      this.chunks.push(chunk);
+
+      // Start pre-buffering this chunk
+      this.preBufferQueue.push(this.preBufferChunk(chunk));
     }
 
-    for (let i = 0; i < Math.min(PREFETCH_DEPTH, this.chunks.length); i++) {
-      this.startSynthesis(this.chunks[i]);
-    }
-
+    // Start playback if not already playing
     if (!this.isPlaying && this.chunks.length > 0) {
-      await this.playSequence();
+      this.playNext();
     }
   }
 
-  private startSynthesis(chunk: TTSChunk): void {
-    if (this.isStopped || chunk.status !== 'pending') return;
+  /**
+   * Pre-buffer a single chunk
+   */
+  private async preBufferChunk(chunk: TTSChunk): Promise<void> {
+    if (this.isStopped) return;
+
     chunk.status = 'loading';
-
-    const promise = preSynthesizeChunk(chunk.text, this.language, this.accessToken)
-      .then((audioUrl) => {
-        chunk.audioUrl = audioUrl;
-        chunk.status = 'ready';
-        this.onChunkReady?.(chunk.id);
-      })
-      .catch((error) => {
-        chunk.status = 'failed';
-        this.onError?.(error instanceof Error ? error : new Error('Synthesis failed'));
-      });
-
-    this.synthesisPromises.set(chunk.id, promise);
+    try {
+      const audioUrl = await preSynthesizeChunk(chunk.text, this.language, this.accessToken);
+      chunk.audioUrl = audioUrl;
+      chunk.status = 'ready';
+      this.onChunkReady?.(chunk.id);
+    } catch (error) {
+      chunk.status = 'pending';
+      this.onError?.(error instanceof Error ? error : new Error('Pre-buffer failed'));
+    }
   }
 
-  private async playSequence(): Promise<void> {
+  /**
+   * Play the next chunk in queue
+   */
+  private async playNext(): Promise<void> {
+    if (this.isStopped) return;
+
+    // Find the next ready chunk
+    const nextChunk = this.chunks.find(c => c.status === 'ready');
+    
+    if (!nextChunk) {
+      // Wait for a chunk to be ready
+      if (this.preBufferQueue.length > 0) {
+        await Promise.race([
+          Promise.any(this.preBufferQueue),
+          new Promise(resolve => setTimeout(resolve, 100)),
+        ]);
+        return this.playNext();
+      }
+      
+      // No more chunks
+      this.isPlaying = false;
+      this.onComplete?.();
+      return;
+    }
+
     this.isPlaying = true;
     this.onStart?.();
+    nextChunk.status = 'playing';
 
-    for (let i = 0; i < this.chunks.length; i++) {
-      if (this.isStopped) break;
-
-      const chunk = this.chunks[i];
-
-      const synthesisPromise = this.synthesisPromises.get(chunk.id);
-      if (synthesisPromise) await synthesisPromise;
-
-      if (this.isStopped) break;
-
-      const nextPrefetchIdx = i + PREFETCH_DEPTH;
-      if (nextPrefetchIdx < this.chunks.length) {
-        this.startSynthesis(this.chunks[nextPrefetchIdx]);
-      }
-
-      if (chunk.status === 'ready' && chunk.audioUrl) {
-        chunk.status = 'playing';
-        try {
-          await this.playAudio(chunk.audioUrl);
-          chunk.status = 'completed';
-        } catch (error) {
-          chunk.status = 'failed';
-          this.onError?.(error instanceof Error ? error : new Error('Playback failed'));
-        }
-      }
+    try {
+      await this.playAudio(nextChunk.audioUrl!);
+      nextChunk.status = 'completed';
+    } catch (error) {
+      this.onError?.(error instanceof Error ? error : new Error('Playback failed'));
     }
 
-    this.isPlaying = false;
-    if (!this.isStopped) this.onComplete?.();
+    // Play next chunk
+    if (!this.isStopped) {
+      this.playNext();
+    }
   }
 
+  /**
+   * Play audio from URL
+   */
   private async playAudio(url: string): Promise<void> {
     return new Promise((resolve, reject) => {
       if (typeof window === 'undefined') {
@@ -262,33 +262,43 @@ export class InstantTTSPlayer {
     });
   }
 
+  /**
+   * Stop playback and clear queue
+   */
   stop(): void {
     this.isStopped = true;
     this.isPlaying = false;
-
+    
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio = null;
     }
 
     this.chunks = [];
-    this.synthesisPromises.clear();
+    this.preBufferQueue = [];
   }
 
+  /**
+   * Check if currently playing
+   */
   getIsPlaying(): boolean {
     return this.isPlaying;
   }
 }
 
+/**
+ * Hook for instant TTS in React components
+ */
 export function useInstantTTS() {
   const playerRef = useRef<InstantTTSPlayer | null>(null);
 
   const startInstantTTS = useCallback(async (text: string, options?: InstantTTSOptions) => {
+    // Stop any existing playback
     playerRef.current?.stop();
 
     const supabase = assertSupabase();
     const { data: { session } } = await supabase.auth.getSession();
-
+    
     if (!session?.access_token) {
       throw new Error('Authentication required for TTS');
     }
@@ -304,3 +314,6 @@ export function useInstantTTS() {
 
   return { startInstantTTS, stopTTS };
 }
+
+// Need to import useRef and useCallback for the hook
+import { useRef, useCallback } from 'react';

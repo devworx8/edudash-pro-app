@@ -42,7 +42,7 @@ export default [
       'no-console': 'off',
       // Allow any for scaffolded/generated code
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': 'warn',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' }],
       // Disable rules that are too strict for working code
       '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',

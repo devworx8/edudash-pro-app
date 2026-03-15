@@ -68,10 +68,10 @@ interface DashInputBarProps {
 }
 
 const WAVE_BARS = 7;
-const FULL_CHAT_COMPACT_HEIGHT = 42;
-const FULL_CHAT_GROW_THRESHOLD = 56;
+const FULL_CHAT_COMPACT_HEIGHT = 34;
+const FULL_CHAT_GROW_THRESHOLD = 48;
 const FULL_CHAT_MAX_HEIGHT = 120;
-const FULL_CHAT_LINE_HEIGHT = 21;
+const FULL_CHAT_LINE_HEIGHT = 20;
 
 const estimateWrappedLineCount = (text: string, charsPerLine: number): number =>
   String(text || '')
@@ -180,8 +180,8 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
   const [previewImageUri, setPreviewImageUri] = useState<string | null>(null);
   const [isFocused, setIsFocused] = useState(false);
   const [inputHeight, setInputHeight] = useState(FULL_CHAT_COMPACT_HEIGHT);
-  const orbSize = screenWidth < 360 ? 28 : screenWidth < 400 ? 30 : 32;
-  const orbRingSize = orbSize + 14;
+  const orbSize = screenWidth < 360 ? 24 : screenWidth < 400 ? 26 : 28;
+  const orbRingSize = orbSize + 12;
   const webCharsPerLine = Math.max(22, Math.floor((screenWidth - 172) / 8));
   const handleComposerTextChange = useCallback(
     (text: string) => {
@@ -222,7 +222,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
       >
         {Platform.OS !== 'web' && selectedAttachments.some(a => a.kind === 'image') && (
           <Text style={{ color: theme.textTertiary, fontSize: 10, fontWeight: '500', paddingHorizontal: 4, paddingBottom: 6, letterSpacing: 0.2 }}>
-            {'Tip: use the ↺ button to rotate if the image is sideways'}
+            {'Tip: use the ↶ ↷ buttons to rotate if the image is sideways'}
           </Text>
         )}
         <ScrollView
@@ -293,27 +293,48 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
                         <Ionicons name="alert-circle" size={24} color="#FFFFFF" />
                       </View>
                     )}
-                    {/* Rotate button — corrects sideways camera photos before sending */}
+                    {/* Rotate buttons — left (counter-clockwise) and right (clockwise) */}
                     {status !== 'uploading' && onUpdateAttachmentUri && Platform.OS !== 'web' && (
-                      <TouchableOpacity
-                        style={[styles.attachmentImageRotate, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
-                        onPress={async () => {
-                          try {
-                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                            const result = await ImageManipulator.manipulateAsync(
-                              imageUri,
-                              [{ rotate: 90 }],
-                              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
-                            );
-                            onUpdateAttachmentUri(attachment.id, result.uri);
-                          } catch {
-                            // ignore — user can retry
-                          }
-                        }}
-                        accessibilityLabel="Rotate image 90°"
-                      >
-                        <Ionicons name="refresh" size={14} color="#FFFFFF" />
-                      </TouchableOpacity>
+                      <>
+                        <TouchableOpacity
+                          style={[styles.attachmentImageRotateLeft, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+                          onPress={async () => {
+                            try {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              const result = await ImageManipulator.manipulateAsync(
+                                imageUri,
+                                [{ rotate: -90 }],
+                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                              );
+                              onUpdateAttachmentUri(attachment.id, result.uri);
+                            } catch {
+                              // ignore — user can retry
+                            }
+                          }}
+                          accessibilityLabel="Rotate image left 90°"
+                        >
+                          <Ionicons name="arrow-undo" size={15} color="#FFFFFF" />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.attachmentImageRotateRight, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+                          onPress={async () => {
+                            try {
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                              const result = await ImageManipulator.manipulateAsync(
+                                imageUri,
+                                [{ rotate: 90 }],
+                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                              );
+                              onUpdateAttachmentUri(attachment.id, result.uri);
+                            } catch {
+                              // ignore — user can retry
+                            }
+                          }}
+                          accessibilityLabel="Rotate image right 90°"
+                        >
+                          <Ionicons name="arrow-redo" size={15} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </>
                     )}
                     {/* Remove button */}
                     {status !== 'uploading' && (

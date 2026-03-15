@@ -484,6 +484,34 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     }
   }, [autoStartListening, isSpeaking, ttsIsSpeaking, restartBlocked]);
 
+  const BARGE_IN_LISTEN_DELAY_MS = Number.parseInt(
+    String(process.env.EXPO_PUBLIC_VOICE_BARGE_IN_LISTEN_DELAY_MS || '900'),
+    10
+  ) || 900;
+  useEffect(() => {
+    if (isMuted || restartBlocked || isProcessing || isParentProcessing) return;
+    if (!(isSpeaking || ttsIsSpeaking)) return;
+    if (recorderState.isRecording || usingLiveSTTRef.current || isListening) return;
+    const timer = setTimeout(() => {
+      if (!restartBlockedRef.current && !isMuted) {
+        handleStartRecordingRef.current?.();
+      }
+    }, BARGE_IN_LISTEN_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [
+    BARGE_IN_LISTEN_DELAY_MS,
+    isListening,
+    isMuted,
+    isParentProcessing,
+    isProcessing,
+    isSpeaking,
+    recorderState.isRecording,
+    restartBlocked,
+    restartBlockedRef,
+    ttsIsSpeaking,
+    usingLiveSTTRef,
+  ]);
+
   // Handle orb press
   const handlePress = useCallback(async () => {
     if (isSpeaking || ttsIsSpeaking) {

@@ -31,7 +31,7 @@ function parseDelta(data: string): string {
     if (p.delta?.text) return p.delta.text;
     if (typeof p.content === 'string') return p.content;
     if (typeof p.text === 'string') return p.text;
-  } catch {}
+  } catch { /* best-effort SSE parse */ }
   return '';
 }
 
@@ -118,7 +118,7 @@ export async function streamAI(
         const p = JSON.parse(line);
         if (p.delta?.text) extracted += p.delta.text;
         else if (typeof p.content === 'string') extracted += p.content;
-      } catch {}
+      } catch { /* skip malformed chunk */ }
     });
     finalise((extracted || raw).trim(), assistantId, cbs);
     return;

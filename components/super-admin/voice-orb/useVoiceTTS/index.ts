@@ -43,11 +43,13 @@ import { useVoiceTTSPlayback } from './useVoiceTTSPlayback';
 export { resolveEffectiveVoiceId } from './ttsUtils';
 export type { TTSOptions, UseVoiceTTSReturn, TTSErrorCategory, EffectiveVoiceResolution } from './types';
 
-// Increased chunk sizes to reduce the number of Azure TTS requests per response.
+// Increased chunk sizes to reduce Azure TTS requests per response.
 // Fewer requests = fewer potential timeouts. First chunk ~200 gives fast initial audio;
 // follow-up chunks up to 700 chars keep total request count to 1-2 for most responses.
 const FIRST_CHUNK_TARGET_CHARS = 200;
 const FOLLOW_UP_CHUNK_MAX_CHARS = 700;
+const MAX_AZURE_RETRIES = 1;
+const RETRY_BASE_DELAY_MS = 250;
 
 const normalizeChunkWhitespace = (text: string): string =>
   String(text || '').replace(/\s+/g, ' ').trim();
@@ -76,24 +78,17 @@ const splitChunkByWords = (text: string, maxChars: number): string[] => {
   return chunks;
 };
 
-/**
- * Split text into chunks optimized for prefetch-pipeline TTS.
- * First chunk is small for fast start; subsequent chunks are moderate-sized.
- * Splits prefer sentence boundaries for natural speech prosody.
- */
 const splitTextForCloudTTS = (text: string, phonicsMode: boolean): string[] => {
   const normalized = normalizeChunkWhitespace(text);
   if (!normalized) return [];
-  if (phonicsMode) return [normalized];
-  if (normalized.length <= FIRST_CHUNK_TARGET_CHARS) return [normalized];
+  if (phonicsMode || normalized.length <= FIRST_CHUNK_TARGET_CHARS) return [normalized];
 
   const sentences = normalized
     .split(/(?<=[.!?])\s+/)
     .map((sentence) => sentence.trim())
     .filter(Boolean);
 
-  if (sentences.length === 0) return normalized.length > 0 ? [normalized] : [];
-  if (sentences.length === 1) {
+  if (sentences.length <= 1) {
     return splitChunkByWords(normalized, FOLLOW_UP_CHUNK_MAX_CHARS);
   }
 
@@ -101,8 +96,7 @@ const splitTextForCloudTTS = (text: string, phonicsMode: boolean): string[] => {
   let current = '';
 
   for (const sentence of sentences) {
-    const isFirstChunk = chunks.length === 0;
-    const maxChars = isFirstChunk ? FIRST_CHUNK_TARGET_CHARS : FOLLOW_UP_CHUNK_MAX_CHARS;
+    const maxChars = chunks.length === 0 ? FIRST_CHUNK_TARGET_CHARS : FOLLOW_UP_CHUNK_MAX_CHARS;
     const candidate = current ? `${current} ${sentence}` : sentence;
 
     if (candidate.length <= maxChars || (chunks.length === 0 && current.length < 80)) {
@@ -114,12 +108,12 @@ const splitTextForCloudTTS = (text: string, phonicsMode: boolean): string[] => {
       chunks.push(current.trim());
     }
 
-    if (sentence.length <= FOLLOW_UP_CHUNK_MAX_CHARS) {
+    if (sentence.length <= maxChars) {
       current = sentence;
       continue;
     }
 
-    const overflowChunks = splitChunkByWords(sentence, FOLLOW_UP_CHUNK_MAX_CHARS);
+    const overflowChunks = splitChunkByWords(sentence, maxChars);
     if (overflowChunks.length === 0) {
       current = '';
       continue;
@@ -489,28 +483,7 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
         }
       }
 
-      // ── Fallback: if Azure failed for all chunks, try device TTS once ───
-      if (!anyChunkSucceeded && !stopRequestedRef.current) {
-        if (phonicsMode && !ALLOW_DEVICE_FALLBACK_IN_PHONICS) {
-          const phonicsErr = new Error('PHONICS_REQUIRES_AZURE');
-          reportTTSError(phonicsErr);
-          telemetryError = phonicsErr;
-          fallbackUsed = 'phonics_blocked';
-        } else {
-          fallbackUsed = 'device';
-          try {
-            reportTTSError(new Error('AZURE_ALL_CHUNKS_FAILED'));
-            await speakWithDeviceTTS(cleanText, language, effectiveOptions);
-            anyChunkSucceeded = true;
-            telemetryError = new Error('AZURE_ALL_CHUNKS_FAILED');
-          } catch (deviceErr) {
-            reportTTSError(deviceErr);
-            telemetryError = deviceErr instanceof Error ? deviceErr : new Error(String(deviceErr));
-          }
-        }
-      }
-
-      if (!anyChunkSucceeded && telemetryError) throw telemetryError;
+      if (!anyChunkSucceeded && lastErr) { telemetryError = lastErr; throw lastErr; }
       if (!policy.isPremiumTier && cloudChunkSucceeded) await consumePremiumVoiceActivity(user?.id);
 
       const successDiagnostics = parseTTSDiagnostics(telemetryError);

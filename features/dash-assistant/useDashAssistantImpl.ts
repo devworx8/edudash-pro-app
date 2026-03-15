@@ -18,18 +18,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
 
 import type { DashMessage, DashConversation, DashAttachment } from '@/services/dash-ai/types';
 import type { IDashAIAssistant } from '@/services/dash-ai/DashAICompat';
-import type { AIModelId, AIModelInfo } from '@/lib/ai/models';
 import type { TutorSession } from '@/hooks/dash-assistant/tutorTypes';
 import type { LearnerContext } from '@/lib/dash-ai/learnerContext';
 import type { VoiceSession, VoiceProvider } from '@/lib/voice/unifiedProvider';
 import type { SpeechChunkProgress } from '@/hooks/dash-assistant/voiceHandlers';
-import type { AttachmentProgress } from '@/hooks/useDashAttachments';
-import type { AIQuotaFeature } from '@/lib/ai/limits';
-import type { DashToolOutcome } from '@/services/tools/types';
+
 import type { VoiceProbeMetrics } from '@/lib/voice/benchmark/types';
 import type { ResponseLifecycleTracker } from '@/hooks/dash-ai/types';
 
@@ -62,12 +58,11 @@ import {
 import {
   handleDashVoiceInputPress, speakDashResponse, stopDashVoiceRecording,
 } from '@/hooks/dash-assistant/voiceHandlers';
-import { shouldAutoSpeak } from '@/features/dash-assistant/voiceAutoSpeakPolicy';
 import {
-  extractFollowUps, wantsLessonGenerator, resolveVoiceLocale, sanitizeTutorUserContent,
+  extractFollowUps, wantsLessonGenerator, resolveVoiceLocale,
 } from '@/hooks/dash-assistant/assistantHelpers';
 import { normalizeMessagesByTurn } from '@/features/dash-assistant/turnOrdering';
-import { formatDashToolActivityLabel, DASH_AI_SERVICE_TYPE, LOCAL_SNAPSHOT_LIMIT, LOCAL_SNAPSHOT_MAX, DUPLICATE_SEND_WINDOW_MS } from '@/hooks/dash-ai/types';
+import { formatDashToolActivityLabel, DASH_AI_SERVICE_TYPE, LOCAL_SNAPSHOT_LIMIT, LOCAL_SNAPSHOT_MAX } from '@/hooks/dash-ai/types';
 import { useDashAIPrefs } from '@/hooks/dash-ai/useDashAIPrefs';
 import { useDashAILearnerContext } from '@/hooks/dash-ai/useDashAILearnerContext';
 import { useDashAISendMessage } from '@/hooks/dash-ai/useDashAISendMessage';
@@ -101,7 +96,7 @@ interface AlertState {
 // ─── Facade Hook ────────────────────────────────────────────
 
 export function useDashAssistant(options: UseDashAssistantOptions) {
-  const { conversationId, initialMessage, handoffSource, onClose, onAutoScanConsumed, externalTutorMode, tutorConfig } = options;
+  const { conversationId, initialMessage, handoffSource, onClose: _onClose, onAutoScanConsumed, externalTutorMode, tutorConfig } = options;
 
   // ── Foundation hooks ──────────────────────────────────
   const { setLayout } = useDashboardPreferences();
@@ -216,7 +211,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
 
   // ── Composed hooks ────────────────────────────────────
   const prefs = useDashAIPrefs(profile?.role);
-  const { learnerContext, setLearnerContext, parentChildren, activeChildId, setActiveChildId } =
+  const { learnerContext, setLearnerContext: _setLearnerContext, parentChildren, activeChildId, setActiveChildId } =
     useDashAILearnerContext({ dashInstance, user, profile, tier, capabilityTier });
 
   useEffect(() => { learnerContextRef.current = learnerContext; }, [learnerContext]);
@@ -292,7 +287,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
         const node = webScrollNodeRef.current;
         if (node && typeof node.scrollTo === 'function') { node.scrollTo({ top: node.scrollHeight, behavior: animated ? 'smooth' : 'auto' }); }
       } else if (flashListRef.current) {
-        try { flashListRef.current.scrollToEnd?.({ animated }); } catch {}
+        try { flashListRef.current.scrollToEnd?.({ animated }); } catch { /* scroll best-effort */ }
       }
       setBottomScrollRequestId(prev => prev + 1);
     };
@@ -361,7 +356,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
   }, [dashInstance, speakingMessageId, isSpeaking, hasTTSAccess, showAlert, hideAlert, prefs.voiceEnabled, stopSpeaking, isFreeTier, consumeVoiceBudget]);
 
   // ── Send message pipeline ─────────────────────────────
-  const { sendMessageInternal, processQueue, requestQueueRef, activeRequestSignatureRef } = useDashAISendMessage({
+  const { sendMessageInternal: _sendMessageInternal, processQueue, requestQueueRef, activeRequestSignatureRef } = useDashAISendMessage({
     dashInstance, messages, conversation, selectedModel, streamingEnabledPref: prefs.streamingEnabledPref,
     user, profile, tier, capabilityTier,
     handoffSource, externalTutorMode, tutorConfig, onAutoScanConsumed, autoScanUserId,
@@ -437,7 +432,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
     setIsLoading(false); setLoadingStatus(null); setStreamingMessageId(null); setStreamingContent('');
   }, []);
 
-  const stopAllActivity = useCallback(async (reason: string = 'user_interrupt') => {
+  const stopAllActivity = useCallback(async (_reason: string = 'user_interrupt') => {
     cancelVoiceAutoSend();
     if (isRecording) await stopVoiceRecording();
     cancelGeneration();
@@ -563,7 +558,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
     const tool = ToolRegistry.getTool(toolName);
     if (!tool) { showAlert({ title: 'Tool Not Found', message: `The tool "${toolName}" is not available right now.`, type: 'warning', icon: 'alert-circle-outline', buttons: [{ text: 'OK', style: 'default' }] }); return; }
     let supabaseClient: any = null;
-    try { supabaseClient = assertSupabase(); } catch {}
+    try { supabaseClient = assertSupabase(); } catch { /* fallback to null */ }
     const context = { profile, user, supabase: supabaseClient, role: String(profile?.role || 'parent').toLowerCase(), tier: tier || 'free', organizationId: (profile as any)?.organization_id || (profile as any)?.preschool_id || null, hasOrganization: Boolean((profile as any)?.organization_id || (profile as any)?.preschool_id), isGuest: !user?.id, trace_id: `dash_assistant_manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, tool_plan: { source: 'useDashAssistant.runTool', tool: toolName } };
     setActiveToolLabel(formatDashToolActivityLabel(toolName, tool.name || toolName));
     beginToolExecution();
@@ -572,7 +567,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
     const toolMessage: DashMessage = { id: `tool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`, type: 'assistant', content, timestamp: Date.now(), metadata: { tool_name: toolName, tool_result: execution, tool_args: params || {}, tool_origin: 'manual_tool', tool_outcome: execution?.success === false ? { status: 'failed', source: 'tool_registry', errorCode: String(execution?.error || 'manual_tool_failed') } : { status: 'success', source: 'tool_registry' } } };
     setMessages(prev => [...prev, toolMessage]);
     const convId = dashInstance?.getCurrentConversationId?.();
-    if (dashInstance && convId) { try { await dashInstance.addMessageToConversation(convId, toolMessage); } catch {} }
+    if (dashInstance && convId) { try { await dashInstance.addMessageToConversation(convId, toolMessage); } catch { /* best-effort persist */ } }
   }, [dashInstance, profile, user, showAlert, tier, beginToolExecution, endToolExecution]);
 
   // ── Initialization ────────────────────────────────────

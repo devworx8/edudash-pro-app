@@ -14,9 +14,13 @@ export type RichSegment =
 
 const normalizeMathDelimiters = (raw: string): string => {
   return String(raw || '')
-    .replace(/\\\\(\[|\]|\(|\)|\$)/g, '\\$1')
+    // Collapse double-escaped delimiters (\\[ → \[) so next regexes can match
+    .replace(/\\\\(\[|\]|\(|\))/g, '\\$1')
+    // Display math: \[...\] → $$...$$
     .replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (_match, expr: string) => `$$${expr}$$`)
+    // Inline math: \(...\) → $...$
     .replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (_match, expr: string) => `$${expr}$`)
+    // Escaped dollar pairs: \$...\$ → $...$
     .replace(/\\\$\s*([^$\n]+?)\s*\\\$/g, (_match, expr: string) => `$${expr}$`);
 };
 
@@ -74,7 +78,7 @@ export const parseRichSegments = (content: string): RichSegment[] => {
     type: 'math',
     content: value,
   }));
-  const withInlineMath = splitByPattern(withMath, /(?<!\$)\$(?!\$)([^\$\n]+?)(?<!\$)\$(?!\$)/g, (value) => ({
+  const withInlineMath = splitByPattern(withMath, /(?<!\$)\$(?!\$)((?:[^$\\]|\\.)+?)\$(?!\$)/g, (value) => ({
     type: 'inlineMath',
     content: value,
   }));

@@ -130,7 +130,7 @@ export function useOrbChatPersistence(
   // ---------- Clear chat ----------
   const clearChat = useCallback(async () => {
     if (AsyncStorage) {
-      try { await AsyncStorage.removeItem(chatStorageKey); } catch {}
+      try { await AsyncStorage.removeItem(chatStorageKey); } catch { /* best-effort */ }
     }
   }, [chatStorageKey]);
 

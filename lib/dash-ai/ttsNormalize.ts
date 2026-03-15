@@ -292,9 +292,10 @@ function normalizeMathExpressions(text: string, phonicsMode: boolean): string {
     // Subtraction "-" tightly bound between digits → "minus"
     // Covers "9-1" but NOT "2024 - 2025" (year ranges with spaces stay as-is for TTS)
     .replace(/(\d)-(\d)/g, '$1 minus $2')
-    // Decimal numbers: "1.3534" → "1 point 3534" (≥2 decimal digits, avoids list-item markers)
-    // Single decimal digits like "3.5" are generally handled correctly by TTS — skip those
-    .replace(/\b(\d+)\.(\d{2,})\b/g, '$1 point $2')
+    // Decimal numbers: "0.5" → "0 point 5", "1.3534" → "1 point 3534"
+    // Must convert ALL decimals so TTS doesn't confuse the period with a sentence end
+    // (e.g. "0.5\n2." would otherwise read as "zero dot five period two")
+    .replace(/\b(\d+)\.(\d+)\b/g, '$1 point $2')
     // Multiplication: × and * between digits
     .replace(/(\d)\s*[×*]\s*(\d)/g, '$1 times $2')
     // Division: ÷ between digits
@@ -345,20 +346,28 @@ function stripMarkdownAndMeta(text: string, preservePhonicsMarkers: boolean): st
   next = next
     .replace(/```[\s\S]*?```/g, '')
     .replace(/`[^`]+`/g, '')
+    // Strikethrough: ~~text~~ → text
+    .replace(/~~([^~]+)~~/g, '$1')
     // Bold+italic (***text***) — must precede bold/italic
     .replace(/\*{3}([\s\S]*?)\*{3}/g, '$1')
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/__([^_]+)__/g, '$1')
     .replace(/_([^_]+)_/g, '$1')
+    // Answer blanks (_____ or more) → "blank"
+    .replace(/_{3,}/g, 'blank')
     // Headers — \s* (not \s+) so ##Heading without space is also stripped
     .replace(/^#{1,6}\s*/gm, '')
+    // Horizontal rules (---, ***, ___)
+    .replace(/^[-*_]{3,}$/gm, '')
     .replace(/^\s*[-*+\u2022\u25e6\u25aa\u00b7]\s*/gm, '')
     // Convert "1. text" → "Item 1. text" so TTS clearly announces each list item
     // instead of blending the number into the previous item's trailing value.
     .replace(/^\s*(\d+)[.)]\s*/gm, 'Item $1. ')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
     .replace(/^>\s*/gm, '')
+    // Strip simple HTML tags (e.g. <b>, </div>, <br/>) but keep inner text
+    .replace(/<[^>]+>/g, '')
     // Catch-all: strip remaining consecutive asterisks (unclosed/malformed bold markers)
     .replace(/\*{2,}/g, '');
 

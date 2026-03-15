@@ -8,7 +8,7 @@ import {
   normalizeTierName,
 } from '@/lib/tiers'
 
-export type AIQuotaFeature = 'lesson_generation' | 'grading_assistance' | 'homework_help' | 'transcription'
+export type AIQuotaFeature = 'lesson_generation' | 'grading_assistance' | 'homework_help' | 'transcription' | 'chat_message'
 
 /**
  * Tier type for quota enforcement.

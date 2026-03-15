@@ -179,7 +179,7 @@ export function DashVoiceOrbSection({
         )}
       </View>
 
-      {/* Mic mute toggle — prevents background conversations from triggering Dash. Does NOT stop TTS. */}
+      {/* Single mic button: reflects mute + listening state. Tap = unmute or toggle listening. Long press = toggle mute. */}
       {(showFreeOrb || showStarterOrb || showPremiumOrb) && VoiceOrb && (
         <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 12 }}>
           <TouchableOpacity

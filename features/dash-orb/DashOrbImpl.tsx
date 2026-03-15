@@ -954,7 +954,7 @@ export default function DashOrb({
         console.log('[DashOrb] Barge-in: cancelling stream');
         cancelStream?.();
       }
-    } catch {}
+    } catch { /* barge-in best-effort */ }
 
     setIsExpanded(true);
 
@@ -1109,20 +1109,20 @@ export default function DashOrb({
 
     try {
       cancelStream?.();
-    } catch {}
+    } catch { /* best-effort */ }
     try {
       if (onDeviceVoice.isListening) {
         await onDeviceVoice.stopListening();
       }
-    } catch {}
+    } catch { /* best-effort */ }
     try {
       if (voiceRecorderState?.isRecording) {
         await voiceRecorderActions?.stopRecording();
       }
-    } catch {}
+    } catch { /* best-effort */ }
     try {
       await Promise.resolve(stopSpeaking());
-    } catch {}
+    } catch { /* best-effort */ }
 
     setIsListeningForCommand(false);
     setIsProcessing(false);
@@ -1150,6 +1150,7 @@ export default function DashOrb({
     if (!whisperModeEnabled) return;
     if (!shouldRestartListeningRef.current) return;
     if (isProcessing || isSpeaking || isListeningForCommand) return;
+    if (isSpeakingSentenceRef.current) return;
 
     const timer = setTimeout(() => {
       if (!whisperModeEnabledRef.current) return;
@@ -1750,7 +1751,7 @@ export default function DashOrb({
     let supabaseClient: any = null;
     try {
       supabaseClient = assertSupabase();
-    } catch {}
+    } catch { /* fallback to null */ }
 
     const traceId = `dash_orb_manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const context = {
@@ -2578,7 +2579,7 @@ export default function DashOrb({
           setIsEditing(false);
           setEditingMessageId(null);
           if (AsyncStorage) {
-            try { await AsyncStorage.removeItem(chatStorageKey); } catch {}
+      try { await AsyncStorage.removeItem(chatStorageKey); } catch { /* best-effort */ }
           }
         }}
         onExportChat={async () => {
