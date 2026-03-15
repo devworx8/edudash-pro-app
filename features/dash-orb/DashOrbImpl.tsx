@@ -1150,6 +1150,7 @@ export default function DashOrb({
     if (!whisperModeEnabled) return;
     if (!shouldRestartListeningRef.current) return;
     if (isProcessing || isSpeaking || isListeningForCommand) return;
+    if (isSpeakingSentenceRef.current) return;
 
     const timer = setTimeout(() => {
       if (!whisperModeEnabledRef.current) return;

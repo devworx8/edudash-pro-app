@@ -434,6 +434,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
                 borderColor: theme.border,
               }}
             >
+              {/* eslint-disable-next-line i18next/no-literal-string */}
               <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
                 Having trouble connecting. Try sending a message and I&apos;ll do my best to help.
               </Text>

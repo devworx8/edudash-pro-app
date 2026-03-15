@@ -28,8 +28,7 @@ export const ALLOW_DEVICE_FALLBACK_IN_PHONICS =
   process.env.EXPO_PUBLIC_ALLOW_DEVICE_FALLBACK_IN_PHONICS === 'true';
 export const TTS_FAST_START_FIRST_CHUNK_MAX_CHARS = 150;
 export const TTS_FAST_START_FIRST_CHUNK_MAX_SENTENCES = 1;
-// Raised from 5000 → 9000 to accommodate Azure TTS responses that take 6-8s.
-// Prevents every chunk from timing out and retrying, which was causing 100s+ pauses.
+// Raised to 9000 to accommodate Azure TTS responses that take 6-8s.
 export const TTS_PROXY_TIMEOUT_DEFAULT_MS = 9000;
 export const TTS_PREFETCH_ENABLED = true;
 export const TTS_PARALLEL_PREFETCH_THRESHOLD_MS = 0;
@@ -247,6 +246,12 @@ export const splitIntoChunks = (text: string, maxLength: number): string[] => {
     const char = text[i];
     buffer += char;
     if ((char === '.' || char === '!' || char === '?') && buffer.trim()) {
+      // Don't split on "." when it's a list marker like "Item 1. ..." or
+      // a decimal remnant like "1. 5" — peek ahead for a digit or "Item"
+      if (char === '.') {
+        const rest = text.slice(i + 1);
+        if (/^\s*\d/.test(rest) || /^\s*Item\b/i.test(rest)) continue;
+      }
       sentences.push(buffer.trim());
       buffer = '';
     }

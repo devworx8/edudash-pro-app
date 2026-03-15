@@ -1,17 +1,24 @@
 /**
- * CosmicOrb - Stunning Cosmic Nebula Animation
- * 
- * Inspired by the reference image with:
- * - Concentric ripple rings
- * - Particle starfield
+ * CosmicOrb - Premium Cosmic Nebula Animation
+ *
+ * Premium design inspired by the reference images:
+ * - Concentric ripple rings with glow effects
+ * - Particle starfield with sparkles
  * - Aurora light bands
  * - Smooth pulsing glow
  * - Dynamic colors (purple, teal, gold)
  */
 
-import React, { useEffect, useRef } from 'react';
-import { View, Animated, Easing, StyleSheet } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Animated, StyleSheet, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { PREMIUM_COLORS } from '@/lib/theme/premiumDashTheme';
+import { useCosmicOrbAnimation } from './useCosmicOrbAnimation';
+import { generateParticles, type Particle } from './particleUtils';
+
+// =============================================================================
+// Types
+// =============================================================================
 
 interface CosmicOrbProps {
   size: number;
@@ -19,265 +26,192 @@ interface CosmicOrbProps {
   isSpeaking: boolean;
 }
 
+// =============================================================================
+// CosmicOrb Component
+// =============================================================================
+
 export const CosmicOrb: React.FC<CosmicOrbProps> = ({ size, isProcessing, isSpeaking }) => {
-  // Animations
-  const ring1Scale = useRef(new Animated.Value(1)).current;
-  const ring2Scale = useRef(new Animated.Value(1)).current;
-  const ring3Scale = useRef(new Animated.Value(1)).current;
-  const ring1Opacity = useRef(new Animated.Value(0.8)).current;
-  const ring2Opacity = useRef(new Animated.Value(0.6)).current;
-  const ring3Opacity = useRef(new Animated.Value(0.4)).current;
-  const coreGlow = useRef(new Animated.Value(1)).current;
-  const rotation = useRef(new Animated.Value(0)).current;
-  const sparkleOpacity = useRef(new Animated.Value(0)).current;
+  const animations = useCosmicOrbAnimation({ isProcessing, isSpeaking });
+  const particles = useMemo(() => generateParticles(size), [size]);
 
-  // Create ripple effect
-  useEffect(() => {
-    const createRipple = (scaleAnim: Animated.Value, opacityAnim: Animated.Value, delay: number) => {
-      return Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.parallel([
-            Animated.timing(scaleAnim, {
-              toValue: 1.4,
-              duration: 3000,
-              easing: Easing.out(Easing.ease),
-              useNativeDriver: true,
-            }),
-            Animated.timing(opacityAnim, {
-              toValue: 0,
-              duration: 3000,
-              easing: Easing.out(Easing.ease),
-              useNativeDriver: true,
-            }),
-          ]),
-          Animated.timing(scaleAnim, {
-            toValue: 1,
-            duration: 0,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacityAnim, {
-            toValue: 0.8,
-            duration: 0,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-    };
-
-    const ripple1 = createRipple(ring1Scale, ring1Opacity, 0);
-    const ripple2 = createRipple(ring2Scale, ring2Opacity, 1000);
-    const ripple3 = createRipple(ring3Scale, ring3Opacity, 2000);
-
-    ripple1.start();
-    ripple2.start();
-    ripple3.start();
-
-    return () => {
-      ripple1.stop();
-      ripple2.stop();
-      ripple3.stop();
-    };
-  }, []);
-
-  // Core glow pulse
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(coreGlow, {
-          toValue: 1.2,
-          duration: 1500,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(coreGlow, {
-          toValue: 1,
-          duration: 1500,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, []);
-
-  // Rotation when processing
-  useEffect(() => {
-    if (isProcessing || isSpeaking) {
-      const rotate = Animated.loop(
-        Animated.timing(rotation, {
-          toValue: 1,
-          duration: 4000,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        })
-      );
-      rotate.start();
-      return () => rotate.stop();
-    } else {
-      rotation.setValue(0);
-    }
-  }, [isProcessing, isSpeaking]);
-
-  // Sparkle animation
-  useEffect(() => {
-    const sparkle = Animated.loop(
-      Animated.sequence([
-        Animated.timing(sparkleOpacity, {
-          toValue: 1,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-        Animated.timing(sparkleOpacity, {
-          toValue: 0.3,
-          duration: 800,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    sparkle.start();
-    return () => sparkle.stop();
-  }, []);
-
-  const rotateInterpolate = rotation.interpolate({
+  const rotateInterpolate = animations.rotation.interpolate({
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
 
   const radius = size / 2;
-  const ringDiameter = size * 0.7;
+  const ringDiameter = size * 0.75;
   const ringOffset = (size - ringDiameter) / 2;
+  const coreSize = size * 0.4;
 
   return (
-    <View style={{ width: size, height: size }}>
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Outer glow effect */}
+      <Animated.View
+        style={{
+          position: 'absolute',
+          width: size * 1.8,
+          height: size * 1.8,
+          borderRadius: size * 0.9,
+          backgroundColor: PREMIUM_COLORS.primaryGlow,
+          opacity: animations.coreGlow.interpolate({
+            inputRange: [1, 1.15],
+            outputRange: [0.3, 0.5],
+          }),
+          transform: [{ scale: animations.coreGlow }],
+        }}
+      />
+
       {/* Background starfield */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]}>
-        {[...Array(20)].map((_, i) => (
+        {particles.map((particle, i) => (
           <Animated.View
             key={i}
             style={{
               position: 'absolute',
-              width: 2,
-              height: 2,
-              borderRadius: 1,
-              backgroundColor: i % 3 === 0 ? '#fbbf24' : '#a78bfa',
-              left: `${(i * 17) % 100}%`,
-              top: `${(i * 13) % 100}%`,
-              opacity: sparkleOpacity,
+              width: particle.size,
+              height: particle.size,
+              borderRadius: particle.size / 2,
+              backgroundColor: particle.color,
+              left: particle.x - particle.size / 2,
+              top: particle.y - particle.size / 2,
+              opacity: animations.sparkleOpacity,
+              transform: [
+                {
+                  scale: animations.sparkleOpacity.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.5, 1.2],
+                  }),
+                },
+              ],
             }}
           />
         ))}
       </View>
 
-      {/* Ripple rings (web-safe, avoids SVG transform-origin warnings) */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: ringDiameter,
-          height: ringDiameter,
-          top: ringOffset,
-          left: ringOffset,
-          borderRadius: ringDiameter / 2,
-          borderWidth: 2,
-          borderColor: '#8b5cf6',
-          opacity: ring1Opacity,
-          transform: [{ scale: ring1Scale }],
-        }}
+      {/* Ripple rings */}
+      <Ring
+        diameter={ringDiameter}
+        offset={ringOffset}
+        color={PREMIUM_COLORS.orbRing3}
+        scale={animations.ring3Scale}
+        opacity={animations.ring3Opacity}
       />
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: ringDiameter,
-          height: ringDiameter,
-          top: ringOffset,
-          left: ringOffset,
-          borderRadius: ringDiameter / 2,
-          borderWidth: 2,
-          borderColor: '#06b6d4',
-          opacity: ring2Opacity,
-          transform: [{ scale: ring2Scale }],
-        }}
+      <Ring
+        diameter={ringDiameter}
+        offset={ringOffset}
+        color={PREMIUM_COLORS.orbRing2}
+        scale={animations.ring2Scale}
+        opacity={animations.ring2Opacity}
       />
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: ringDiameter,
-          height: ringDiameter,
-          top: ringOffset,
-          left: ringOffset,
-          borderRadius: ringDiameter / 2,
-          borderWidth: 2,
-          borderColor: '#fbbf24',
-          opacity: ring3Opacity,
-          transform: [{ scale: ring3Scale }],
-        }}
+      <Ring
+        diameter={ringDiameter}
+        offset={ringOffset}
+        color={PREMIUM_COLORS.orbRing1}
+        scale={animations.ring1Scale}
+        opacity={animations.ring1Opacity}
       />
 
-      {/* Rotating aurora bands */}
+      {/* Core orb with gradient */}
       <Animated.View
         style={{
-          position: 'absolute',
-          width: size,
-          height: size,
-          transform: [{ rotate: rotateInterpolate }],
+          transform: [{ rotate: rotateInterpolate }, { scale: animations.pulseScale }],
         }}
       >
         <LinearGradient
-          colors={['#8b5cf6', 'transparent', '#06b6d4', 'transparent', '#fbbf24', 'transparent']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          colors={[PREMIUM_COLORS.primaryLight, PREMIUM_COLORS.primary, PREMIUM_COLORS.primaryDark]}
+          start={{ x: 0.3, y: 0.3 }}
+          end={{ x: 0.7, y: 0.7 }}
           style={{
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            opacity: 0.3,
+            width: coreSize,
+            height: coreSize,
+            borderRadius: coreSize / 2,
+            alignItems: 'center',
+            justifyContent: 'center',
+            ...Platform.select({
+              ios: {
+                shadowColor: PREMIUM_COLORS.primary,
+                shadowOffset: { width: 0, height: 0 },
+                shadowOpacity: 0.8,
+                shadowRadius: 20,
+              },
+              android: { elevation: 8 },
+            }),
           }}
-        />
+        >
+          {/* Inner highlight */}
+          <View
+            style={{
+              width: coreSize * 0.5,
+              height: coreSize * 0.5,
+              borderRadius: coreSize * 0.25,
+              backgroundColor: 'rgba(255,255,255,0.2)',
+              position: 'absolute',
+              top: coreSize * 0.15,
+              left: coreSize * 0.15,
+            }}
+          />
+        </LinearGradient>
       </Animated.View>
 
-      {/* Core orb with glow */}
-      <Animated.View
-        style={{
-          position: 'absolute',
-          width: radius,
-          height: radius,
-          top: radius / 2,
-          left: radius / 2,
-          borderRadius: radius / 2,
-          transform: [{ scale: coreGlow }],
-        }}
-      >
-        <LinearGradient
-          colors={['#a78bfa', '#8b5cf6', '#6366f1', '#4f46e5']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+      {/* Speaking indicator pulse */}
+      {isSpeaking && (
+        <Animated.View
           style={{
-            width: radius,
-            height: radius,
-            borderRadius: radius / 2,
-            shadowColor: '#8b5cf6',
-            shadowOffset: { width: 0, height: 0 },
-            shadowOpacity: 0.8,
-            shadowRadius: 20,
-            elevation: 10,
+            position: 'absolute',
+            width: coreSize * 1.3,
+            height: coreSize * 1.3,
+            borderRadius: coreSize * 0.65,
+            borderWidth: 2,
+            borderColor: PREMIUM_COLORS.tertiary,
+            opacity: animations.pulseScale.interpolate({
+              inputRange: [1, 1.08],
+              outputRange: [0.8, 0.2],
+            }),
+            transform: [{ scale: animations.pulseScale }],
           }}
         />
-      </Animated.View>
-
-      {/* Inner core highlight */}
-      <View
-        style={{
-          position: 'absolute',
-          width: radius * 0.4,
-          height: radius * 0.4,
-          top: radius * 0.8,
-          left: radius * 0.8,
-          borderRadius: (radius * 0.4) / 2,
-          backgroundColor: '#fff',
-          opacity: 0.4,
-        }}
-      />
+      )}
     </View>
   );
 };
+
+// =============================================================================
+// Ring Sub-Component
+// =============================================================================
+
+interface RingProps {
+  diameter: number;
+  offset: number;
+  color: string;
+  scale: Animated.Value;
+  opacity: Animated.Value;
+}
+
+const Ring: React.FC<RingProps> = ({ diameter, offset, color, scale, opacity }) => (
+  <Animated.View
+    style={{
+      position: 'absolute',
+      width: diameter,
+      height: diameter,
+      top: offset,
+      left: offset,
+      borderRadius: diameter / 2,
+      borderWidth: 2,
+      borderColor: color,
+      opacity,
+      transform: [{ scale }],
+      ...Platform.select({
+        ios: {
+          shadowColor: color,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.6,
+          shadowRadius: 10,
+        },
+        android: { elevation: 4 },
+      }),
+    }}
+  />
+);
+
+export default CosmicOrb;

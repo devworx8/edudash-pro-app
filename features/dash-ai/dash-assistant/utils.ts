@@ -1,4 +1,4 @@
-export const COMPOSER_FLOAT_GAP = 0;
+export const COMPOSER_FLOAT_GAP = 6;
 export const COMPOSER_OVERLAY_MIN_HEIGHT = 64;
 export const COMPOSER_ANDROID_NAV_LIFT = 14;
 
