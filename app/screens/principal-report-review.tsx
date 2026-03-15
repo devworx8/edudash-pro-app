@@ -91,6 +91,7 @@ export default function PrincipalReportReviewScreen() {
             <ReportApprovalCard report={item} onPress={() => review.handleReportPress(item)} />
           )}
           keyExtractor={(item) => item.id}
+          estimatedItemSize={120}
           contentContainerStyle={styles.listContent}
           onRefresh={review.refetch}
           refreshing={review.isLoading}

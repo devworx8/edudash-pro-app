@@ -215,6 +215,7 @@ export default function PrincipalRegistrationsScreen() {
           data={filteredRegistrations}
           renderItem={renderRegistration}
           keyExtractor={(item) => item.id}
+          estimatedItemSize={100}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl

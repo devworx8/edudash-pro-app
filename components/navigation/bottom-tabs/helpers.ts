@@ -170,5 +170,7 @@ export function getBottomTabVariant(
     navInactiveColor: isNextGenNav ? 'rgba(231, 238, 255, 0.74)' : 'rgba(214, 223, 255, 0.68)',
     centerOrbBackground: 'rgba(9, 12, 26, 0.98)',
     dockGlowColors: ['rgba(24, 212, 255, 0.08)', 'rgba(139, 92, 246, 0.06)', 'rgba(252, 211, 77, 0.03)'],
+    // Hide background overlay for K-12 parent dashboard to inherit dashboard background
+    showBackgroundOverlay: !isK12ParentNextGenNav,
   };
 }
