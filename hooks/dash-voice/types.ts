@@ -50,6 +50,7 @@ export interface UseDashVoiceSendMessageParams {
   streamingTTSEnabled?: boolean;
   enqueueSpeech: (text: string) => void;
   maybeEnqueueStreamingSpeech?: (text: string) => void;
+  flushStreamingSpeechFinal?: (text: string) => void;
   resetStreamingSpeech?: () => void;
   longestCommonPrefixLen?: (left: string, right: string) => number;
   logDashTrace: (event: string, payload?: Record<string, unknown>) => void;

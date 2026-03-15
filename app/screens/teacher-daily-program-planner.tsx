@@ -1,5 +1,14 @@
 import React, { useMemo, useState, useCallback, useEffect, useRef } from 'react';
-import { Modal, View, Text, ScrollView, TouchableOpacity, StyleSheet, useWindowDimensions, ActivityIndicator } from 'react-native';
+import {
+  Modal,
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  useWindowDimensions,
+  ActivityIndicator,
+} from 'react-native';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
@@ -8,12 +17,18 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTeacherDashboard } from '@/hooks/useDashboardData';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
-import { buildReminderEventsFromBlocks, useNextActivityReminder } from '@/hooks/useNextActivityReminder';
+import {
+  buildReminderEventsFromBlocks,
+  useNextActivityReminder,
+} from '@/hooks/useNextActivityReminder';
 import { resolveSchoolTypeFromProfile } from '@/lib/schoolTypeResolver';
 import { assertSupabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/ToastProvider';
 import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
-import { invokeAIGatewayWithRetry, formatAIGatewayErrorMessage } from '@/lib/ai-gateway/invokeWithRetry';
+import {
+  invokeAIGatewayWithRetry,
+  formatAIGatewayErrorMessage,
+} from '@/lib/ai-gateway/invokeWithRetry';
 import { LessonGeneratorService } from '@/lib/ai/lessonGenerator';
 import { incrementUsage, logUsageEvent } from '@/lib/ai/usage';
 import { getRoutineBlockTypePresentation } from '@/lib/routines/blockTypePresentation';
@@ -92,19 +107,24 @@ const formatDate = (value?: string | null) => {
 
 const buildRoutineContext = (routine: {
   title?: string | null;
-  blocks: Array<{ title: string; blockType: string; startTime?: string | null; endTime?: string | null }>;
+  blocks: Array<{
+    title: string;
+    blockType: string;
+    startTime?: string | null;
+    endTime?: string | null;
+  }>;
 }) => {
   const topBlocks = (routine.blocks || []).slice(0, 8);
   const lines = topBlocks.map((block) => {
-    const timeLabel = block.startTime && block.endTime
-      ? `${block.startTime}-${block.endTime}`
-      : block.startTime || 'TBD';
+    const timeLabel =
+      block.startTime && block.endTime
+        ? `${block.startTime}-${block.endTime}`
+        : block.startTime || 'TBD';
     return `${timeLabel} [${block.blockType}] ${block.title}`;
   });
-  return [
-    `Weekly routine context: ${String(routine.title || 'Published routine')}`,
-    ...lines,
-  ].join('\n');
+  return [`Weekly routine context: ${String(routine.title || 'Published routine')}`, ...lines].join(
+    '\n',
+  );
 };
 
 type WeekBlockRow = {
@@ -118,9 +138,12 @@ type WeekBlockRow = {
 function inferSubjectFromContext(value: string): string {
   const source = value.toLowerCase();
   if (/(afrikaans|afrikaans huistaal|eerste addisionele taal)/.test(source)) return 'Afrikaans';
-  if (/(english|language arts|grammar|reading|writing|comprehension)/.test(source)) return 'English';
-  if (/(math|mathematics|numeracy|algebra|fractions|geometry|division|multiplication)/.test(source)) return 'Mathematics';
-  if (/(science|natural science|life science|physics|chemistry)/.test(source)) return 'Natural Sciences';
+  if (/(english|language arts|grammar|reading|writing|comprehension)/.test(source))
+    return 'English';
+  if (/(math|mathematics|numeracy|algebra|fractions|geometry|division|multiplication)/.test(source))
+    return 'Mathematics';
+  if (/(science|natural science|life science|physics|chemistry)/.test(source))
+    return 'Natural Sciences';
   if (/(social science|history|geography|ems|economics)/.test(source)) return 'Social Sciences';
   if (/(technology|robotics|coding|computer|ict|digital)/.test(source)) return 'Technology';
   if (/(life orientation|wellness|health|sport)/.test(source)) return 'Life Orientation';
@@ -215,7 +238,11 @@ export default function TeacherDailyProgramPlannerScreen() {
   }, [routineOptions]);
   const routine = useMemo(() => {
     if (!selectedRoutineKey) return data?.todayRoutine || null;
-    return routineOptions.find((option) => option.key === selectedRoutineKey)?.routine || data?.todayRoutine || null;
+    return (
+      routineOptions.find((option) => option.key === selectedRoutineKey)?.routine ||
+      data?.todayRoutine ||
+      null
+    );
   }, [data?.todayRoutine, routineOptions, selectedRoutineKey]);
   const routineScopeLabel = useMemo(() => {
     if (!routine) return '';
@@ -231,15 +258,27 @@ export default function TeacherDailyProgramPlannerScreen() {
   const isCompact = width < 760;
   const todayDayOfWeek = useMemo(() => toWeekdayMondayFirst(new Date()), []);
   const [selectedDay, setSelectedDay] = useState<number>(todayDayOfWeek);
-  const [weekBlocks, setWeekBlocks] = useState<Record<number, Array<{ id: string; title: string; blockType: string; startTime: string | null; endTime: string | null }>>>({});
+  const [weekBlocks, setWeekBlocks] = useState<
+    Record<
+      number,
+      Array<{
+        id: string;
+        title: string;
+        blockType: string;
+        startTime: string | null;
+        endTime: string | null;
+      }>
+    >
+  >({});
   const [loadingWeekBlocks, setLoadingWeekBlocks] = useState(false);
   const lastFetchedProgramId = useRef<string | null>(null);
   const [reminderSoundEnabled, setReminderSoundEnabled] = useState(true);
   const [weeklyGenerationPending, setWeeklyGenerationPending] = useState(false);
   const resolvedSchoolType = useMemo(() => resolveSchoolTypeFromProfile(profile), [profile]);
-  const alignedLessonRoute = resolvedSchoolType === 'k12_school'
-    ? '/screens/ai-lesson-generator'
-    : '/screens/preschool-lesson-generator';
+  const alignedLessonRoute =
+    resolvedSchoolType === 'k12_school'
+      ? '/screens/ai-lesson-generator'
+      : '/screens/preschool-lesson-generator';
 
   const alignedLessonParams = useMemo(() => {
     const routineTopic = routine?.nextBlockTitle || routine?.title || 'Today routine focus';
@@ -280,7 +319,16 @@ export default function TeacherDailyProgramPlannerScreen() {
           .order('block_order', { ascending: true });
         if (!active) return;
         lastFetchedProgramId.current = programId;
-        const grouped: Record<number, Array<{ id: string; title: string; blockType: string; startTime: string | null; endTime: string | null }>> = {};
+        const grouped: Record<
+          number,
+          Array<{
+            id: string;
+            title: string;
+            blockType: string;
+            startTime: string | null;
+            endTime: string | null;
+          }>
+        > = {};
         for (const row of (rows || []) as Array<Record<string, unknown>>) {
           const day = Number(row.day_of_week || 0);
           if (day < 1 || day > 5) continue;
@@ -299,14 +347,16 @@ export default function TeacherDailyProgramPlannerScreen() {
       }
     };
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [routine?.weeklyProgramId]);
 
   const blocksForSelectedDay = useMemo(() => {
     if (selectedDay === todayDayOfWeek && routine?.blocks?.length) {
       return routine.blocks;
     }
-    return (weekBlocks[selectedDay] || []);
+    return weekBlocks[selectedDay] || [];
   }, [selectedDay, todayDayOfWeek, routine?.blocks, weekBlocks]);
 
   const dayBlockCounts = useMemo(() => {
@@ -405,7 +455,7 @@ export default function TeacherDailyProgramPlannerScreen() {
 
       const gate = await canUseFeature('lesson_generation', activeWeekdays.length);
       if (!gate.allowed) {
-        const status = gate.status || await getQuotaStatus('lesson_generation');
+        const status = gate.status || (await getQuotaStatus('lesson_generation'));
         showAlert({
           title: 'Monthly limit reached',
           message: `You need ${activeWeekdays.length} generations, but only ${status.remaining} are available.`,
@@ -415,10 +465,7 @@ export default function TeacherDailyProgramPlannerScreen() {
       }
 
       let categoryId: string | null = null;
-      const { data: categoryRows } = await supabase
-        .from('lesson_categories')
-        .select('id')
-        .limit(1);
+      const { data: categoryRows } = await supabase.from('lesson_categories').select('id').limit(1);
       if (categoryRows?.[0]?.id) {
         categoryId = categoryRows[0].id;
       } else {
@@ -459,7 +506,9 @@ export default function TeacherDailyProgramPlannerScreen() {
       const warnings: string[] = [];
 
       for (const dayOfWeek of WEEKDAYS_MONDAY_TO_FRIDAY) {
-        const dayBlocks = normalizedBlocks.filter((block) => Number(block.day_of_week || 0) === dayOfWeek);
+        const dayBlocks = normalizedBlocks.filter(
+          (block) => Number(block.day_of_week || 0) === dayOfWeek,
+        );
         if (dayBlocks.length === 0) {
           skipped += 1;
           continue;
@@ -519,7 +568,9 @@ export default function TeacherDailyProgramPlannerScreen() {
 
         if (error) {
           failed += 1;
-          warnings.push(`${weekdayLabel}: ${formatAIGatewayErrorMessage(error, 'Generation failed')}`);
+          warnings.push(
+            `${weekdayLabel}: ${formatAIGatewayErrorMessage(error, 'Generation failed')}`,
+          );
           continue;
         }
 
@@ -606,17 +657,40 @@ export default function TeacherDailyProgramPlannerScreen() {
 
       {overlay ? (
         <Modal visible={true} transparent animationType="fade" onRequestClose={dismissOverlay}>
-          <TouchableOpacity style={styles.reminderOverlayBackdrop} activeOpacity={1} onPress={dismissOverlay}>
-            <View style={[styles.reminderOverlayContent, isCompact && styles.reminderOverlayContentCompact, { backgroundColor: theme.surface, borderColor: theme.primary }]}>
-              <Text style={[styles.reminderOverlayLabel, { color: theme.textSecondary }]}>Reminder</Text>
-              <Text style={[styles.reminderOverlayMinutes, { color: theme.text }]}>{overlay.threshold} min</Text>
-              <Text style={[styles.reminderOverlayTitle, { color: theme.text }]}>{overlay.title}</Text>
-              <Text style={[styles.reminderOverlayHint, { color: theme.textSecondary }]}>Prepare transition now.</Text>
+          <TouchableOpacity
+            style={styles.reminderOverlayBackdrop}
+            activeOpacity={1}
+            onPress={dismissOverlay}
+          >
+            <View
+              style={[
+                styles.reminderOverlayContent,
+                isCompact && styles.reminderOverlayContentCompact,
+                { backgroundColor: theme.surface, borderColor: theme.primary },
+              ]}
+            >
+              <Text style={[styles.reminderOverlayLabel, { color: theme.textSecondary }]}>
+                Reminder
+              </Text>
+              <Text style={[styles.reminderOverlayMinutes, { color: theme.text }]}>
+                {overlay.threshold} min
+              </Text>
+              <Text style={[styles.reminderOverlayTitle, { color: theme.text }]}>
+                {overlay.title}
+              </Text>
+              <Text style={[styles.reminderOverlayHint, { color: theme.textSecondary }]}>
+                Prepare transition now.
+              </Text>
               <TouchableOpacity
-                style={[styles.reminderOverlayButton, { borderColor: theme.primary, backgroundColor: `${theme.primary}22` }]}
+                style={[
+                  styles.reminderOverlayButton,
+                  { borderColor: theme.primary, backgroundColor: `${theme.primary}22` },
+                ]}
                 onPress={dismissOverlay}
               >
-                <Text style={[styles.reminderOverlayButtonText, { color: theme.primary }]}>Dismiss</Text>
+                <Text style={[styles.reminderOverlayButtonText, { color: theme.primary }]}>
+                  Dismiss
+                </Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -630,7 +704,9 @@ export default function TeacherDailyProgramPlannerScreen() {
           </TouchableOpacity>
           <View style={styles.headerTextWrap}>
             <Text style={styles.headerTitle}>Daily Routine</Text>
-            <Text style={styles.headerSubtitle}>Teacher view only: routine is managed by principal/admin.</Text>
+            <Text style={styles.headerSubtitle}>
+              Teacher view only: routine is managed by principal/admin.
+            </Text>
           </View>
         </View>
       </View>
@@ -641,214 +717,288 @@ export default function TeacherDailyProgramPlannerScreen() {
           <Text style={styles.loadingText}>Loading today's routine...</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.pageShell}>
-          {routine ? (
-            <>
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>{routine.title || 'Published school routine'}</Text>
-                {isRoutineFromPastWeek && (
-                  <View style={styles.pastWeekBanner}>
-                    <Ionicons name="time-outline" size={14} color={theme.warning || '#f59e0b'} />
-                    <Text style={styles.pastWeekBannerText}>
-                      Showing last published routine — no routine published for this week yet.
-                    </Text>
-                  </View>
-                )}
-                <Text style={styles.cardMeta}>
-                  {formatDate(routine.weekStartDate)} - {formatDate(routine.weekEndDate)} • {routineScopeLabel} • {routine.blockCount} blocks
-                </Text>
-                {routineOptions.length > 1 ? (
-                  <View style={styles.routineSwitchRow}>
-                    {routineOptions.map((option) => {
-                      const isActive = option.key === selectedRoutineKey;
+            {routine ? (
+              <>
+                <View style={styles.card}>
+                  <Text style={styles.cardTitle}>
+                    {routine.title || 'Published school routine'}
+                  </Text>
+                  {isRoutineFromPastWeek && (
+                    <View style={styles.pastWeekBanner}>
+                      <Ionicons name="time-outline" size={14} color={theme.warning || '#f59e0b'} />
+                      <Text style={styles.pastWeekBannerText}>
+                        Showing last published routine — no routine published for this week yet.
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.cardMeta}>
+                    {formatDate(routine.weekStartDate)} - {formatDate(routine.weekEndDate)} •{' '}
+                    {routineScopeLabel} • {routine.blockCount} blocks
+                  </Text>
+                  {routineOptions.length > 1 ? (
+                    <View style={styles.routineSwitchRow}>
+                      {routineOptions.map((option) => {
+                        const isActive = option.key === selectedRoutineKey;
+                        return (
+                          <TouchableOpacity
+                            key={option.key}
+                            style={[
+                              styles.routineSwitchChip,
+                              {
+                                borderColor: isActive ? theme.primary : theme.border,
+                                backgroundColor: isActive ? `${theme.primary}1c` : theme.background,
+                              },
+                            ]}
+                            onPress={() => setSelectedRoutineKey(option.key)}
+                          >
+                            <Text
+                              style={[
+                                styles.routineSwitchChipText,
+                                { color: isActive ? theme.primary : theme.textSecondary },
+                              ]}
+                            >
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                  {routine.nextBlockTitle ? (
+                    <>
+                      <View style={styles.nextBlockRow}>
+                        <View style={styles.nextBlockPill}>
+                          <Ionicons name="time-outline" size={14} color="#fff" />
+                          <Text style={styles.nextBlockText}>
+                            Next: {routine.nextBlockTitle}
+                            {routine.nextBlockStart ? ` at ${routine.nextBlockStart}` : ''}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.reminderSoundToggle,
+                            { borderColor: reminderSoundEnabled ? theme.primary : theme.border },
+                          ]}
+                          onPress={() => setReminderSoundEnabled((prev) => !prev)}
+                        >
+                          <Ionicons
+                            name={
+                              reminderSoundEnabled ? 'volume-high-outline' : 'volume-mute-outline'
+                            }
+                            size={14}
+                            color={reminderSoundEnabled ? theme.primary : theme.textSecondary}
+                          />
+                          <Text
+                            style={[
+                              styles.reminderSoundToggleText,
+                              { color: reminderSoundEnabled ? theme.primary : theme.textSecondary },
+                            ]}
+                          >
+                            {reminderSoundEnabled ? 'Sound on' : 'Sound off'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      {notice ? (
+                        <View
+                          style={[
+                            styles.reminderNotice,
+                            { backgroundColor: `${theme.primary}18`, borderColor: theme.primary },
+                          ]}
+                        >
+                          <Ionicons name="notifications-outline" size={12} color={theme.primary} />
+                          <Text style={[styles.reminderNoticeText, { color: theme.text }]}>
+                            {notice}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </>
+                  ) : null}
+                </View>
+
+                <View style={styles.blockListCard}>
+                  {/* Day tabs - Mon to Fri */}
+                  <View style={styles.dayTabRow}>
+                    {([1, 2, 3, 4, 5] as const).map((day) => {
+                      const isActive = day === selectedDay;
+                      const isToday = day === todayDayOfWeek;
+                      const count = dayBlockCounts[day] || 0;
                       return (
                         <TouchableOpacity
-                          key={option.key}
+                          key={day}
                           style={[
-                            styles.routineSwitchChip,
-                            { borderColor: isActive ? theme.primary : theme.border, backgroundColor: isActive ? `${theme.primary}1c` : theme.background },
+                            styles.dayTab,
+                            isActive && styles.dayTabActive,
+                            isToday && !isActive && styles.dayTabToday,
                           ]}
-                          onPress={() => setSelectedRoutineKey(option.key)}
+                          onPress={() => setSelectedDay(day)}
                         >
-                          <Text style={[styles.routineSwitchChipText, { color: isActive ? theme.primary : theme.textSecondary }]}>
-                            {option.label}
+                          <Text style={[styles.dayTabLabel, isActive && styles.dayTabLabelActive]}>
+                            {WEEKDAY_LABELS[day]?.slice(0, 3)}
                           </Text>
+                          {isToday && (
+                            <View style={[styles.todayDot, isActive && styles.todayDotActive]} />
+                          )}
+                          {count > 0 && (
+                            <Text
+                              style={[styles.dayTabCount, isActive && styles.dayTabCountActive]}
+                            >
+                              {count}
+                            </Text>
+                          )}
                         </TouchableOpacity>
                       );
                     })}
                   </View>
-                ) : null}
-                {routine.nextBlockTitle ? (
-                  <>
-                    <View style={styles.nextBlockRow}>
-                      <View style={styles.nextBlockPill}>
-                        <Ionicons name="time-outline" size={14} color="#fff" />
-                        <Text style={styles.nextBlockText}>
-                          Next: {routine.nextBlockTitle}
-                          {routine.nextBlockStart ? ` at ${routine.nextBlockStart}` : ''}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.reminderSoundToggle, { borderColor: reminderSoundEnabled ? theme.primary : theme.border }]}
-                        onPress={() => setReminderSoundEnabled((prev) => !prev)}
-                      >
-                        <Ionicons
-                          name={reminderSoundEnabled ? 'volume-high-outline' : 'volume-mute-outline'}
-                          size={14}
-                          color={reminderSoundEnabled ? theme.primary : theme.textSecondary}
-                        />
-                        <Text style={[styles.reminderSoundToggleText, { color: reminderSoundEnabled ? theme.primary : theme.textSecondary }]}>
-                          {reminderSoundEnabled ? 'Sound on' : 'Sound off'}
-                        </Text>
-                      </TouchableOpacity>
+
+                  <Text style={styles.sectionTitle}>
+                    {selectedDay === todayDayOfWeek
+                      ? "Today's blocks"
+                      : `${WEEKDAY_LABELS[selectedDay] || 'Day'} blocks`}
+                  </Text>
+
+                  {loadingWeekBlocks && selectedDay !== todayDayOfWeek ? (
+                    <View style={styles.dayLoadingWrap}>
+                      <ActivityIndicator color={theme.primary} size="small" />
+                      <Text style={styles.dayLoadingText}>Loading week blocks...</Text>
                     </View>
-                    {notice ? (
-                      <View style={[styles.reminderNotice, { backgroundColor: `${theme.primary}18`, borderColor: theme.primary }]}>
-                        <Ionicons name="notifications-outline" size={12} color={theme.primary} />
-                        <Text style={[styles.reminderNoticeText, { color: theme.text }]}>{notice}</Text>
-                      </View>
-                    ) : null}
-                  </>
-                ) : null}
-              </View>
-
-              <View style={styles.blockListCard}>
-                {/* Day tabs - Mon to Fri */}
-                <View style={styles.dayTabRow}>
-                  {([1, 2, 3, 4, 5] as const).map((day) => {
-                    const isActive = day === selectedDay;
-                    const isToday = day === todayDayOfWeek;
-                    const count = dayBlockCounts[day] || 0;
-                    return (
-                      <TouchableOpacity
-                        key={day}
-                        style={[styles.dayTab, isActive && styles.dayTabActive, isToday && !isActive && styles.dayTabToday]}
-                        onPress={() => setSelectedDay(day)}
-                      >
-                        <Text style={[styles.dayTabLabel, isActive && styles.dayTabLabelActive]}>
-                          {WEEKDAY_LABELS[day]?.slice(0, 3)}
-                        </Text>
-                        {isToday && (
-                          <View style={[styles.todayDot, isActive && styles.todayDotActive]} />
-                        )}
-                        {count > 0 && (
-                          <Text style={[styles.dayTabCount, isActive && styles.dayTabCountActive]}>
-                            {count}
-                          </Text>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <Text style={styles.sectionTitle}>
-                  {selectedDay === todayDayOfWeek
-                    ? "Today's blocks"
-                    : `${WEEKDAY_LABELS[selectedDay] || 'Day'} blocks`}
-                </Text>
-
-                {loadingWeekBlocks && selectedDay !== todayDayOfWeek ? (
-                  <View style={styles.dayLoadingWrap}>
-                    <ActivityIndicator color={theme.primary} size="small" />
-                    <Text style={styles.dayLoadingText}>Loading week blocks...</Text>
-                  </View>
-                ) : blocksForSelectedDay.length === 0 ? (
-                  <View style={styles.emptyDayWrap}>
-                    <Ionicons name="calendar-outline" size={28} color={theme.textSecondary} />
-                    <Text style={styles.emptyDayText}>
-                      No blocks scheduled for {WEEKDAY_LABELS[selectedDay] || 'this day'}.
-                    </Text>
-                  </View>
-                ) : (
-                  blocksForSelectedDay.map((block, index) => {
-                    const blockType = getRoutineBlockTypePresentation(block.blockType);
-                    return (
-                      <View key={block.id || `block-${index}`} style={[styles.blockRow, { borderLeftColor: blockType.textColor }]}>
-                        <View style={styles.blockIndex}>
-                          <Text style={styles.blockIndexText}>{index + 1}</Text>
-                        </View>
-                        <View style={styles.blockBody}>
-                          <Text style={styles.blockTitle}>{block.title}</Text>
-                          <View style={styles.blockMetaRow}>
-                            <Text style={styles.blockTimeText}>{formatRange(block.startTime, block.endTime)}</Text>
-                            <View style={[styles.blockTypeChip, { backgroundColor: blockType.backgroundColor, borderColor: blockType.borderColor }]}>
-                              <Text style={[styles.blockTypeChipText, { color: blockType.textColor }]}>{blockType.label}</Text>
+                  ) : blocksForSelectedDay.length === 0 ? (
+                    <View style={styles.emptyDayWrap}>
+                      <Ionicons name="calendar-outline" size={28} color={theme.textSecondary} />
+                      <Text style={styles.emptyDayText}>
+                        No blocks scheduled for {WEEKDAY_LABELS[selectedDay] || 'this day'}.
+                      </Text>
+                    </View>
+                  ) : (
+                    blocksForSelectedDay.map((block, index) => {
+                      const blockType = getRoutineBlockTypePresentation(block.blockType);
+                      return (
+                        <View
+                          key={block.id || `block-${index}`}
+                          style={[styles.blockRow, { borderLeftColor: blockType.textColor }]}
+                        >
+                          <View style={styles.blockIndex}>
+                            <Text style={styles.blockIndexText}>{index + 1}</Text>
+                          </View>
+                          <View style={styles.blockBody}>
+                            <Text style={styles.blockTitle}>{block.title}</Text>
+                            <View style={styles.blockMetaRow}>
+                              <Text style={styles.blockTimeText}>
+                                {formatRange(block.startTime, block.endTime)}
+                              </Text>
+                              <View
+                                style={[
+                                  styles.blockTypeChip,
+                                  {
+                                    backgroundColor: blockType.backgroundColor,
+                                    borderColor: blockType.borderColor,
+                                  },
+                                ]}
+                              >
+                                <Text
+                                  style={[styles.blockTypeChipText, { color: blockType.textColor }]}
+                                >
+                                  {blockType.label}
+                                </Text>
+                              </View>
                             </View>
                           </View>
                         </View>
-                      </View>
-                    );
-                  })
-                )}
+                      );
+                    })
+                  )}
+                </View>
+              </>
+            ) : (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>No published routine yet</Text>
+                <Text style={styles.cardMeta}>
+                  Ask your principal/admin to publish a school-wide or class routine. It will appear
+                  here automatically.
+                </Text>
               </View>
-            </>
-          ) : (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>No published routine yet</Text>
-              <Text style={styles.cardMeta}>
-                Ask your principal/admin to publish a school-wide or class routine. It will appear here automatically.
-              </Text>
-            </View>
-          )}
+            )}
 
-          <View style={styles.actionsCard}>
-            <Text style={styles.sectionTitle}>Lesson tools</Text>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push({ pathname: alignedLessonRoute as any, params: alignedLessonParams } as any)}
-            >
-              <Ionicons name="sparkles-outline" size={18} color="#fff" />
-              <Text style={styles.actionText}>Generate lesson from routine</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionButton, weeklyGenerationPending && styles.actionButtonDisabled]}
-              onPress={handleGenerateWeekLessons}
-              disabled={weeklyGenerationPending || !routine}
-            >
-              {weeklyGenerationPending ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons name="calendar-outline" size={18} color="#fff" />
-              )}
-              <Text style={styles.actionText}>
-                {weeklyGenerationPending ? 'Generating Mon-Fri lessons...' : 'Generate week lessons (Mon-Fri)'}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/screens/teacher-lessons')}>
-              <Ionicons name="book-outline" size={18} color="#fff" />
-              <Text style={styles.actionText}>Open lesson plans</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton} onPress={() => router.push('/screens/assign-lesson')}>
-              <Ionicons name="link-outline" size={18} color="#fff" />
-              <Text style={styles.actionText}>Assign lessons to today's blocks</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push('/screens/room-display-connect')}>
-              <Ionicons name="tv-outline" size={18} color={theme.text} />
-              <Text style={styles.secondaryText}>Open Room Display link</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.secondaryButton}
-              onPress={() =>
-                router.push({
-                  pathname: '/screens/teacher-routine-requests',
-                  params: {
-                    requestType: 'daily_routine',
-                    weekStartDate: routine?.weekStartDate || '',
-                    classId: routine?.classId || '',
-                    themeTitle: routine?.title || '',
-                  },
-                })
-              }
-            >
-              <Ionicons name="clipboard-outline" size={18} color={theme.text} />
-              <Text style={styles.secondaryText}>Request new routine/program</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.refreshButton} onPress={refresh}>
-              <Ionicons name="refresh-outline" size={16} color={theme.primary} />
-              <Text style={styles.refreshText}>Refresh routine</Text>
-            </TouchableOpacity>
-          </View>
+            <View style={styles.actionsCard}>
+              <Text style={styles.sectionTitle}>Lesson tools</Text>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() =>
+                  router.push({
+                    pathname: alignedLessonRoute as any,
+                    params: alignedLessonParams,
+                  } as any)
+                }
+              >
+                <Ionicons name="sparkles-outline" size={18} color="#fff" />
+                <Text style={styles.actionText}>Generate lesson from routine</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.actionButton,
+                  weeklyGenerationPending && styles.actionButtonDisabled,
+                ]}
+                onPress={handleGenerateWeekLessons}
+                disabled={weeklyGenerationPending || !routine}
+              >
+                {weeklyGenerationPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Ionicons name="calendar-outline" size={18} color="#fff" />
+                )}
+                <Text style={styles.actionText}>
+                  {weeklyGenerationPending
+                    ? 'Generating Mon-Fri lessons...'
+                    : 'Generate week lessons (Mon-Fri)'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push('/screens/teacher-lessons')}
+              >
+                <Ionicons name="book-outline" size={18} color="#fff" />
+                <Text style={styles.actionText}>Open lesson plans</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => router.push('/screens/assign-lesson')}
+              >
+                <Ionicons name="link-outline" size={18} color="#fff" />
+                <Text style={styles.actionText}>Assign lessons to today's blocks</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => router.push('/screens/room-display-connect')}
+              >
+                <Ionicons name="tv-outline" size={18} color={theme.text} />
+                <Text style={styles.secondaryText}>Open Room Display link</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() =>
+                  router.push({
+                    pathname: '/screens/teacher-routine-requests',
+                    params: {
+                      requestType: 'daily_routine',
+                      weekStartDate: routine?.weekStartDate || '',
+                      classId: routine?.classId || '',
+                      themeTitle: routine?.title || '',
+                    },
+                  })
+                }
+              >
+                <Ionicons name="clipboard-outline" size={18} color={theme.text} />
+                <Text style={styles.secondaryText}>Request new routine/program</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.refreshButton} onPress={refresh}>
+                <Ionicons name="refresh-outline" size={16} color={theme.primary} />
+                <Text style={styles.refreshText}>Refresh routine</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       )}

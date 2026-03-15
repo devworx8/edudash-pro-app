@@ -1,8 +1,18 @@
 /**
  * useDashVoiceTTS — TTS queue for Dash Voice.
  *
- * Single source of truth for speech queuing. Responses are spoken in full
- * after the AI finishes — no chunking, no speak-pause splitting.
+ * Single source of truth for speech queuing.  Two modes:
+ *  - Default (streamingTTSEnabled=false): full response spoken after AI finishes.
+ *  - Phrase-streaming (streamingTTSEnabled=true): streaming deltas are buffered
+ *    into natural phrase chunks and spoken progressively, so Dash starts talking
+ *    before the response completes.
+ *
+ * Phrase-buffer flush rules (streaming mode only):
+ *  1. Sentence boundary (.?! or \n\n) when chunk ≥ PHRASE_MIN_SENTENCE chars.
+ *  2. Target-size flush at last whitespace before target length
+ *     (PHRASE_FIRST_TARGET for first phrase, PHRASE_FOLLOW_TARGET thereafter).
+ *  3. Safety valve: if no flush for PHRASE_SAFETY_VALVE_MS and buffer ≥ 60 chars,
+ *     flush at last whitespace.
  *
  * Extracted from app/screens/dash-voice.tsx as part of the WARP refactor.
  */
@@ -12,6 +22,12 @@ import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVo
 import { cleanForTTS } from '@/lib/dash-voice-utils';
 import { shouldUsePhonicsMode } from '@/lib/dash-ai/phonicsDetection';
 import { getOrganizationType } from '@/lib/tenant/compat';
+
+// ── Phrase-buffer constants ──────────────────────────────────────────────────
+const PHRASE_FIRST_TARGET = 100;      // chars — first phrase (quick start)
+const PHRASE_FOLLOW_TARGET = 200;     // chars — subsequent phrases
+const PHRASE_MIN_SENTENCE = 40;       // chars — min length to flush at sentence boundary
+const PHRASE_SAFETY_VALVE_MS = 1200;  // ms — time-based flush threshold
 
 type VoiceOrbRef = {
   speakText: (text: string, language?: SupportedLanguage, options?: { phonicsMode?: boolean }) => Promise<void>;
@@ -36,6 +52,27 @@ const longestCommonPrefixLen = (a: string, b: string): number => {
   return i;
 };
 
+/** Find the last sentence boundary (.?!\n) index in `text`, or -1. */
+function lastSentenceBoundary(text: string): number {
+  // Look for double-newline paragraph break first (highest priority)
+  const paraIdx = text.lastIndexOf('\n\n');
+  if (paraIdx !== -1) return paraIdx + 1;
+  // Single sentence-ending punctuation
+  for (let i = text.length - 1; i >= 0; i--) {
+    if (text[i] === '.' || text[i] === '?' || text[i] === '!') return i + 1;
+  }
+  return -1;
+}
+
+/** Find the last whitespace index at or before `maxLen`, or -1. */
+function lastWhitespaceBefore(text: string, maxLen: number): number {
+  const end = Math.min(maxLen, text.length);
+  for (let i = end - 1; i >= 0; i--) {
+    if (text[i] === ' ' || text[i] === '\n') return i;
+  }
+  return -1;
+}
+
 export function useDashVoiceTTS({
   voiceOrbRef,
   preferredLanguage,
@@ -48,6 +85,11 @@ export function useDashVoiceTTS({
   const speechMutexRef = useRef(false);
   const isSpeakingRef = useRef(false);
   const streamedPrefixQueuedRef = useRef('');
+
+  // Phrase-buffer state (streaming mode)
+  const pendingSpeakBufferRef = useRef('');
+  const safetyValveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasSpokenFirstPhraseRef = useRef(false);
 
   const speakResponse = useCallback(async (text: string) => {
     if (!voiceOrbRef.current) return;
@@ -86,8 +128,56 @@ export function useDashVoiceTTS({
     processSpeechQueue();
   }, [processSpeechQueue]);
 
+  // ── Phrase buffer ──────────────────────────────────────────────────────────
+
+  /**
+   * Attempt to flush a phrase chunk from pendingSpeakBufferRef.
+   * If `force` is true, flush everything remaining.
+   */
+  const flushPhraseBuffer = useCallback((force: boolean) => {
+    const buf = pendingSpeakBufferRef.current;
+    if (!buf.trim()) return;
+
+    const target = hasSpokenFirstPhraseRef.current ? PHRASE_FOLLOW_TARGET : PHRASE_FIRST_TARGET;
+
+    if (force) {
+      // Speak whatever is left
+      pendingSpeakBufferRef.current = '';
+      hasSpokenFirstPhraseRef.current = true;
+      enqueueSpeech(buf);
+      return;
+    }
+
+    // 1. Sentence boundary flush
+    const sentIdx = lastSentenceBoundary(buf);
+    if (sentIdx !== -1 && sentIdx >= PHRASE_MIN_SENTENCE) {
+      const chunk = buf.slice(0, sentIdx).trim();
+      pendingSpeakBufferRef.current = buf.slice(sentIdx);
+      hasSpokenFirstPhraseRef.current = true;
+      if (chunk) enqueueSpeech(chunk);
+      return;
+    }
+
+    // 2. Target-size flush at last whitespace
+    if (buf.length >= target) {
+      const wsIdx = lastWhitespaceBefore(buf, target);
+      if (wsIdx > 0) {
+        const chunk = buf.slice(0, wsIdx).trim();
+        pendingSpeakBufferRef.current = buf.slice(wsIdx + 1);
+        hasSpokenFirstPhraseRef.current = true;
+        if (chunk) enqueueSpeech(chunk);
+      }
+    }
+  }, [enqueueSpeech]);
+
   const resetStreamingSpeech = useCallback(() => {
     streamedPrefixQueuedRef.current = '';
+    pendingSpeakBufferRef.current = '';
+    hasSpokenFirstPhraseRef.current = false;
+    if (safetyValveTimerRef.current) {
+      clearTimeout(safetyValveTimerRef.current);
+      safetyValveTimerRef.current = null;
+    }
   }, []);
 
   const maybeEnqueueStreamingSpeech = useCallback((nextText: string) => {
@@ -95,14 +185,39 @@ export function useDashVoiceTTS({
     const fullText = String(nextText || '').trim();
     if (!fullText) return;
 
-    const alreadyQueuedPrefix = streamedPrefixQueuedRef.current;
-    const sharedPrefixLen = longestCommonPrefixLen(alreadyQueuedPrefix, fullText);
-    const delta = fullText.slice(sharedPrefixLen).trim();
+    const sharedPrefixLen = longestCommonPrefixLen(streamedPrefixQueuedRef.current, fullText);
+    const delta = fullText.slice(sharedPrefixLen);
     if (!delta) return;
 
     streamedPrefixQueuedRef.current = fullText;
-    enqueueSpeech(delta);
-  }, [enqueueSpeech, streamingTTSEnabled]);
+    pendingSpeakBufferRef.current += delta;
+
+    if (safetyValveTimerRef.current) clearTimeout(safetyValveTimerRef.current);
+    flushPhraseBuffer(false);
+    safetyValveTimerRef.current = setTimeout(() => {
+      if (pendingSpeakBufferRef.current.trim().length >= 60) flushPhraseBuffer(false);
+    }, PHRASE_SAFETY_VALVE_MS);
+  }, [flushPhraseBuffer, streamingTTSEnabled]);
+
+  /**
+   * Called at stream completion. Computes any tail text not yet spoken,
+   * appends it to the buffer, and force-flushes everything remaining.
+   * Pass the full final text (before markdown stripping) so the tail
+   * can be calculated against `streamedPrefixQueuedRef`.
+   */
+  const flushStreamingSpeechFinal = useCallback((finalFullText: string) => {
+    if (safetyValveTimerRef.current) {
+      clearTimeout(safetyValveTimerRef.current);
+      safetyValveTimerRef.current = null;
+    }
+    const tail = finalFullText.slice(
+      longestCommonPrefixLen(streamedPrefixQueuedRef.current, finalFullText),
+    );
+    if (tail) pendingSpeakBufferRef.current += tail;
+    flushPhraseBuffer(true);
+    streamedPrefixQueuedRef.current = '';
+    hasSpokenFirstPhraseRef.current = false;
+  }, [flushPhraseBuffer]);
 
   return {
     isSpeaking,
@@ -114,6 +229,7 @@ export function useDashVoiceTTS({
     enqueueSpeech,
     resetStreamingSpeech,
     maybeEnqueueStreamingSpeech,
+    flushStreamingSpeechFinal,
     longestCommonPrefixLen,
     streamedPrefixQueuedRef,
   };

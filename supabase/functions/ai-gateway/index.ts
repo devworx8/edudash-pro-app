@@ -55,6 +55,19 @@ serve(async (req) => {
     body: JSON.stringify(proxyBody),
   });
 
+  // Pass SSE stream directly — do not buffer, do not coerce to JSON
+  if (payload.stream === true) {
+    return new Response(proxyResponse.body, {
+      status: proxyResponse.status,
+      headers: {
+        'Content-Type': proxyResponse.headers.get('Content-Type') ?? 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      },
+    });
+  }
+
   const proxyText = await proxyResponse.text();
   return new Response(proxyText, {
     status: proxyResponse.status,

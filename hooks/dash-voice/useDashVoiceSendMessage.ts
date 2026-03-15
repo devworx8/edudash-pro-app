@@ -35,7 +35,9 @@ export function useDashVoiceSendMessage({
   speechQueueRef,
   attachedImage, role, orgType, aiScope, preferredLanguage,
   profile, user, dashPolicy, activeTier, autoScanUserId,
-  enqueueSpeech, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
+  streamingTTSEnabled,
+  enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal,
+  logDashTrace, refreshAutoScanBudget, voiceOrbRef,
 }: UseDashVoiceSendMessageParams) {
   const persistOrbMessages = useCallback(async (msgs: ConversationEntry[]) => {
     try {
@@ -50,7 +52,9 @@ export function useDashVoiceSendMessage({
     role, profile, user, activeTier,
     setWhiteboardContent, setLastResponse, setStreamingText, setIsProcessing,
     setLatestPdfArtifact, conversationHistoryRef, activeRequestRef,
-    enqueueSpeech, logDashTrace,
+    enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal,
+    streamingTTSEnabled,
+    logDashTrace,
     persistOrbMessages, setConversationHistory,
   });
 

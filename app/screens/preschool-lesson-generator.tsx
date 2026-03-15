@@ -6,7 +6,17 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, TextInput, Share, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  RefreshControl,
+  TextInput,
+  Share,
+  Platform,
+} from 'react-native';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -46,7 +56,10 @@ import { getCombinedUsage, incrementUsage, logUsageEvent } from '@/lib/ai/usage'
 import { SuccessModal } from '@/components/ui/SuccessModal';
 import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
 import { track } from '@/lib/analytics';
-import { formatAIGatewayErrorMessage, invokeAIGatewayWithRetry } from '@/lib/ai-gateway/invokeWithRetry';
+import {
+  formatAIGatewayErrorMessage,
+  invokeAIGatewayWithRetry,
+} from '@/lib/ai-gateway/invokeWithRetry';
 import { parseLessonPlanResponse } from '@/lib/ai/parseLessonPlan';
 import type { LessonPlanV2 } from '@/lib/ai/lessonPlanSchema';
 import { LessonGenerationFullscreen } from '@/components/ai-lesson-generator';
@@ -61,26 +74,111 @@ import {
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 // Preschool-specific constants
 const AGE_GROUPS = [
-  { id: 'toddlers', label: 'Toddlers (1-2 years)', ageRange: '1-2', description: 'Early exploration and sensory play' },
-  { id: 'preschool', label: 'Preschool (3-4 years)', ageRange: '3-4', description: 'Building foundational skills' },
-  { id: 'prek', label: 'Pre-K (4-5 years)', ageRange: '4-5', description: 'Preparing for kindergarten' },
-  { id: 'kindergarten', label: 'Kindergarten (5-6 years)', ageRange: '5-6', description: 'School readiness' },
+  {
+    id: 'toddlers',
+    label: 'Toddlers (1-2 years)',
+    ageRange: '1-2',
+    description: 'Early exploration and sensory play',
+  },
+  {
+    id: 'preschool',
+    label: 'Preschool (3-4 years)',
+    ageRange: '3-4',
+    description: 'Building foundational skills',
+  },
+  {
+    id: 'prek',
+    label: 'Pre-K (4-5 years)',
+    ageRange: '4-5',
+    description: 'Preparing for kindergarten',
+  },
+  {
+    id: 'kindergarten',
+    label: 'Kindergarten (5-6 years)',
+    ageRange: '5-6',
+    description: 'School readiness',
+  },
 ];
 
 const PRESCHOOL_SUBJECTS = [
-  { id: 'colors', label: '🎨 Colors & Art', icon: 'color-palette', description: 'Color recognition, mixing, art activities' },
-  { id: 'shapes', label: '🔷 Shapes & Patterns', icon: 'shapes', description: 'Shape identification, patterns, spatial awareness' },
-  { id: 'numbers', label: '🔢 Numbers & Counting', icon: 'calculator', description: 'Counting, number recognition, basic math concepts' },
-  { id: 'letters', label: '🔤 Letters & Sounds', icon: 'text', description: 'Letter recognition, phonics, early literacy' },
-  { id: 'nature', label: '🌿 Nature & Science', icon: 'leaf', description: 'Plants, animals, weather, simple experiments' },
-  { id: 'social', label: '🤝 Social Skills', icon: 'people', description: 'Sharing, emotions, friendship, manners' },
-  { id: 'motor', label: '🏃 Motor Skills', icon: 'body', description: 'Fine and gross motor development' },
-  { id: 'music', label: '🎵 Music & Movement', icon: 'musical-notes', description: 'Songs, rhythm, dance, instruments' },
-  { id: 'storytime', label: '📚 Storytime & Language', icon: 'book', description: 'Story comprehension, vocabulary, speaking' },
-  { id: 'sensory', label: '👐 Sensory Play', icon: 'hand-left', description: 'Texture exploration, sensory bins, tactile learning' },
-  { id: 'ai', label: '🤖 AI & Technology', icon: 'sparkles', description: 'Simple AI concepts, age-appropriate technology exploration' },
-  { id: 'robotics', label: '🤖 Robotics', icon: 'hardware-chip', description: 'Robot movements, basic programming concepts, sequencing' },
-  { id: 'computer_literacy', label: '💻 Computer Literacy', icon: 'laptop', description: 'Keyboard, mouse, basic apps, online safety' },
+  {
+    id: 'colors',
+    label: '🎨 Colors & Art',
+    icon: 'color-palette',
+    description: 'Color recognition, mixing, art activities',
+  },
+  {
+    id: 'shapes',
+    label: '🔷 Shapes & Patterns',
+    icon: 'shapes',
+    description: 'Shape identification, patterns, spatial awareness',
+  },
+  {
+    id: 'numbers',
+    label: '🔢 Numbers & Counting',
+    icon: 'calculator',
+    description: 'Counting, number recognition, basic math concepts',
+  },
+  {
+    id: 'letters',
+    label: '🔤 Letters & Sounds',
+    icon: 'text',
+    description: 'Letter recognition, phonics, early literacy',
+  },
+  {
+    id: 'nature',
+    label: '🌿 Nature & Science',
+    icon: 'leaf',
+    description: 'Plants, animals, weather, simple experiments',
+  },
+  {
+    id: 'social',
+    label: '🤝 Social Skills',
+    icon: 'people',
+    description: 'Sharing, emotions, friendship, manners',
+  },
+  {
+    id: 'motor',
+    label: '🏃 Motor Skills',
+    icon: 'body',
+    description: 'Fine and gross motor development',
+  },
+  {
+    id: 'music',
+    label: '🎵 Music & Movement',
+    icon: 'musical-notes',
+    description: 'Songs, rhythm, dance, instruments',
+  },
+  {
+    id: 'storytime',
+    label: '📚 Storytime & Language',
+    icon: 'book',
+    description: 'Story comprehension, vocabulary, speaking',
+  },
+  {
+    id: 'sensory',
+    label: '👐 Sensory Play',
+    icon: 'hand-left',
+    description: 'Texture exploration, sensory bins, tactile learning',
+  },
+  {
+    id: 'ai',
+    label: '🤖 AI & Technology',
+    icon: 'sparkles',
+    description: 'Simple AI concepts, age-appropriate technology exploration',
+  },
+  {
+    id: 'robotics',
+    label: '🤖 Robotics',
+    icon: 'hardware-chip',
+    description: 'Robot movements, basic programming concepts, sequencing',
+  },
+  {
+    id: 'computer_literacy',
+    label: '💻 Computer Literacy',
+    icon: 'laptop',
+    description: 'Keyboard, mouse, basic apps, online safety',
+  },
 ];
 
 const DURATION_OPTIONS = [
@@ -93,7 +191,9 @@ const DURATION_OPTIONS = [
 type LanguageCode = 'en' | 'af' | 'zu' | 'st';
 
 const resolveSubjectId = (value: string): string | null => {
-  const normalized = String(value || '').trim().toLowerCase();
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase();
   if (!normalized) return null;
   const direct = PRESCHOOL_SUBJECTS.find((subject) => subject.id === normalized);
   if (direct) return direct.id;
@@ -125,89 +225,95 @@ export default function PreschoolLessonGeneratorScreen() {
   const modeParam = Array.isArray(params?.mode) ? params.mode[0] : params?.mode;
   const isQuickMode = modeParam === 'quick';
   const quickDefaultsApplied = useRef(false);
-  const palette = useMemo(() => ({
-    bg: theme.background,
-    text: theme.text,
-    textSec: theme.textSecondary,
-    outline: theme.border,
-    surface: theme.surface,
-    primary: theme.primary,
-    accent: theme.accent,
-  }), [theme]);
+  const palette = useMemo(
+    () => ({
+      bg: theme.background,
+      text: theme.text,
+      textSec: theme.textSecondary,
+      outline: theme.border,
+      surface: theme.surface,
+      primary: theme.primary,
+      accent: theme.accent,
+    }),
+    [theme],
+  );
 
   // Markdown styles for rendering generated content
-  const markdownStyles = useMemo(() => ({
-    body: {
-      color: theme.text,
-      fontSize: 14,
-      lineHeight: 22,
-    },
-    heading1: {
-      color: '#FF6B6B',
-      fontSize: 20,
-      fontWeight: '700' as const,
-      marginTop: 16,
-      marginBottom: 8,
-    },
-    heading2: {
-      color: theme.primary,
-      fontSize: 17,
-      fontWeight: '600' as const,
-      marginTop: 12,
-      marginBottom: 6,
-    },
-    heading3: {
-      color: theme.text,
-      fontSize: 15,
-      fontWeight: '600' as const,
-      marginTop: 10,
-      marginBottom: 4,
-    },
-    paragraph: {
-      marginBottom: 8,
-    },
-    strong: {
-      fontWeight: '700' as const,
-      color: theme.text,
-    },
-    em: {
-      fontStyle: 'italic' as const,
-    },
-    bullet_list: {
-      marginLeft: 8,
-    },
-    ordered_list: {
-      marginLeft: 8,
-    },
-    list_item: {
-      marginBottom: 4,
-    },
-    code_inline: {
-      backgroundColor: theme.surface,
-      padding: 2,
-      borderRadius: 4,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      fontSize: 13,
-    },
-    fence: {
-      backgroundColor: theme.surface,
-      padding: 12,
-      borderRadius: 8,
-      marginVertical: 8,
-    },
-    blockquote: {
-      backgroundColor: theme.surface,
-      borderLeftColor: '#FF6B6B',
-      borderLeftWidth: 4,
-      paddingLeft: 12,
-      marginLeft: 0,
-    },
-    hr: {
-      backgroundColor: theme.border,
-      height: 1,
-      marginVertical: 12,
-    },
-  }), [theme]);
+  const markdownStyles = useMemo(
+    () => ({
+      body: {
+        color: theme.text,
+        fontSize: 14,
+        lineHeight: 22,
+      },
+      heading1: {
+        color: '#FF6B6B',
+        fontSize: 20,
+        fontWeight: '700' as const,
+        marginTop: 16,
+        marginBottom: 8,
+      },
+      heading2: {
+        color: theme.primary,
+        fontSize: 17,
+        fontWeight: '600' as const,
+        marginTop: 12,
+        marginBottom: 6,
+      },
+      heading3: {
+        color: theme.text,
+        fontSize: 15,
+        fontWeight: '600' as const,
+        marginTop: 10,
+        marginBottom: 4,
+      },
+      paragraph: {
+        marginBottom: 8,
+      },
+      strong: {
+        fontWeight: '700' as const,
+        color: theme.text,
+      },
+      em: {
+        fontStyle: 'italic' as const,
+      },
+      bullet_list: {
+        marginLeft: 8,
+      },
+      ordered_list: {
+        marginLeft: 8,
+      },
+      list_item: {
+        marginBottom: 4,
+      },
+      code_inline: {
+        backgroundColor: theme.surface,
+        padding: 2,
+        borderRadius: 4,
+        fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        fontSize: 13,
+      },
+      fence: {
+        backgroundColor: theme.surface,
+        padding: 12,
+        borderRadius: 8,
+        marginVertical: 8,
+      },
+      blockquote: {
+        backgroundColor: theme.surface,
+        borderLeftColor: '#FF6B6B',
+        borderLeftWidth: 4,
+        paddingLeft: 12,
+        marginLeft: 0,
+      },
+      hr: {
+        backgroundColor: theme.border,
+        height: 1,
+        marginVertical: 12,
+      },
+    }),
+    [theme],
+  );
 
   // Form state
   const [topic, setTopic] = useState('');
@@ -217,32 +323,49 @@ export default function PreschoolLessonGeneratorScreen() {
   const [includeHomework, setIncludeHomework] = useState(true);
   const [includeInsights, setIncludeInsights] = useState(true);
   const [language, setLanguage] = useState<LanguageCode>('en');
-  
+
   // Generation state
   const [generated, setGenerated] = useState<GeneratedContent | null>(null);
   const [pending, setPending] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [progressPhase, setProgressPhase] = useState<'idle' | 'init' | 'quota_check' | 'request' | 'parse' | 'complete'>('idle');
+  const [progressPhase, setProgressPhase] = useState<
+    'idle' | 'init' | 'quota_check' | 'request' | 'parse' | 'complete'
+  >('idle');
   const [progressMessage, setProgressMessage] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'lesson' | 'insights' | 'homework'>('lesson');
   const [showSaveSuccessModal, setShowSaveSuccessModal] = useState(false);
   const [showFullscreenLesson, setShowFullscreenLesson] = useState(false);
-  const [quickLessonContext, setQuickLessonContext] = useState<QuickLessonThemeContext | null>(null);
+  const [quickLessonContext, setQuickLessonContext] = useState<QuickLessonThemeContext | null>(
+    null,
+  );
   const [quickLessonContextLoading, setQuickLessonContextLoading] = useState(false);
   const [explicitRoutineContext, setExplicitRoutineContext] = useState('');
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  
+
   // Usage state
   const [usage, setUsage] = useState({ lesson_generation: 0 });
-  const [quotaStatus, setQuotaStatus] = useState<{ used: number; limit: number; remaining: number } | null>(null);
-  
-  const { availableModels, selectedModel, setSelectedModel, isLoading: modelsLoading } = useLessonGeneratorModels();
+  const [quotaStatus, setQuotaStatus] = useState<{
+    used: number;
+    limit: number;
+    remaining: number;
+  } | null>(null);
+
+  const {
+    availableModels,
+    selectedModel,
+    setSelectedModel,
+    isLoading: modelsLoading,
+  } = useLessonGeneratorModels();
   const { tierInfo } = useTierInfo();
-  
-  const isQuotaExhausted = Boolean(quotaStatus && quotaStatus.limit !== -1 && quotaStatus.used >= quotaStatus.limit);
-  const AI_ENABLED = process.env.EXPO_PUBLIC_AI_ENABLED === 'true' || process.env.EXPO_PUBLIC_ENABLE_AI_FEATURES === 'true';
+
+  const isQuotaExhausted = Boolean(
+    quotaStatus && quotaStatus.limit !== -1 && quotaStatus.used >= quotaStatus.limit,
+  );
+  const AI_ENABLED =
+    process.env.EXPO_PUBLIC_AI_ENABLED === 'true' ||
+    process.env.EXPO_PUBLIC_ENABLE_AI_FEATURES === 'true';
   const flags = getFeatureFlagsSync();
   const progressContractEnabled = flags.progress_contract_v1 !== false;
   const lessonFullscreenEnabled = flags.lesson_fullscreen_v1 !== false;
@@ -277,7 +400,9 @@ export default function PreschoolLessonGeneratorScreen() {
     try {
       const s = await getQuotaStatus('lesson_generation');
       setQuotaStatus(s);
-    } catch { /* non-fatal */ }
+    } catch {
+      /* non-fatal */
+    }
   }, []);
 
   const clearProgressTimer = useCallback(() => {
@@ -287,21 +412,27 @@ export default function PreschoolLessonGeneratorScreen() {
     }
   }, []);
 
-  const startProgressTimer = useCallback((minIncrement: number, maxIncrement: number, intervalMs: number) => {
-    clearProgressTimer();
-    progressTimerRef.current = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) return prev;
-        const next = Math.min(prev + (Math.random() * (maxIncrement - minIncrement) + minIncrement), 90);
-        if (next < 20) setProgressMessage('Preparing lesson structure...');
-        else if (next < 40) setProgressMessage('Creating activities...');
-        else if (next < 60) setProgressMessage('Generating teaching insights...');
-        else if (next < 80) setProgressMessage('Designing take-home activity...');
-        else setProgressMessage('Finalizing...');
-        return next;
-      });
-    }, intervalMs);
-  }, [clearProgressTimer]);
+  const startProgressTimer = useCallback(
+    (minIncrement: number, maxIncrement: number, intervalMs: number) => {
+      clearProgressTimer();
+      progressTimerRef.current = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 90) return prev;
+          const next = Math.min(
+            prev + (Math.random() * (maxIncrement - minIncrement) + minIncrement),
+            90,
+          );
+          if (next < 20) setProgressMessage('Preparing lesson structure...');
+          else if (next < 40) setProgressMessage('Creating activities...');
+          else if (next < 60) setProgressMessage('Generating teaching insights...');
+          else if (next < 80) setProgressMessage('Designing take-home activity...');
+          else setProgressMessage('Finalizing...');
+          return next;
+        });
+      }, intervalMs);
+    },
+    [clearProgressTimer],
+  );
 
   useEffect(() => {
     return () => {
@@ -309,10 +440,13 @@ export default function PreschoolLessonGeneratorScreen() {
     };
   }, [clearProgressTimer]);
 
-  const { refreshing, onRefreshHandler } = useSimplePullToRefresh(refreshUsage, 'preschool_lesson_generator');
+  const { refreshing, onRefreshHandler } = useSimplePullToRefresh(
+    refreshUsage,
+    'preschool_lesson_generator',
+  );
 
-  const selectedSubjectInfo = PRESCHOOL_SUBJECTS.find(s => s.id === selectedSubject);
-  const selectedAgeGroupInfo = AGE_GROUPS.find(a => a.id === selectedAgeGroup);
+  const selectedSubjectInfo = PRESCHOOL_SUBJECTS.find((s) => s.id === selectedSubject);
+  const selectedAgeGroupInfo = AGE_GROUPS.find((a) => a.id === selectedAgeGroup);
   const schoolId = profile?.organization_id || profile?.preschool_id || null;
 
   useEffect(() => {
@@ -380,7 +514,10 @@ export default function PreschoolLessonGeneratorScreen() {
     const ageLabel = selectedAgeGroupInfo?.label || 'Preschool (3-4 years)';
     const ageRange = selectedAgeGroupInfo?.ageRange || '3-4';
     const topicStr = topic.trim() || 'age-appropriate activity';
-    const isSTEMSubject = selectedSubject === 'ai' || selectedSubject === 'robotics' || selectedSubject === 'computer_literacy';
+    const isSTEMSubject =
+      selectedSubject === 'ai' ||
+      selectedSubject === 'robotics' ||
+      selectedSubject === 'computer_literacy';
     const quickModeNote = isQuickMode
       ? '\n\n**QUICK LESSON MODE:** Create a low-prep, high-engagement lesson that fits within the time limit. Use minimal materials, clear transitions, and simple instructions.'
       : '';
@@ -388,7 +525,7 @@ export default function PreschoolLessonGeneratorScreen() {
     const routineHint = explicitRoutineContext
       ? `\n**ROUTINE EXECUTION CONTEXT (MUST ALIGN):**\n${explicitRoutineContext}`
       : '';
-    
+
     let prompt = `You are a highly experienced early childhood educator and curriculum specialist creating an engaging, developmentally appropriate preschool lesson plan. Your expertise spans child development, educational psychology, and hands-on learning methodologies.${quickModeNote}
 
 **LESSON REQUIREMENTS:**
@@ -438,7 +575,20 @@ Schema:
 }`;
 
     return prompt;
-  }, [topic, selectedSubject, selectedAgeGroup, duration, language, includeInsights, includeHomework, selectedSubjectInfo, selectedAgeGroupInfo, isQuickMode, quickLessonContext, explicitRoutineContext]);
+  }, [
+    topic,
+    selectedSubject,
+    selectedAgeGroup,
+    duration,
+    language,
+    includeInsights,
+    includeHomework,
+    selectedSubjectInfo,
+    selectedAgeGroupInfo,
+    isQuickMode,
+    quickLessonContext,
+    explicitRoutineContext,
+  ]);
 
   const parsedLessonPlan: LessonPlanV2 | null = useMemo(() => {
     const lessonText = generated?.lesson?.trim();
@@ -485,14 +635,22 @@ Schema:
       router.push('/pricing');
       return;
     }
-    
+
     if (!selectedSubject) {
-      showAlert({ title: 'Select Subject', message: 'Please select a subject area for your lesson.', type: 'warning' });
+      showAlert({
+        title: 'Select Subject',
+        message: 'Please select a subject area for your lesson.',
+        type: 'warning',
+      });
       return;
     }
-    
+
     if (!selectedAgeGroup) {
-      showAlert({ title: 'Select Age Group', message: 'Please select an age group for your lesson.', type: 'warning' });
+      showAlert({
+        title: 'Select Age Group',
+        message: 'Please select an age group for your lesson.',
+        type: 'warning',
+      });
       return;
     }
 
@@ -537,20 +695,33 @@ Schema:
           buttons: [
             { text: 'Cancel', style: 'cancel' },
             { text: 'See plans', onPress: () => router.push('/pricing') },
-          ]
+          ],
         });
         return;
       }
 
-      track('edudash.ai.preschool_lesson.generate_started', { subject: selectedSubject, ageGroup: selectedAgeGroup });
+      track('edudash.ai.preschool_lesson.generate_started', {
+        subject: selectedSubject,
+        ageGroup: selectedAgeGroup,
+      });
       setProgressPhase('request');
       setProgress(28);
       setProgressMessage('Preparing request...');
 
       const prompt = buildPrompt();
-      const isSTEMSubject = selectedSubject === 'ai' || selectedSubject === 'robotics' || selectedSubject === 'computer_literacy';
-      const stemCategory = selectedSubject === 'ai' ? 'ai' : selectedSubject === 'robotics' ? 'robotics' : selectedSubject === 'computer_literacy' ? 'computer_literacy' : 'none';
-      
+      const isSTEMSubject =
+        selectedSubject === 'ai' ||
+        selectedSubject === 'robotics' ||
+        selectedSubject === 'computer_literacy';
+      const stemCategory =
+        selectedSubject === 'ai'
+          ? 'ai'
+          : selectedSubject === 'robotics'
+            ? 'robotics'
+            : selectedSubject === 'computer_literacy'
+              ? 'computer_literacy'
+              : 'none';
+
       const payload = {
         action: 'lesson_generation',
         prompt,
@@ -560,13 +731,20 @@ Schema:
         duration: Number(duration) || 30,
         objectives: [],
         language: language || 'en',
-        model: selectedModel || process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
+        model:
+          selectedModel || process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
         isPreschool: true,
         ageGroup: selectedAgeGroup,
         includeHomework,
         includeInsights,
         stemCategory: stemCategory,
-        lessonType: isSTEMSubject ? (selectedSubject === 'ai' ? 'ai_enhanced' : selectedSubject === 'robotics' ? 'robotics' : 'computer_literacy') : 'standard',
+        lessonType: isSTEMSubject
+          ? selectedSubject === 'ai'
+            ? 'ai_enhanced'
+            : selectedSubject === 'robotics'
+              ? 'robotics'
+              : 'computer_literacy'
+          : 'standard',
       };
 
       if (progressContractEnabled) {
@@ -598,8 +776,12 @@ Schema:
 
       // Parse sections from generated content with more flexible matching
       // Match lesson plan section (various emoji/heading variations)
-      const lessonMatch = content.match(/##\s*📚?\s*LESSON\s*PLAN[\s\S]*?(?=##\s*🔍?\s*TEACHER|##\s*🏠?\s*TAKE[-\s]?HOME|$)/i);
-      const insightsMatch = content.match(/##\s*🔍?\s*TEACHER\s*INSIGHTS[\s\S]*?(?=##\s*🏠?\s*TAKE[-\s]?HOME|$)/i);
+      const lessonMatch = content.match(
+        /##\s*📚?\s*LESSON\s*PLAN[\s\S]*?(?=##\s*🔍?\s*TEACHER|##\s*🏠?\s*TAKE[-\s]?HOME|$)/i,
+      );
+      const insightsMatch = content.match(
+        /##\s*🔍?\s*TEACHER\s*INSIGHTS[\s\S]*?(?=##\s*🏠?\s*TAKE[-\s]?HOME|$)/i,
+      );
       const homeworkMatch = content.match(/##\s*🏠?\s*TAKE[-\s]?HOME[\s\S]*$/i);
       const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
       let jsonPayload: Record<string, unknown> | null = null;
@@ -653,8 +835,10 @@ Schema:
 
       await refreshUsage();
       toast.success('Lesson generated!');
-      track('edudash.ai.preschool_lesson.generate_completed', { subject: selectedSubject, ageGroup: selectedAgeGroup });
-
+      track('edudash.ai.preschool_lesson.generate_completed', {
+        subject: selectedSubject,
+        ageGroup: selectedAgeGroup,
+      });
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Please try again';
       track('edudash.ai.preschool_lesson.generate_failed', { error: message });
@@ -693,7 +877,7 @@ Schema:
       toast.warn('Generate a lesson first');
       return;
     }
-    
+
     try {
       setSaving(true);
       const { data: auth } = await assertSupabase().auth.getUser();
@@ -702,14 +886,14 @@ Schema:
         .select('id,preschool_id,organization_id')
         .or(`id.eq.${auth?.user?.id || ''},auth_user_id.eq.${auth?.user?.id || ''}`)
         .maybeSingle();
-        
+
       if (!teacherProfile) {
         toast.error('Not signed in');
         return;
       }
-      
+
       const schoolId = teacherProfile.preschool_id || teacherProfile.organization_id;
-      
+
       // Get or create a default category if none exists
       let categoryId = categoriesQuery.data?.[0]?.id;
       if (!categoryId) {
@@ -719,7 +903,7 @@ Schema:
           .insert({ name: 'Preschool', description: 'Preschool lessons and activities' })
           .select('id')
           .single();
-        
+
         if (catError) {
           console.error('[PreschoolLessonGen] Failed to create category:', catError);
           toast.warn('Could not create lesson category. Please contact support.');
@@ -735,7 +919,9 @@ Schema:
         generated.lesson,
         generated.insights ? `\n---\n${generated.insights}` : '',
         generated.homework ? `\n---\n${generated.homework}` : '',
-      ].filter(Boolean).join('\n');
+      ]
+        .filter(Boolean)
+        .join('\n');
 
       const res = await LessonGeneratorService.saveGeneratedLesson({
         lesson: {
@@ -759,7 +945,7 @@ Schema:
 
       toast.success(`Lesson saved! View in My Lessons`);
       track('edudash.ai.preschool_lesson.saved', { lessonId: res.lessonId });
-      
+
       // Show custom success modal instead of Alert.alert
       setShowSaveSuccessModal(true);
     } catch (e: unknown) {
@@ -767,7 +953,15 @@ Schema:
     } finally {
       setSaving(false);
     }
-  }, [generated, categoriesQuery, selectedSubjectInfo, topic, selectedAgeGroup, duration, selectedSubject]);
+  }, [
+    generated,
+    categoriesQuery,
+    selectedSubjectInfo,
+    topic,
+    selectedAgeGroup,
+    duration,
+    selectedSubject,
+  ]);
 
   const onShareHomework = useCallback(async () => {
     if (!generated?.homework) {
@@ -777,12 +971,12 @@ Schema:
 
     try {
       const shareContent = `📚 Take-Home Activity from ${profile?.first_name || 'Teacher'}\n\n${generated.homework}\n\n---\nFrom EduDash Pro - Young Eagles`;
-      
+
       await Share.share({
         message: shareContent,
         title: 'Take-Home Activity',
       });
-      
+
       track('edudash.ai.preschool_lesson.homework_shared', {});
     } catch (error) {
       console.error('Share failed:', error);
@@ -804,7 +998,7 @@ Schema:
 
       await EducationalPDFService.generateTextPDF(
         `${selectedSubjectInfo?.label || 'Lesson'}: ${topic || 'Preschool Activity'}`,
-        fullContent
+        fullContent,
       );
       toast.success('PDF generated');
     } catch {
@@ -812,7 +1006,7 @@ Schema:
     }
   }, [generated, selectedSubjectInfo, topic]);
 
-  const renderSubjectButton = (subject: typeof PRESCHOOL_SUBJECTS[0]) => {
+  const renderSubjectButton = (subject: (typeof PRESCHOOL_SUBJECTS)[0]) => {
     const isSelected = selectedSubject === subject.id;
     return (
       <TouchableOpacity
@@ -838,7 +1032,7 @@ Schema:
     );
   };
 
-  const renderAgeGroupButton = (ageGroup: typeof AGE_GROUPS[0]) => {
+  const renderAgeGroupButton = (ageGroup: (typeof AGE_GROUPS)[0]) => {
     const isSelected = selectedAgeGroup === ageGroup.id;
     return (
       <TouchableOpacity
@@ -886,7 +1080,12 @@ Schema:
         </View>
       </LinearGradient>
       {isQuickMode && (
-        <View style={[styles.quickModeBanner, { backgroundColor: theme.primary + '20', borderColor: theme.primary }]}>
+        <View
+          style={[
+            styles.quickModeBanner,
+            { backgroundColor: theme.primary + '20', borderColor: theme.primary },
+          ]}
+        >
           <Ionicons name="flash" size={16} color={theme.primary} />
           <View style={styles.quickModeTextWrap}>
             <Text style={[styles.quickModeText, { color: theme.primary }]}>
@@ -912,25 +1111,27 @@ Schema:
         }
       >
         {/* Subject Selection */}
-        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}>
+        <View
+          style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}
+        >
           <Text style={[styles.cardTitle, { color: palette.text }]}>📚 Choose Subject</Text>
-          <View style={styles.subjectsGrid}>
-            {PRESCHOOL_SUBJECTS.map(renderSubjectButton)}
-          </View>
+          <View style={styles.subjectsGrid}>{PRESCHOOL_SUBJECTS.map(renderSubjectButton)}</View>
         </View>
 
         {/* Age Group Selection */}
-        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}>
+        <View
+          style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}
+        >
           <Text style={[styles.cardTitle, { color: palette.text }]}>👶 Select Age Group</Text>
-          <View style={styles.ageGroupsContainer}>
-            {AGE_GROUPS.map(renderAgeGroupButton)}
-          </View>
+          <View style={styles.ageGroupsContainer}>{AGE_GROUPS.map(renderAgeGroupButton)}</View>
         </View>
 
         {/* Topic & Duration */}
-        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}>
+        <View
+          style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}
+        >
           <Text style={[styles.cardTitle, { color: palette.text }]}>✏️ Lesson Details</Text>
-          
+
           <Text style={[styles.label, { color: palette.textSec }]}>Topic (optional)</Text>
           <TextInput
             style={[styles.input, { color: palette.text, borderColor: palette.outline }]}
@@ -942,7 +1143,7 @@ Schema:
 
           <Text style={[styles.label, { color: palette.textSec, marginTop: 12 }]}>Duration</Text>
           <View style={styles.durationRow}>
-            {DURATION_OPTIONS.map(opt => (
+            {DURATION_OPTIONS.map((opt) => (
               <TouchableOpacity
                 key={opt.value}
                 style={[
@@ -954,7 +1155,12 @@ Schema:
                 ]}
                 onPress={() => setDuration(opt.value)}
               >
-                <Text style={[styles.durationLabel, { color: duration === opt.value ? theme.primary : palette.text }]}>
+                <Text
+                  style={[
+                    styles.durationLabel,
+                    { color: duration === opt.value ? theme.primary : palette.text },
+                  ]}
+                >
                   {opt.label}
                 </Text>
               </TouchableOpacity>
@@ -963,9 +1169,11 @@ Schema:
         </View>
 
         {/* Options */}
-        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}>
+        <View
+          style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}
+        >
           <Text style={[styles.cardTitle, { color: palette.text }]}>⚙️ Include</Text>
-          
+
           <TouchableOpacity
             style={styles.toggleRow}
             onPress={() => setIncludeInsights(!includeInsights)}
@@ -976,7 +1184,9 @@ Schema:
               color={includeInsights ? theme.primary : palette.textSec}
             />
             <View style={styles.toggleInfo}>
-              <Text style={[styles.toggleLabel, { color: palette.text }]}>🔍 Teaching Insights</Text>
+              <Text style={[styles.toggleLabel, { color: palette.text }]}>
+                🔍 Teaching Insights
+              </Text>
               <Text style={[styles.toggleDesc, { color: palette.textSec }]}>
                 Differentiation tips, assessment ideas, common challenges
               </Text>
@@ -993,7 +1203,9 @@ Schema:
               color={includeHomework ? theme.primary : palette.textSec}
             />
             <View style={styles.toggleInfo}>
-              <Text style={[styles.toggleLabel, { color: palette.text }]}>🏠 Take-Home Activity</Text>
+              <Text style={[styles.toggleLabel, { color: palette.text }]}>
+                🏠 Take-Home Activity
+              </Text>
               <Text style={[styles.toggleDesc, { color: palette.textSec }]}>
                 Simple homework parents can do with their child
               </Text>
@@ -1002,8 +1214,12 @@ Schema:
         </View>
 
         {/* Quota Bar */}
-        <View style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}>
-          <Text style={{ color: palette.textSec }}>Monthly usage: {usage.lesson_generation} lessons</Text>
+        <View
+          style={[styles.card, { backgroundColor: palette.surface, borderColor: palette.outline }]}
+        >
+          <Text style={{ color: palette.textSec }}>
+            Monthly usage: {usage.lesson_generation} lessons
+          </Text>
           <QuotaBar used={usage.lesson_generation} limit={quotaStatus?.limit || 5} />
         </View>
 
@@ -1014,7 +1230,9 @@ Schema:
             selectedModel={selectedModel}
             onSelect={setSelectedModel}
             feature="lesson_generation"
-            onPersist={async (modelId, feat) => { await setPreferredModel(modelId, feat as 'lesson_generation'); }}
+            onPersist={async (modelId, feat) => {
+              await setPreferredModel(modelId, feat as 'lesson_generation');
+            }}
             title="AI Model"
           />
         )}
@@ -1053,13 +1271,20 @@ Schema:
             ]}
           >
             <Ionicons name="expand-outline" size={18} color={theme.primary} />
-            <Text style={[styles.generateButtonText, { color: theme.primary }]}>Open Fullscreen Lesson</Text>
+            <Text style={[styles.generateButtonText, { color: theme.primary }]}>
+              Open Fullscreen Lesson
+            </Text>
           </TouchableOpacity>
         )}
 
         {/* Progress */}
         {showInlineProgress && (
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: '#FF6B6B', marginTop: 16 }]}>
+          <View
+            style={[
+              styles.card,
+              { backgroundColor: palette.surface, borderColor: '#FF6B6B', marginTop: 16 },
+            ]}
+          >
             <View style={styles.progressHeader}>
               <EduDashSpinner color="#FF6B6B" />
               <Text style={[styles.progressTitle, { color: '#FF6B6B' }]}>Generating...</Text>
@@ -1076,16 +1301,23 @@ Schema:
 
         {/* Error */}
         {errorMsg && !pending && (
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: '#EF4444', borderWidth: 1, marginTop: 16 }]}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: palette.surface,
+                borderColor: '#EF4444',
+                borderWidth: 1,
+                marginTop: 16,
+              },
+            ]}
+          >
             <View style={styles.errorHeader}>
               <Ionicons name="warning-outline" size={18} color="#EF4444" />
               <Text style={styles.errorTitle}>Generation Failed</Text>
             </View>
             <Text style={{ color: palette.textSec, fontSize: 13 }}>{errorMsg}</Text>
-            <TouchableOpacity
-              style={styles.retryButton}
-              onPress={handleGenerate}
-            >
+            <TouchableOpacity style={styles.retryButton} onPress={handleGenerate}>
               <Text style={styles.retryButtonText}>Try Again</Text>
             </TouchableOpacity>
           </View>
@@ -1093,7 +1325,17 @@ Schema:
 
         {/* Generated Content */}
         {showInlineGenerated && (
-          <View style={[styles.card, { backgroundColor: palette.surface, borderColor: '#10B981', borderWidth: 2, marginTop: 16 }]}>
+          <View
+            style={[
+              styles.card,
+              {
+                backgroundColor: palette.surface,
+                borderColor: '#10B981',
+                borderWidth: 2,
+                marginTop: 16,
+              },
+            ]}
+          >
             <View style={styles.successHeader}>
               <Ionicons name="checkmark-circle" size={20} color="#10B981" />
               <Text style={styles.successTitle}>Lesson Generated!</Text>
@@ -1105,14 +1347,18 @@ Schema:
                 style={[styles.tab, activeTab === 'lesson' && styles.tabActive]}
                 onPress={() => setActiveTab('lesson')}
               >
-                <Text style={[styles.tabText, activeTab === 'lesson' && styles.tabTextActive]}>📚 Lesson</Text>
+                <Text style={[styles.tabText, activeTab === 'lesson' && styles.tabTextActive]}>
+                  📚 Lesson
+                </Text>
               </TouchableOpacity>
               {generated.insights && (
                 <TouchableOpacity
                   style={[styles.tab, activeTab === 'insights' && styles.tabActive]}
                   onPress={() => setActiveTab('insights')}
                 >
-                  <Text style={[styles.tabText, activeTab === 'insights' && styles.tabTextActive]}>🔍 Insights</Text>
+                  <Text style={[styles.tabText, activeTab === 'insights' && styles.tabTextActive]}>
+                    🔍 Insights
+                  </Text>
                 </TouchableOpacity>
               )}
               {generated.homework && (
@@ -1120,7 +1366,9 @@ Schema:
                   style={[styles.tab, activeTab === 'homework' && styles.tabActive]}
                   onPress={() => setActiveTab('homework')}
                 >
-                  <Text style={[styles.tabText, activeTab === 'homework' && styles.tabTextActive]}>🏠 Homework</Text>
+                  <Text style={[styles.tabText, activeTab === 'homework' && styles.tabTextActive]}>
+                    🏠 Homework
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1128,10 +1376,13 @@ Schema:
             {/* Content */}
             <View style={[styles.contentScroll, { backgroundColor: palette.surface }]}>
               {(() => {
-                const content = activeTab === 'lesson' ? generated.lesson :
-                               activeTab === 'insights' ? generated.insights :
-                               generated.homework;
-                
+                const content =
+                  activeTab === 'lesson'
+                    ? generated.lesson
+                    : activeTab === 'insights'
+                      ? generated.insights
+                      : generated.homework;
+
                 // Debug: ensure content exists
                 if (!content || !content.trim()) {
                   return (
@@ -1140,19 +1391,13 @@ Schema:
                     </Text>
                   );
                 }
-                
+
                 if (Markdown) {
-                  return (
-                    <Markdown style={markdownStyles}>
-                      {content}
-                    </Markdown>
-                  );
+                  return <Markdown style={markdownStyles}>{content}</Markdown>;
                 }
-                
+
                 return (
-                  <Text style={[styles.generatedText, { color: palette.text }]}>
-                    {content}
-                  </Text>
+                  <Text style={[styles.generatedText, { color: palette.text }]}>{content}</Text>
                 );
               })()}
             </View>
@@ -1192,10 +1437,13 @@ Schema:
                 <Text style={styles.actionButtonText}>PDF</Text>
               </TouchableOpacity>
             </View>
-            
+
             {/* View Saved Lessons Button */}
             <TouchableOpacity
-              style={[styles.viewLessonsButton, { backgroundColor: theme.primary + '15', borderColor: theme.primary }]}
+              style={[
+                styles.viewLessonsButton,
+                { backgroundColor: theme.primary + '15', borderColor: theme.primary },
+              ]}
               onPress={() => router.push('/screens/teacher-lessons')}
             >
               <Ionicons name="library-outline" size={18} color={theme.primary} />
@@ -1226,7 +1474,13 @@ Schema:
               : [
                   { label: 'Save', onPress: onSave, disabled: saving, tone: 'primary' as const },
                   ...(generated?.homework
-                    ? [{ label: 'Share Homework', onPress: onShareHomework, tone: 'secondary' as const }]
+                    ? [
+                        {
+                          label: 'Share Homework',
+                          onPress: onShareHomework,
+                          tone: 'secondary' as const,
+                        },
+                      ]
                     : []),
                   { label: 'PDF', onPress: onExportPDF, tone: 'secondary' as const },
                 ]
@@ -1288,7 +1542,12 @@ const styles = StyleSheet.create({
   card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, padding: 16, marginBottom: 16 },
   cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   label: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
-  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  input: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   subjectsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   subjectButton: {
     flexDirection: 'row',
@@ -1355,9 +1614,9 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#FF6B6B' },
   tabText: { fontSize: 13, fontWeight: '600', color: '#6B7280' },
   tabTextActive: { color: '#FFF' },
-  contentScroll: { 
-    backgroundColor: '#F9FAFB', 
-    borderRadius: 8, 
+  contentScroll: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
     padding: 12,
     minHeight: 200,
   },

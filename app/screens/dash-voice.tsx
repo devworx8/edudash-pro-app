@@ -173,7 +173,7 @@ export default function DashVoiceScreen() {
   const {
     isSpeaking, setIsSpeaking, isSpeakingRef, speechQueueRef,
     enqueueSpeech, resetStreamingSpeech, maybeEnqueueStreamingSpeech,
-    longestCommonPrefixLen, streamedPrefixQueuedRef,
+    flushStreamingSpeechFinal, longestCommonPrefixLen, streamedPrefixQueuedRef,
   } = useDashVoiceTTS({ voiceOrbRef, preferredLanguage, orgType, streamingTTSEnabled: STREAMING_TTS_ENABLED });
 
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking, isSpeakingRef]);
@@ -212,7 +212,7 @@ export default function DashVoiceScreen() {
     attachedImage, role, orgType, aiScope, preferredLanguage, profile, user,
     dashPolicy, activeTier, autoScanUserId,
     streamingTTSEnabled: STREAMING_TTS_ENABLED,
-    enqueueSpeech, maybeEnqueueStreamingSpeech, resetStreamingSpeech,
+    enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal, resetStreamingSpeech,
     longestCommonPrefixLen, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
   });
 

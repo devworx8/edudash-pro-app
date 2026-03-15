@@ -231,6 +231,8 @@ export function showQuotaExceededAlert(
     onPress: () => {
       track('edudash.ai.upsell.shown', {
         trigger: 'quota_exceeded_alert',
+        current_tier: 'unknown',
+        target_tier: 'unknown',
         quota_percentage: quotaInfo?.limit ? (quotaInfo.used / quotaInfo.limit) * 100 : 100,
       });
       if (onUpgradePressed) { onUpgradePressed(); }

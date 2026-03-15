@@ -14,14 +14,22 @@ export default function OrgAISettingsScreen() {
   const { theme } = useTheme();
   const { showAlert, alertProps } = useAlertModal();
   const styles = createStyles(theme);
-  
+
   const { data: orgSettings, isLoading } = useOrgSettings();
   const updateSettings = useUpdateOrgSettings();
 
-  const [automationEnabled, setAutomationEnabled] = useState(orgSettings?.ai_preferences?.automation_enabled || false);
-  const [autoGenerateContent, setAutoGenerateContent] = useState(orgSettings?.ai_preferences?.auto_generate_content || false);
-  const [preferredModel, setPreferredModel] = useState(orgSettings?.ai_preferences?.preferred_model || 'gpt-4');
-  const [enabledServices, setEnabledServices] = useState<string[]>(orgSettings?.ai_preferences?.enabled_services || ['openai', 'anthropic']);
+  const [automationEnabled, setAutomationEnabled] = useState(
+    orgSettings?.ai_preferences?.automation_enabled || false,
+  );
+  const [autoGenerateContent, setAutoGenerateContent] = useState(
+    orgSettings?.ai_preferences?.auto_generate_content || false,
+  );
+  const [preferredModel, setPreferredModel] = useState(
+    orgSettings?.ai_preferences?.preferred_model || 'gpt-4',
+  );
+  const [enabledServices, setEnabledServices] = useState<string[]>(
+    orgSettings?.ai_preferences?.enabled_services || ['openai', 'anthropic'],
+  );
 
   React.useEffect(() => {
     if (orgSettings?.ai_preferences) {
@@ -47,27 +55,30 @@ export default function OrgAISettingsScreen() {
         title: t('common.success', { defaultValue: 'Success' }),
         message: t('ai_settings.saved', { defaultValue: 'AI settings saved successfully' }),
         type: 'success',
-        buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }]
+        buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), onPress: () => router.back() }],
       });
     } catch (error: any) {
       showAlert({
         title: t('common.error', { defaultValue: 'Error' }),
-        message: error.message || t('common.save_failed', { defaultValue: 'Failed to save settings' }),
-        type: 'error'
+        message:
+          error.message || t('common.save_failed', { defaultValue: 'Failed to save settings' }),
+        type: 'error',
       });
     }
   };
 
   const toggleService = (service: string) => {
     setEnabledServices((prev) =>
-      prev.includes(service) ? prev.filter((s) => s !== service) : [...prev, service]
+      prev.includes(service) ? prev.filter((s) => s !== service) : [...prev, service],
     );
   };
 
   if (isLoading) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: t('ai_settings.title', { defaultValue: 'Dash AI Settings' }) }} />
+        <Stack.Screen
+          options={{ title: t('ai_settings.title', { defaultValue: 'Dash AI Settings' }) }}
+        />
         <View style={styles.loading}>
           <EduDashSpinner size="large" color={theme.primary} />
         </View>
@@ -77,8 +88,8 @@ export default function OrgAISettingsScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           title: t('ai_settings.title', { defaultValue: 'Dash AI & Automation' }),
           headerRight: () => (
             <TouchableOpacity onPress={handleSave} style={{ marginRight: 16 }}>
@@ -91,20 +102,24 @@ export default function OrgAISettingsScreen() {
               )}
             </TouchableOpacity>
           ),
-        }} 
+        }}
       />
       <ScrollView contentContainerStyle={styles.content}>
         {/* Automation Settings */}
         <Card padding={20} margin={0} elevation="small" style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('ai_settings.automation', { defaultValue: 'Automation' })}</Text>
-          
+          <Text style={styles.sectionTitle}>
+            {t('ai_settings.automation', { defaultValue: 'Automation' })}
+          </Text>
+
           <View style={styles.settingRow}>
             <View style={styles.settingInfo}>
               <Text style={styles.settingLabel}>
                 {t('ai_settings.enable_automation', { defaultValue: 'Enable AI Automation' })}
               </Text>
               <Text style={styles.settingDescription}>
-                {t('ai_settings.automation_desc', { defaultValue: 'Allow Dash AI to automate routine tasks and workflows' })}
+                {t('ai_settings.automation_desc', {
+                  defaultValue: 'Allow Dash AI to automate routine tasks and workflows',
+                })}
               </Text>
             </View>
             <Switch
@@ -121,7 +136,9 @@ export default function OrgAISettingsScreen() {
                 {t('ai_settings.auto_generate', { defaultValue: 'Auto-Generate Content' })}
               </Text>
               <Text style={styles.settingDescription}>
-                {t('ai_settings.auto_generate_desc', { defaultValue: 'Automatically generate announcements, reports, and other content' })}
+                {t('ai_settings.auto_generate_desc', {
+                  defaultValue: 'Automatically generate announcements, reports, and other content',
+                })}
               </Text>
             </View>
             <Switch
@@ -135,11 +152,15 @@ export default function OrgAISettingsScreen() {
 
         {/* AI Services */}
         <Card padding={20} margin={0} elevation="small" style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('ai_settings.services', { defaultValue: 'AI Services' })}</Text>
-          <Text style={styles.sectionDescription}>
-            {t('ai_settings.services_desc', { defaultValue: 'Select which AI services to use for different tasks' })}
+          <Text style={styles.sectionTitle}>
+            {t('ai_settings.services', { defaultValue: 'AI Services' })}
           </Text>
-          
+          <Text style={styles.sectionDescription}>
+            {t('ai_settings.services_desc', {
+              defaultValue: 'Select which AI services to use for different tasks',
+            })}
+          </Text>
+
           {['openai', 'anthropic', 'google'].map((service) => (
             <TouchableOpacity
               key={service}
@@ -147,13 +168,17 @@ export default function OrgAISettingsScreen() {
               onPress={() => toggleService(service)}
             >
               <View style={styles.serviceInfo}>
-                <Ionicons 
-                  name={enabledServices.includes(service) ? 'checkmark-circle' : 'ellipse-outline'} 
-                  size={24} 
-                  color={enabledServices.includes(service) ? theme.primary : theme.textSecondary} 
+                <Ionicons
+                  name={enabledServices.includes(service) ? 'checkmark-circle' : 'ellipse-outline'}
+                  size={24}
+                  color={enabledServices.includes(service) ? theme.primary : theme.textSecondary}
                 />
                 <Text style={styles.serviceLabel}>
-                  {service === 'openai' ? 'OpenAI (GPT-4)' : service === 'anthropic' ? 'Anthropic (Claude)' : 'Google (Gemini)'}
+                  {service === 'openai'
+                    ? 'OpenAI (GPT-4)'
+                    : service === 'anthropic'
+                      ? 'Anthropic (Claude)'
+                      : 'Google (Gemini)'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -162,11 +187,15 @@ export default function OrgAISettingsScreen() {
 
         {/* Preferred Model */}
         <Card padding={20} margin={0} elevation="small" style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('ai_settings.preferred_model', { defaultValue: 'Preferred Model' })}</Text>
-          <Text style={styles.sectionDescription}>
-            {t('ai_settings.model_desc', { defaultValue: 'Default AI model for content generation' })}
+          <Text style={styles.sectionTitle}>
+            {t('ai_settings.preferred_model', { defaultValue: 'Preferred Model' })}
           </Text>
-          
+          <Text style={styles.sectionDescription}>
+            {t('ai_settings.model_desc', {
+              defaultValue: 'Default AI model for content generation',
+            })}
+          </Text>
+
           {[
             'gpt-4o',
             'gpt-4o-mini',
@@ -177,7 +206,10 @@ export default function OrgAISettingsScreen() {
           ].map((model) => (
             <TouchableOpacity
               key={model}
-              style={[styles.modelItem, preferredModel === model && { backgroundColor: theme.primary + '20' }]}
+              style={[
+                styles.modelItem,
+                preferredModel === model && { backgroundColor: theme.primary + '20' },
+              ]}
               onPress={() => setPreferredModel(model)}
             >
               <View style={styles.modelInfo}>
@@ -195,25 +227,29 @@ export default function OrgAISettingsScreen() {
   );
 }
 
-const createStyles = (theme: any) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.background },
-  content: { padding: 16, paddingBottom: 32 },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  section: { marginBottom: 16 },
-  sectionTitle: { color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 8 },
-  sectionDescription: { color: theme.textSecondary, fontSize: 14, marginBottom: 16 },
-  settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
-  settingInfo: { flex: 1, marginRight: 16 },
-  settingLabel: { color: theme.text, fontSize: 16, fontWeight: '600', marginBottom: 4 },
-  settingDescription: { color: theme.textSecondary, fontSize: 13 },
-  serviceItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
-  serviceInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  serviceLabel: { color: theme.text, fontSize: 16 },
-  modelItem: { padding: 12, borderRadius: 8, marginBottom: 8 },
-  modelInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  modelLabel: { color: theme.text, fontSize: 16, fontWeight: '500' },
-});
-
-
-
-
+const createStyles = (theme: any) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    content: { padding: 16, paddingBottom: 32 },
+    loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    section: { marginBottom: 16 },
+    sectionTitle: { color: theme.text, fontSize: 18, fontWeight: '700', marginBottom: 8 },
+    sectionDescription: { color: theme.textSecondary, fontSize: 14, marginBottom: 16 },
+    settingRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.border,
+    },
+    settingInfo: { flex: 1, marginRight: 16 },
+    settingLabel: { color: theme.text, fontSize: 16, fontWeight: '600', marginBottom: 4 },
+    settingDescription: { color: theme.textSecondary, fontSize: 13 },
+    serviceItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+    serviceInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    serviceLabel: { color: theme.text, fontSize: 16 },
+    modelItem: { padding: 12, borderRadius: 8, marginBottom: 8 },
+    modelInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    modelLabel: { color: theme.text, fontSize: 16, fontWeight: '500' },
+  });
