@@ -59,17 +59,18 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
     label: string,
     placeholder: string,
     required: boolean = false,
-    keyboardType: 'default' | 'email-address' | 'phone-pad' | 'numeric' = 'default'
+    keyboardType: 'default' | 'email-address' | 'phone-pad' | 'numeric' = 'default',
+    autoCapitalize: 'none' | 'words' | 'sentences' | 'characters' = 'none'
   ) => {
     const fieldErrors = errors[fieldName] || [];
     const hasError = fieldErrors.length > 0 && touched[fieldName];
     const value = formState[fieldName] as string || '';
-    
+
     return (
       <View style={styles.fieldContainer}>
         <Text style={[
           styles.fieldLabel,
-          { 
+          {
             color: theme.colors.onSurface,
             fontSize: theme.typography.body2.fontSize,
             fontWeight: theme.typography.subtitle2.fontWeight as any
@@ -78,7 +79,7 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
           {label}
           {required && <Text style={{ color: theme.colors.error }}> *</Text>}
         </Text>
-        
+
         <TextInput
           style={[
             styles.textInput,
@@ -94,7 +95,7 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
           placeholder={placeholder}
           placeholderTextColor={theme.colors.onSurfaceVariant}
           keyboardType={keyboardType}
-          autoCapitalize="none"
+          autoCapitalize={autoCapitalize}
           autoCorrect={false}
           editable={!loading}
         />
@@ -320,15 +321,15 @@ export const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({
       <View style={styles.fieldsContainer}>
         <View style={styles.row}>
           <View style={styles.column}>
-            {renderTextField('firstName', 'First Name', 'John', true)}
+            {renderTextField('firstName', 'First Name', 'John', true, 'default', 'words')}
           </View>
           <View style={styles.column}>
-            {renderTextField('lastName', 'Last Name', 'Doe', true)}
+            {renderTextField('lastName', 'Last Name', 'Doe', true, 'default', 'words')}
           </View>
         </View>
         
-        {renderTextField('email', 'Email Address', 'john.doe@example.com', true, 'email-address')}
-        {renderTextField('phone', 'Phone Number', '(555) 123-4567', false, 'phone-pad')}
+        {renderTextField('email', 'Email Address', 'john.doe@example.com', true, 'email-address', 'none')}
+        {renderTextField('phone', 'Phone Number', '(555) 123-4567', false, 'phone-pad', 'none')}
         
         {role === 'parent' && !invitationToken && (
           <View style={{ marginTop: 8 }}>

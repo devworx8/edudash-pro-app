@@ -107,15 +107,16 @@ export default function ResetPasswordScreen() {
       return;
     }
 
-    // Check password strength (basic requirements)
+    // Check password strength requirements
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumber = /[0-9]/.test(password);
+    const hasSpecial = /[^A-Za-z0-9]/.test(password);
 
-    if (!hasUpperCase || !hasLowerCase || !hasNumber) {
+    if (!hasUpperCase || !hasLowerCase || !hasNumber || !hasSpecial) {
       showAlert({
-        title: 'Weak Password',
-        message: 'Password must contain at least one uppercase letter, one lowercase letter, and one number',
+        title: 'Password Too Weak',
+        message: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (e.g. !@#$).',
         type: 'warning',
         buttons: [{ text: 'OK', style: 'default' }],
       });
@@ -224,6 +225,15 @@ export default function ResetPasswordScreen() {
       </LinearGradient>
     );
   }
+
+  // Derived requirement flags — used both in the checklist and to gate the submit button
+  const reqLength = password.length >= 8;
+  const reqUpper = /[A-Z]/.test(password);
+  const reqLower = /[a-z]/.test(password);
+  const reqNumber = /[0-9]/.test(password);
+  const reqSpecial = /[^A-Za-z0-9]/.test(password);
+  const reqMatch = password.length > 0 && password === confirmPassword;
+  const allRequirementsMet = reqLength && reqUpper && reqLower && reqNumber && reqSpecial && reqMatch;
 
   // Valid session - show password reset form
   return (
@@ -354,21 +364,19 @@ export default function ResetPasswordScreen() {
 
               {/* Password requirements */}
               <View style={styles.requirements}>
-                <PasswordRequirement met={password.length >= 8} text="At least 8 characters" />
-                <PasswordRequirement met={/[A-Z]/.test(password)} text="One uppercase letter" />
-                <PasswordRequirement met={/[a-z]/.test(password)} text="One lowercase letter" />
-                <PasswordRequirement met={/[0-9]/.test(password)} text="One number" />
-                <PasswordRequirement
-                  met={password.length > 0 && password === confirmPassword}
-                  text="Passwords match"
-                />
+                <PasswordRequirement met={reqLength} text="At least 8 characters" />
+                <PasswordRequirement met={reqUpper} text="One uppercase letter (A–Z)" />
+                <PasswordRequirement met={reqLower} text="One lowercase letter (a–z)" />
+                <PasswordRequirement met={reqNumber} text="One number (0–9)" />
+                <PasswordRequirement met={reqSpecial} text="One special character (!@#$…)" />
+                <PasswordRequirement met={reqMatch} text="Passwords match" />
               </View>
 
               {/* Submit Button */}
               <GradientButton
                 label={loading ? 'Updating...' : 'Update Password'}
                 onPress={handleResetPassword}
-                disabled={loading}
+                disabled={loading || !allRequirementsMet}
                 loading={loading}
                 style={styles.submitButton}
               />
