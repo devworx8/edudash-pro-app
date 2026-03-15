@@ -6,11 +6,9 @@
  * auto-restart logic.
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect } from 'react';
 import { Animated, Platform } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { formatTranscript } from '@/lib/voice/formatTranscript';
-import { toast } from '@/components/ui/ToastProvider';
 import type { ChatMessage } from '@/components/dash-orb/ChatModal';
 import { normalizeSupportedLanguage } from './orbTutorHelpers';
 
@@ -106,9 +104,7 @@ export function useOrbVoiceHandlers(
         await Promise.resolve(hooks.stopSpeaking());
       }
       if (state.isProcessing) hooks.cancelStream?.();
-    } catch {}
-
-    setters.setIsExpanded(true);
+    } catch { /* barge-in best-effort */ }
 
     if (!state.voiceEnabled) return;
 
@@ -136,9 +132,7 @@ export function useOrbVoiceHandlers(
           setters.setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
         }, 10000);
         return;
-      } catch {
-        // Fall through to server STT
-      }
+      } catch { /* fall through to server STT */ }
     }
 
     // Server STT path
@@ -188,7 +182,7 @@ export function useOrbVoiceHandlers(
     }
   }, [
     state.locked, state.isSpeaking, state.isProcessing, state.voiceEnabled, state.orgType,
-    hooks.onDeviceVoice, hooks.voiceRecorderActions, hooks.voiceRecorderState,
+    hooks, hooks.onDeviceVoice, hooks.voiceRecorderActions, hooks.voiceRecorderState,
     hooks.voiceSTT, hooks.stopSpeaking, hooks.cancelStream,
     refs, setters,
   ]);
@@ -227,10 +221,10 @@ export function useOrbVoiceHandlers(
     refs.ttsSentenceQueueRef.current = [];
     refs.isSpeakingSentenceRef.current = false;
 
-    try { hooks.cancelStream?.(); } catch {}
-    try { if (hooks.onDeviceVoice.isListening) await hooks.onDeviceVoice.stopListening(); } catch {}
-    try { if (hooks.voiceRecorderState?.isRecording) await hooks.voiceRecorderActions?.stopRecording(); } catch {}
-    try { await Promise.resolve(hooks.stopSpeaking()); } catch {}
+    try { hooks.cancelStream?.(); } catch { /* best-effort */ }
+    try { if (hooks.onDeviceVoice.isListening) await hooks.onDeviceVoice.stopListening(); } catch { /* best-effort */ }
+    try { if (hooks.voiceRecorderState?.isRecording) await hooks.voiceRecorderActions?.stopRecording(); } catch { /* best-effort */ }
+    try { await Promise.resolve(hooks.stopSpeaking()); } catch { /* best-effort */ }
 
     setters.setIsListeningForCommand(false);
     setters.setIsProcessing(false);

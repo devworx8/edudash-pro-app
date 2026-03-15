@@ -140,7 +140,14 @@ export function VoiceSection({
       { name: LEGACY_VOICES_BY_LANG[shortCode].female.split('-')[2]?.replace('Neural', '') || 'Female', value: LEGACY_VOICES_BY_LANG[shortCode].female, gender: '👩', label: 'Classic' },
     ] : [];
 
-    const allOptions = [...multilingualOptions, ...hdOptions, ...legacyOptions];
+    // Some legacy voices overlap with HD voices (e.g. en-ZA Luke/Leah).
+    // React list keys are based on `value`, so we must ensure uniqueness here.
+    const seenVoiceIds = new Set<string>();
+    const allOptions = [...multilingualOptions, ...hdOptions, ...legacyOptions].filter((opt) => {
+      if (seenVoiceIds.has(opt.value)) return false;
+      seenVoiceIds.add(opt.value);
+      return true;
+    });
 
     return (
       <View style={[styles.settingRow, { borderBottomColor: theme.border }]}>

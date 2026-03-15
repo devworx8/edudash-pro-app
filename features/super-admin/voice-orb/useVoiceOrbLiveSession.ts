@@ -32,7 +32,7 @@ export function useVoiceOrbLiveSession({
   setUsingLiveSTT,
   setIsProcessing,
   setStatusText,
-  setLiveTranscript,
+  setLiveTranscript: _setLiveTranscript,
   VOICE_TRACE_ENABLED,
   LIVE_SILENCE_TIMEOUT_MS,
   LIVE_FINAL_FALLBACK_MS,
