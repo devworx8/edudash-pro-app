@@ -467,6 +467,7 @@ export default function PrincipalParentRequestsScreen() {
       <FlashList
         data={requests}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={150}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme?.primary || '#00f5ff'} />}
         renderItem={({ item }) => (
           <View style={styles.card}>

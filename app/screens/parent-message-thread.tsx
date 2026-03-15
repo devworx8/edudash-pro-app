@@ -545,6 +545,7 @@ export default function ParentMessageThreadScreen() {
                 </TouchableOpacity>
               )}
               <FlashList ref={h.listRef} data={h.rowsAsc} renderItem={renderRow} keyExtractor={item => item.key}
+              estimatedItemSize={80}
               getItemType={item => item.type} onScroll={h.handleScroll} scrollEventThrottle={16}
               keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}
               removeClippedSubviews={false}

@@ -190,6 +190,7 @@ export default function PrincipalParentsScreen() {
           <FlashList
             data={filtered}
             keyExtractor={(item) => item.auth_user_id}
+            estimatedItemSize={80}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme?.primary || '#00f5ff'} />}
             ListEmptyComponent={
               loading ? <Text style={styles.muted}>Loading…</Text> : <Text style={styles.muted}>No parents found</Text>

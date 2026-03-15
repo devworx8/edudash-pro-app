@@ -302,6 +302,7 @@ export default function ParentMessagesScreen() {
       <FlashList
         data={filteredThreads}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={80}
         renderItem={({ item }) => (
           <ParentThreadItem
             thread={item}

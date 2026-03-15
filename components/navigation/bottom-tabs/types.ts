@@ -24,4 +24,5 @@ export interface BottomTabVariantState {
   navInactiveColor: string;
   centerOrbBackground: string;
   dockGlowColors: [string, string, string];
+  showBackgroundOverlay: boolean;
 }

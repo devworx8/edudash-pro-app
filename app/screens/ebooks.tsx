@@ -429,6 +429,7 @@ export default function EBooksScreen() {
           data={filteredBooks}
           renderItem={renderBookCard}
           keyExtractor={(item) => item.id}
+          estimatedItemSize={200}
           numColumns={2}
           contentContainerStyle={styles.bookList}
           refreshControl={

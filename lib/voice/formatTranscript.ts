@@ -60,6 +60,20 @@ const GRAMMAR_FIXES: Array<[RegExp, string]> = [
   [/\bi wants\b/gi, 'I want'],
   [/\bi needs\b/gi, 'I need'],
   [/\bi doesn't\b/gi, "I don't"],
+  // Additional grammar fixes
+  [/\bhe don't know\b/gi, "he doesn't know"],
+  [/\bshe don't know\b/gi, "she doesn't know"],
+  [/\bthey don't know\b/gi, "they don't know"],
+  [/\bme and my friend\b/gi, 'my friend and I'],
+  [/\bme and him\b/gi, 'he and I'],
+  [/\bme and her\b/gi, 'she and I'],
+  [/\bmore better\b/gi, 'better'],
+  [/\bmore worse\b/gi, 'worse'],
+  [/\bmore faster\b/gi, 'faster'],
+  [/\bmore slower\b/gi, 'slower'],
+  [/\bshould of been\b/gi, 'should have been'],
+  [/\bwould of been\b/gi, 'would have been'],
+  [/\bcould of been\b/gi, 'could have been'],
 ];
 
 import { STT_CORRECTIONS } from '@/lib/voice/sttDictionary';

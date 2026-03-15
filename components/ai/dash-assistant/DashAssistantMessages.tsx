@@ -218,7 +218,19 @@ export const DashAssistantMessages: React.FC<DashAssistantMessagesProps> = ({
       contentContainerStyle={listContentStyle}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
-      removeClippedSubviews={false}
+      removeClippedSubviews={Platform.OS !== 'web'}
+      drawDistance={320}
+      overrideItemLayout={(layout, item, _index, _maxWidth, _extra) => {
+        // Provide estimated height hints for better layout calculations
+        // User messages are typically shorter than assistant messages
+        if (item?.type === 'user') {
+          layout.span = undefined;
+          layout.size = 80;
+        } else if (item?.type === 'assistant') {
+          layout.span = undefined;
+          layout.size = 220;
+        }
+      }}
       onScroll={(e: any) => {
         try {
           const { contentOffset, layoutMeasurement, contentSize } = e.nativeEvent as any;

@@ -342,6 +342,7 @@ export default function TeacherMessageListScreen() {
       <FlashList
         data={filteredThreads}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={80}
         renderItem={({ item }) => (
           <ThreadItem
             thread={item}

@@ -335,6 +335,7 @@ export default function TeacherLessonsScreen() {
           data={filteredLessons}
           renderItem={renderLessonItem}
           keyExtractor={(item) => item.id}
+          estimatedItemSize={120}
           contentContainerStyle={[
             styles.listContent,
             filteredLessons.length === 0 && styles.listContentEmpty,

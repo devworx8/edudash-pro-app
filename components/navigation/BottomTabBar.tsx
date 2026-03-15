@@ -72,8 +72,8 @@ export function BottomTabBar() {
       ]}
     >
       <View style={styles.dock}>
-        {Platform.OS === 'ios' ? <BlurView intensity={32} tint="dark" style={styles.blurBackground} /> : null}
-        <LinearGradient colors={variant.dockGlowColors} style={styles.dockGlow} />
+        {variant.showBackgroundOverlay && Platform.OS === 'ios' ? <BlurView intensity={32} tint="dark" style={styles.blurBackground} /> : null}
+        {variant.showBackgroundOverlay ? <LinearGradient colors={variant.dockGlowColors} style={styles.dockGlow} /> : null}
         {sortedTabs.map((tab) => {
           const active = isBottomTabActive(pathname, tab.route, tab.id);
           const label = t(`navigation.${tab.label.toLowerCase()}`, { defaultValue: tab.label });

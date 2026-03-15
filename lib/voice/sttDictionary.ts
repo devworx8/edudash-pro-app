@@ -218,6 +218,54 @@ export const STT_CORRECTIONS: Array<[RegExp, string]> = [
   [/\bmemorandum\b/gi, 'memorandum'],
   [/\brubric\b/gi, 'rubric'],
   [/\bassessment\b/gi, 'assessment'],
+
+  // ── Additional common STT misrecognitions ──
+  [/\bi\s*mean\s*to\s*say\b/gi, 'I meant to say'],
+  [/\bgon\s*na\b/gi, 'going to'],
+  [/\bgot\s*ta\b/gi, 'got to'],
+  [/\bwant\s*ta\b/gi, 'want to'],
+  [/\bdon\s*ta\b/gi, 'do not'],
+  [/\bcannot\s*wait\b/gi, "can't wait"],
+  [/\bkind\s*of\s*a\b/gi, 'kind of'],
+  [/\bsort\s*of\s*a\b/gi, 'sort of'],
+  [/\bin\s*the\s*morning\b/gi, 'in the morning'],
+  [/\bin\s*the\s*afternoon\b/gi, 'in the afternoon'],
+  [/\bin\s*the\s*evening\b/gi, 'in the evening'],
+
+  // ── Math and numbers ──
+  [/\btimes\s*table\b/gi, 'times table'],
+  [/\bmultiplication\s*table\b/gi, 'multiplication table'],
+  [/\baddition\s*and\s*subtraction\b/gi, 'addition and subtraction'],
+  [/\bplus\s*minus\b/gi, 'plus minus'],
+  [/\bsquare\s*root\b/gi, 'square root'],
+  [/\bpower\s*of\b/gi, 'power of'],
+  [/\bto\s*the\s*power\b/gi, 'to the power'],
+
+  // ── School subjects ──
+  [/\bmath\s*lit\b/gi, 'Mathematical Literacy'],
+  [/\bmeth\s*lit\b/gi, 'Mathematical Literacy'],
+  [/\blife\s*orientation\b/gi, 'Life Orientation'],
+  [/\blife\s*sciences?\b/gi, 'Life Sciences'],
+  [/\bnatural\s*sciences?\b/gi, 'Natural Sciences'],
+  [/\bsocial\s*sciences?\b/gi, 'Social Sciences'],
+  [/\bphysical\s*sciences?\b/gi, 'Physical Sciences'],
+  [/\baccounting\b/gi, 'Accounting'],
+  [/\bbusiness\s*studies?\b/gi, 'Business Studies'],
+  [/\beconomics\b/gi, 'Economics'],
+  [/\bgeography\b/gi, 'Geography'],
+  [/\bhistory\b/gi, 'History'],
+  [/\benglish\b/gi, 'English'],
+  [/\bafrikaans\b/gi, 'Afrikaans'],
+
+  // ── Common South African terms ──
+  [/\bmatric\b/gi, 'matric'],
+  [/\bmatriculation\b/gi, 'matriculation'],
+  [/\bnsce?\b/gi, 'NSC'],
+  [/\bnational\s*senior\s*certificate\b/gi, 'National Senior Certificate'],
+  [/\bieb\b/gi, 'IEB'],
+  [/\bschool\s*fees?\b/gi, 'school fees'],
+  [/\bhome\s*work\b/gi, 'homework'],
+  [/\bhome\s*work\b/gi, 'homework'],
 ];
 
 // ── Lightweight partial correction ─────────────────────────────────
