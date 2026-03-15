@@ -253,6 +253,23 @@ function normalizeLatexMath(text: string): string {
   // Square root: \sqrt{x} → "square root of x"
   result = result.replace(/\\sqrt\{([^}]*)\}/g, 'square root of $1');
 
+  // Exponents: 5^{3} → "5 to the power of 3", 2^4 → "2 to the power of 4"
+  // SA convention: "to the power of" (never "caret" or "hat")
+  result = result.replace(/(\d+)\^{([^}]+)}/g, '$1 to the power of $2');
+  result = result.replace(/(\d+)\^(\d+)/g, '$1 to the power of $2');
+  // Unicode superscripts (from native renderer): 5² → "5 to the power of 2"
+  result = result
+    .replace(/(\d)⁰/g, '$1 to the power of 0')
+    .replace(/(\d)¹/g, '$1 to the power of 1')
+    .replace(/(\d)²/g, '$1 to the power of 2')
+    .replace(/(\d)³/g, '$1 to the power of 3')
+    .replace(/(\d)⁴/g, '$1 to the power of 4')
+    .replace(/(\d)⁵/g, '$1 to the power of 5')
+    .replace(/(\d)⁶/g, '$1 to the power of 6')
+    .replace(/(\d)⁷/g, '$1 to the power of 7')
+    .replace(/(\d)⁸/g, '$1 to the power of 8')
+    .replace(/(\d)⁹/g, '$1 to the power of 9');
+
   // LaTeX commands → Unicode symbols (normalizeMathExpressions converts these to words)
   result = result
     .replace(/\\div\b/g, '÷')

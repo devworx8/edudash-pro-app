@@ -15,7 +15,7 @@ export const inputStyles = StyleSheet.create({
   // Main Input Container
   inputContainer: {
     paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingTop: 16,
     paddingBottom: 12,
     borderTopWidth: 0,
     borderWidth: 0,

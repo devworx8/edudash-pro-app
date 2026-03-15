@@ -11,7 +11,8 @@ import {
   getConversationSnapshot,
   saveConversationSnapshot,
   setLastActiveConversationId,
-  getLastActiveConversationId
+  getLastActiveConversationId,
+  deleteConversationSnapshot,
 } from '@/services/conversationPersistence';
 
 export class DashAIConversationFacade {
@@ -131,7 +132,14 @@ export class DashAIConversationFacade {
    */
   public async deleteConversation(conversationId: string): Promise<void> {
     if (!this.conversationManager) {
-      console.warn('[DashAIConversationFacade] Conversation manager not initialized');
+      // Standalone user — delete from local persistence
+      if (this.userId) {
+        await deleteConversationSnapshot(this.userId, conversationId);
+      }
+      this.tempMessages.delete(conversationId);
+      if (this.tempConversationId === conversationId) {
+        this.tempConversationId = null;
+      }
       return;
     }
     return this.conversationManager.deleteConversation(conversationId);

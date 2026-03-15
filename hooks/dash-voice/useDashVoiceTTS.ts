@@ -101,7 +101,9 @@ export function useDashVoiceTTS({
       setIsSpeaking(true);
       const lang = preferredLanguage || 'en-ZA';
       await voiceOrbRef.current.speakText(clean, lang, { phonicsMode });
-    } catch { /* ignore */ } finally {
+    } catch (ttsErr) {
+      if (__DEV__) console.warn('[DashVoiceTTS] speakResponse error:', ttsErr);
+    } finally {
       isSpeakingRef.current = false;
       setIsSpeaking(false);
     }

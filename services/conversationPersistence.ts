@@ -229,6 +229,27 @@ export function pruneMessages(messages: PersistedMessage[], max: number): Persis
 }
 
 /**
+ * Delete a single conversation snapshot from local storage
+ */
+export async function deleteConversationSnapshot(
+  userId: string,
+  conversationId: string,
+): Promise<void> {
+  try {
+    const key = CONVERSATION_CACHE_KEY(userId, conversationId);
+    await AsyncStorage.removeItem(key);
+
+    // If this was the last-active conversation, clear that pointer too
+    const lastActive = await AsyncStorage.getItem(LAST_ACTIVE_CONVERSATION_KEY(userId));
+    if (lastActive === conversationId) {
+      await AsyncStorage.removeItem(LAST_ACTIVE_CONVERSATION_KEY(userId));
+    }
+  } catch (error) {
+    console.error('[ConversationPersistence] Failed to delete conversation snapshot:', error);
+  }
+}
+
+/**
  * Clear all conversation data for a user (for logout/reset)
  */
 export async function clearAllConversationData(userId: string): Promise<void> {

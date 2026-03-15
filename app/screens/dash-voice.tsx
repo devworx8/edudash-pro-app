@@ -247,7 +247,12 @@ export default function DashVoiceScreen() {
     if (n.includes('network_retrying')) return setVoiceErrorBanner('I lost connection for a moment. Retrying listening now...');
     if (n.includes('phonics') && n.includes('cloud tts')) return setVoiceErrorBanner('Phonics voice needs Azure cloud TTS. It is currently unavailable, so letter sounds may fail.');
     if (n.includes('service_unconfigured') || n.includes('502')) return setVoiceErrorBanner('Azure voice is unavailable right now. Check tts-proxy Azure secrets/config.');
-    if (n.includes('network') || n.includes('timeout') || n.includes('fetch')) return setVoiceErrorBanner('Voice recognition needs a stable connection. Check internet and try again.');
+    if (n.includes('voice service unavailable') || n.includes('500') || n.includes('503')) return setVoiceErrorBanner('Voice service is temporarily unavailable. Please try again.');
+    if (n.includes('not authenticated') || n.includes('401') || n.includes('403')) return setVoiceErrorBanner('Session expired. Please sign in again.');
+    if (n.includes('not available') || n.includes('permission denied')) return setVoiceErrorBanner('Microphone or voice recognition not available on this device.');
+    // Only classify as network issue for actual connectivity failures
+    if (n.includes('network request failed') || n.includes('err_internet') || n.includes('no internet')) return setVoiceErrorBanner('Voice recognition needs a stable connection. Check internet and try again.');
+    if (n.includes('timeout')) return setVoiceErrorBanner('Voice request timed out. This usually resolves itself — please try again.');
     setVoiceErrorBanner('Voice encountered an error. Please try again.');
   }, []);
 

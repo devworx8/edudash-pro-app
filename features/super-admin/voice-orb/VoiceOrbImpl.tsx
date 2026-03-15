@@ -141,10 +141,12 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     if (isMuted || !spoken) return false;
     if (!(isSpeakingRef.current || ttsSpeakingRef.current)) return false;
     if (bargeInTriggeredRef.current) return false;
+    // Block barge-in while TTS is actively playing — mic picks up Dash's own audio
+    if (ttsPlaybackActiveRef.current) return false;
     const ttsStartedAt = ttsStartedAtRef.current;
     if (ttsStartedAt != null && Date.now() - ttsStartedAt < bargeInGraceMsRef.current) return false;
     return spoken.length >= 4;
-  }, [isMuted]);
+  }, [isMuted, ttsPlaybackActiveRef]);
 
   const triggerBargeIn = useCallback(async (text: string) => {
     if (!shouldTriggerBargeIn(text)) return;
@@ -361,7 +363,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   ]);
 
   // TTS handlers + auto-restart (imperative handle, feedback prevention, auto-restart effects)
-  const { cancelAutoRestart } = useVoiceOrbTTSHandlers({
+  const { cancelAutoRestart, ttsPlaybackActiveRef } = useVoiceOrbTTSHandlers({
     ref,
     recorderState,
     recorderActions,
@@ -493,7 +495,9 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     if (!(isSpeaking || ttsIsSpeaking)) return;
     if (recorderState.isRecording || usingLiveSTTRef.current || isListening) return;
     const timer = setTimeout(() => {
-      if (!restartBlockedRef.current && !isMuted) {
+      // Don't start barge-in monitor while TTS is actively playing —
+      // the mic picks up Dash's own speech and triggers self-interruption.
+      if (!restartBlockedRef.current && !isMuted && !ttsPlaybackActiveRef.current) {
         handleStartRecordingRef.current?.();
       }
     }, BARGE_IN_LISTEN_DELAY_MS);
@@ -509,6 +513,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     restartBlocked,
     restartBlockedRef,
     ttsIsSpeaking,
+    ttsPlaybackActiveRef,
     usingLiveSTTRef,
   ]);
 

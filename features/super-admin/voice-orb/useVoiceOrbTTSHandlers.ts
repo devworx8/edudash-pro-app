@@ -68,6 +68,9 @@ export function useVoiceOrbTTSHandlers({
   postTTSSilentUntilRef,
 }: TTSHandlerParams) {
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** True while the speakText imperative handle is executing (Azure request + audio playback).
+   *  Prevents the barge-in listen effect from starting recording during TTS. */
+  const ttsPlaybackActiveRef = useRef(false);
   // Delay before re-enabling mic after TTS ends — long enough for speaker echo to die down
   const AUTO_RESTART_DELAY_MS = 1500;
   // How long (ms) to gate onTranscript after TTS ends to prevent echo self-interruption
@@ -96,13 +99,15 @@ export function useVoiceOrbTTSHandlers({
 
   useImperativeHandle(ref, () => ({
     speakText: async (text: string, language?: SupportedLanguage, options?: TTSOptions) => {
+      ttsPlaybackActiveRef.current = true;
       await suspendListeningForTTS();
       onTTSStart?.();
       try {
         const ttsLanguage = language || lastDetectedLanguage || selectedLanguage;
         console.log('[VoiceOrb] Speaking with language:', ttsLanguage);
-        await speak(text, ttsLanguage, options);
+        await speak(text, ttsLanguage, { ...options, onBeforePlay: suspendListeningForTTS });
       } finally {
+        ttsPlaybackActiveRef.current = false;
         onTTSEnd?.();
       }
     },
@@ -217,5 +222,5 @@ export function useVoiceOrbTTSHandlers({
   // Cleanup timer on unmount
   useEffect(() => () => { cancelAutoRestart(); }, [cancelAutoRestart]);
 
-  return { suspendListeningForTTS, scheduleAutoRestart, cancelAutoRestart };
+  return { suspendListeningForTTS, scheduleAutoRestart, cancelAutoRestart, ttsPlaybackActiveRef };
 }

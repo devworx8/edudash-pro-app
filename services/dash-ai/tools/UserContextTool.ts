@@ -138,7 +138,7 @@ const UserContextTool: Tool = {
           : 'en-ZA';
 
       const userContext: Record<string, any> = {
-        name: profile.full_name || profile.display_name || 'User',
+        name: profile.full_name || profile.display_name || '',
         firstName: profile.full_name?.split(' ')[0] || 'there',
         role: profile.role || context.role,
         tier: profile.subscription_tier || context.tier,

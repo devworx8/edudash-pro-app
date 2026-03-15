@@ -58,6 +58,8 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
       playbackIdRef.current += 1;
       clearPlaybackTimers();
       cleanupPlayer(playerRef.current);
+      // Reset so the next playAudioUrl reclaims audio focus/mode
+      audioModeConfiguredRef.current = false;
     } catch (err) {
       console.error('[VoiceTTS] Error stopping playback:', err);
     }
@@ -70,13 +72,13 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
 
   const playAudioUrl = useCallback((audioUrl: string, timeoutMs: number): Promise<void> => {
     return new Promise<void>(async (resolve, reject) => {
-      if (!audioModeConfiguredRef.current) {
-        try {
-          await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
-          audioModeConfiguredRef.current = true;
-        } catch (modeErr) {
-          console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
-        }
+      // Always reconfigure audio mode before playback — barge-in recording
+      // or other audio sources may have changed the audio session since last play.
+      try {
+        await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
+        audioModeConfiguredRef.current = true;
+      } catch (modeErr) {
+        console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
       }
 
       let settled = false;

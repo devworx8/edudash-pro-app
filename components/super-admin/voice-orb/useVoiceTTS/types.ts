@@ -10,6 +10,8 @@ export interface TTSOptions {
   rate?: number;
   pitch?: number;
   phonicsMode?: boolean;
+  /** Called before each audio chunk plays — used to suspend barge-in recording. */
+  onBeforePlay?: () => Promise<void> | void;
 }
 
 export interface UseVoiceTTSReturn {

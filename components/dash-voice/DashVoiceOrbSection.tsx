@@ -1,17 +1,13 @@
 /**
  * DashVoiceOrbSection — ORB + processing indicator for Dash Voice.
  *
- * Tier-based orb visuals:
- * - free: DashOrb (shared glass-ring orb across web/native)
- * - starter: CosmicOrb (purple/teal concentric rings, purple core)
- * - premium/enterprise: PremiumCosmicOrb (premium cosmic orb with orbiting satellites)
+ * All tiers use the DashOrb 3D sphere visual. VoiceOrb is rendered hidden
+ * for audio logic only.
  */
 
 import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
-import { PremiumCosmicOrb } from '@/components/dash-orb/PremiumCosmicOrb';
 import { DashOrb } from '@/components/dash-orb/DashOrb';
 import { s } from '@/app/screens/dash-voice.styles';
 import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
@@ -137,12 +133,7 @@ export function DashVoiceOrbSection({
     />
   ) : null;
 
-  // free tier — shared DashOrb visual on both web and native
-  const showFreeOrb = orbTier === 'free';
-  // starter tier — CosmicOrb visual (purple/teal rings)
-  const showStarterOrb = orbTier === 'starter';
-  // premium/enterprise — PremiumCosmicOrb visual (premium cosmic orb)
-  const showPremiumOrb = orbTier === 'premium' || orbTier === 'enterprise';
+  // All tiers now use DashOrb 3D sphere visual
 
   // Map processing/speaking state to DashOrb state prop
   const dashOrbState = isSpeaking ? 'speaking' as const
@@ -153,34 +144,15 @@ export function DashVoiceOrbSection({
   return (
     <>
       <View style={[s.orbContainer, { minHeight: orbRenderSize + 40, marginBottom: showTranscript ? 10 : 16 }]}>
-        {showFreeOrb ? (
-          <>
-            {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
-            <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
-              <DashOrb size={orbRenderSize} state={dashOrbState} />
-            </TouchableOpacity>
-          </>
-        ) : showStarterOrb ? (
-          <>
-            {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
-            <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
-              <CosmicOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
-            </TouchableOpacity>
-          </>
-        ) : showPremiumOrb ? (
-          <>
-            {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
-            <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
-              <PremiumCosmicOrb size={orbRenderSize} isProcessing={isProcessing || isListening} isSpeaking={isSpeaking} />
-            </TouchableOpacity>
-          </>
-        ) : (
-          voiceOrbElement ?? <DashOrb size={orbRenderSize} state={dashOrbState} />
-        )}
+        {/* VoiceOrb handles audio logic in a hidden container; DashOrb is always the visual */}
+        {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
+        <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
+          <DashOrb size={orbRenderSize} state={dashOrbState} />
+        </TouchableOpacity>
       </View>
 
       {/* Single mic button: reflects mute + listening state. Tap = unmute or toggle listening. Long press = toggle mute. */}
-      {(showFreeOrb || showStarterOrb || showPremiumOrb) && VoiceOrb && (
+      {VoiceOrb && (
         <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 12 }}>
           <TouchableOpacity
             style={[

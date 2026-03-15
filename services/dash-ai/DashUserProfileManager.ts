@@ -140,7 +140,7 @@ export class DashUserProfileManager {
     this.userProfile = {
       userId: this.config.currentUser.id,
       role: this.config.currentUser.role as any,
-      name: this.config.currentUser.name || 'User',
+      name: this.config.currentUser.name || '',
       preferences: {
         communication_style: 'friendly',
         notification_frequency: 'daily_digest',

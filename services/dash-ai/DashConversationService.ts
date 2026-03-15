@@ -212,19 +212,38 @@ export class DashConversationService {
 
   /**
    * Delete conversation
+   * RLS enforces auth.uid() = user_id, so preschool_id filter is relaxed
+   * to avoid silent 0-row deletes when org IDs drift.
    */
   async deleteConversation(conversationId: string): Promise<void> {
     try {
-      const { error } = await getSupabase()
+      // Try exact match first (user + preschool + conversation)
+      const { data, error } = await getSupabase()
         .from('ai_conversations')
         .delete()
         .eq('user_id', this.userId)
-        .eq('preschool_id', this.preschoolId) // REQUIRED for tenant isolation
-        .eq('conversation_id', conversationId);
+        .eq('preschool_id', this.preschoolId)
+        .eq('conversation_id', conversationId)
+        .select('id');
 
       if (error) throw error;
 
-      console.log(`[DashConversationService] Deleted conversation: ${conversationId}`);
+      // If exact match deleted rows, we're done
+      if (data && data.length > 0) {
+        console.log(`[DashConversationService] Deleted conversation: ${conversationId}`);
+        return;
+      }
+
+      // Fallback: delete by user_id + conversation_id only (RLS still enforces ownership)
+      const { error: fallbackError } = await getSupabase()
+        .from('ai_conversations')
+        .delete()
+        .eq('user_id', this.userId)
+        .eq('conversation_id', conversationId);
+
+      if (fallbackError) throw fallbackError;
+
+      console.log(`[DashConversationService] Deleted conversation (fallback): ${conversationId}`);
     } catch (error) {
       console.error('[DashConversationService] Failed to delete conversation:', error);
       throw error;

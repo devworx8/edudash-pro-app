@@ -405,6 +405,9 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
         const chunkText = cloudChunks[chunkIndex];
         const promise = requestAzureWithRetry(chunkText, language, effectiveOptions, cachedToken)
           .then((audioUrl) => ({ audioUrl, chunkIndex }));
+        // Prevent unhandled rejection if this prefetch is abandoned (e.g. stop/barge-in).
+        // The main loop still awaits the original promise and handles the rejection there.
+        promise.catch(() => {});
         prefetchMap.set(chunkIndex, promise);
       };
 
@@ -441,6 +444,13 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
           startPrefetch(chunkIndex + 1);
           if (chunkIndex + 2 < cloudChunks.length) startPrefetch(chunkIndex + 2);
 
+          // Suspend barge-in recording before playing — the barge-in monitor
+          // may have started recording during the Azure request, stealing audio
+          // focus and preventing playback on Android.
+          if (effectiveOptions.onBeforePlay) {
+            try { await effectiveOptions.onBeforePlay(); } catch { /* non-fatal */ }
+          }
+
           await playAudioUrl(audioUrl, estimatePlaybackTimeoutMs(chunkText));
           anyChunkSucceeded = true;
           cloudChunkSucceeded = true;
@@ -464,8 +474,9 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
           const errMsg = String(azureErr instanceof Error ? azureErr.message : azureErr || '').toLowerCase();
           const isAuthError = errMsg.includes('auth_missing') || errMsg.includes('401') || errMsg.includes('403');
           const isQuotaError = errMsg.includes('quota_exhausted');
+          const isStopError = errMsg === 'stopped' || stopRequestedRef.current;
 
-          if (isAuthError || isQuotaError) {
+          if (isAuthError || isQuotaError || isStopError) {
             reportTTSError(azureErr);
             lastErr = azureErr instanceof Error ? azureErr : new Error(String(azureErr));
             telemetryError = azureErr;
@@ -491,10 +502,16 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
       logVoiceTrace('tts_done', { mode: cloudChunkSucceeded ? 'azure' : fallbackUsed || 'none', durationMs: Date.now() - speechStartedAt });
 
     } catch (err) {
-      console.error('[VoiceTTS] Error:', err);
-      reportTTSError(err);
-      const diagnostics = parseTTSDiagnostics(err);
-      track('edudash.voice.tts_turn', { tier: tier || 'free', capability_tier: resolveCapabilityTier(String(tier || 'free')), cloud_attempted: true, fallback_used: 'none', error_code: diagnostics.errorCode || null, upstream_status: diagnostics.statusCode || null, request_id: diagnostics.requestId || null, success: false });
+      // STOPPED is a normal interruption (barge-in, user stop) — not an error condition
+      const errMsg = String(err instanceof Error ? err.message : err || '').toLowerCase();
+      if (errMsg === 'stopped' || stopRequestedRef.current) {
+        logVoiceTrace('tts_stopped', { reason: 'user_interrupt' });
+      } else {
+        console.error('[VoiceTTS] Error:', err);
+        reportTTSError(err);
+        const diagnostics = parseTTSDiagnostics(err);
+        track('edudash.voice.tts_turn', { tier: tier || 'free', capability_tier: resolveCapabilityTier(String(tier || 'free')), cloud_attempted: true, fallback_used: 'none', error_code: diagnostics.errorCode || null, upstream_status: diagnostics.statusCode || null, request_id: diagnostics.requestId || null, success: false });
+      }
     } finally {
       setIsSpeaking(false);
     }
