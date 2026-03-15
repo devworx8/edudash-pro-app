@@ -154,7 +154,7 @@ export function useRealtimeTier(options: UseRealtimeTierOptions = {}) {
 
       // Prefer authoritative quota from Edge Function (ai-usage) when available
       try {
-        const quotaStatus = await getQuotaStatus(userId, 'homework_help');
+        const quotaStatus = await getQuotaStatus(userId, 'chat_message');
         if (typeof quotaStatus?.limit === 'number') {
           quotaLimit = quotaStatus.limit;
         }
@@ -271,12 +271,31 @@ export function useRealtimeTier(options: UseRealtimeTierOptions = {}) {
     setIsLoading(true);
     fetchTierStatus();
   }, [fetchTierStatus]);
-  
+
+  /**
+   * Optimistic quota increment — call immediately when a message is sent
+   * so the ring updates without waiting for the server round-trip.
+   * The next `refresh()` (called 2s after response) will sync the real value.
+   */
+  const incrementQuota = useCallback((by: number) => {
+    setTierStatus((prev) => {
+      if (!prev) return prev;
+      const newUsed = prev.quotaUsed + by;
+      const cappedUsed = prev.quotaLimit > 0 ? Math.min(newUsed, prev.quotaLimit) : newUsed;
+      return {
+        ...prev,
+        quotaUsed: cappedUsed,
+        quotaPercentage: prev.quotaLimit > 0 ? (cappedUsed / prev.quotaLimit) * 100 : 0,
+      };
+    });
+  }, []);
+
   return {
     tierStatus,
     isLoading,
     error,
     refresh,
+    incrementQuota,
     tier: tierStatus?.tier || contextTier || 'free',
     tierDisplayName: tierStatus?.tierDisplayName || formatRealtimeTierName(contextTier || 'free'),
     isActive: tierStatus?.isActive ?? true,

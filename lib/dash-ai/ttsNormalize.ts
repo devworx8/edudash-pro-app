@@ -354,7 +354,9 @@ function stripMarkdownAndMeta(text: string, preservePhonicsMarkers: boolean): st
     // Headers — \s* (not \s+) so ##Heading without space is also stripped
     .replace(/^#{1,6}\s*/gm, '')
     .replace(/^\s*[-*+\u2022\u25e6\u25aa\u00b7]\s*/gm, '')
-    .replace(/^\s*\d+[.)]\s*/gm, '')
+    // Convert "1. text" → "Item 1. text" so TTS clearly announces each list item
+    // instead of blending the number into the previous item's trailing value.
+    .replace(/^\s*(\d+)[.)]\s*/gm, 'Item $1. ')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
     .replace(/^>\s*/gm, '')
     // Catch-all: strip remaining consecutive asterisks (unclosed/malformed bold markers)

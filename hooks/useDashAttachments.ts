@@ -55,6 +55,7 @@ export interface UseDashAttachmentsReturn {
   handlePickDocuments: () => Promise<void>;
   handleAttachFile: () => Promise<void>;
   handleRemoveAttachment: (attachmentId: string) => Promise<void>;
+  updateAttachmentUri: (attachmentId: string, newUri: string) => void;
   uploadAttachments: (attachments: DashAttachment[], conversationIdOverride?: string | null) => Promise<DashAttachment[]>;
   prepareAttachmentsForAI: (attachments: DashAttachment[]) => Promise<DashAttachment[]>;
 }
@@ -376,6 +377,16 @@ export function useDashAttachments(options: UseDashAttachmentsOptions): UseDashA
     return prepared;
   }, []);
 
+  const updateAttachmentUri = useCallback((attachmentId: string, newUri: string) => {
+    setSelectedAttachments((prev) =>
+      prev.map((a) =>
+        a.id === attachmentId
+          ? { ...a, previewUri: newUri, uri: newUri, meta: { ...(a.meta || {}), image_base64: undefined } }
+          : a
+      )
+    );
+  }, []);
+
   return {
     selectedAttachments,
     setSelectedAttachments,
@@ -386,6 +397,7 @@ export function useDashAttachments(options: UseDashAttachmentsOptions): UseDashA
     handlePickDocuments,
     handleAttachFile,
     handleRemoveAttachment,
+    updateAttachmentUri,
     uploadAttachments,
     prepareAttachmentsForAI,
   };

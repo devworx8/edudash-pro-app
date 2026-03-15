@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { inputStyles as styles } from '@/components/ai/dash-assistant/styles/input.styles';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { DashAttachment } from '@/services/dash-ai/types';
@@ -56,6 +57,7 @@ interface DashInputBarProps {
   onTakePhoto: () => void;
   onAttachFile: () => void;
   onRemoveAttachment: (attachmentId: string) => void;
+  onUpdateAttachmentUri?: (attachmentId: string, newUri: string) => void;
   onQuickAction?: (text: string) => void;
   onCancel?: () => void;
   onInterrupt?: () => void | Promise<void>;
@@ -165,6 +167,7 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
   onTakePhoto,
   onAttachFile,
   onRemoveAttachment,
+  onUpdateAttachmentUri,
   onQuickAction,
   onCancel,
   onInterrupt,
@@ -217,6 +220,11 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
           },
         ]}
       >
+        {Platform.OS !== 'web' && selectedAttachments.some(a => a.kind === 'image') && (
+          <Text style={{ color: theme.textTertiary, fontSize: 10, fontWeight: '500', paddingHorizontal: 4, paddingBottom: 6, letterSpacing: 0.2 }}>
+            {'Tip: use the ↺ button to rotate if the image is sideways'}
+          </Text>
+        )}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -284,6 +292,28 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
                       >
                         <Ionicons name="alert-circle" size={24} color="#FFFFFF" />
                       </View>
+                    )}
+                    {/* Rotate button — corrects sideways camera photos before sending */}
+                    {status !== 'uploading' && onUpdateAttachmentUri && Platform.OS !== 'web' && (
+                      <TouchableOpacity
+                        style={[styles.attachmentImageRotate, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+                        onPress={async () => {
+                          try {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                            const result = await ImageManipulator.manipulateAsync(
+                              imageUri,
+                              [{ rotate: 90 }],
+                              { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                            );
+                            onUpdateAttachmentUri(attachment.id, result.uri);
+                          } catch {
+                            // ignore — user can retry
+                          }
+                        }}
+                        accessibilityLabel="Rotate image 90°"
+                      >
+                        <Ionicons name="refresh" size={14} color="#FFFFFF" />
+                      </TouchableOpacity>
                     )}
                     {/* Remove button */}
                     {status !== 'uploading' && (

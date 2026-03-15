@@ -37,8 +37,9 @@ const STREAMING_PREF_USER_SET_KEY = '@dash_streaming_pref_user_set';
 
 function getDefaultVoiceTypeForLanguage(lang: string): string {
   const langNorm = normalizeLanguageCode(lang);
+  // Always default to the multilingual Ava voice for English — avoids Leah/Luke legacy defaults.
   return langNorm === 'en'
-    ? 'en-ZA-LukeNeural'
+    ? 'en-US-AvaMultilingualNeural'
     : resolveDefaultVoiceId(langNorm, 'female');
 }
 

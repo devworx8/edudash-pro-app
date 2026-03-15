@@ -17,6 +17,7 @@ interface DashOptionsSheetProps {
   onOpenHistory: () => void;
   onOpenSearch: () => void;
   onOpenOrb: () => void;
+  onOpenSettings: () => void;
   onOpenScanner?: () => void;
   onRunScheduleTool?: () => void;
   onRunAssignmentsTool?: () => void;
@@ -77,6 +78,7 @@ export function DashOptionsSheet({
   onOpenHistory,
   onOpenSearch,
   onOpenOrb,
+  onOpenSettings,
   onOpenScanner,
   onRunScheduleTool,
   onRunAssignmentsTool,
@@ -173,6 +175,12 @@ export function DashOptionsSheet({
             subtitle="Switch to voice-first mode"
             disabled={isBusy}
             onPress={() => closeThen(onOpenOrb)}
+          />
+          <OptionItem
+            icon="settings-outline"
+            title="Dash Settings"
+            subtitle="Personalise Dash — voice, model, memory"
+            onPress={() => closeThen(onOpenSettings)}
           />
           <TouchableOpacity
             style={[

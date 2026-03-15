@@ -5,11 +5,22 @@
 export type OCRTask = 'homework' | 'document' | 'handwriting';
 
 export const HOMEWORK_SCAN_PROMPT = [
-  'OCR HOMEWORK SCAN:',
-  '- Read all visible handwritten and printed text with high accuracy.',
+  'OCR HOMEWORK SCAN — READ ALL INSTRUCTIONS BEFORE RESPONDING:',
+  '',
+  'IMAGE ORIENTATION:',
+  '- The image may be rotated 90°, 180°, or upside-down. ALWAYS mentally rotate the image to every orientation and identify which produces readable text before responding.',
+  '- Never say the image is unclear or in a foreign language just because it appears rotated.',
+  '- If text runs sideways, rotate 90° clockwise mentally and try to read it.',
+  '',
+  'TEXT EXTRACTION:',
+  '- Read ALL visible handwritten and printed text character-by-character with maximum accuracy.',
+  '- South African worksheets often use a comma as the decimal separator (e.g., 6,35 = six point three five). Read comma-separated numbers as decimals.',
+  '- For numbered lists (1. 2. 3.) read EACH item separately. Do not merge a list number with the answer from the previous item.',
   '- Identify subject, topic, and likely grade level (CAPS if South African).',
+  '- Return uncertain text with [?] markers.',
+  '',
+  'RESPONSE QUALITY:',
   '- If answers are present, evaluate correctness with brief reasoning.',
-  '- Return uncertain text with [?] markers. Use confidence scores where helpful.',
   '- Provide kind, practical next-step feedback for learner and parent.',
   '- For math: show worked solutions step-by-step. Identify calculation errors.',
   '- Suggest 1-2 follow-up practice problems if gaps are found.',
@@ -18,6 +29,7 @@ export const HOMEWORK_SCAN_PROMPT = [
   '- For criteria-answer requests, use exact headings in this form: "a) <exact criterion text>" followed by the response.',
   '- Never replace an original criterion heading with a different heading.',
   '- Do not invent school names, learner names, signatures, or claims not visible in the prompt/image.',
+  '- NEVER give a vague "this appears to be a worksheet" answer — always work through the actual problems shown.',
 ].join('\n');
 
 export const DOCUMENT_SCAN_PROMPT = [
