@@ -616,10 +616,10 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
                 backgroundColor: theme.surfaceVariant + 'F2',
                 borderColor: isFocused ? theme.primary : theme.border + 'AA',
                 shadowColor: '#020617',
-                shadowOpacity: Platform.OS === 'android' ? 0.25 : 0.18,
-                shadowRadius: 10,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 6,
+                shadowOpacity: Platform.OS === 'android' ? 0.12 : 0.08,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 4 },
+                elevation: 3,
               },
             ]}
           >

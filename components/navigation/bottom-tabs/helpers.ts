@@ -165,10 +165,10 @@ export function getBottomTabVariant(
     isNextGenNav,
     navActiveColor: nextGenPalette.cyan3,
     activeIndicatorColor: nextGenPalette.gold2,
-    navBackgroundColor: isNextGenNav ? 'rgba(7, 11, 22, 0.92)' : 'rgba(10, 14, 28, 0.94)',
+    navBackgroundColor: 'transparent',
     navBorderColor: 'rgba(118, 90, 247, 0.20)',
     navInactiveColor: isNextGenNav ? 'rgba(231, 238, 255, 0.74)' : 'rgba(214, 223, 255, 0.68)',
     centerOrbBackground: 'rgba(9, 12, 26, 0.98)',
-    dockGlowColors: ['rgba(24, 212, 255, 0.18)', 'rgba(139, 92, 246, 0.14)', 'rgba(252, 211, 77, 0.08)'],
+    dockGlowColors: ['rgba(24, 212, 255, 0.08)', 'rgba(139, 92, 246, 0.06)', 'rgba(252, 211, 77, 0.03)'],
   };
 }
