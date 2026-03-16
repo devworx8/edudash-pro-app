@@ -49,6 +49,7 @@ export interface UseDashVoiceSendMessageParams {
   autoScanUserId: string | null;
   streamingTTSEnabled?: boolean;
   enqueueSpeech: (text: string) => void;
+  cancelSpeech?: () => void;
   maybeEnqueueStreamingSpeech?: (text: string) => void;
   flushStreamingSpeechFinal?: (text: string) => void;
   resetStreamingSpeech?: () => void;

@@ -36,7 +36,7 @@ export function useDashVoiceSendMessage({
   attachedImage, role, orgType, aiScope, preferredLanguage,
   profile, user, dashPolicy, activeTier, autoScanUserId,
   streamingTTSEnabled,
-  enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal,
+  enqueueSpeech, cancelSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal,
   logDashTrace, refreshAutoScanBudget, voiceOrbRef,
 }: UseDashVoiceSendMessageParams) {
   const persistOrbMessages = useCallback(async (msgs: ConversationEntry[]) => {
@@ -88,7 +88,8 @@ export function useDashVoiceSendMessage({
     track('dash.turn.started', turnTelemetryBase);
     logDashTrace('turn_started', { turnId, role, orgType, language: preferredLanguage, inputChars: trimmed.length, inputPreview: trimmed.slice(0, 140), hasImage: !!attachedImage?.base64, autoPdfIntent: shouldAutoExportPdf });
     activeRequestRef.current?.abort();
-    speechQueueRef.current = [];
+    if (cancelSpeech) cancelSpeech();
+    else speechQueueRef.current = [];
     setIsProcessing(true);
     setLastResponse('');
     setWhiteboardContent(null);

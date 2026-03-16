@@ -172,7 +172,7 @@ export default function DashVoiceScreen() {
   // ── TTS hook ──────────────────────────────────────────────────────
   const {
     isSpeaking, setIsSpeaking, isSpeakingRef, speechQueueRef,
-    enqueueSpeech, resetStreamingSpeech, maybeEnqueueStreamingSpeech,
+    enqueueSpeech, cancelSpeech, resetStreamingSpeech, maybeEnqueueStreamingSpeech,
     flushStreamingSpeechFinal, longestCommonPrefixLen, streamedPrefixQueuedRef,
   } = useDashVoiceTTS({ voiceOrbRef, preferredLanguage, orgType, streamingTTSEnabled: STREAMING_TTS_ENABLED });
 
@@ -212,7 +212,7 @@ export default function DashVoiceScreen() {
     attachedImage, role, orgType, aiScope, preferredLanguage, profile, user,
     dashPolicy, activeTier, autoScanUserId,
     streamingTTSEnabled: STREAMING_TTS_ENABLED,
-    enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal, resetStreamingSpeech,
+    enqueueSpeech, cancelSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal, resetStreamingSpeech,
     longestCommonPrefixLen, logDashTrace, refreshAutoScanBudget, voiceOrbRef,
   });
 
@@ -222,16 +222,12 @@ export default function DashVoiceScreen() {
     if (blockRestart) setRestartBlocked(true);
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
-    speechQueueRef.current = [];
+    cancelSpeech();
     resetStreamingSpeech();
-    isSpeakingRef.current = false;
-    setIsSpeaking(false);
     setIsListening(false);
     setIsProcessing(false);
     setStreamingText('');
-    voiceOrbRef.current?.stopSpeaking?.().catch(() => {});
-    voiceOrbRef.current?.stopListening?.().catch(() => {});
-  }, [logDashTrace, resetStreamingSpeech, isSpeakingRef, setIsSpeaking, speechQueueRef]);
+  }, [logDashTrace, cancelSpeech, resetStreamingSpeech]);
 
   useFocusEffect(useCallback(() => {
     setRestartBlocked(false);
@@ -300,11 +296,9 @@ export default function DashVoiceScreen() {
       setPreferredLanguage(pendingTurn.language);
     }
     if (isSpeakingRef.current || isSpeaking) {
-      speechQueueRef.current = [];
-      resetStreamingSpeech();
+      cancelSpeech();
       isSpeakingRef.current = false;
       setIsSpeaking(false);
-      voiceOrbRef.current?.stopSpeaking?.().catch(() => {});
       logDashTrace('dash_stop', { reason: 'flush_pending_voice_turn' });
     }
     logDashTrace('voice_input_flushed', {
@@ -417,13 +411,16 @@ export default function DashVoiceScreen() {
               orbTier={capabilityTier}
               isMuted={isVoiceMuted}
               onMuteChange={setIsVoiceMuted}
-              onStopListening={() => setIsListening(false)}
+              onStopListening={() => {
+                if (isSpeakingRef.current) cancelSpeech();
+                setIsListening(false);
+              }}
               onStartListening={() => setIsListening(true)}
               onPartialTranscript={(text) => setLiveUserTranscript(text)}
               onTranscript={handleVoiceInput}
               onVoiceError={handleVoiceError}
-              onTTSStart={() => setIsSpeaking(true)}
-              onTTSEnd={() => setIsSpeaking(false)}
+              onTTSStart={() => { setIsListening(false); }}
+              onTTSEnd={() => { /* managed by useDashVoiceTTS queue */ }}
               onLanguageChange={(lang) => setPreferredLanguage(lang)}
             />
 

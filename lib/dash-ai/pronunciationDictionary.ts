@@ -46,15 +46,15 @@ export interface PronunciationEntry {
 const BRAND_NAMES: PronunciationEntry[] = [
   {
     pattern: /\bEduDash\s*Pro\b/gi,
-    alias: 'Edyoo-dash Pro',
-    ipa: 'ˌɛdjuːˈdæʃ proʊ',
-    note: 'Single compound name, NOT "E D U Dash Pro"',
+    alias: 'Edju-da-dash Pro',
+    ipa: 'ˌɛdʒuːdəˈdæʃ proʊ',
+    note: 'SA pronunciation: "edju-da-dash pro" — single compound name',
   },
   {
     pattern: /\bEduDash\b/gi,
-    alias: 'Edyoo-dash',
-    ipa: 'ˌɛdjuːˈdæʃ',
-    note: 'Without "Pro" suffix',
+    alias: 'Edju-da-dash',
+    ipa: 'ˌɛdʒuːdəˈdæʃ',
+    note: 'SA pronunciation: "edju-da-dash" — without "Pro" suffix',
   },
   {
     pattern: /\bDash\s*AI\b/gi,
@@ -198,6 +198,32 @@ const TECH_ABBREVIATIONS: PronunciationEntry[] = [
   { pattern: /\bURL\b/g, alias: 'U.R.L.' },
   { pattern: /\bPDF\b/g, alias: 'PDF' },
   { pattern: /\bOTP\b/g, alias: 'O.T.P.' },
+];
+
+// ---------------------------------------------------------------------------
+// South African Common Words & Place Names
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// SA English Letter Pronunciations
+// ---------------------------------------------------------------------------
+
+const SA_LETTER_PRONUNCIATIONS: PronunciationEntry[] = [
+  {
+    pattern: /\bthe letter Z\b/gi,
+    alias: 'the letter zed',
+    note: 'SA English: Z is always "zed", never "zee"',
+  },
+  {
+    pattern: /\bletter "?Z"?\b/gi,
+    alias: 'letter zed',
+    note: 'SA English: Z is "zed"',
+  },
+  {
+    pattern: /(?<=,\s|\band\s|or\s)"?Z"?(?=[.!?,\s]|$)/g,
+    alias: 'zed',
+    note: 'SA English: standalone Z in lists (A, B, ... Z) reads as "zed"',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -392,6 +418,7 @@ export const PRONUNCIATION_DICTIONARY: PronunciationEntry[] = [
   ...BRAND_NAMES,
   ...SA_LANGUAGE_NAMES,
   ...EDUCATIONAL_TERMS,
+  ...SA_LETTER_PRONUNCIATIONS, // Before common words so "letter Z" matches before generic Z
   ...SA_PERSONAL_NAMES,
   ...SA_PLACE_NAMES,
   ...SA_COMMON_WORDS,

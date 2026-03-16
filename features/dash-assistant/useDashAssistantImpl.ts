@@ -200,6 +200,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
   const activeToolExecutionCountRef = useRef<number>(0);
   const responseLifecycleRef = useRef<ResponseLifecycleTracker>({ requestId: null, state: 'idle', committedText: null });
   const abortControllerRef = useRef<AbortController | null>(null);
+  const stopAllActivityRef = useRef<() => Promise<void>>(async () => {});
 
   // ── Ref syncs ─────────────────────────────────────────
   useEffect(() => { inputTextRef.current = inputText; }, [inputText]);
@@ -438,6 +439,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
     cancelGeneration();
     await stopSpeaking();
   }, [cancelVoiceAutoSend, cancelGeneration, isRecording, stopSpeaking, stopVoiceRecording]);
+  useEffect(() => { stopAllActivityRef.current = stopAllActivity; }, [stopAllActivity]);
 
   // ── Public sendMessage (quota check + queue) ──────────
   const sendMessage = useCallback(async (text: string = inputText.trim(), overrideAttachments?: any[]) => {
@@ -621,8 +623,9 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
         }
       }).catch(() => {});
     }
-    return () => { active = false; initialConversationScrollRef.current = null; focusTimers.forEach(t => clearTimeout(t)); stopAllActivity().catch(() => {}); };
-  }, [dashInstance, conversation?.id, prefs, stopAllActivity, normalizeConversationMessages, persistConversationSnapshot, scrollToBottom]));
+    return () => { active = false; initialConversationScrollRef.current = null; focusTimers.forEach(t => clearTimeout(t)); stopAllActivityRef.current().catch(() => {}); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashInstance, conversation?.id, normalizeConversationMessages, persistConversationSnapshot, scrollToBottom]));
 
   useEffect(() => {
     return () => {

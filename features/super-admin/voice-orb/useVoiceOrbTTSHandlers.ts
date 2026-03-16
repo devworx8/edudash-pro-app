@@ -97,9 +97,8 @@ export function useVoiceOrbTTSHandlers({
       clearLiveTimers();
       setUsingLiveSTT(false);
     }
-    onStopListening();
     setStatusText('Speaking...');
-  }, [cancelLiveListening, clearLiveTimers, onStopListening, recorderActions, recorderState.isRecording, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
+  }, [cancelLiveListening, clearLiveTimers, recorderActions, recorderState.isRecording, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);
 
   useImperativeHandle(ref, () => ({
     speakText: async (text: string, language?: SupportedLanguage, options?: TTSOptions) => {
