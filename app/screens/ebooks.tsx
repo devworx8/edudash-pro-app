@@ -439,7 +439,6 @@ export default function EBooksScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          estimatedItemSize={280}
         />
       )}
     </View>

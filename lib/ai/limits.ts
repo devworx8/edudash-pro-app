@@ -370,15 +370,12 @@ export async function getTeacherSpecificQuota(feature: AIQuotaFeature): Promise<
     });
     
     // Map feature to allocation quota type (matching database schema)
-    if (feature === 'chat_message') {
-      return null;
-    }
-
-    const quotaMapping: Record<Exclude<AIQuotaFeature, 'chat_message'>, string> = {
-      'lesson_generation': 'lesson_generation', // Lesson generation has its own quota pool
-      'grading_assistance': 'grading_assistance', // Grading assistance has its own quota pool  
-      'homework_help': 'homework_help', // Homework help has its own quota pool
-      'transcription': 'transcription', // Voice transcription quota (chunks per month)
+    const quotaMapping: Record<AIQuotaFeature, string> = {
+      'lesson_generation': 'lesson_generation',
+      'grading_assistance': 'grading_assistance',
+      'homework_help': 'homework_help',
+      'transcription': 'transcription',
+      'chat_message': 'chat_message',
     }
     
     const quotaType = quotaMapping[feature]
