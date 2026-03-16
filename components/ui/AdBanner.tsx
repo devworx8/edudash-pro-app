@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,17 +27,20 @@ export default function AdBanner({
   const [adLoaded, setAdLoaded] = useState(false);
   const [adFailed, setAdFailed] = useState(false);
   const [showAds, setShowAds] = useState(false);
+
   const isHuaweiNoGmsRiskDevice = Platform.OS === 'android'
     && (String(Device.brand || '').toLowerCase().includes('huawei')
       || String(Device.manufacturer || '').toLowerCase().includes('huawei'));
 
-  // Check if ads should be shown
+  const unitId = getAdUnitId(placement);
+
+  // Check if ads should be shown — must stay above all early returns
   useEffect(() => {
     const checkAdsEligibility = async () => {
       try {
         const eligible = await shouldShowAds(profile, 'free');
         setShowAds(eligible);
-        
+
         if (eligible) {
           track('edudash.ad.banner_eligible', {
             placement,
@@ -54,12 +57,40 @@ export default function AdBanner({
     checkAdsEligibility();
   }, [placement, profile, user?.id]);
 
-  // Don't show anything if ads are not eligible
-  if (!showAds) {
-    return null;
-  }
+  // All useCallback hooks must be declared before any early returns
+  const handleAdLoaded = useCallback(() => {
+    setAdLoaded(true);
+    setAdFailed(false);
+    track('edudash.ad.banner_loaded', {
+      placement,
+      ad_unit_id: unitId ? unitId.slice(-8) : '',
+      user_id: user?.id,
+      platform: Platform.OS,
+    });
+  }, [placement, unitId, user?.id]);
 
-  // Explicitly exclude web platform to prevent bundling issues
+  const handleAdFailedToLoad = useCallback((error: any) => {
+    setAdFailed(true);
+    setAdLoaded(false);
+    track('edudash.ad.banner_failed', {
+      placement,
+      error: error?.message || 'Unknown error',
+      user_id: user?.id,
+      platform: Platform.OS,
+    });
+  }, [placement, user?.id]);
+
+  const handleAdOpened = useCallback(() => {
+    track('edudash.ad.banner_clicked', {
+      placement,
+      ad_unit_id: unitId ? unitId.slice(-8) : '',
+      user_id: user?.id,
+      platform: Platform.OS,
+    });
+  }, [placement, unitId, user?.id]);
+
+  // Early returns — all hooks are already declared above this point
+  if (!showAds) return null;
   if (Platform.OS === 'web') return null;
   if (Platform.OS !== 'android') return null;
   if (isHuaweiNoGmsRiskDevice) return null;
@@ -76,46 +107,10 @@ export default function AdBanner({
     return showFallback ? <FallbackBanner theme={theme} placement={placement} /> : null;
   }
 
-  const unitId = getAdUnitId(placement);
   if (!unitId) {
     return showFallback ? <FallbackBanner theme={theme} placement={placement} /> : null;
   }
 
-  // Handle ad events
-  const handleAdLoaded = () => {
-    setAdLoaded(true);
-    setAdFailed(false);
-    
-    track('edudash.ad.banner_loaded', {
-      placement,
-      ad_unit_id: unitId.slice(-8), // Last 8 chars for tracking
-      user_id: user?.id,
-      platform: Platform.OS,
-    });
-  };
-
-  const handleAdFailedToLoad = (error: any) => {
-    setAdFailed(true);
-    setAdLoaded(false);
-    
-    track('edudash.ad.banner_failed', {
-      placement,
-      error: error?.message || 'Unknown error',
-      user_id: user?.id,
-      platform: Platform.OS,
-    });
-  };
-
-  const handleAdOpened = () => {
-    track('edudash.ad.banner_clicked', {
-      placement,
-      ad_unit_id: unitId.slice(-8),
-      user_id: user?.id,
-      platform: Platform.OS,
-    });
-  };
-
-  // Show fallback if ad failed and fallback is enabled
   if (adFailed && showFallback) {
     return <FallbackBanner theme={theme} placement={placement} />;
   }
