@@ -72,13 +72,15 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
 
   const playAudioUrl = useCallback((audioUrl: string, timeoutMs: number): Promise<void> => {
     return new Promise<void>(async (resolve, reject) => {
-      // Always reconfigure audio mode before playback — barge-in recording
-      // or other audio sources may have changed the audio session since last play.
-      try {
-        await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
-        audioModeConfiguredRef.current = true;
-      } catch (modeErr) {
-        console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
+      // Only reconfigure audio mode if it was reset (after stop or barge-in).
+      // Skipping this on back-to-back chunks eliminates ~50-100ms inter-chunk latency.
+      if (!audioModeConfiguredRef.current) {
+        try {
+          await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: true, interruptionMode: 'doNotMix' });
+          audioModeConfiguredRef.current = true;
+        } catch (modeErr) {
+          console.warn('[VoiceTTS] Audio mode config failed (non-fatal):', modeErr);
+        }
       }
 
       let settled = false;

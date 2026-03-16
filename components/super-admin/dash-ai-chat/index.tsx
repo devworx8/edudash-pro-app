@@ -120,6 +120,10 @@ export default function DashAIChat({
   const voiceOrbRef = useRef<VoiceOrbRefType>(null);
   const isVoiceModeRef = useRef(false);
   const actionDebounceRef = useRef<Record<string, number>>({});
+  /** Tracks whether the user has manually scrolled away from the bottom */
+  const isNearBottomRef = useRef(true);
+  /** Promise for the currently playing TTS utterance (fire-and-forget first sentence during streaming) */
+  const activeTTSPromiseRef = useRef<Promise<void> | null>(null);
 
   // Welcome message content
   const welcomeMessage: ChatMessageData = {
@@ -204,12 +208,20 @@ export default function DashAIChat({
     console.log('[DashAIChat] Voice mode changed:', isVoiceMode);
   }, [isVoiceMode]);
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages — only if user hasn't scrolled up
   useEffect(() => {
+    if (!isNearBottomRef.current) return;
     setTimeout(() => {
       listRef.current?.scrollToEnd({ animated: true });
     }, 100);
   }, [messages]);
+
+  /** Track user scroll position to avoid fighting manual scroll-up */
+  const handleScroll = useCallback((event: any) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    isNearBottomRef.current = distanceFromBottom < 150;
+  }, []);
 
   /**
    * Send message to the superadmin-ai Edge Function
@@ -433,7 +445,7 @@ export default function DashAIChat({
           message: text,
           history: history,
           stream: true, // Request streaming
-          max_tokens: 600, // Shorter for voice (faster)
+          max_tokens: 1200, // Balanced: long enough for thorough answers, fast enough for voice
         }),
       }
     );
@@ -504,12 +516,13 @@ export default function DashAIChat({
               : msg
           ));
 
-          // Check if we have a complete sentence for TTS
+          // Check if we have a complete sentence for TTS — speak first sentence early for fast audio start
           const sentenceEnd = /[.!?]\s/.test(sentenceBuffer);
           if (sentenceEnd && sentenceBuffer.trim().length > 20 && !hasStartedSpeaking) {
             const firstSentence = sentenceBuffer.trim();
             console.log('[DashAIChat] Starting TTS with first sentence:', firstSentence.substring(0, 50) + '...');
-            speakResponse(firstSentence);
+            // Fire-and-forget but save promise so we can await before speaking remainder
+            activeTTSPromiseRef.current = speakResponse(firstSentence);
             hasStartedSpeaking = true;
             sentenceBuffer = '';
           }
@@ -547,10 +560,25 @@ export default function DashAIChat({
           : msg
       ));
 
-      // If we haven't started speaking yet (short response), speak now
+      // Speak remaining text that accumulated after the first sentence
       if (!hasStartedSpeaking && fullResponse.trim()) {
+        // Short response that never hit a sentence boundary — speak it all
         console.log('[DashAIChat] Speaking complete response');
         speakResponse(fullResponse);
+      } else if (hasStartedSpeaking && sentenceBuffer.trim()) {
+        // First sentence was spoken during streaming; wait for it to finish, then speak the rest
+        const remainder = sentenceBuffer.trim();
+        console.log('[DashAIChat] Speaking remaining text after first sentence, length:', remainder.length);
+        try {
+          if (activeTTSPromiseRef.current) {
+            await activeTTSPromiseRef.current;
+          }
+        } catch {
+          // First sentence TTS may have been interrupted — still speak remainder
+        } finally {
+          activeTTSPromiseRef.current = null;
+        }
+        speakResponse(remainder);
       }
 
     } catch (error) {
@@ -700,10 +728,13 @@ export default function DashAIChat({
         data={messages}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
+        estimatedItemSize={120}
         style={styles.messagesContainer}
         contentContainerStyle={[styles.messagesContent, { paddingBottom: 20 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={handleScroll}
+        scrollEventThrottle={100}
         extraData={{ isProcessing }}
       />
 
