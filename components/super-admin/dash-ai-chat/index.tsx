@@ -16,6 +16,8 @@ import {
   Share,
   TouchableOpacity,
   Platform,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -217,7 +219,7 @@ export default function DashAIChat({
   }, [messages]);
 
   /** Track user scroll position to avoid fighting manual scroll-up */
-  const handleScroll = useCallback((event: any) => {
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
     const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
     isNearBottomRef.current = distanceFromBottom < 150;
@@ -229,6 +231,11 @@ export default function DashAIChat({
    */
   const sendMessage = async (text: string) => {
     if (!text.trim() || isProcessing) return;
+
+    // User is sending — scroll their message into view regardless of scroll position
+    isNearBottomRef.current = true;
+    // Discard any stale TTS promise from a previous turn
+    activeTTSPromiseRef.current = null;
 
     const userMessage: ChatMessageData = {
       id: `user-${Date.now()}`,
@@ -521,8 +528,11 @@ export default function DashAIChat({
           if (sentenceEnd && sentenceBuffer.trim().length > 20 && !hasStartedSpeaking) {
             const firstSentence = sentenceBuffer.trim();
             console.log('[DashAIChat] Starting TTS with first sentence:', firstSentence.substring(0, 50) + '...');
-            // Fire-and-forget but save promise so we can await before speaking remainder
-            activeTTSPromiseRef.current = speakResponse(firstSentence);
+            // Capture this specific promise locally — chainRemainder must await THIS
+            // promise, not whatever activeTTSPromiseRef.current holds at execution time
+            // (which could be overwritten if the user sends another message quickly).
+            const firstSentencePromise = speakResponse(firstSentence);
+            activeTTSPromiseRef.current = firstSentencePromise;
             hasStartedSpeaking = true;
             sentenceBuffer = '';
           }
@@ -569,20 +579,25 @@ export default function DashAIChat({
         console.log('[DashAIChat] Speaking complete response');
         speakResponse(fullResponse);
       } else if (hasStartedSpeaking && sentenceBuffer.trim()) {
-        // Remainder: first sentence is playing; chain the rest without blocking
+        // Remainder: first sentence is playing; chain the rest without blocking.
+        // We capture activeTTSPromiseRef.current RIGHT NOW (at closure creation time)
+        // into a local const. This prevents the race condition where a new sendMessage
+        // call overwrites the ref before chainRemainder resumes.
         const remainder = sentenceBuffer.trim();
+        const firstSentencePromise = activeTTSPromiseRef.current;
         console.log('[DashAIChat] Chaining remainder after first sentence, length:', remainder.length);
         const chainRemainder = async () => {
           try {
-            if (activeTTSPromiseRef.current) {
-              await activeTTSPromiseRef.current;
-            }
+            if (firstSentencePromise) await firstSentencePromise;
           } catch {
             // First sentence was interrupted (barge-in/stop) — still speak remainder
           } finally {
-            activeTTSPromiseRef.current = null;
+            // Only clear the ref if it still points to the same promise we captured
+            if (activeTTSPromiseRef.current === firstSentencePromise) {
+              activeTTSPromiseRef.current = null;
+            }
           }
-          speakResponse(remainder);
+          speakResponse(remainder).catch(() => {}); // remainder errors are non-fatal
         };
         chainRemainder(); // intentional fire-and-forget
       }

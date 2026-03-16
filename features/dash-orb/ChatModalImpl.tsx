@@ -1,5 +1,5 @@
 /* eslint-disable i18next/no-literal-string */
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -158,6 +158,13 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const isNearBottomRef = useRef(true);
+
+  const handleScrollMessages = useCallback((event: { nativeEvent: { contentOffset: { y: number }; contentSize: { height: number }; layoutMeasurement: { height: number } } }) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+    isNearBottomRef.current = distanceFromBottom < 150;
+  }, []);
+
   const [showWakeWordHelp, setShowWakeWordHelp] = React.useState(false);
   const [inlineReplies, setInlineReplies] = React.useState<Record<string, string>>({});
   const [imageViewerUri, setImageViewerUri] = React.useState<string | null>(null);
@@ -574,11 +581,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               keyboardShouldPersistTaps="handled"
               scrollEventThrottle={100}
-              onScroll={(event) => {
-                const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-                const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
-                isNearBottomRef.current = distanceFromBottom < 150;
-              }}
+              onScroll={handleScrollMessages}
             >
               {messages.length === 0 && (
                 <View style={{ paddingVertical: 24 }}>
