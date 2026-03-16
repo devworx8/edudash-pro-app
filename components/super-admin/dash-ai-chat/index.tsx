@@ -560,25 +560,31 @@ export default function DashAIChat({
           : msg
       ));
 
-      // Speak remaining text that accumulated after the first sentence
+      // Speak remaining text that accumulated after the first sentence.
+      // Fire-and-forget — do NOT await here. Blocking sendMessageStreaming on TTS
+      // keeps isProcessing=true while audio plays, which prevents the user from
+      // typing and blocks the VoiceOrb from restarting its listen session.
       if (!hasStartedSpeaking && fullResponse.trim()) {
-        // Short response that never hit a sentence boundary — speak it all
+        // Short response: no sentence boundary was hit — speak it all now
         console.log('[DashAIChat] Speaking complete response');
         speakResponse(fullResponse);
       } else if (hasStartedSpeaking && sentenceBuffer.trim()) {
-        // First sentence was spoken during streaming; wait for it to finish, then speak the rest
+        // Remainder: first sentence is playing; chain the rest without blocking
         const remainder = sentenceBuffer.trim();
-        console.log('[DashAIChat] Speaking remaining text after first sentence, length:', remainder.length);
-        try {
-          if (activeTTSPromiseRef.current) {
-            await activeTTSPromiseRef.current;
+        console.log('[DashAIChat] Chaining remainder after first sentence, length:', remainder.length);
+        const chainRemainder = async () => {
+          try {
+            if (activeTTSPromiseRef.current) {
+              await activeTTSPromiseRef.current;
+            }
+          } catch {
+            // First sentence was interrupted (barge-in/stop) — still speak remainder
+          } finally {
+            activeTTSPromiseRef.current = null;
           }
-        } catch {
-          // First sentence TTS may have been interrupted — still speak remainder
-        } finally {
-          activeTTSPromiseRef.current = null;
-        }
-        speakResponse(remainder);
+          speakResponse(remainder);
+        };
+        chainRemainder(); // intentional fire-and-forget
       }
 
     } catch (error) {
