@@ -1,19 +1,47 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { DashboardCard } from './DashboardCard';
 import { useTerm } from '@/contexts/TerminologyContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { assertSupabase } from '@/lib/supabase';
+
+interface ScheduleItem {
+  time: string;
+  title: string;
+  location: string;
+}
 
 export function ScheduleCard() {
-  const sessionTerm = useTerm('session'); // "Class" / "Training" / "Match" etc
+  const sessionTerm = useTerm('session');
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>([]);
 
-  // TODO: Replace with real schedule data
-  const scheduleItems = [
-    { time: '09:00 AM', title: `Math ${sessionTerm}`, location: 'Room 101' },
-    { time: '11:00 AM', title: `Science ${sessionTerm}`, location: 'Lab 2' },
-    { time: '02:00 PM', title: `PE ${sessionTerm}`, location: 'Gymnasium' },
-  ];
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = assertSupabase();
+        const { data } = await supabase
+          .from('student_enrollments')
+          .select('classes(name, schedule, room)')
+          .eq('student_id', user.id);
+
+        if (cancelled) return;
+        const mapped = (data ?? [])
+          .filter((e: any) => e.classes)
+          .map((e: any) => ({
+            time: e.classes.schedule || '',
+            title: `${e.classes.name} ${sessionTerm}`,
+            location: e.classes.room || '',
+          }));
+        setScheduleItems(mapped);
+      } catch { /* graceful fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, sessionTerm]);
 
   return (
     <DashboardCard title="Today's Schedule" icon="calendar-outline">

@@ -1,17 +1,50 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { DashboardCard } from './DashboardCard';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { assertSupabase } from '@/lib/supabase';
+
+interface GradeItem {
+  subject: string;
+  grade: string;
+  percentage: number;
+}
 
 export function GradesCard() {
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const [grades, setGrades] = useState<GradeItem[]>([]);
 
-  // TODO: Replace with real grades data
-  const grades = [
-    { subject: 'Mathematics', grade: 'A', percentage: 92 },
-    { subject: 'Science', grade: 'B+', percentage: 87 },
-    { subject: 'English', grade: 'A-', percentage: 90 },
-  ];
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = assertSupabase();
+        // Fetch recently graded homework submissions with subject info
+        const { data } = await supabase
+          .from('homework_submissions')
+          .select('grade, homework_assignments(subject)')
+          .eq('student_id', user.id)
+          .not('grade', 'is', null)
+          .order('submitted_at', { ascending: false })
+          .limit(5);
+
+        if (cancelled) return;
+        const mapped = (data ?? []).map((s: any) => {
+          const pct = Math.round(Number(s.grade) || 0);
+          return {
+            subject: s.homework_assignments?.subject || 'General',
+            grade: percentToLetter(pct),
+            percentage: pct,
+          };
+        });
+        setGrades(mapped);
+      } catch { /* graceful fallback */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const getGradeColor = (percentage: number) => {
     if (percentage >= 90) return theme.colors?.success || theme.success || '#10b981';
@@ -73,3 +106,12 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 });
+
+function percentToLetter(pct: number): string {
+  if (pct >= 90) return 'A';
+  if (pct >= 80) return 'B+';
+  if (pct >= 70) return 'B';
+  if (pct >= 60) return 'C';
+  if (pct >= 50) return 'D';
+  return 'F';
+}

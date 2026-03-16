@@ -24,10 +24,10 @@ import { shouldUsePhonicsMode } from '@/lib/dash-ai/phonicsDetection';
 import { getOrganizationType } from '@/lib/tenant/compat';
 
 // ── Phrase-buffer constants ──────────────────────────────────────────────────
-const PHRASE_FIRST_TARGET = 100;      // chars — first phrase (quick start)
-const PHRASE_FOLLOW_TARGET = 200;     // chars — subsequent phrases
-const PHRASE_MIN_SENTENCE = 40;       // chars — min length to flush at sentence boundary
-const PHRASE_SAFETY_VALVE_MS = 1200;  // ms — time-based flush threshold
+const PHRASE_FIRST_TARGET = 60;        // chars — first phrase (quick start)
+const PHRASE_FOLLOW_TARGET = 150;     // chars — subsequent phrases
+const PHRASE_MIN_SENTENCE = 25;       // chars — min length to flush at sentence boundary
+const PHRASE_SAFETY_VALVE_MS = 800;   // ms — time-based flush threshold
 
 type VoiceOrbRef = {
   speakText: (text: string, language?: SupportedLanguage, options?: { phonicsMode?: boolean }) => Promise<void>;
@@ -77,7 +77,7 @@ export function useDashVoiceTTS({
   voiceOrbRef,
   preferredLanguage,
   orgType,
-  streamingTTSEnabled = false,
+  streamingTTSEnabled = true,
 }: UseDashVoiceTTSParams) {
   const [isSpeaking, setIsSpeaking] = useState(false);
 
@@ -117,7 +117,7 @@ export function useDashVoiceTTS({
       if (!next) return;
       await speakResponse(next);
       if (speechQueueRef.current.length > 0) {
-        setTimeout(() => processSpeechQueue(), 50);
+        processSpeechQueue();
       }
     } finally {
       speechMutexRef.current = false;
@@ -187,8 +187,9 @@ export function useDashVoiceTTS({
     const fullText = String(nextText || '').trim();
     if (!fullText) return;
 
-    const sharedPrefixLen = longestCommonPrefixLen(streamedPrefixQueuedRef.current, fullText);
-    const delta = fullText.slice(sharedPrefixLen);
+    // O(1) delta: accumulated text only grows during streaming, so slice
+    // from the stored prefix length instead of character-by-character comparison.
+    const delta = fullText.slice(streamedPrefixQueuedRef.current.length);
     if (!delta) return;
 
     streamedPrefixQueuedRef.current = fullText;

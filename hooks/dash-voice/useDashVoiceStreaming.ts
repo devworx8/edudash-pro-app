@@ -63,7 +63,7 @@ export function useDashVoiceStreaming({
   setWhiteboardContent, setLastResponse, setStreamingText, setIsProcessing,
   setLatestPdfArtifact, conversationHistoryRef, activeRequestRef,
   enqueueSpeech, maybeEnqueueStreamingSpeech, flushStreamingSpeechFinal,
-  streamingTTSEnabled = false,
+  streamingTTSEnabled = true,
   logDashTrace,
   persistOrbMessages, setConversationHistory,
 }: UseDashVoiceStreamingParams) {
@@ -137,6 +137,15 @@ export function useDashVoiceStreaming({
           const cleaned = cleanRawJSON(finalText);
           const isSseArtifact = !cleaned || /^\s*(data:\s*\[DONE\]|data:\s*$)/i.test(cleaned);
           const displayText = isSseArtifact ? 'I couldn\'t get a response. Please try again.' : cleaned;
+
+          // Flush streaming TTS immediately — don't wait for guardrails/PDF.
+          // Most of the response was already spoken via phrase-streaming; this
+          // just pushes the remaining unspoken tail so the user hears the end
+          // without delay.
+          if (streamingTTSEnabled && !isSseArtifact && displayText) {
+            flushStreamingSpeechFinal?.(displayText);
+          }
+
           const criteriaGuard = isSseArtifact ? { text: displayText } : await applyCriteriaGuardrails(displayText);
           const finalDisplayText = criteriaGuard.text || displayText;
           let resolvedDisplayText = finalDisplayText;
@@ -156,13 +165,11 @@ export function useDashVoiceStreaming({
             conversationHistoryRef.current = withResponse;
             setConversationHistory(withResponse);
             persistOrbMessages(withResponse);
-            // Speak the response — in streaming mode, flush only the unspoken tail
+            // Speak the response — in streaming mode, tail was already flushed above
             const ttsText = wb2 ? getWhiteboardTTSContent(wb2) : resolvedSpeechText;
             if (ttsText) {
               if (streamingTTSEnabled) {
-                // Flush any buffered tail of the streamed response text
-                flushStreamingSpeechFinal?.(resolvedSpeechText);
-                // If Dash Board is shown, append its TTS as a separate chunk
+                // Whiteboard TTS (if present) as a separate chunk
                 if (wb2) enqueueSpeech(getWhiteboardTTSContent(wb2));
               } else {
                 enqueueSpeech(ttsText);

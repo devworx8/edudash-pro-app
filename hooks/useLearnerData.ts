@@ -97,6 +97,16 @@ export interface PortfolioItem {
 // Enrollments
 // ============================================
 
+/** Compute progress from enrollment metadata or default to status-based estimate */
+function computeProgress(enrollment: any): number {
+  // If enrollment has explicit progress field, use it
+  if (typeof enrollment.progress === 'number') return enrollment.progress;
+  if (typeof enrollment.completion_percentage === 'number') return enrollment.completion_percentage;
+  // Status-based fallback
+  if (enrollment.dropped_at || !enrollment.is_active) return 0;
+  return 0; // Will be refined when lesson_completions relation is added
+}
+
 export function useLearnerEnrollments() {
   const { profile } = useAuth();
   const learnerId = profile?.id;
@@ -133,7 +143,7 @@ export function useLearnerEnrollments() {
         enrolled_at: enrollment.enrolled_at, // Added for compatibility
         is_active: enrollment.is_active, // Added for compatibility
         completion_date: enrollment.dropped_at || null,
-        progress_percentage: 0, // TODO: Calculate from actual progress data
+        progress_percentage: computeProgress(enrollment),
         program: enrollment.course ? {
           id: enrollment.course.id,
           title: enrollment.course.title,

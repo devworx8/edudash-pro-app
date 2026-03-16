@@ -19,11 +19,11 @@ const AUTH_ROUTE_SEGMENTS = [
   'sign-in',
   'sign-up',
   'signup',
-  'register',
+  '/register',
   'forgot-password',
   'reset-password',
   'auth-callback',
-  'verify',
+  '/verify',
 ] as const;
 
 export function isAuthRoute(pathname: string | undefined): boolean {

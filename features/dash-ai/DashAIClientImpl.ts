@@ -1296,9 +1296,12 @@ export class DashAIClient {
 
           let processedLen = 0;
           let accumulated = '';
+          let lineBuffer = '';
 
           const processNewData = (newData: string) => {
-            for (const line of newData.split('\n')) {
+            const lines = (lineBuffer + newData).split('\n');
+            lineBuffer = lines.pop() || '';
+            for (const line of lines) {
               if (!line.startsWith('data: ')) continue;
               const payload = line.slice(6).trim();
               if (payload === '[DONE]') continue;

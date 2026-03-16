@@ -1,10 +1,11 @@
-import { Stack, usePathname } from 'expo-router';
-import React from 'react';
+import { Stack, usePathname, router } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { ThemeOverrideProvider, useTheme } from '../../contexts/ThemeContext';
 import { nextGenK12Parent } from '../../contexts/theme/nextGenK12Parent';
 import { resolveSchoolTypeFromProfile } from '../../lib/schoolTypeResolver';
+import { resolveDashboard } from '../../hooks/auth/dashboardResolution';
 import ThemedStatusBar from '../../components/ui/ThemedStatusBar';
 
 const NEXT_GEN_PARENT_SHARED_ROUTES = new Set([
@@ -14,6 +15,30 @@ const NEXT_GEN_PARENT_SHARED_ROUTES = new Set([
   '/screens/exam-generation',
   '/screens/dash-assistant',
 ]);
+
+// Role-prefix → allowed roles. Screens without a role prefix are accessible to all.
+const ROLE_PREFIX_MAP: Record<string, Set<string>> = {
+  'parent-':       new Set(['parent', 'super_admin']),
+  'teacher-':      new Set(['teacher', 'principal', 'principal_admin', 'super_admin']),
+  'principal-':    new Set(['principal', 'principal_admin', 'super_admin']),
+  'student-':      new Set(['student', 'learner', 'parent', 'super_admin']),
+  'super-admin-':  new Set(['super_admin']),
+  'admin-':        new Set(['principal', 'principal_admin', 'super_admin']),
+  'org-admin':     new Set(['principal', 'principal_admin', 'super_admin']),
+};
+
+/** Returns true if `role` is allowed to access `screenName`. */
+function isRoleAllowedForScreen(screenName: string, role: string | null): boolean {
+  if (!role) return false;
+  const normalizedRole = role.toLowerCase();
+  for (const [prefix, allowedRoles] of Object.entries(ROLE_PREFIX_MAP)) {
+    if (screenName.startsWith(prefix)) {
+      return allowedRoles.has(normalizedRole);
+    }
+  }
+  // No role-prefix → shared screen, any authenticated role OK
+  return true;
+}
 
 function ScreensStack() {
   const { theme } = useTheme();
@@ -41,9 +66,35 @@ function ScreensStack() {
 }
 
 export default function ScreensLayout() {
-  const { profile } = useAuth();
+  const { user, profile, profileLoading } = useAuth();
   const pathname = usePathname();
+  const guardRedirectedRef = useRef<string | null>(null);
 
+  // ── Role guard: enforce screen-level access ────────────────────────
+  useEffect(() => {
+    if (!user || profileLoading || !profile || typeof pathname !== 'string') return;
+    // Extract screen name from "/screens/teacher-dashboard" → "teacher-dashboard"
+    const screenName = pathname.startsWith('/screens/')
+      ? pathname.slice('/screens/'.length).split('?')[0]
+      : '';
+    if (!screenName) return;
+
+    const userRole = String((profile as any)?.role || '').toLowerCase();
+    if (isRoleAllowedForScreen(screenName, userRole)) {
+      guardRedirectedRef.current = null;
+      return;
+    }
+    // Prevent redirect loops — don't re-redirect for the same path
+    if (guardRedirectedRef.current === pathname) return;
+    guardRedirectedRef.current = pathname;
+
+    const { targetDashboard } = resolveDashboard(user, profile);
+    if (targetDashboard && targetDashboard !== pathname) {
+      router.replace(targetDashboard as any);
+    }
+  }, [pathname, user, profile, profileLoading]);
+
+  // ── Theme override for K-12 parent flows ───────────────────────────
   const isParentRole = String((profile as any)?.role || '').toLowerCase() === 'parent';
   const isK12Parent = isParentRole && resolveSchoolTypeFromProfile(profile) === 'k12_school';
   const isParentFlowRoute =

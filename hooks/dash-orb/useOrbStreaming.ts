@@ -112,10 +112,13 @@ export function useOrbStreaming() {
             xhr.responseType = 'text';
 
             let lastIdx = 0;
+            let lineBuffer = '';
             const drain = () => {
               const chunk = xhr.responseText.slice(lastIdx);
               lastIdx = xhr.responseText.length;
-              for (const line of chunk.split('\n')) processLine(line);
+              const lines = (lineBuffer + chunk).split('\n');
+              lineBuffer = lines.pop() || '';
+              for (const line of lines) processLine(line);
             };
 
             xhr.onreadystatechange = () => {

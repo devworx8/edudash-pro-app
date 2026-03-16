@@ -140,7 +140,7 @@ export default function DashVoiceScreen() {
   } | null>(null);
 
   const DASH_TRACE_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_DASH_VOICE_TRACE === 'true';
-  const STREAMING_TTS_ENABLED = process.env.EXPO_PUBLIC_DASH_VOICE_STREAMING_TTS === 'true';
+  const STREAMING_TTS_ENABLED = process.env.EXPO_PUBLIC_DASH_VOICE_STREAMING_TTS !== 'false';
 
   const logDashTrace = useCallback((event: string, payload?: Record<string, unknown>) => {
     if (!DASH_TRACE_ENABLED) return;

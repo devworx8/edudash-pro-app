@@ -130,7 +130,6 @@ function configurePostHogForAndroid() {
  */
 export function initMonitoring(config?: { enableInDevelopment?: boolean; environment?: string }) {
   if (started) return;
-  started = true;
 
   const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
   const looksValidDsn = !!dsn && /https?:\/\/.+@.+/i.test(dsn);
@@ -153,6 +152,8 @@ export function initMonitoring(config?: { enableInDevelopment?: boolean; environ
       },
     });
 
+    started = true;
+
     if (__DEV__) {
       console.log('Monitoring: Sentry initialized successfully');
     }
@@ -163,7 +164,6 @@ export function initMonitoring(config?: { enableInDevelopment?: boolean; environ
 
 export function startMonitoring() {
   if (started) return;
-  started = true;
 
   // Only start monitoring on Android during testing phase
   const flags = getFeatureFlagsSync();
@@ -188,6 +188,7 @@ export function startMonitoring() {
         admob_test_ids: flags.admob_test_ids,
       });
 
+      started = true;
       console.log('Sentry initialized');
     } catch (error) {
       // Keep quiet unless debug mode is explicitly enabled

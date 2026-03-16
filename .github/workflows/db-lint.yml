@@ -3,8 +3,8 @@ name: Database SQL Linting
 on:
   pull_request:
     paths:
-      - 'migrations/**.sql'
-      - 'supabase/migrations/**.sql'
+      - 'migrations/**/*.sql'
+      - 'supabase/migrations/**/*.sql'
       - '.sqlfluff'
       - '.github/workflows/db-lint.yml'
       - 'scripts/check-migration-filenames.sh'

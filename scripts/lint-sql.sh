@@ -17,7 +17,7 @@ echo "=================================================="
 
 # Default action
 ACTION=${1:-lint}
-TARGET=${2:-"db/ migrations/ *.sql"}
+TARGET=${2:-"supabase/migrations/"}
 
 case $ACTION in
     "lint"|"check")

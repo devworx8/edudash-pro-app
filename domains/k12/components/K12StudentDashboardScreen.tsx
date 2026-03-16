@@ -25,6 +25,7 @@ import { MobileNavDrawer } from '@/components/navigation/MobileNavDrawer';
 import { GlassCard } from '@/components/nextgen/GlassCard';
 import { GradientActionCard } from '@/components/nextgen/GradientActionCard';
 import { Pill } from '@/components/nextgen/Pill';
+import { useK12StudentDashboard } from '@/domains/k12/hooks/useK12StudentDashboard';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 const { width } = Dimensions.get('window');
@@ -46,18 +47,7 @@ const QUICK_ACTION_CONFIG = [
   },
 ] as const;
 
-// Placeholder data — screens fetch real data via hooks, dashboard shows summary cards  
-// TODO: Wire real assignment count + class schedule from Supabase queries
-const EMPTY_ASSIGNMENTS: { id: string; title: string; subject: string; dueDate: string; status: string }[] = [];
-const EMPTY_CLASSES: { id: string; name: string; time: string; room: string; teacher: string; current: boolean }[] = [];
-
-// Default metrics shown until real aggregation is wired
-const defaultMetrics = {
-  avgGrade: '--',
-  attendance: 0,
-  pendingTasks: 0,
-  completedToday: 0,
-};
+// Quick action config is static — real data comes from useK12StudentDashboard hook
 
 interface QuickStatProps {
   icon: string;
@@ -91,9 +81,8 @@ export default function K12StudentDashboardScreen() {
   const params = useLocalSearchParams<{ schoolType?: string; mode?: string }>();
 
   const [refreshing, setRefreshing] = useState(false);
-  const [todaysClasses, setTodaysClasses] = useState(EMPTY_CLASSES);
-  const [upcomingAssignments, setUpcomingAssignments] = useState(EMPTY_ASSIGNMENTS);
-  const [metrics, setMetrics] = useState(defaultMetrics);
+  const orgId = (profile as any)?.organization_id ?? (profile as any)?.organization_membership?.organization_id;
+  const { metrics, upcomingAssignments, todaysClasses, unreadNotifications, refresh: refreshDashboard } = useK12StudentDashboard(user?.id, orgId);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const quickActions = useMemo(
     () =>
@@ -230,10 +219,9 @@ export default function K12StudentDashboardScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     track('k12.student.dashboard_refresh', { user_id: user?.id });
-    // TODO: Fetch real data from Supabase
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await refreshDashboard();
     setRefreshing(false);
-  }, [user?.id]);
+  }, [user?.id, refreshDashboard]);
 
   const handleQuickAction = (route: string, actionId: string) => {
     track('k12.student.quick_action_tap', { action: actionId, user_id: user?.id });
@@ -313,9 +301,11 @@ export default function K12StudentDashboardScreen() {
               }}
             >
               <Ionicons name="notifications-outline" size={24} color={theme.colors.text} />
+              {unreadNotifications > 0 && (
               <View style={[styles.notificationBadge, { backgroundColor: theme.colors.error }]}>
-                <Text style={styles.notificationBadgeText}>2</Text>
+                <Text style={styles.notificationBadgeText}>{unreadNotifications > 9 ? '9+' : unreadNotifications}</Text>
               </View>
+              )}
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.profileButton}

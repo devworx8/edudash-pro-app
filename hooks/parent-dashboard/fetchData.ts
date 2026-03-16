@@ -83,10 +83,21 @@ export async function fetchParentDashboardData(
   const recentHomework = buildRecentHomework(assignmentsData, childIds, children);
   const upcomingEvents = buildUpcomingEvents(eventsData);
 
+  // Fetch unread message count
+  let unreadMessages = 0;
+  try {
+    const { count } = await supabase
+      .from('notifications')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+    unreadMessages = count ?? 0;
+  } catch { /* graceful fallback */ }
+
   const dashboardData: ParentDashboardData = {
     schoolName, totalChildren, feesDueSoon: feesDue,
     children, attendanceRate, presentToday,
-    recentHomework, upcomingEvents, unreadMessages: 0,
+    recentHomework, upcomingEvents, unreadMessages,
   };
 
   if (schoolId) {

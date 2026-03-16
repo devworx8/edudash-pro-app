@@ -1,19 +1,59 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, StyleSheet, Text } from 'react-native';
 import { DashboardCard } from './DashboardCard';
 import { useTerm } from '@/contexts/TerminologyContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { assertSupabase } from '@/lib/supabase';
+
+interface Assignment {
+  title: string;
+  dueDate: string;
+  status: string;
+}
 
 export function AssignmentsCard() {
-  const taskTerm = useTerm('task'); // "Assignment" / "Task" / "Project"
+  const taskTerm = useTerm('task');
   const { theme } = useTheme();
+  const { user } = useAuth();
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
 
-  // TODO: Replace with real assignments data
-  const assignments = [
-    { title: 'Math Problem Set 5', dueDate: 'Due Tomorrow', status: 'pending' },
-    { title: 'Science Lab Report', dueDate: 'Due in 3 days', status: 'in_progress' },
-    { title: 'History Essay', dueDate: 'Due next week', status: 'pending' },
-  ];
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = assertSupabase();
+        const todayStr = new Date().toISOString().slice(0, 10);
+
+        // Fetch upcoming homework assignments for this student's classes
+        const { data: subs } = await supabase
+          .from('homework_submissions')
+          .select('assignment_id')
+          .eq('student_id', user.id);
+        const submittedIds = new Set((subs ?? []).map(s => s.assignment_id).filter(Boolean));
+
+        const { data } = await supabase
+          .from('homework_assignments')
+          .select('id, title, due_date, status')
+          .gte('due_date', todayStr)
+          .in('status', ['active', 'published', 'assigned'])
+          .order('due_date', { ascending: true })
+          .limit(5);
+
+        if (cancelled) return;
+        const mapped = (data ?? [])
+          .filter(a => !submittedIds.has(a.id))
+          .map(a => ({
+            title: a.title,
+            dueDate: a.due_date ? formatRelativeDate(a.due_date) : '',
+            status: 'pending',
+          }));
+        setAssignments(mapped);
+      } catch { /* graceful fallback to empty */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -64,3 +104,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
 });
+
+function formatRelativeDate(dateStr: string): string {
+  const due = new Date(dateStr);
+  const now = new Date();
+  const diffDays = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays <= 0) return 'Due Today';
+  if (diffDays === 1) return 'Due Tomorrow';
+  if (diffDays <= 7) return `Due in ${diffDays} days`;
+  return `Due ${due.toLocaleDateString()}`;
+}
