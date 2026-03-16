@@ -157,6 +157,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   const roleCopy = getDashAIRoleCopy(profile?.role);
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
+  const isNearBottomRef = useRef(true);
   const [showWakeWordHelp, setShowWakeWordHelp] = React.useState(false);
   const [inlineReplies, setInlineReplies] = React.useState<Record<string, string>>({});
   const [imageViewerUri, setImageViewerUri] = React.useState<string | null>(null);
@@ -308,7 +309,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   };
 
   useEffect(() => {
-    if (visible && !showQuickActions) {
+    if (visible && !showQuickActions && isNearBottomRef.current) {
       setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
     }
   }, [visible, messages, showQuickActions]);
@@ -572,6 +573,12 @@ export const ChatModal: React.FC<ChatModalProps> = ({
               showsVerticalScrollIndicator={false}
               keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
               keyboardShouldPersistTaps="handled"
+              scrollEventThrottle={100}
+              onScroll={(event) => {
+                const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+                const distanceFromBottom = contentSize.height - (contentOffset.y + layoutMeasurement.height);
+                isNearBottomRef.current = distanceFromBottom < 150;
+              }}
             >
               {messages.length === 0 && (
                 <View style={{ paddingVertical: 24 }}>
