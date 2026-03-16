@@ -112,5 +112,7 @@ web/.next.bak*
 *.INSECURE_BACKUP
 *.deno-backup
 edudashpro_playbook.md
-.claude/settings.json
+.claude/
+bundle.py
+repo_bundle.txt
 *.bak
