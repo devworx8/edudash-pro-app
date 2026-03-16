@@ -226,5 +226,5 @@ export function useVoiceOrbTTSHandlers({
   // Cleanup timer on unmount
   useEffect(() => () => { cancelAutoRestart(); }, [cancelAutoRestart]);
 
-  return { suspendListeningForTTS, scheduleAutoRestart, cancelAutoRestart, ttsPlaybackActiveRef };
+  return { suspendListeningForTTS, scheduleAutoRestart, cancelAutoRestart };
 }

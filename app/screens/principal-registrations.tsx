@@ -225,7 +225,6 @@ export default function PrincipalRegistrationsScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          estimatedItemSize={120}
         />
       )}
 
