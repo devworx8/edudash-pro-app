@@ -10,16 +10,8 @@ import { Text, TouchableOpacity, View, StyleSheet, useWindowDimensions } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import Feedback from '@/lib/feedback';
-
-const getLayoutMetrics = (width: number) => {
-  const isTablet = width > 768;
-  const isSmallScreen = width < 380;
-  const cardPadding = isTablet ? 20 : isSmallScreen ? 10 : 14;
-  const cardGap = isTablet ? 12 : isSmallScreen ? 6 : 8;
-  const containerWidth = width - (cardPadding * 2);
-  const cardWidth = isTablet ? (containerWidth - (cardGap * 3)) / 4 : (containerWidth - cardGap) / 2;
-  return { isTablet, isSmallScreen, cardPadding, cardGap, containerWidth, cardWidth };
-};
+import { getCardLayoutMetrics } from '@/lib/utils/layoutMetrics';
+import { isNextGenTheme } from '@/lib/utils/themeVariant';
 
 interface TeacherQuickActionCardProps {
   title: string;
@@ -43,8 +35,8 @@ export const TeacherQuickActionCard: React.FC<TeacherQuickActionCardProps> = ({
 }) => {
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
-  const layout = useMemo(() => getLayoutMetrics(width), [width]);
-  const isNextGenTeacher = String(theme?.background || '').toLowerCase() === '#0f121e';
+  const layout = useMemo(() => getCardLayoutMetrics(width), [width]);
+  const isNextGenTeacher = isNextGenTheme(theme);
   const styles = useMemo(() => getStyles(theme, layout), [theme, layout]);
 
   const handlePress = async () => {
@@ -86,8 +78,8 @@ export const TeacherQuickActionCard: React.FC<TeacherQuickActionCardProps> = ({
   );
 };
 
-const getStyles = (theme: any, layout: ReturnType<typeof getLayoutMetrics>) => {
-  const isNextGenTeacher = String(theme?.background || '').toLowerCase() === '#0f121e';
+const getStyles = (theme: any, layout: ReturnType<typeof getCardLayoutMetrics>) => {
+  const isNextGenTeacher = isNextGenTheme(theme);
 
   return StyleSheet.create({
     actionCard: {

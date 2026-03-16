@@ -18,6 +18,7 @@ import { fetchFinancials, buildFinancialSummary } from './fetchFinancials';
 import { fetchUniformPayments } from './fetchUniforms';
 import { fetchRecentActivities } from './fetchActivities';
 import { buildSchoolStats, buildCapacityMetrics, buildEnrollmentPipeline } from './assembleHubData';
+import { getApprovalStats } from '@/lib/services/teacherApprovalService';
 
 // Re-export public API
 export type { SchoolStats, TeacherSummary, FinancialSummary, UniformPaymentSummary, CapacityMetrics, EnrollmentPipeline, ActivitySummary, PrincipalHubData } from './types';
@@ -47,6 +48,8 @@ const normalizeErrorMessage = (error: unknown): string => {
 export const usePrincipalHub = () => {
   const { user, profile } = useAuth();
   const { metrics: pettyCashMetrics } = usePettyCashDashboard();
+  const pettyCashMetricsRef = useRef(pettyCashMetrics);
+  pettyCashMetricsRef.current = pettyCashMetrics;
   const { t } = useTranslation();
 
   const [data, setData] = useState<PrincipalHubData>({
@@ -97,13 +100,14 @@ export const usePrincipalHub = () => {
       setLastRefresh(new Date());
 
       try {
-        // Phase 1: parallel — stats + uniforms (both independent)
-        const [rawStats, uniformResult] = await Promise.all([
+        // Phase 1: parallel — stats + uniforms + teacher approvals (all independent)
+        const [rawStats, uniformResult, approvalStats] = await Promise.all([
           fetchStatsAndCounts(
             preschoolId,
             user?.user_metadata?.school_name || t('dashboard.your_school'),
           ),
           fetchUniformPayments(preschoolId),
+          getApprovalStats(preschoolId).catch(() => ({ pending: 0 })),
         ]);
 
         // Phase 2: parallel — teachers, financials, activities (depend on rawStats)
@@ -125,9 +129,9 @@ export const usePrincipalHub = () => {
           t,
         );
         const financialSummary = buildFinancialSummary(financialRaw, {
-          currentBalance: pettyCashMetrics?.currentBalance,
-          monthlyExpenses: pettyCashMetrics?.monthlyExpenses,
-          pendingTransactionsCount: pettyCashMetrics?.pendingTransactionsCount,
+          currentBalance: pettyCashMetricsRef.current?.currentBalance,
+          monthlyExpenses: pettyCashMetricsRef.current?.monthlyExpenses,
+          pendingTransactionsCount: pettyCashMetricsRef.current?.pendingTransactionsCount,
         });
         const capacityMetrics = buildCapacityMetrics(
           rawStats.studentsCount,
@@ -153,6 +157,7 @@ export const usePrincipalHub = () => {
             pendingActivityApprovals: rawStats.pendingActivityApprovalsCount,
             pendingHomeworkApprovals: rawStats.pendingHomeworkApprovalsCount,
             uniformPayments: uniformResult.summary,
+            pendingTeacherApprovals: approvalStats.pending,
             schoolId: preschoolId,
             schoolName: rawStats.schoolName,
           });

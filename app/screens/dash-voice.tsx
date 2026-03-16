@@ -412,7 +412,9 @@ export default function DashVoiceScreen() {
               isMuted={isVoiceMuted}
               onMuteChange={setIsVoiceMuted}
               onStopListening={() => {
-                if (isSpeakingRef.current) cancelSpeech();
+                // Only update listening state — do NOT cancel speech here.
+                // This fires for mute, barge-in suspend, and other non-user-initiated
+                // stops. TTS should keep playing when the mic is muted.
                 setIsListening(false);
               }}
               onStartListening={() => setIsListening(true)}

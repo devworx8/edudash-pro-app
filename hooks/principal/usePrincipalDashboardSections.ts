@@ -161,16 +161,12 @@ export function usePrincipalDashboardSections({
             ? explicitCollapsed
             : !prev.has(sectionId);
 
+        const next = new Set(prev);
         if (shouldCollapse) {
-          // Collapsing a section — just add it
-          const next = new Set(prev);
           next.add(sectionId);
-          return next;
+        } else {
+          next.delete(sectionId);
         }
-
-        // Expanding a section — collapse all others (accordion)
-        const next = new Set<PrincipalSectionId>(ALL_PRINCIPAL_SECTION_IDS);
-        next.delete(sectionId);
         return next;
       });
     },

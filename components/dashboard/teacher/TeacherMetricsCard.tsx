@@ -16,16 +16,8 @@ import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions, Accessib
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
-
-const getLayoutMetrics = (width: number) => {
-  const isTablet = width > 768;
-  const isSmallScreen = width < 380;
-  const cardPadding = isTablet ? 20 : isSmallScreen ? 10 : 14;
-  const cardGap = isTablet ? 12 : isSmallScreen ? 6 : 8;
-  const containerWidth = width - (cardPadding * 2);
-  const cardWidth = isTablet ? (containerWidth - (cardGap * 3)) / 4 : (containerWidth - cardGap) / 2;
-  return { isTablet, isSmallScreen, cardPadding, cardGap, containerWidth, cardWidth };
-};
+import { getCardLayoutMetrics } from '@/lib/utils/layoutMetrics';
+import { isNextGenTheme } from '@/lib/utils/themeVariant';
 
 interface TeacherMetricsCardProps {
   title: string;
@@ -58,7 +50,7 @@ export const TeacherMetricsCard: React.FC<TeacherMetricsCardProps> = memo(functi
   const { theme } = useTheme();
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
-  const layout = getLayoutMetrics(width || 0);
+  const layout = getCardLayoutMetrics(width || 0);
   const styles = getStyles(theme, layout);
 
   // Memoize accessibility label
@@ -174,8 +166,8 @@ export const getTrendText = (trend: string, t: any): string => {
   }
 };
 
-const getStyles = (theme: any, layout: ReturnType<typeof getLayoutMetrics>) => {
-  const isNextGenTeacher = String(theme?.background || '').toLowerCase() === '#0f121e';
+const getStyles = (theme: any, layout: ReturnType<typeof getCardLayoutMetrics>) => {
+  const isNextGenTeacher = isNextGenTheme(theme);
 
   return StyleSheet.create({
     metricCard: {

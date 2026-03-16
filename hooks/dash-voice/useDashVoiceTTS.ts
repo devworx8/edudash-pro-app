@@ -1,19 +1,18 @@
 /**
- * useDashVoiceTTS — Progressive streaming TTS for Dash Voice ORB.
+ * useDashVoiceTTS — Single-stream TTS for Dash Voice ORB.
  *
- * Near-realtime approach: speech keeps pace with the SSE token stream.
- *  1. FIRST PHRASE — spoken as soon as ~80 chars accumulate at a sentence
- *     boundary (low first-word latency).
- *  2. PROGRESSIVE PHRASES — every time ≥80 new chars accumulate past a
- *     sentence boundary, the new segment is enqueued. Speech plays
- *     continuously while the stream is still arriving.
- *  3. FLUSH — any remaining unspoken tail is enqueued when the stream ends.
+ * Designed to produce ONE CONTINUOUS speech flow with minimal pauses:
+ *  1. FIRST PHRASE — spoken as soon as ~100 chars at a sentence boundary
+ *     arrive during SSE (low first-word latency).
+ *  2. REMAINDER — everything else spoken as ONE chunk when the stream ends.
+ *     The speak() pipeline sends it as a single Azure request (up to ~3000
+ *     chars) so the entire remainder plays as one continuous audio file.
  *
- * The underlying speak() prefetch pipeline handles internal cloud-chunk
- * splitting seamlessly with zero inter-chunk gaps.
- *
- * Result: TTS tracks the stream in near-realtime instead of waiting for
- * the full response, giving a smooth conversational feel.
+ * Why 2-phase, not progressive chunks?
+ * Each enqueueSpeech() → speak() → Azure TTS request → new AudioPlayer.
+ * More calls = more inter-chunk gaps. Two calls (first phrase + remainder)
+ * means at most ONE transition. The speak() prefetch pipeline handles any
+ * internal splitting with pre-buffered players for zero-gap handoff.
  */
 
 import { useState, useRef, useCallback } from 'react';
@@ -23,9 +22,8 @@ import { shouldUsePhonicsMode } from '@/lib/dash-ai/phonicsDetection';
 import { getOrganizationType } from '@/lib/tenant/compat';
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const FIRST_PHRASE_MIN = 40;          // min chars at sentence boundary to flush first phrase
-const FIRST_PHRASE_TARGET = 80;       // word-boundary fallback for first phrase
-const PROGRESSIVE_MIN_DELTA = 80;     // min new chars before flushing a progressive phrase
+const FIRST_PHRASE_MIN = 40;     // min chars at sentence boundary to flush
+const FIRST_PHRASE_TARGET = 100; // word-boundary fallback target
 
 type VoiceOrbRef = {
   speakText: (text: string, language?: SupportedLanguage, options?: { phonicsMode?: boolean }) => Promise<void>;
@@ -43,27 +41,16 @@ interface UseDashVoiceTTSParams {
 
 /**
  * Find the LAST sentence-ending boundary (.?! followed by space/end, or \n\n)
- * within the range [startFrom, endBefore). Returns -1 if none found.
+ * within the range [startFrom, text.length). Returns -1 if none found.
  */
-function findLastSentenceBoundary(text: string, startFrom: number, endBefore?: number): number {
-  const end = endBefore ?? text.length;
+function findLastSentenceBoundary(text: string, startFrom: number): number {
   let lastBoundary = -1;
-  for (let i = startFrom; i < end; i++) {
+  for (let i = startFrom; i < text.length; i++) {
     if (text[i] === '?' || text[i] === '!') { lastBoundary = i + 1; continue; }
-    if (text[i] === '.' && (i + 1 >= end || text[i + 1] === ' ' || text[i + 1] === '\n')) { lastBoundary = i + 1; continue; }
-    if (text[i] === '\n' && i + 1 < end && text[i + 1] === '\n') { lastBoundary = i + 2; continue; }
+    if (text[i] === '.' && (i + 1 >= text.length || text[i + 1] === ' ' || text[i + 1] === '\n')) { lastBoundary = i + 1; continue; }
+    if (text[i] === '\n' && i + 1 < text.length && text[i + 1] === '\n') { lastBoundary = i + 2; continue; }
   }
   return lastBoundary;
-}
-
-/** Find the first sentence-ending boundary at or after `startFrom`. */
-function findFirstSentenceBoundary(text: string, startFrom: number): number {
-  for (let i = startFrom; i < text.length; i++) {
-    if (text[i] === '?' || text[i] === '!') return i + 1;
-    if (text[i] === '.' && (i + 1 >= text.length || text[i + 1] === ' ' || text[i + 1] === '\n')) return i + 1;
-    if (text[i] === '\n' && i + 1 < text.length && text[i + 1] === '\n') return i + 2;
-  }
-  return -1;
 }
 
 /** Length of the longest common prefix between two strings. */
@@ -91,7 +78,7 @@ export function useDashVoiceTTS({
 
   // ── Streaming accumulation ─────────────────────────────────────────────────
   const accumulatedTextRef = useRef('');      // Full display text received so far
-  const spokenPrefixLenRef = useRef(0);       // How many chars have been queued to TTS
+  const spokenPrefixLenRef = useRef(0);       // How many chars have been queued
   const firstPhraseSpokenRef = useRef(false); // Whether the first quick phrase was spoken
 
   // ── Core speak ─────────────────────────────────────────────────────────────
@@ -167,72 +154,52 @@ export function useDashVoiceTTS({
   }, []);
 
   // ── Streaming: called on each SSE chunk ────────────────────────────────────
-  // Progressive multi-sentence streaming: enqueues new complete sentences as
-  // they arrive so TTS keeps pace with the SSE stream in near-realtime.
+  // Only speaks the FIRST phrase (for low latency). All remaining text
+  // accumulates and is spoken as ONE continuous chunk when stream ends.
   const maybeEnqueueStreamingSpeech = useCallback((displayText: string) => {
     if (!streamingTTSEnabled) return;
     const text = String(displayText || '').trim();
     if (!text) return;
     accumulatedTextRef.current = text;
 
-    const spokenLen = spokenPrefixLenRef.current;
-    const newChars = text.length - spokenLen;
+    // After first phrase, just track — remainder spoken as one chunk at end
+    if (firstPhraseSpokenRef.current) return;
+    if (text.length < FIRST_PHRASE_MIN) return;
 
-    // ── First phrase: quick start with low threshold ──────────────────────
-    if (!firstPhraseSpokenRef.current) {
-      if (text.length < FIRST_PHRASE_MIN) return;
-
-      // Look for the last sentence boundary so we speak as much as possible
-      const boundary = findLastSentenceBoundary(text, FIRST_PHRASE_MIN - 1);
-      if (boundary > 0) {
-        const phrase = text.slice(0, boundary).trim();
-        if (phrase) {
-          firstPhraseSpokenRef.current = true;
-          spokenPrefixLenRef.current = boundary;
-          if (__DEV__) console.log('[TTS] first phrase:', phrase.length, 'chars');
-          enqueueSpeech(phrase);
-          return;
-        }
+    // Find the LAST sentence boundary for maximum first-phrase content
+    // (more audio = more time for the stream to finish before we need chunk 2)
+    const boundary = findLastSentenceBoundary(text, FIRST_PHRASE_MIN - 1);
+    if (boundary > 0) {
+      const phrase = text.slice(0, boundary).trim();
+      if (phrase) {
+        firstPhraseSpokenRef.current = true;
+        spokenPrefixLenRef.current = boundary;
+        if (__DEV__) console.log('[TTS] first phrase:', phrase.length, 'chars');
+        enqueueSpeech(phrase);
+        return;
       }
-
-      // No sentence boundary yet — fall back to word boundary at target size
-      if (text.length >= FIRST_PHRASE_TARGET) {
-        let cutoff = FIRST_PHRASE_TARGET;
-        for (let i = FIRST_PHRASE_TARGET; i >= FIRST_PHRASE_MIN; i--) {
-          if (text[i] === ' ' || text[i] === '\n') { cutoff = i; break; }
-        }
-        const phrase = text.slice(0, cutoff).trim();
-        if (phrase) {
-          firstPhraseSpokenRef.current = true;
-          spokenPrefixLenRef.current = cutoff;
-          if (__DEV__) console.log('[TTS] first phrase (word-break):', phrase.length, 'chars');
-          enqueueSpeech(phrase);
-        }
-      }
-      return;
     }
 
-    // ── Progressive phrases: enqueue new sentences as they stream in ──────
-    // Wait until enough new content has arrived to avoid tiny fragments
-    if (newChars < PROGRESSIVE_MIN_DELTA) return;
-
-    // Find the last sentence boundary in the NEW (unspoken) portion of text.
-    // Search from spokenLen but stop before the very end of the stream
-    // (the last few chars might be mid-sentence).
-    const boundary = findLastSentenceBoundary(text, spokenLen);
-    if (boundary <= spokenLen) return;
-
-    const phrase = text.slice(spokenLen, boundary).trim();
-    if (!phrase || phrase.length < 20) return; // skip tiny fragments
-
-    spokenPrefixLenRef.current = boundary;
-    if (__DEV__) console.log('[TTS] progressive phrase:', phrase.length, 'chars, spoken total:', boundary);
-    enqueueSpeech(phrase);
+    // No sentence boundary yet — fall back to word boundary at target size
+    if (text.length >= FIRST_PHRASE_TARGET) {
+      let cutoff = FIRST_PHRASE_TARGET;
+      for (let i = FIRST_PHRASE_TARGET; i >= FIRST_PHRASE_MIN; i--) {
+        if (text[i] === ' ' || text[i] === '\n') { cutoff = i; break; }
+      }
+      const phrase = text.slice(0, cutoff).trim();
+      if (phrase) {
+        firstPhraseSpokenRef.current = true;
+        spokenPrefixLenRef.current = cutoff;
+        if (__DEV__) console.log('[TTS] first phrase (word-break):', phrase.length, 'chars');
+        enqueueSpeech(phrase);
+      }
+    }
   }, [enqueueSpeech, streamingTTSEnabled]);
 
   // ── Streaming: called when stream completes ────────────────────────────────
-  // Speaks any remaining unspoken tail. With progressive streaming, this is
-  // typically just the last partial sentence (much smaller than before).
+  // Speaks everything not yet spoken as ONE chunk. The speak() prefetch
+  // pipeline handles internal cloud-chunking with pre-buffered players
+  // for zero-gap transitions.
   const flushStreamingSpeechFinal = useCallback((finalFullText: string) => {
     const fullText = String(finalFullText || '').trim();
     if (!fullText) { resetStreamingSpeech(); return; }

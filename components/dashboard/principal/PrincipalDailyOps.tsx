@@ -62,7 +62,12 @@ export const PrincipalDailyOps: React.FC<PrincipalDailyOpsProps> = ({
           icon="alert-circle"
           label={t('dashboard.urgent_items', { defaultValue: 'Urgent Items' })}
           value={`${urgentCount}`}
-          detail={`${pendingPayments} payments • ${pendingPOPs} POPs • ${pendingApprovalsTotal} approvals`}
+          detail={t('dashboard.urgent_items_detail', {
+            defaultValue: '{{payments}} payments • {{pops}} POPs • {{approvals}} approvals',
+            payments: pendingPayments,
+            pops: pendingPOPs,
+            approvals: pendingApprovalsTotal,
+          })}
           color={theme.error}
           theme={theme}
         />

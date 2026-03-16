@@ -14,9 +14,7 @@ import {
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 
-interface PrincipalDashboardWrapperProps {
-  refreshTrigger?: number;
-}
+interface PrincipalDashboardWrapperProps {}
 
 /**
  * Principal Dashboard Wrapper
@@ -30,9 +28,7 @@ interface PrincipalDashboardWrapperProps {
  * - PrincipalQuickActions, PrincipalRecentActivity
  * - Shared: MetricCard, QuickActionCard, CollapsibleSection, SearchBar
  */
-const PrincipalDashboardWrapperComponent: React.FC<PrincipalDashboardWrapperProps> = ({
-  refreshTrigger
-}) => {
+const PrincipalDashboardWrapperComponent: React.FC<PrincipalDashboardWrapperProps> = () => {
   const { profile } = useAuth();
   const { theme } = useTheme();
   const [resolvedSchoolType, setResolvedSchoolType] = useState<ResolvedSchoolType>(
@@ -129,9 +125,7 @@ const PrincipalDashboardWrapperComponent: React.FC<PrincipalDashboardWrapperProp
   
   // Default: Preschool dashboard
   return (
-    <PrincipalDashboardV2 
-      refreshTrigger={refreshTrigger}
-    />
+    <PrincipalDashboardV2 />
   );
 };
 
@@ -149,6 +143,5 @@ const styles = StyleSheet.create({
 
 // Memoize wrapper to prevent unnecessary re-renders
 export const PrincipalDashboardWrapper = memo(
-  PrincipalDashboardWrapperComponent,
-  (prevProps, nextProps) => prevProps.refreshTrigger === nextProps.refreshTrigger
+  PrincipalDashboardWrapperComponent
 );

@@ -43,10 +43,12 @@ import { useVoiceTTSPlayback } from './useVoiceTTSPlayback';
 export { resolveEffectiveVoiceId } from './ttsUtils';
 export type { TTSOptions, UseVoiceTTSReturn, TTSErrorCategory, EffectiveVoiceResolution } from './types';
 
-// First chunk ~120 chars for fastest time-to-first-audio (usually one sentence).
-// Follow-up chunks up to 800 chars keep total request count to 1-2 for most responses.
-const FIRST_CHUNK_TARGET_CHARS = 120;
-const FOLLOW_UP_CHUNK_MAX_CHARS = 800;
+// First chunk ~200 chars — gives ~8-12s of audio for the stream to finish.
+// Follow-up chunks up to 3000 chars so the ENTIRE remainder is usually ONE
+// Azure request → ONE continuous audio file → zero mid-speech pauses.
+// Azure Neural TTS handles up to ~5000 chars per request.
+const FIRST_CHUNK_TARGET_CHARS = 200;
+const FOLLOW_UP_CHUNK_MAX_CHARS = 3000;
 const MAX_AZURE_RETRIES = 1;
 const RETRY_BASE_DELAY_MS = 250;
 
@@ -147,7 +149,7 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
   const cachedAISettingsVoiceRef = useRef<string | null | undefined>(undefined);
   const lastAppliedVoiceSignatureRef = useRef<string | null>(null);
 
-  const { stopPlayback, playAudioUrl, estimatePlaybackTimeoutMs } = useVoiceTTSPlayback();
+  const { stopPlayback, playAudioUrl, preloadAudioUrl, estimatePlaybackTimeoutMs } = useVoiceTTSPlayback();
 
   const logVoiceTrace = useCallback((event: string, payload?: Record<string, unknown>) => {
     if (!VOICE_TRACE_ENABLED) return;
@@ -443,6 +445,16 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
           startPrefetch(chunkIndex + 1);
           if (chunkIndex + 2 < cloudChunks.length) startPrefetch(chunkIndex + 2);
 
+          // Pre-buffer next chunk's AudioPlayer while current one plays.
+          // When playAudioUrl is called for the next chunk it reuses the
+          // already-loaded player → zero-gap seamless handoff.
+          const nextPrefetch = prefetchMap.get(chunkIndex + 1);
+          if (nextPrefetch) {
+            nextPrefetch.then(r => {
+              if (!stopRequestedRef.current) preloadAudioUrl(r.audioUrl);
+            }).catch(() => {});
+          }
+
           // Suspend barge-in recording before playing — the barge-in monitor
           // may have started recording during the Azure request, stealing audio
           // focus and preventing playback on Android.
@@ -515,7 +527,7 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
       setIsSpeaking(false);
     }
   }, [
-    stopPlayback, getSessionTokenCached, requestAzureWithRetry, playAudioUrl,
+    stopPlayback, getSessionTokenCached, requestAzureWithRetry, playAudioUrl, preloadAudioUrl,
     estimatePlaybackTimeoutMs, speakWithDeviceTTS, reportTTSError, resolveSessionVoice,
     logVoiceTrace, profile?.role, tier, user?.id,
   ]);

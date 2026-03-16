@@ -108,7 +108,7 @@ export const PrincipalQuickActions: React.FC<PrincipalQuickActionsProps> = ({
   const { t } = useTranslation();
   const { theme } = useTheme();
   const alert = useAlert();
-  const styles = createQuickActionsStyles(theme);
+  const styles = useMemo(() => createQuickActionsStyles(theme), [theme]);
   const flags = getFeatureFlagsSync();
   const canLiveLessons = flags.live_lessons_enabled || flags.group_calls_enabled;
   const lifecycleEnabled = flags.learner_activity_lifecycle_v1 !== false;

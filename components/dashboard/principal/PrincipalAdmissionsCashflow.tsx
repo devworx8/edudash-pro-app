@@ -36,7 +36,6 @@ export interface PrincipalAdmissionsCashflowProps {
     unpaidStudentCount?: number;
   } | null;
   showUniformSection: boolean;
-  isYoungEagles: boolean;
   onOpenUniforms?: () => void;
   onMessageUnpaid?: () => void;
   onMessageNoOrder?: () => void;
@@ -55,7 +54,6 @@ export const PrincipalAdmissionsCashflow: React.FC<PrincipalAdmissionsCashflowPr
   utilization,
   uniformSummary,
   showUniformSection,
-  isYoungEagles,
   onOpenUniforms,
   onMessageUnpaid,
   onMessageNoOrder,
@@ -167,12 +165,7 @@ export const PrincipalAdmissionsCashflow: React.FC<PrincipalAdmissionsCashflowPr
             {t('dashboard.uniform_collections', { defaultValue: 'Uniform Collections' })}
           </Text>
           <Text style={styles.uniformNote}>
-            {isYoungEagles
-              ? t('dashboard.uniform_collections_note_ye', {
-                  defaultValue:
-                    'Young Eagles uniform payments are tracked separately from school revenue.',
-                })
-              : t('dashboard.uniform_collections_note', {
+            {t('dashboard.uniform_collections_note', {
                   defaultValue:
                     'Uniform payments are tracked separately from school revenue.',
                 })}

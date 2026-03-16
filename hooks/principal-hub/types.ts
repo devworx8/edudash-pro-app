@@ -19,6 +19,8 @@ export interface SchoolStats {
   expectedTuitionIncome?: { total: number; trend: string };
   /** Tuition fees actually collected (paid rows only) for the current billing month */
   collectedTuitionAmount?: { total: number; trend: string };
+  parentLinks?: { total: number };
+  feeStructures?: { total: number };
   timestamp: string;
 }
 
@@ -115,6 +117,7 @@ export interface PrincipalHubData {
   pendingActivityApprovals: number;
   pendingHomeworkApprovals: number;
   uniformPayments: UniformPaymentSummary | null;
+  pendingTeacherApprovals: number;
   schoolId: string | null;
   schoolName: string;
 }
@@ -145,6 +148,7 @@ export const EMPTY_HUB_DATA: PrincipalHubData = {
   pendingActivityApprovals: 0,
   pendingHomeworkApprovals: 0,
   uniformPayments: null,
+  pendingTeacherApprovals: 0,
   schoolId: null,
   schoolName: '',
 };

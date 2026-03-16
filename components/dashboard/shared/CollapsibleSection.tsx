@@ -6,9 +6,10 @@
  */
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
+import { isNextGenTheme } from '@/lib/utils/themeVariant';
 import Animated, { 
   useSharedValue, 
   useAnimatedStyle, 
@@ -18,10 +19,6 @@ import Animated, {
 import Feedback from '@/lib/feedback';
 import { SectionAttentionDot, type AttentionPriority } from './SectionAttentionDot';
 import { GlowContainer } from './GlowContainer';
-
-const { width } = Dimensions.get('window');
-const isTablet = width > 768;
-const isSmallScreen = width < 380;
 
 export interface SectionAttention {
   priority: AttentionPriority;
@@ -60,6 +57,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   attention,
 }) => {
   const { theme } = useTheme();
+  const { width: windowWidth } = useWindowDimensions();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const rotation = useSharedValue(defaultCollapsed ? 0 : 1);
   const contentOpacity = useSharedValue(defaultCollapsed ? 0 : 1);
@@ -69,7 +67,7 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
     (collapsed && attention?.priority) ? attention.priority : 'none';
   const isElevated = attentionPriority === 'critical';
 
-  const styles = createStyles(theme, visualStyle);
+  const styles = createStyles(theme, visualStyle, windowWidth);
 
   // Sync with external collapsed state (from parent component)
   useEffect(() => {
@@ -187,9 +185,11 @@ export const CollapsibleSection: React.FC<CollapsibleSectionProps> = ({
   return sectionContent;
 };
 
-const createStyles = (theme: any, visualStyle: 'default' | 'glass') => {
-  const isNextGenTeacher = String(theme?.background || '').toLowerCase() === '#0f121e';
+const createStyles = (theme: any, visualStyle: 'default' | 'glass', windowWidth: number) => {
+  const isNextGenTeacher = isNextGenTheme(theme);
   const isGlass = visualStyle === 'glass';
+  const isTablet = windowWidth > 768;
+  const isSmallScreen = windowWidth < 380;
 
   return StyleSheet.create({
     container: {

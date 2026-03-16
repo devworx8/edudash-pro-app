@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+import { Ionicons } from '@expo/vector-icons';
 import { usePrincipalHub } from '@/hooks/usePrincipalHub';
 import { useRecentStudents } from '@/hooks/useRecentStudents';
 import { useBirthdayPlanner } from '@/hooks/useBirthdayPlanner';
@@ -38,13 +39,10 @@ import {
 } from '@/components/dashboard/principal/sectionTypes';
 import type { AttentionPriority } from '@/components/dashboard/shared/SectionAttentionDot';
 import TierBadge from '@/components/ui/TierBadge';
-import { getApprovalStats } from '@/lib/services/teacherApprovalService';
 import { createStyles } from '@/components/dashboard/principal/PrincipalDashboardV2.styles';
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
-interface PrincipalDashboardV2Props {
-  refreshTrigger?: number;
-}
+interface PrincipalDashboardV2Props {}
 
 const getAttentionPriority = (
   count: number,
@@ -72,7 +70,7 @@ export const PrincipalDashboardV2: React.FC<PrincipalDashboardV2Props> = () => {
   const insets = useSafeAreaInsets();
   const resolvedSchoolType = resolveSchoolTypeFromProfile(profile);
 
-  const { data, loading, refresh } = usePrincipalHub();
+  const { data, loading, error, refresh } = usePrincipalHub();
   const { hideFeesOnDashboards } = useFinancePrivacyMode();
   const organizationId = profile?.organization_id || profile?.preschool_id || null;
 
@@ -89,16 +87,9 @@ export const PrincipalDashboardV2: React.FC<PrincipalDashboardV2Props> = () => {
   } = useBirthdayPlanner({ preschoolId: organizationId || undefined, daysAhead: 45 });
 
   const [refreshing, setRefreshing] = useState(false);
-  const [pendingTeacherApprovals, setPendingTeacherApprovals] = useState(0);
 
   const stats = data.stats;
-
-  useEffect(() => {
-    if (!organizationId) return;
-    getApprovalStats(organizationId)
-      .then((s) => setPendingTeacherApprovals(s.pending))
-      .catch(() => {});
-  }, [organizationId, refreshing]);
+  const pendingTeacherApprovals = data.pendingTeacherApprovals;
 
   // --- Derived counts ---
   const totalStudents = stats?.students?.total ?? 0;
@@ -136,15 +127,13 @@ export const PrincipalDashboardV2: React.FC<PrincipalDashboardV2Props> = () => {
 
   const uniformSummary = data.uniformPayments;
   const schoolName = profile?.organization_name || data.schoolName || t('dashboard.your_school', { defaultValue: 'Your School' });
-  const isYoungEagles = (schoolName || '').toLowerCase().includes('young eagles');
   const showUniformSection = Boolean(
     uniformSummary &&
     (
       uniformSummary.totalStudents > 0 ||
       uniformSummary.paidCount > 0 ||
       uniformSummary.pendingCount > 0 ||
-      uniformSummary.pendingUploads > 0 ||
-      isYoungEagles
+      uniformSummary.pendingUploads > 0
     )
   );
 
@@ -312,6 +301,26 @@ export const PrincipalDashboardV2: React.FC<PrincipalDashboardV2Props> = () => {
       <View pointerEvents="none" style={styles.backgroundOrbOne} />
       <View pointerEvents="none" style={styles.backgroundOrbTwo} />
 
+      {error && !data.stats && (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Ionicons name="alert-circle-outline" size={48} color={theme.error || '#DC2626'} />
+          <Text style={{ color: theme.error || '#DC2626', fontWeight: '600', fontSize: 16, marginTop: 12, textAlign: 'center' }}>
+            {t('common.error_title', { defaultValue: 'Something went wrong' })}
+          </Text>
+          <Text style={{ color: theme.textSecondary, fontSize: 13, marginTop: 4, textAlign: 'center' }}>
+            {error}
+          </Text>
+          <TouchableOpacity
+            onPress={onRefresh}
+            style={{ backgroundColor: theme.primary, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12, marginTop: 16 }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>
+              {t('common.retry', { defaultValue: 'Try Again' })}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -377,7 +386,7 @@ export const PrincipalDashboardV2: React.FC<PrincipalDashboardV2Props> = () => {
         {/* Start Here */}
         {renderSection('start-here', (
           <View style={styles.sectionBody}>
-            <PrincipalSchoolPulse stats={stats} hideFinanceTiles={hideFeesOnDashboards} />
+            <PrincipalSchoolPulse stats={stats} hideFinanceTiles={hideFeesOnDashboards} attendancePresent={attendancePresent} />
             <PrincipalGettingStartedCard stats={stats} />
           </View>
         ))}
@@ -426,7 +435,6 @@ export const PrincipalDashboardV2: React.FC<PrincipalDashboardV2Props> = () => {
             utilization={utilization}
             uniformSummary={uniformSummary}
             showUniformSection={showUniformSection}
-            isYoungEagles={isYoungEagles}
             onOpenUniforms={openUniformHub}
             onMessageUnpaid={messageUnpaidUniformParents}
             onMessageNoOrder={messageNoOrderParents}

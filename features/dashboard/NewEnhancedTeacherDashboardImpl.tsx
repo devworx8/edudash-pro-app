@@ -41,7 +41,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ParentJoinService } from '@/lib/services/parentJoinService';
 import { useTeacherStudents } from '@/hooks/useTeacherStudents';
 import { CollapsibleSection, StudentSummaryCard } from '@/components/dashboard/shared';
-import { TeachTodaySuggestion } from '@/components/dashboard/teacher/TeachTodaySuggestion';
+import { TeachTodaySuggestionOptimized as TeachTodaySuggestion } from '@/components/dashboard/teacher/TeachTodaySuggestionOptimized';
 import { scheduleTeacherRoutineReminders } from '@/lib/dashboard/teacherRoutineReminders';
 import { router } from 'expo-router';
 

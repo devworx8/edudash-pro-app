@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { router } from 'expo-router';
@@ -14,10 +14,6 @@ import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useNotificationCounts } from '@/contexts/NotificationContext';
 import type { SchoolStats } from '@/hooks/usePrincipalHub';
-
-const { width } = Dimensions.get('window');
-const isTablet = width > 768;
-const isSmallScreen = width < 380;
 
 type PulseTone = 'neutral' | 'good' | 'warn' | 'bad';
 
@@ -61,17 +57,21 @@ function isDarkHex(hex: string): boolean {
 export interface PrincipalSchoolPulseProps {
   stats?: SchoolStats | null;
   hideFinanceTiles?: boolean;
+  attendancePresent?: number;
 }
 
-export const PrincipalSchoolPulse: React.FC<PrincipalSchoolPulseProps> = ({ stats, hideFinanceTiles = false }) => {
+export const PrincipalSchoolPulse: React.FC<PrincipalSchoolPulseProps> = ({ stats, hideFinanceTiles = false, attendancePresent: attendancePresentProp }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const counts = useNotificationCounts();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { width } = useWindowDimensions();
+  const isTablet = width > 768;
+  const isSmallScreen = width < 380;
+  const styles = useMemo(() => createStyles(theme, width), [theme, width]);
 
   const totalStudents = stats?.students?.total ?? 0;
   const attendanceRate = Number(stats?.attendanceRate?.percentage ?? 0);
-  const attendancePresent = totalStudents > 0 ? Math.round((attendanceRate / 100) * totalStudents) : 0;
+  const attendancePresent = attendancePresentProp ?? (totalStudents > 0 ? Math.round((attendanceRate / 100) * totalStudents) : 0);
 
   const unpaidFees = stats?.pendingPayments?.total ?? 0;
   const popPending = stats?.pendingPOPUploads?.total ?? 0;
@@ -180,7 +180,9 @@ export const PrincipalSchoolPulse: React.FC<PrincipalSchoolPulseProps> = ({ stat
   );
 };
 
-const createStyles = (theme: any) => {
+const createStyles = (theme: any, windowWidth: number) => {
+  const isTablet = windowWidth > 768;
+  const isSmallScreen = windowWidth < 380;
   const gap = isTablet ? 12 : isSmallScreen ? 8 : 10;
   const isDark = isDarkHex(theme?.background);
   const tileBackground = isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.72)';

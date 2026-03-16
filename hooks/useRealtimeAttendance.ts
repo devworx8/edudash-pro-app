@@ -117,9 +117,16 @@ export function useRealtimeAttendance(options: UseRealtimeAttendanceOptions) {
             for (const update of updates) {
               if (studentIds.includes(update.studentId)) {
                 changed = true;
-                if (update.type === 'INSERT' || update.type === 'UPDATE') {
-                  // Recalculate based on status
-                  // This is a simplified version - in production you'd track previous status
+                const isPresent = update.status === 'present' || update.status === 'late';
+                if (update.type === 'INSERT') {
+                  if (isPresent) presentToday += 1;
+                } else if (update.type === 'DELETE') {
+                  // Record removed — decrement if it was a present/late record
+                  presentToday = Math.max(0, presentToday - 1);
+                } else if (update.type === 'UPDATE') {
+                  // Status changed — if now present, increment; if now absent, decrement
+                  if (isPresent) presentToday += 1;
+                  else presentToday = Math.max(0, presentToday - 1);
                 }
               }
             }

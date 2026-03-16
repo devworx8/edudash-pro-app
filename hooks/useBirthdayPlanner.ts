@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { BirthdayPlannerService } from '@/services/BirthdayPlannerService';
+import { logger } from '@/lib/logger';
 import type {
   StudentBirthday,
   BirthdayCelebrationPreferences,
@@ -127,7 +128,7 @@ export function useBirthdayPlanner(options: UseBirthdayPlannerOptions = {}): Use
       const events = await BirthdayPlannerService.getBirthdayCalendarEvents(preschoolId, year, month);
       setCalendarEvents(events);
     } catch (err: any) {
-      console.error('[useBirthdayPlanner] Error loading calendar events:', err);
+      logger.error('[useBirthdayPlanner] Error loading calendar events:', err);
     }
   }, [preschoolId]);
 

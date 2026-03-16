@@ -62,7 +62,7 @@ export async function scheduleTeacherRoutineReminders(
       continue;
     }
 
-    const reminderDate = buildTodayDateForMinutes(startMinutes - 10);
+    const reminderDate = buildTodayDateForMinutes(Math.max(0, startMinutes - 10));
     if (reminderDate.getTime() <= now) {
       skipped += 1;
       continue;

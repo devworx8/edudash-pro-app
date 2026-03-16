@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { ratioToPercent } from '@/lib/progress/clampPercent';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -15,10 +15,6 @@ import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import type { SchoolStats } from '@/hooks/usePrincipalHub';
 
-const { width } = Dimensions.get('window');
-const isTablet = width > 768;
-const isSmallScreen = width < 380;
-
 export interface PrincipalGettingStartedCardProps {
   stats?: SchoolStats | null;
 }
@@ -26,7 +22,8 @@ export interface PrincipalGettingStartedCardProps {
 export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardProps> = ({ stats }) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { width } = useWindowDimensions();
+  const styles = useMemo(() => createStyles(theme, width), [theme, width]);
 
   const students = stats?.students?.total ?? 0;
   const teachers = stats?.staff?.total ?? 0;
@@ -77,7 +74,7 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
         id: 'parents',
         title: t('onboarding.invite_parents', { defaultValue: 'Invite parents' }),
         subtitle: t('onboarding.invite_parents_sub', { defaultValue: 'Share an invite code via WhatsApp so parents can connect to their child.' }),
-        done: false,
+        done: (stats?.parentLinks?.total ?? 0) > 0,
         icon: 'heart',
         route: '/screens/principal-parent-invite-code',
         cta: t('common.invite', { defaultValue: 'Invite' }),
@@ -87,7 +84,7 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
         id: 'fees',
         title: t('onboarding.set_fees', { defaultValue: 'Set up fees' }),
         subtitle: t('onboarding.set_fees_sub', { defaultValue: 'Configure fee structures so payment reminders and tracking work automatically.' }),
-        done: true,
+        done: (stats?.feeStructures?.total ?? 0) > 0,
         icon: 'cash',
         route: '/screens/finance-control-center?tab=overview',
         cta: t('common.open', { defaultValue: 'Open' }),
@@ -99,11 +96,11 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
       if (a.done !== b.done) return Number(a.done) - Number(b.done);
       return a.priority - b.priority;
     });
-  }, [classes, students, t, teachers]);
+  }, [classes, students, stats, t, teachers]);
 
   const completedCount = steps.filter((s) => s.done).length;
   const totalSteps = steps.length;
-  const shouldShow = students === 0 || teachers === 0 || classes === 0;
+  const shouldShow = completedCount < totalSteps;
   if (!shouldShow) return null;
 
   return (
@@ -164,8 +161,10 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
   );
 };
 
-const createStyles = (theme: any) =>
-  StyleSheet.create({
+const createStyles = (theme: any, windowWidth: number) => {
+  const isTablet = windowWidth > 768;
+  const isSmallScreen = windowWidth < 380;
+  return StyleSheet.create({
     card: {
       marginTop: 10,
       borderRadius: 18,
@@ -286,5 +285,6 @@ const createStyles = (theme: any) =>
       color: theme.primary,
     },
   });
+};
 
 export default PrincipalGettingStartedCard;

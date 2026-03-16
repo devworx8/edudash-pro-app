@@ -1,9 +1,11 @@
 /**
- * useVoiceTTSPlayback — AudioPlayer lifecycle management sub-hook.
+ * useVoiceTTSPlayback — AudioPlayer lifecycle with pre-buffered handoff.
  *
- * Handles create/play/stop/cleanup of expo-audio players with aggressive
- * polling for fast completion detection. Tuned for minimal inter-chunk
- * gap so speech sounds fluent when chunks are played back-to-back.
+ * Handles create/play/stop/cleanup of expo-audio players. When multiple
+ * chunks must play back-to-back, the NEXT player is pre-created and
+ * buffered while the current one plays. On handoff the pre-loaded player
+ * just needs `.play()` — eliminating the ~100-200ms create+load gap that
+ * caused audible pauses between chunks.
  *
  * @module components/super-admin/voice-orb/useVoiceTTS/useVoiceTTSPlayback
  */
@@ -22,6 +24,7 @@ export interface VoiceTTSPlaybackHandle {
   playerRef: React.MutableRefObject<AudioPlayer | null>;
   stopPlayback: () => Promise<void>;
   playAudioUrl: (audioUrl: string, timeoutMs: number) => Promise<void>;
+  preloadAudioUrl: (audioUrl: string) => void;
   estimatePlaybackTimeoutMs: (text: string) => number;
 }
 
@@ -31,6 +34,9 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
   const playbackIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const playbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioModeConfiguredRef = useRef(false);
+
+  // ── Pre-buffer: next player created while current one plays ────────────
+  const preloadedRef = useRef<{ player: AudioPlayer; url: string } | null>(null);
 
   const clearPlaybackTimers = useCallback(() => {
     if (playbackIntervalRef.current) { clearInterval(playbackIntervalRef.current); playbackIntervalRef.current = null; }
@@ -44,13 +50,22 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
     if (playerRef.current === player) playerRef.current = null;
   }, []);
 
+  const cleanupPreloaded = useCallback(() => {
+    if (preloadedRef.current) {
+      try { preloadedRef.current.player.pause(); } catch { /* ignore */ }
+      try { preloadedRef.current.player.release(); } catch { /* ignore */ }
+      preloadedRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       Speech.stop();
       clearPlaybackTimers();
       cleanupPlayer(playerRef.current);
+      cleanupPreloaded();
     };
-  }, [clearPlaybackTimers, cleanupPlayer]);
+  }, [clearPlaybackTimers, cleanupPlayer, cleanupPreloaded]);
 
   const stopPlayback = useCallback(async () => {
     try {
@@ -58,17 +73,35 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
       playbackIdRef.current += 1;
       clearPlaybackTimers();
       cleanupPlayer(playerRef.current);
+      cleanupPreloaded();
       // Reset so the next playAudioUrl reclaims audio focus/mode
       audioModeConfiguredRef.current = false;
     } catch (err) {
       console.error('[VoiceTTS] Error stopping playback:', err);
     }
-  }, [clearPlaybackTimers, cleanupPlayer]);
+  }, [clearPlaybackTimers, cleanupPlayer, cleanupPreloaded]);
 
   const estimatePlaybackTimeoutMs = useCallback((text: string): number => {
     const estimated = (text || '').length * 100;
     return Math.min(90000, Math.max(15000, estimated));
   }, []);
+
+  // ── Pre-load the next audio URL while current one plays ────────────────
+  // Creates a player that starts buffering immediately. When playAudioUrl
+  // is called with this URL it reuses the already-loaded player instead
+  // of creating a new one (eliminating the load gap).
+  const preloadAudioUrl = useCallback((audioUrl: string) => {
+    // Already pre-loaded for this URL
+    if (preloadedRef.current?.url === audioUrl) return;
+    // Clean up any previous pre-load
+    cleanupPreloaded();
+    try {
+      const player = createAudioPlayer(audioUrl);
+      preloadedRef.current = { player, url: audioUrl };
+    } catch {
+      // Pre-load is best-effort; playAudioUrl will create on demand
+    }
+  }, [cleanupPreloaded]);
 
   const playAudioUrl = useCallback((audioUrl: string, timeoutMs: number): Promise<void> => {
     return new Promise<void>(async (resolve, reject) => {
@@ -114,7 +147,15 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
 
       let player: AudioPlayer | null = null;
       try {
-        player = createAudioPlayer(audioUrl);
+        // ── Use pre-loaded player if available (zero-gap handoff) ─────────
+        if (preloadedRef.current?.url === audioUrl) {
+          player = preloadedRef.current.player;
+          preloadedRef.current = null;
+        } else {
+          // Clean up stale pre-load since we're playing a different URL
+          cleanupPreloaded();
+          player = createAudioPlayer(audioUrl);
+        }
         playerRef.current = player;
         player.play();
       } catch {
@@ -162,7 +203,7 @@ export function useVoiceTTSPlayback(): VoiceTTSPlaybackHandle {
         finalize(unfinished ? new Error('AUDIO_PLAYBACK_STALL') : undefined);
       }, timeoutMs);
     });
-  }, [clearPlaybackTimers, cleanupPlayer]);
+  }, [clearPlaybackTimers, cleanupPlayer, cleanupPreloaded]);
 
-  return { playerRef, stopPlayback, playAudioUrl, estimatePlaybackTimeoutMs };
+  return { playerRef, stopPlayback, playAudioUrl, preloadAudioUrl, estimatePlaybackTimeoutMs };
 }
