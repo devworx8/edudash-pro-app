@@ -122,7 +122,11 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
         await AsyncStorage.setItem(STORAGE_KEYS.appStartTime, startTime.toString());
 
         if (shouldEnableAds && !isWeb) {
-          debug('[AdsProvider] Initializing AdMob for free tier user');
+          debug('[AdsProvider] Initializing AdMob for free tier user', {
+            tier,
+            roleEligible,
+            platformEligible,
+          });
           const initialized = await initializeAdMob();
           
           track('ads.context_initialized', {

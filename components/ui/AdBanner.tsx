@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +27,9 @@ export default function AdBanner({
   const [adLoaded, setAdLoaded] = useState(false);
   const [adFailed, setAdFailed] = useState(false);
   const [showAds, setShowAds] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isHuaweiNoGmsRiskDevice = Platform.OS === 'android'
     && (String(Device.brand || '').toLowerCase().includes('huawei')
       || String(Device.manufacturer || '').toLowerCase().includes('huawei'));
@@ -94,17 +97,37 @@ export default function AdBanner({
     });
   };
 
-  const handleAdFailedToLoad = (error: any) => {
-    setAdFailed(true);
+  const handleAdFailedToLoad = useCallback((error: any) => {
     setAdLoaded(false);
     
+    const attempt = retryCountRef.current;
     track('edudash.ad.banner_failed', {
       placement,
       error: error?.message || 'Unknown error',
       user_id: user?.id,
       platform: Platform.OS,
+      retry_attempt: attempt,
     });
-  };
+
+    // Retry up to 3 times with exponential backoff (15s, 30s, 60s)
+    if (attempt < 3) {
+      const delay = 15_000 * Math.pow(2, attempt);
+      retryTimerRef.current = setTimeout(() => {
+        retryCountRef.current = attempt + 1;
+        setAdFailed(false);
+        setRetryKey((k) => k + 1);
+      }, delay);
+    } else {
+      setAdFailed(true);
+    }
+  }, [placement, user?.id]);
+
+  // Clean up retry timer on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, []);
 
   const handleAdOpened = () => {
     track('edudash.ad.banner_clicked', {
@@ -129,8 +152,10 @@ export default function AdBanner({
         </View>
       )}
       <BannerAd 
+        key={retryKey}
         unitId={unitId} 
         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
+        requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         onAdLoaded={handleAdLoaded}
         onAdFailedToLoad={handleAdFailedToLoad}
         onAdOpened={handleAdOpened}

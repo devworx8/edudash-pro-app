@@ -152,15 +152,29 @@ export async function initializeAdMob(): Promise<boolean> {
     
     // Initialize the SDK
     try {
-      const { default: mobileAds } = require('react-native-google-mobile-ads');
+      const { default: mobileAds, MaxAdContentRating } = require('react-native-google-mobile-ads');
+
+      // Configure ad request defaults before initializing.
+      // MaxAdContentRating.G ensures family-safe inventory;
+      // tagForChildDirectedTreatment is false because parents (adults) see ads.
+      await mobileAds().setRequestConfiguration({
+        maxAdContentRating: MaxAdContentRating.G,
+        tagForChildDirectedTreatment: false,
+        tagForUnderAgeOfConsent: false,
+      });
+
       await mobileAds().initialize();
+      isInitialized = true;
       log('AdMob SDK initialized successfully');
     } catch (sdkErr) {
       // SDK not available (e.g., dev build without native module)
       warn('AdMob SDK not available, running in stub mode:', sdkErr);
+      track('edudash.ads.sdk_unavailable', {
+        platform: Platform.OS,
+        error: sdkErr instanceof Error ? sdkErr.message : String(sdkErr),
+      });
+      return false;
     }
-
-    isInitialized = true;
     
     track('edudash.ads.initialized', {
       platform: Platform.OS,
