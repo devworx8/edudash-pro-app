@@ -27,6 +27,7 @@ interface InstantTTSOptions {
 const EDGE_FUNCTION_URL = process.env.EXPO_PUBLIC_SUPABASE_URL + '/functions/v1/tts-proxy';
 
 const MIN_CHUNK_LENGTH = 30;
+const FIRST_CHUNK_TARGET = 130;
 const IDEAL_CHUNK_SIZE = 250;
 const MAX_CHUNK_SIZE = 400;
 
@@ -39,19 +40,24 @@ export function splitIntoSpeechChunks(text: string): string[] {
   let remaining = text.trim();
 
   while (remaining.length > 0) {
-    if (remaining.length <= IDEAL_CHUNK_SIZE) {
+    const isFirstChunk = chunks.length === 0;
+    const targetChunkSize = isFirstChunk ? FIRST_CHUNK_TARGET : IDEAL_CHUNK_SIZE;
+    const maxChunkSize = isFirstChunk ? Math.max(FIRST_CHUNK_TARGET, MIN_CHUNK_LENGTH) : MAX_CHUNK_SIZE;
+
+    if (remaining.length <= targetChunkSize) {
       chunks.push(remaining);
       break;
     }
 
-    const window = remaining.slice(0, MAX_CHUNK_SIZE);
+    const window = remaining.slice(0, Math.min(MAX_CHUNK_SIZE, remaining.length));
     const sentenceMatches = [...window.matchAll(/[.!?]+\s*/g)];
     if (sentenceMatches.length > 0) {
       let bestIdx = -1;
       for (const m of sentenceMatches) {
         const endPos = (m.index ?? 0) + m[0].length;
-        if (endPos >= MIN_CHUNK_LENGTH && endPos <= MAX_CHUNK_SIZE) {
+        if (endPos >= MIN_CHUNK_LENGTH && endPos <= maxChunkSize) {
           bestIdx = endPos;
+          if (isFirstChunk) break;
         }
       }
       if (bestIdx > MIN_CHUNK_LENGTH) {
@@ -66,8 +72,9 @@ export function splitIntoSpeechChunks(text: string): string[] {
       let bestIdx = -1;
       for (const m of clauseMatches) {
         const endPos = (m.index ?? 0) + m[0].length;
-        if (endPos >= MIN_CHUNK_LENGTH && endPos <= MAX_CHUNK_SIZE) {
+        if (endPos >= MIN_CHUNK_LENGTH && endPos <= maxChunkSize) {
           bestIdx = endPos;
+          if (isFirstChunk) break;
         }
       }
       if (bestIdx > MIN_CHUNK_LENGTH) {
@@ -77,13 +84,13 @@ export function splitIntoSpeechChunks(text: string): string[] {
       }
     }
 
-    const wordBoundary = remaining.slice(0, IDEAL_CHUNK_SIZE).lastIndexOf(' ');
+    const wordBoundary = remaining.slice(0, targetChunkSize).lastIndexOf(' ');
     if (wordBoundary > MIN_CHUNK_LENGTH) {
       chunks.push(remaining.slice(0, wordBoundary).trim());
       remaining = remaining.slice(wordBoundary + 1).trim();
     } else {
-      chunks.push(remaining.slice(0, MAX_CHUNK_SIZE).trim());
-      remaining = remaining.slice(MAX_CHUNK_SIZE).trim();
+      chunks.push(remaining.slice(0, maxChunkSize).trim());
+      remaining = remaining.slice(maxChunkSize).trim();
     }
   }
 

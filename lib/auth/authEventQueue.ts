@@ -113,19 +113,25 @@ class AuthEventQueue {
     this.processing = true;
     const label = `${item.event}@${item.enqueuedAt}`;
 
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      timeoutId = setTimeout(
+        () => reject(new Error(`AuthEventQueue: handler timed out (${label})`)),
+        HANDLER_TIMEOUT_MS
+      );
+    });
+
     try {
       await Promise.race([
         item.handler(item.event, item.session),
-        new Promise<void>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`AuthEventQueue: handler timed out (${label})`)),
-            HANDLER_TIMEOUT_MS
-          )
-        ),
+        timeoutPromise,
       ]);
     } catch (err) {
       logger.error('AuthEventQueue', `Error processing ${label}:`, err);
     } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       this.processing = false;
       // Process next item (if any)
       if (this.queue.length > 0) {

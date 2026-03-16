@@ -213,7 +213,6 @@ export default function PrincipalParentsScreen() {
                 </View>
               );
             }}
-            estimatedItemSize={90}
           />
         </>
       )}

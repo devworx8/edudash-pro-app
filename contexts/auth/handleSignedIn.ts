@@ -106,13 +106,21 @@ export async function handleSignedIn(
   deps.showLoadingOverlay?.('Setting up your dashboard...');
 
   // 1. Main RPC fetch — await with generous timeout
+  let profileTimeoutId: ReturnType<typeof setTimeout> | null = null;
+  const profileTimeoutPromise = new Promise<null>((resolve) => {
+    profileTimeoutId = setTimeout(() => resolve(null), PROFILE_TIMEOUT);
+  });
   try {
     enhancedProfile = await Promise.race([
       fetchEnhancedUserProfile(userId, s),
-      new Promise<null>((r) => setTimeout(() => r(null), PROFILE_TIMEOUT)),
+      profileTimeoutPromise,
     ]) as EnhancedUserProfile | null;
   } catch (err) {
     logger.warn('handleSignedIn', 'Profile fetch failed:', err);
+  } finally {
+    if (profileTimeoutId) {
+      clearTimeout(profileTimeoutId);
+    }
   }
   if (isStale()) { deps.hideLoadingOverlay?.(); return; }
 

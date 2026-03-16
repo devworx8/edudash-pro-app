@@ -43,6 +43,7 @@ function formatFeatureName(feature: AIQuotaFeature): string {
     grading_assistance: 'Grading',
     homework_help: 'Assignment Help',
     transcription: 'Voice',
+    chat_message: 'Chat',
   };
   return names[feature] || feature;
 }
@@ -56,6 +57,7 @@ function getFeatureIcon(feature: AIQuotaFeature): string {
     grading_assistance: 'checkmark-done',
     homework_help: 'help-buoy',
     transcription: 'mic',
+    chat_message: 'chatbubble-ellipses',
   };
   return icons[feature] || 'analytics';
 }
@@ -69,6 +71,7 @@ function getFeatureColor(feature: AIQuotaFeature): string {
     grading_assistance: '#10B981',
     homework_help: '#F59E0B',
     transcription: '#8B5CF6',
+    chat_message: '#6366F1',
   };
   return colors[feature] || '#6B7280';
 }

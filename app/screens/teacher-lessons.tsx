@@ -350,7 +350,6 @@ export default function TeacherLessonsScreen() {
           ListEmptyComponent={renderEmpty}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
-          estimatedItemSize={80}
         />
       )}
 

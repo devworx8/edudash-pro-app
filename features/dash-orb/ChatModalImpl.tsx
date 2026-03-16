@@ -1,3 +1,4 @@
+/* eslint-disable i18next/no-literal-string */
 import React, { useRef, useEffect, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';

@@ -109,6 +109,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   const scheduleLiveFallbackRef = useRef<(() => void) | null>(null);
   const ttsStartedAtRef = useRef<number | null>(null);
   const bargeInTriggeredRef = useRef(false);
+  const ttsPlaybackActiveRef = useRef(false);
 
   useEffect(() => { isSpeakingRef.current = isSpeaking; }, [isSpeaking]);
   useEffect(() => { ttsSpeakingRef.current = ttsIsSpeaking; }, [ttsIsSpeaking]);
@@ -363,7 +364,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
   ]);
 
   // TTS handlers + auto-restart (imperative handle, feedback prevention, auto-restart effects)
-  const { cancelAutoRestart, ttsPlaybackActiveRef } = useVoiceOrbTTSHandlers({
+  const { cancelAutoRestart } = useVoiceOrbTTSHandlers({
     ref,
     recorderState,
     recorderActions,
@@ -393,6 +394,7 @@ const VoiceOrb = forwardRef<VoiceOrbRef, VoiceOrbProps>(({
     skipNextAutoRestartRef,
     setMuted: applyMuteState,
     postTTSSilentUntilRef,
+    ttsPlaybackActiveRef,
   });
 
   // Derived sizes

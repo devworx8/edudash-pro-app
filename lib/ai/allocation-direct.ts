@@ -18,19 +18,19 @@ import type { AIQuotaFeature } from './limits';
 function getBaseQuotasByTier(tier: string): Record<AIQuotaFeature, number> {
   switch (tier.toLowerCase()) {
     case 'free':
-      return { lesson_generation: 10, grading_assistance: 5, homework_help: 300, transcription: 60 };
+      return { lesson_generation: 10, grading_assistance: 5, homework_help: 300, transcription: 60, chat_message: 100 };
     case 'parent_starter':
-      return { lesson_generation: 0, grading_assistance: 0, homework_help: 30, transcription: 120 };
+      return { lesson_generation: 0, grading_assistance: 0, homework_help: 30, transcription: 120, chat_message: 150 };
     case 'parent_plus':
-      return { lesson_generation: 0, grading_assistance: 0, homework_help: 100, transcription: 300 };
+      return { lesson_generation: 0, grading_assistance: 0, homework_help: 100, transcription: 300, chat_message: 500 };
     case 'private_teacher':
-      return { lesson_generation: 20, grading_assistance: 20, homework_help: 100, transcription: 600 };
+      return { lesson_generation: 20, grading_assistance: 20, homework_help: 100, transcription: 600, chat_message: 300 };
     case 'pro':
-      return { lesson_generation: 50, grading_assistance: 100, homework_help: 300, transcription: 1800 };
+      return { lesson_generation: 50, grading_assistance: 100, homework_help: 300, transcription: 1800, chat_message: 1500 };
     case 'enterprise':
-      return { lesson_generation: 5000, grading_assistance: 10000, homework_help: 30000, transcription: 36000 };
+      return { lesson_generation: 5000, grading_assistance: 10000, homework_help: 30000, transcription: 36000, chat_message: 999999 };
     default:
-      return { lesson_generation: 10, grading_assistance: 5, homework_help: 300, transcription: 60 };
+      return { lesson_generation: 10, grading_assistance: 5, homework_help: 300, transcription: 60, chat_message: 100 };
   }
 }
 
@@ -84,12 +84,12 @@ export async function getSchoolAISubscriptionDirect(preschoolId: string): Promis
         subscription_tier: tier as any,
         org_type: 'preschool' as any,
         total_quotas: baseQuotas,
-        allocated_quotas: { 'lesson_generation': 0, 'grading_assistance': 0, 'homework_help': 0, 'transcription': 0 },
+        allocated_quotas: { 'lesson_generation': 0, 'grading_assistance': 0, 'homework_help': 0, 'transcription': 0, 'chat_message': 0 },
         available_quotas: baseQuotas,
-        total_usage: { 'lesson_generation': 0, 'grading_assistance': 0, 'homework_help': 0, 'transcription': 0 },
+        total_usage: { 'lesson_generation': 0, 'grading_assistance': 0, 'homework_help': 0, 'transcription': 0, 'chat_message': 0 },
         allow_teacher_self_allocation: false,
-        default_teacher_quotas: { 'lesson_generation': 10, 'grading_assistance': 5, 'homework_help': 20, 'transcription': 30 },
-        max_individual_quota: { 'lesson_generation': Math.floor(baseQuotas.lesson_generation * 0.5), 'grading_assistance': Math.floor(baseQuotas.grading_assistance * 0.5), 'homework_help': Math.floor(baseQuotas.homework_help * 0.5), 'transcription': Math.floor(baseQuotas.transcription * 0.5) },
+        default_teacher_quotas: { 'lesson_generation': 10, 'grading_assistance': 5, 'homework_help': 20, 'transcription': 30, 'chat_message': 20 },
+        max_individual_quota: { 'lesson_generation': Math.floor(baseQuotas.lesson_generation * 0.5), 'grading_assistance': Math.floor(baseQuotas.grading_assistance * 0.5), 'homework_help': Math.floor(baseQuotas.homework_help * 0.5), 'transcription': Math.floor(baseQuotas.transcription * 0.5), 'chat_message': Math.floor(baseQuotas.chat_message * 0.5) },
         current_period_start: new Date().toISOString(),
         current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         created_at: new Date().toISOString(),
@@ -116,6 +116,7 @@ export async function getSchoolAISubscriptionDirect(preschoolId: string): Promis
         'grading_assistance': 0,
         'homework_help': 0,
         'transcription': 0,
+        'chat_message': 0,
       },
       available_quotas: baseQuotas,
       total_usage: {
@@ -123,6 +124,7 @@ export async function getSchoolAISubscriptionDirect(preschoolId: string): Promis
         'grading_assistance': 0,
         'homework_help': 0,
         'transcription': 0,
+        'chat_message': 0,
       },
       allow_teacher_self_allocation: false,
       default_teacher_quotas: {
@@ -130,12 +132,14 @@ export async function getSchoolAISubscriptionDirect(preschoolId: string): Promis
         'grading_assistance': 30,
         'homework_help': 50,
         'transcription': 300,
+        'chat_message': 50,
       },
       max_individual_quota: {
         'lesson_generation': Math.floor(baseQuotas.lesson_generation * 0.5),
         'grading_assistance': Math.floor(baseQuotas.grading_assistance * 0.5),
         'homework_help': Math.floor(baseQuotas.homework_help * 0.5),
         'transcription': Math.floor(baseQuotas.transcription * 0.5),
+        'chat_message': Math.floor(baseQuotas.chat_message * 0.5),
       },
       current_period_start: new Date().toISOString(),
       current_period_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
@@ -389,18 +393,21 @@ export async function allocateAIQuotasDirect(
         grading_assistance: allocatedQuotas.content_generation || 0,
         homework_help: allocatedQuotas.assessment_ai || 0,
         transcription: allocatedQuotas.transcription || 0,
+        chat_message: allocatedQuotas.claude_messages || 0,
       },
       used_quotas: {
         lesson_generation: usedQuotas.claude_messages || 0,
         grading_assistance: usedQuotas.content_generation || 0,
         homework_help: usedQuotas.assessment_ai || 0,
         transcription: usedQuotas.transcription || 0,
+        chat_message: usedQuotas.claude_messages || 0,
       },
       remaining_quotas: {
         lesson_generation: Math.max(0, (allocatedQuotas.claude_messages || 0) - (usedQuotas.claude_messages || 0)),
         grading_assistance: Math.max(0, (allocatedQuotas.content_generation || 0) - (usedQuotas.content_generation || 0)),
         homework_help: Math.max(0, (allocatedQuotas.assessment_ai || 0) - (usedQuotas.assessment_ai || 0)),
         transcription: Math.max(0, (allocatedQuotas.transcription || 0) - (usedQuotas.transcription || 0)),
+        chat_message: Math.max(0, (allocatedQuotas.claude_messages || 0) - (usedQuotas.claude_messages || 0)),
       },
       allocated_by: allocation.allocated_by,
       allocated_at: allocation.allocated_at,

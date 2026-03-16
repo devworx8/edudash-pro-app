@@ -34,6 +34,8 @@ interface TTSHandlerParams {
   setMuted: (muted: boolean) => Promise<void>;
   /** Ref set to Date.now() + grace_ms when TTS ends; onTranscript is gated until this timestamp */
   postTTSSilentUntilRef: React.MutableRefObject<number>;
+  /** Optional external ref for TTS playback tracking */
+  ttsPlaybackActiveRef?: React.MutableRefObject<boolean>;
 }
 
 export function useVoiceOrbTTSHandlers({
@@ -66,11 +68,13 @@ export function useVoiceOrbTTSHandlers({
   skipNextAutoRestartRef,
   setMuted,
   postTTSSilentUntilRef,
+  ttsPlaybackActiveRef: externalPlaybackActiveRef,
 }: TTSHandlerParams) {
   const autoRestartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** True while the speakText imperative handle is executing (Azure request + audio playback).
    *  Prevents the barge-in listen effect from starting recording during TTS. */
-  const ttsPlaybackActiveRef = useRef(false);
+  const internalPlaybackActiveRef = useRef(false);
+  const ttsPlaybackActiveRef = externalPlaybackActiveRef ?? internalPlaybackActiveRef;
   // Delay before re-enabling mic after TTS ends — long enough for speaker echo to die down
   const AUTO_RESTART_DELAY_MS = 1500;
   // How long (ms) to gate onTranscript after TTS ends to prevent echo self-interruption
@@ -138,7 +142,7 @@ export function useVoiceOrbTTSHandlers({
     },
     get isSpeaking() { return ttsIsSpeaking; },
     get isMuted() { return isMuted; },
-  }), [speak, stopSpeaking, ttsIsSpeaking, selectedLanguage, onTTSStart, onTTSEnd, suspendListeningForTTS, handlePrimaryActionRef, handleStartRecordingRef, recorderState.isRecording, recorderActions, cancelLiveListening, clearLiveTimers, onStopListening, lastDetectedLanguage, setStatusText, setUsingLiveSTT, usingLiveSTTRef, setMuted, isMuted]);
+  }), [speak, stopSpeaking, ttsIsSpeaking, selectedLanguage, onTTSStart, onTTSEnd, suspendListeningForTTS, handlePrimaryActionRef, handleStartRecordingRef, recorderState.isRecording, recorderActions, cancelLiveListening, clearLiveTimers, onStopListening, lastDetectedLanguage, setStatusText, setUsingLiveSTT, usingLiveSTTRef, setMuted, isMuted, ttsPlaybackActiveRef]);
 
   const cancelAutoRestart = useCallback(() => {
     if (autoRestartTimerRef.current) {

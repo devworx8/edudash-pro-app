@@ -23,6 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { PREMIUM_COLORS } from '@/lib/theme/premiumDashTheme';
+import { clampPercent } from '@/lib/progress/clampPercent';
 import { LongDivisionDiagram, FractionDiagram } from './math-diagrams';
 import { ChalkLine, classifyLine, detectDiagramType } from './whiteboard';
 import { MathText } from './KaTeXRenderer';
@@ -99,6 +100,9 @@ export function DashTutorWhiteboardEnhanced({
 
   // Progress calculation
   const progressFrac = totalSteps > 0 ? step / (totalSteps - 1) : 1;
+  const progressPercent = clampPercent(progressFrac * 100, {
+    source: 'components/ai/DashTutorWhiteboardEnhanced.progress',
+  });
 
   return (
     <Animated.View entering={FadeIn.duration(200)} style={styles.overlay}>
@@ -165,7 +169,7 @@ export function DashTutorWhiteboardEnhanced({
 
         {/* Progress bar */}
         <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${progressFrac * 100}%` as any }]} />
+          <View style={[styles.progressFill, { width: `${progressPercent}%` as any }]} />
         </View>
 
         {/* Footer */}

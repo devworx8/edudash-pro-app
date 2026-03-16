@@ -108,6 +108,41 @@ try {
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
+const normalizeSupportedLanguage = (lang?: string | null): 'en-ZA' | 'af-ZA' | 'zu-ZA' | null => {
+  if (!lang) return null;
+  if (lang === 'en-ZA' || lang === 'af-ZA' || lang === 'zu-ZA') return lang;
+  return null;
+};
+
+const resolveAgeGroupFromYears = (ageYears?: number | null) => {
+  if (!ageYears && ageYears !== 0) return null;
+  if (ageYears <= 5) return '3-5';
+  if (ageYears <= 8) return '6-8';
+  if (ageYears <= 12) return '9-12';
+  if (ageYears <= 15) return '13-15';
+  if (ageYears <= 18) return '16-18';
+  return 'adult';
+};
+
+const resolveGradeBand = (ageGroup: string) => {
+  switch (ageGroup) {
+    case '3-5':
+      return 'Grade R / Reception';
+    case '6-8':
+      return 'Grades 1-3';
+    case '9-12':
+      return 'Grades 4-6';
+    case '13-15':
+      return 'Grades 7-9';
+    case '16-18':
+      return 'Grades 10-12';
+    case 'adult':
+      return 'Adult learners';
+    default:
+      return null;
+  }
+};
+
 interface DashOrbProps {
   /** Position of the orb */
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
@@ -244,41 +279,6 @@ export default function DashOrb({
   useEffect(() => {
     void refreshAutoScanBudget();
   }, [refreshAutoScanBudget]);
-
-  const normalizeSupportedLanguage = (lang?: string | null): 'en-ZA' | 'af-ZA' | 'zu-ZA' | null => {
-    if (!lang) return null;
-    if (lang === 'en-ZA' || lang === 'af-ZA' || lang === 'zu-ZA') return lang;
-    return null;
-  };
-
-  const resolveAgeGroupFromYears = (ageYears?: number | null) => {
-    if (!ageYears && ageYears !== 0) return null;
-    if (ageYears <= 5) return '3-5';
-    if (ageYears <= 8) return '6-8';
-    if (ageYears <= 12) return '9-12';
-    if (ageYears <= 15) return '13-15';
-    if (ageYears <= 18) return '16-18';
-    return 'adult';
-  };
-
-  const resolveGradeBand = (ageGroup: string) => {
-    switch (ageGroup) {
-      case '3-5':
-        return 'Grade R / Reception';
-      case '6-8':
-        return 'Grades 1-3';
-      case '9-12':
-        return 'Grades 4-6';
-      case '13-15':
-        return 'Grades 7-9';
-      case '16-18':
-        return 'Grades 10-12';
-      case 'adult':
-        return 'Adult learners';
-      default:
-        return null;
-    }
-  };
 
   useEffect(() => {
     isListeningForCommandRef.current = isListeningForCommand;
@@ -445,7 +445,7 @@ export default function DashOrb({
     if (!wakeWordAvailable) return;
     setWakeWordEnabled(true);
     wakeWord.startListening();
-  }, [voiceEnabled, wakeWordAvailable]);
+  }, [voiceEnabled, wakeWordAvailable, wakeWord]);
   
   // Animations & Gestures
   const pan = useRef(new Animated.ValueXY()).current;
@@ -479,7 +479,7 @@ export default function DashOrb({
     }
     
     pan.setValue({ x: initialX, y: initialY });
-  }, [position, size]);
+  }, [position, size, pan]);
 
   useEffect(() => {
     if (autoOpen && !locked) {
@@ -817,7 +817,7 @@ export default function DashOrb({
       pulse.stop();
       glow.stop();
     };
-  }, [isDragging]);
+  }, [isDragging, pulseAnim, glowAnim]);
 
   // Rotation animation when processing
   useEffect(() => {
@@ -835,7 +835,7 @@ export default function DashOrb({
     } else {
       rotateAnim.setValue(0);
     }
-  }, [isProcessing]);
+  }, [isProcessing, rotateAnim]);
 
   // Expand/collapse animation
   useEffect(() => {
@@ -845,7 +845,7 @@ export default function DashOrb({
       friction: 8,
       tension: 40,
     }).start();
-  }, [isExpanded]);
+  }, [isExpanded, expandAnim]);
 
   const handleOrbPress = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -912,7 +912,7 @@ export default function DashOrb({
     }
   };
 
-  const handleWakeWordDetected = async () => {
+  const handleWakeWordDetected = useCallback(async () => {
     console.log('[DashOrb] Wake word detected');
 
     if (isMicMuted) {
@@ -1039,7 +1039,7 @@ export default function DashOrb({
                   }
                 );
                 shouldRestartListeningRef.current = whisperModeEnabledRef.current;
-                await handleSend(formatted);
+                await handleSendRef.current(formatted);
               }
             }
             setIsListeningForCommand(false);
@@ -1061,7 +1061,28 @@ export default function DashOrb({
       setIsListeningForCommand(false);
       setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
     }
-  };
+  }, [
+    cancelStream,
+    isMicMuted,
+    isProcessing,
+    isSpeaking,
+    locked,
+    onDeviceVoice,
+    orgType,
+    setIsExpanded,
+    setInputText,
+    setIsListeningForCommand,
+    setLiveTranscript,
+    setMessages,
+    setSelectedLanguage,
+    setShowUpgradeBubble,
+    stopSpeaking,
+    upgradeAnim,
+    voiceEnabled,
+    voiceRecorderActions,
+    voiceRecorderState,
+    voiceSTT,
+  ]);
 
   useEffect(() => {
     triggerListeningRef.current = () => {
@@ -1237,100 +1258,7 @@ export default function DashOrb({
     toast.success('Homework scan attached');
   }, [getRemainingOrbImageSlots, refreshAutoScanBudget]);
 
-  const handleSend = async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed && pendingAttachments.length === 0) return;
-    const flags = getFeatureFlagsSync();
-    const handoffIntent = flags.dash_tutor_auto_handoff_v1 ? classifyFullChatIntent(trimmed) : null;
-
-    if (handoffIntent && !isEditing && !pendingTutorIntent) {
-      trackTutorFullChatHandoff({
-        intent: handoffIntent,
-        source: 'dash_orb',
-        role: normalizedRole,
-      });
-      setIsExpanded(false);
-      router.push({
-        pathname: '/screens/dash-assistant',
-        params: {
-          source: 'dash_orb',
-          initialMessage: trimmed,
-          resumePrompt: trimmed,
-          mode: handoffIntent === 'quiz' ? 'tutor' : 'advisor',
-          tutorMode: handoffIntent === 'quiz' ? 'quiz' : undefined,
-          handoffIntent,
-        },
-      } as any);
-      return;
-    }
-
-    if (isEditing && editingMessageId) {
-      const index = messages.findIndex((m) => m.id === editingMessageId);
-      const baseMessages = index >= 0 ? messages.slice(0, index) : messages;
-      setIsEditing(false);
-      setEditingMessageId(null);
-      await processCommand(trimmed, undefined, {
-        baseMessages,
-        attachments: pendingAttachments,
-      });
-      setPendingAttachments([]);
-      return;
-    }
-    if (pendingTutorIntent) {
-      const mergedPrompt = buildTutorPrompt(pendingTutorIntent.prompt, {
-        topicHint: trimmed,
-        requireDetails: false,
-      });
-      setPendingTutorIntent(null);
-      await processCommand(mergedPrompt, trimmed, { attachments: pendingAttachments });
-      setPendingAttachments([]);
-      return;
-    }
-    await processCommand(trimmed || 'Please analyze this image.', undefined, { attachments: pendingAttachments });
-    setPendingAttachments([]);
-  };
-
-  useEffect(() => {
-    handleSendRef.current = handleSend;
-  }, [handleSend]);
-
-  const quickIntents = useMemo(() => {
-    if (learnerContext) return [];
-    const actions = Array.isArray(dashPolicy.quickActions) ? dashPolicy.quickActions : [];
-    if (actions.length > 0) {
-      return actions.map((a) => ({ id: a.id, label: a.label, prompt: a.prompt }));
-    }
-
-    // Fallback (should be rare): keep a few safe defaults.
-    return [
-      { id: 'explain', label: 'Explain', prompt: 'Explain this in simple steps and ask one check question.' },
-      { id: 'practice', label: 'Practice', prompt: 'Give me one practice task and then evaluate my answer.' },
-      { id: 'summarize', label: 'Summarize', prompt: 'Summarize this into key points and one next action.' },
-    ];
-  }, [dashPolicy.quickActions, learnerContext]);
-
-  const handleQuickIntent = useCallback((intent: { id: string; label: string; prompt: string }) => {
-    if (isProcessing) return;
-
-    if (intent.id === 'summarize') {
-      const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && !msg.isLoading);
-      if (lastAssistant?.content) {
-        void handleSend(`Summarize this response for parent and child:\n${lastAssistant.content}`);
-        return;
-      }
-    }
-
-    if (intent.id === 'translate') {
-      const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && !msg.isLoading);
-      if (lastAssistant?.content) {
-        void handleSend(`Translate this into simpler language for a parent and child:\n${lastAssistant.content}`);
-        return;
-      }
-    }
-
-    void handleSend(intent.prompt);
-  }, [isProcessing, messages, handleSend]);
-
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- processCommand is used in memoized callbacks but remains non-memoized to avoid a deep dependency graph.
   const processCommand = async (
     command: string,
     displayOverride?: string,
@@ -2204,7 +2132,7 @@ export default function DashOrb({
 
   const isTutorRole = ['parent', 'student', 'learner'].includes(normalizedRole);
 
-  const buildTutorPrompt = (basePrompt: string, options?: { topicHint?: string | null; requireDetails?: boolean }) => {
+  const buildTutorPrompt = useCallback((basePrompt: string, options?: { topicHint?: string | null; requireDetails?: boolean }) => {
     const ageYears = ['student', 'learner'].includes(normalizedRole)
       ? (profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null)
       : learnerAgeYears;
@@ -2245,7 +2173,117 @@ export default function DashOrb({
       interactionRules,
       detailRule,
     ].filter(Boolean).join(' ');
-  };
+  }, [isTutorRole, learnerAgeYears, learnerGrade, normalizedRole, profile, quickActionAge]);
+
+  const handleSend = useCallback(async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed && pendingAttachments.length === 0) return;
+    const flags = getFeatureFlagsSync();
+    const handoffIntent = flags.dash_tutor_auto_handoff_v1 ? classifyFullChatIntent(trimmed) : null;
+
+    if (handoffIntent && !isEditing && !pendingTutorIntent) {
+      trackTutorFullChatHandoff({
+        intent: handoffIntent,
+        source: 'dash_orb',
+        role: normalizedRole,
+      });
+      setIsExpanded(false);
+      router.push({
+        pathname: '/screens/dash-assistant',
+        params: {
+          source: 'dash_orb',
+          initialMessage: trimmed,
+          resumePrompt: trimmed,
+          mode: handoffIntent === 'quiz' ? 'tutor' : 'advisor',
+          tutorMode: handoffIntent === 'quiz' ? 'quiz' : undefined,
+          handoffIntent,
+        },
+      } as any);
+      return;
+    }
+
+    if (isEditing && editingMessageId) {
+      const index = messages.findIndex((m) => m.id === editingMessageId);
+      const baseMessages = index >= 0 ? messages.slice(0, index) : messages;
+      setIsEditing(false);
+      setEditingMessageId(null);
+      await processCommand(trimmed, undefined, {
+        baseMessages,
+        attachments: pendingAttachments,
+      });
+      setPendingAttachments([]);
+      return;
+    }
+    if (pendingTutorIntent) {
+      const mergedPrompt = buildTutorPrompt(pendingTutorIntent.prompt, {
+        topicHint: trimmed,
+        requireDetails: false,
+      });
+      setPendingTutorIntent(null);
+      await processCommand(mergedPrompt, trimmed, { attachments: pendingAttachments });
+      setPendingAttachments([]);
+      return;
+    }
+    await processCommand(trimmed || 'Please analyze this image.', undefined, { attachments: pendingAttachments });
+    setPendingAttachments([]);
+  }, [
+    buildTutorPrompt,
+    editingMessageId,
+    isEditing,
+    messages,
+    normalizedRole,
+    pendingAttachments,
+    pendingTutorIntent,
+    processCommand,
+  ]);
+
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  }, [handleSend]);
+
+  const quickIntents = useMemo(() => {
+    if (learnerContext) return [];
+    const actions = Array.isArray(dashPolicy.quickActions) ? dashPolicy.quickActions : [];
+    if (actions.length > 0) {
+      const mapped: Array<{ id: string; label: string; prompt: string }> = actions
+        .map((a) => ({
+          id: String(a.id),
+          label: String(a.label),
+          prompt: typeof a.prompt === 'string' ? a.prompt.trim() : '',
+        }))
+        .filter((intent) => intent.prompt.length > 0);
+      if (mapped.length > 0) return mapped;
+    }
+
+    // Fallback (should be rare): keep a few safe defaults.
+    return [
+      { id: 'explain', label: 'Explain', prompt: 'Explain this in simple steps and ask one check question.' },
+      { id: 'practice', label: 'Practice', prompt: 'Give me one practice task and then evaluate my answer.' },
+      { id: 'summarize', label: 'Summarize this into key points and one next action.' },
+    ];
+  }, [dashPolicy.quickActions, learnerContext]) as Array<{ id: string; label: string; prompt: string }>;
+
+  const handleQuickIntent = useCallback((intent: { id: string; label: string; prompt: string }) => {
+    if (isProcessing) return;
+
+    if (intent.id === 'summarize') {
+      const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && !msg.isLoading);
+      if (lastAssistant?.content) {
+        void handleSend(`Summarize this response for parent and child:\n${lastAssistant.content}`);
+        return;
+      }
+    }
+
+    if (intent.id === 'translate') {
+      const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && !msg.isLoading);
+      if (lastAssistant?.content) {
+        void handleSend(`Translate this into simpler language for a parent and child:\n${lastAssistant.content}`);
+        return;
+      }
+    }
+
+    void handleSend(intent.prompt);
+  }, [handleSend, isProcessing, messages]);
 
   const handleQuickAction = (action: QuickAction) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

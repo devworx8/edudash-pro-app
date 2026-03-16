@@ -1,3 +1,4 @@
+/* eslint-disable i18next/no-literal-string */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Platform,

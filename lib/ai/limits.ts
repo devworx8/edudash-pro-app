@@ -23,10 +23,10 @@ export type QuotaMap = Record<AIQuotaFeature, number>
  * Aligned with TIER_QUOTAS in `@/lib/tiers` for the shared fields.
  */
 const DEFAULT_MONTHLY_QUOTAS: Record<CapabilityTier, QuotaMap> = {
-  free: { lesson_generation: 10, grading_assistance: 10, homework_help: 20, transcription: 5 },
-  starter: { lesson_generation: 30, grading_assistance: 60, homework_help: 120, transcription: 30 },
-  premium: { lesson_generation: 120, grading_assistance: 240, homework_help: 480, transcription: 120 },
-  enterprise: { lesson_generation: 5000, grading_assistance: 10000, homework_help: 30000, transcription: 36000 }, // ~300 hours
+  free: { lesson_generation: 10, grading_assistance: 10, homework_help: 20, transcription: 5, chat_message: 100 },
+  starter: { lesson_generation: 30, grading_assistance: 60, homework_help: 120, transcription: 30, chat_message: 150 },
+  premium: { lesson_generation: 120, grading_assistance: 240, homework_help: 480, transcription: 120, chat_message: 500 },
+  enterprise: { lesson_generation: 5000, grading_assistance: 10000, homework_help: 30000, transcription: 36000, chat_message: 999999 }, // ~300 hours
 }
 
 export type EffectiveLimits = {
@@ -370,7 +370,11 @@ export async function getTeacherSpecificQuota(feature: AIQuotaFeature): Promise<
     });
     
     // Map feature to allocation quota type (matching database schema)
-    const quotaMapping: Record<AIQuotaFeature, string> = {
+    if (feature === 'chat_message') {
+      return null;
+    }
+
+    const quotaMapping: Record<Exclude<AIQuotaFeature, 'chat_message'>, string> = {
       'lesson_generation': 'lesson_generation', // Lesson generation has its own quota pool
       'grading_assistance': 'grading_assistance', // Grading assistance has its own quota pool  
       'homework_help': 'homework_help', // Homework help has its own quota pool

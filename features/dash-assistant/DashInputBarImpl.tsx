@@ -5,6 +5,7 @@
  * Extracted from DashAssistant for better maintainability.
  */
 
+/* eslint-disable i18next/no-literal-string */
 import React, { useState, useCallback } from 'react';
 import {
   View,

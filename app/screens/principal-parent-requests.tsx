@@ -492,7 +492,6 @@ export default function PrincipalParentRequestsScreen() {
           </View>
         )}
         ListEmptyComponent={<Text style={styles.empty}>No pending requests</Text>}
-        estimatedItemSize={140}
       />
       <AlertModal {...alertProps} />
     </View>

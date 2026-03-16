@@ -353,7 +353,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
       setIsSpeaking, setSpeakingMessageId, showAlert, hideAlert, setVoiceEnabled: prefs.setVoiceEnabled, stopSpeaking,
       preferFastStart: opts?.preferFastStart, forceSpeak: opts?.forceSpeak, onSpeechChunkProgress: setSpeechChunkProgress,
     });
-  }, [dashInstance, speakingMessageId, isSpeaking, hasTTSAccess, showAlert, hideAlert, prefs.voiceEnabled, stopSpeaking, isFreeTier, consumeVoiceBudget]);
+  }, [dashInstance, speakingMessageId, isSpeaking, hasTTSAccess, showAlert, hideAlert, prefs.voiceEnabled, prefs.setVoiceEnabled, stopSpeaking, isFreeTier, consumeVoiceBudget]);
 
   // ── Send message pipeline ─────────────────────────────
   const { sendMessageInternal: _sendMessageInternal, processQueue, requestQueueRef, activeRequestSignatureRef } = useDashAISendMessage({
@@ -504,7 +504,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
     setInputText('');
     dashAttachments.setSelectedAttachments([]);
     processQueue();
-  }, [cancelVoiceAutoSend, inputText, dashAttachments, dashInstance, user?.id, tier, processQueue, isRecording, stopVoiceRecording, capabilityTier, selectedModel, setSelectedModel, canShowBanner, offerRewarded, unlockFeature, isFeatureUnlocked, showAlert]);
+  }, [cancelVoiceAutoSend, inputText, dashAttachments, dashInstance, user?.id, processQueue, requestQueueRef, activeRequestSignatureRef, isRecording, stopVoiceRecording, capabilityTier, selectedModel, setSelectedModel, canShowBanner, offerRewarded, unlockFeature, isFeatureUnlocked]);
 
   useEffect(() => { sendMessageRef.current = sendMessage; }, [sendMessage]);
 
@@ -513,7 +513,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
     if (!trimmed) return;
     if (tutorSessionRef.current) track('edudash.ai.tutor.answer', { session_id: tutorSessionRef.current.id, mode: tutorSessionRef.current.mode });
     await sendMessage(trimmed);
-  }, [sendMessage]);
+  }, [sendMessage, tutorSessionRef]);
 
   // ── Voice mic press ───────────────────────────────────
   const handleInputMicPress = useCallback(async () => {
@@ -622,7 +622,7 @@ export function useDashAssistant(options: UseDashAssistantOptions) {
       }).catch(() => {});
     }
     return () => { active = false; initialConversationScrollRef.current = null; focusTimers.forEach(t => clearTimeout(t)); stopAllActivity().catch(() => {}); };
-  }, [dashInstance, conversation?.id, prefs.loadChatPrefs, stopAllActivity, normalizeConversationMessages, persistConversationSnapshot, scrollToBottom]));
+  }, [dashInstance, conversation?.id, prefs, stopAllActivity, normalizeConversationMessages, persistConversationSnapshot, scrollToBottom]));
 
   useEffect(() => {
     return () => {

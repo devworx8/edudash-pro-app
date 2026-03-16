@@ -7,6 +7,7 @@
  * PhonicsPracticeCard extracted.
  */
 
+/* eslint-disable i18next/no-literal-string */
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, Platform, Animated, Dimensions,
@@ -276,7 +277,7 @@ export default function DashTutorVoiceChat() {
     setVoiceErrorBanner(mapVoiceErrorToBanner(errorMessage));
   }, [mapVoiceErrorToBanner]);
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isProcessing) return;
     const trimmed = text.trim();
     const flags = getFeatureFlagsSync();
@@ -306,7 +307,7 @@ export default function DashTutorVoiceChat() {
           context: buildTutorContext(profile, preferredLanguage, lastLowAccuracyPhonemeRef.current),
         },
         enable_tools: true,
-        metadata: { role: normalizedRole, source: 'dash_voice_orb', org_type: getOrganizationType(profile), language: preferredLanguage || undefined },
+        metadata: { role: normalizedRole, source: 'dash_voice_orb', org_type: orgType, language: preferredLanguage || undefined },
       };
       const cbs = {
         setMessages, setWhiteboardContent, updatePhonicsTarget,
@@ -324,7 +325,17 @@ export default function DashTutorVoiceChat() {
           : `❌ Oops! ${msg}\n\nPlease try asking again.`;
       setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: friendly, isStreaming: false } : m));
     } finally { setIsProcessing(false); }
-  };
+  }, [
+    aiScope,
+    enqueueSpeech,
+    isProcessing,
+    messages,
+    normalizedRole,
+    orgType,
+    preferredLanguage,
+    profile,
+    updatePhonicsTarget,
+  ]);
 
   const handleVoiceInput = useCallback((transcript: string, language?: SupportedLanguage, meta?: VoiceTranscriptMeta) => {
     const formatted = formatTranscript(transcript, language, { whisperFlow: true, summarize: true, preschoolMode: orgType === 'preschool', maxSummaryWords: orgType === 'preschool' ? 16 : 20 });

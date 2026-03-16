@@ -48,10 +48,16 @@ function withTimeout<T>(
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return promise;
   }
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(errorCode)), timeoutMs)),
-  ]);
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<T>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(errorCode)), timeoutMs);
+  });
+  const guarded = promise.finally(() => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  });
+  return Promise.race([guarded, timeoutPromise]);
 }
 
 function normalizeLimit(value: unknown): number {

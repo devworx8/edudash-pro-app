@@ -182,8 +182,7 @@ export function useOrbVoiceHandlers(
     }
   }, [
     state.locked, state.isSpeaking, state.isProcessing, state.voiceEnabled, state.orgType,
-    hooks, hooks.onDeviceVoice, hooks.voiceRecorderActions, hooks.voiceRecorderState,
-    hooks.voiceSTT, hooks.stopSpeaking, hooks.cancelStream,
+    hooks,
     refs, setters,
   ]);
 

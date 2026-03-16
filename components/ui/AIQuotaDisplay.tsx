@@ -104,6 +104,7 @@ function formatServiceType(serviceType: AIQuotaFeature): string {
     grading_assistance: 'Grading',
     homework_help: 'Assignment Help',
     transcription: 'Voice',
+    chat_message: 'Chat',
   };
   return names[serviceType] || serviceType;
 }
@@ -117,6 +118,7 @@ function getServiceIcon(serviceType: AIQuotaFeature): string {
     grading_assistance: 'checkmark-circle',
     homework_help: 'help-circle',
     transcription: 'mic',
+    chat_message: 'chatbubble-ellipses',
   };
   return icons[serviceType] || 'analytics';
 }
