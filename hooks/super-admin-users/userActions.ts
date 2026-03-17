@@ -11,9 +11,9 @@ import type { ActionDeps } from './types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-/** Resolve the auth user ID for RPC calls. */
+/** Resolve the auth user ID for RPC calls. profiles.id = auth.uid() */
 export const getAuthUserId = (user: UserRecord): string =>
-  user.auth_user_id || user.id;
+  user.id;
 
 // ─── Clipboard / Share ──────────────────────────────────────────────────────
 
