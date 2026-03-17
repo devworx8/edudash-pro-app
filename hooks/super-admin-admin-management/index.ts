@@ -8,6 +8,14 @@ import type { AdminUser } from '@/lib/screen-styles/super-admin-admin-management
 import { fetchAdminUsers } from './fetchAdminUsers';
 import { type ShowAlertConfig, type FormData, INITIAL_FORM_DATA } from './types';
 
+/** Best-effort platform activity log entry */
+async function logPlatformActivity(actorId: string, action: string, entityId: string, metadata?: Record<string, unknown>) {
+  void assertSupabase()
+    .from('platform_activity_log')
+    .insert({ actor_id: actorId, action, entity_type: 'profile', entity_id: entityId, metadata: metadata || {} })
+    .then(() => {}, () => {});
+}
+
 export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig) => void) {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -131,6 +139,9 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
                 new_status: newStatus,
                 changed_by: profile?.id,
               });
+              if (profile?.id) {
+                logPlatformActivity(profile.id, 'admin_status_changed', user.id, { email: user.email, new_status: newStatus });
+              }
               showAlert({
                 title: 'Success',
                 message: `${user.full_name} has been ${user.is_active ? 'deactivated' : 'activated'}`,
@@ -191,6 +202,9 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
                 user_role: user.role,
                 deleted_by: profile?.id,
               });
+              if (profile?.id) {
+                logPlatformActivity(profile.id, 'admin_deleted', user.id, { email: user.email, role: user.role });
+              }
               showAlert({ title: 'Success', message: `${user.full_name} has been deleted`, type: 'success' });
               await loadAdminUsers();
             } catch (error: any) {

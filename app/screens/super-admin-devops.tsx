@@ -84,6 +84,15 @@ const INTEGRATIONS: Integration[] = [
     status: 'connected',
     url: 'https://app.posthog.com',
   },
+  {
+    id: 'mcp',
+    name: 'MCP Servers',
+    type: 'mcp',
+    icon: 'extension-puzzle',
+    color: '#8b5cf6',
+    status: 'disconnected',
+    url: '',
+  },
 ];
 
 export default function SuperAdminDevOpsScreen() {

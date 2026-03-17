@@ -205,8 +205,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           // Single-session revocation is opt-in. Defaulting it on caused
           // users to get signed out on phone/web unexpectedly.
+          // Skip during account switch to avoid revoking sessions while session swap is in-flight.
           const singleSessionEnabled = process.env.EXPO_PUBLIC_SINGLE_SESSION_ENABLED === 'true';
-          if (qEvent === 'SIGNED_IN' && qS?.user?.id && singleSessionEnabled) {
+          if (qEvent === 'SIGNED_IN' && qS?.user?.id && singleSessionEnabled && !isAccountSwitchInProgress()) {
             assertSupabase()
               .auth.signOut({ scope: 'others' } as { scope: 'others' })
               .catch(() => {});

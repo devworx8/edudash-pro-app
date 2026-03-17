@@ -4,7 +4,7 @@ import { StyleSheet } from 'react-native';
 export interface Integration {
   id: string;
   name: string;
-  type: 'github' | 'eas' | 'vercel' | 'claude' | 'supabase' | 'posthog';
+  type: 'github' | 'eas' | 'vercel' | 'claude' | 'supabase' | 'posthog' | 'mcp';
   icon: string;
   color: string;
   status: 'connected' | 'disconnected' | 'error';

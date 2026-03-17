@@ -191,6 +191,25 @@ export function ProfileSwitcher({
       // Token-based restore is safe — the user is already authenticated on this device.
       // Flag so AuthContext skips SIGNED_OUT cleanup when Supabase emits it during session replace.
       setAccountSwitchInProgress(true);
+
+      // Snapshot the outgoing user's live refresh token before we swap sessions.
+      // TOKEN_REFRESHED saves tokens via fire-and-forget dynamic import which can
+      // silently lag or fail — this explicit save guarantees freshness.
+      if (user?.id) {
+        try {
+          const { data: liveSession } = await assertSupabase().auth.getSession();
+          if (
+            liveSession?.session?.user?.id === user.id &&
+            liveSession.session.refresh_token
+          ) {
+            const { setRefreshTokenForUser } = await import('@/services/biometricStorage');
+            await setRefreshTokenForUser(user.id, liveSession.session.refresh_token);
+          }
+        } catch {
+          // Non-fatal — proceed with switch even if snapshot fails
+        }
+      }
+
       const result = biometricAvailable
         ? await EnhancedBiometricAuth.authenticateWithBiometricForUser(account.userId)
         : await EnhancedBiometricAuth.restoreSessionForUser(account.userId);

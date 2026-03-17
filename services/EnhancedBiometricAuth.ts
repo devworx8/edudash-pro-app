@@ -21,7 +21,6 @@ import {
   getGlobalRefreshToken,
   setGlobalRefreshToken,
   getBiometricSession,
-  ensureSessionInMap,
   getBiometricAccounts,
   removeBiometricSession,
   clearBiometricSession,
@@ -65,6 +64,12 @@ export class EnhancedBiometricAuth {
   /** Set the active biometric user id */
   public static setActiveUserId = setActiveUserId;
 
+  private static nextExpiryIso(days = 30): string {
+    const expirationTime = new Date();
+    expirationTime.setDate(expirationTime.getDate() + days);
+    return expirationTime.toISOString();
+  }
+
   // Delegate storage operations — kept on class for backward compatibility
   static getBiometricSession = getBiometricSession;
   static clearBiometricSession = clearBiometricSession;
@@ -82,14 +87,11 @@ export class EnhancedBiometricAuth {
     refreshToken?: string,
   ): Promise<boolean> {
     try {
-      const expirationTime = new Date();
-      expirationTime.setDate(expirationTime.getDate() + 30);
-
       const sessionData: BiometricSessionData = {
         userId,
         email,
         sessionToken: await generateSecureToken(),
-        expiresAt: expirationTime.toISOString(),
+        expiresAt: this.nextExpiryIso(),
         lastUsed: new Date().toISOString(),
         profileSnapshot: profile
           ? {
@@ -201,6 +203,27 @@ export class EnhancedBiometricAuth {
 
       if (refreshErr) {
         if (this.isInvalidRefreshTokenError(refreshErr)) {
+          // Fallback: try the global refresh token in case per-user storage lagged
+          try {
+            const globalToken = await getGlobalRefreshToken();
+            if (globalToken && globalToken !== refresh) {
+              const { data: globalRefreshed, error: globalErr } =
+                await assertSupabase().auth.refreshSession({ refresh_token: globalToken });
+              if (!globalErr && globalRefreshed?.session?.user?.id === userId) {
+                if (globalRefreshed.session.refresh_token) {
+                  await setRefreshTokenForUser(userId, globalRefreshed.session.refresh_token);
+                }
+                return { sessionRestored: true, reason: 'ok' };
+              }
+              // Wrong user or error — sign out the wrong session and fall through
+              if (globalRefreshed?.session?.user?.id && globalRefreshed.session.user.id !== userId) {
+                await assertSupabase().auth.signOut({ scope: 'local' } as any).catch(() => {});
+              }
+            }
+          } catch {
+            /* best-effort fallback */
+          }
+
           try {
             await clearRefreshTokenForUser(userId);
           } catch {
@@ -314,8 +337,12 @@ export class EnhancedBiometricAuth {
 
       // Update last used time
       sessionData.lastUsed = new Date().toISOString();
+      sessionData.expiresAt = this.nextExpiryIso();
       await storage.setItem(BIOMETRIC_SESSION_KEY, JSON.stringify(sessionData));
-      await ensureSessionInMap(sessionData);
+      const newMap = await getSessionsMap();
+      newMap[sessionData.userId] = sessionData;
+      await setSessionsMap(newMap);
+      await setActiveUserId(sessionData.userId);
 
       if (__DEV__)
         console.log(
@@ -550,6 +577,7 @@ export class EnhancedBiometricAuth {
 
       // Update active user and last used ONLY after target-user session is verified.
       sessionData.lastUsed = new Date().toISOString();
+      sessionData.expiresAt = this.nextExpiryIso();
       const newMap = await getSessionsMap();
       newMap[userId] = sessionData;
       await setSessionsMap(newMap);
@@ -625,6 +653,7 @@ export class EnhancedBiometricAuth {
 
       // Update active user and last used ONLY after target-user session is verified.
       sessionData.lastUsed = new Date().toISOString();
+      sessionData.expiresAt = this.nextExpiryIso();
       const newMap = await getSessionsMap();
       newMap[userId] = sessionData;
       await setSessionsMap(newMap);

@@ -79,6 +79,19 @@ export class SeatService {
     }
 
     if (
+      rawCode === '23514' ||
+      combined.includes('subscriptions_seats_check') ||
+      (combined.includes('seats_used') && combined.includes('seats_total'))
+    ) {
+      return {
+        code: 'LIMIT_EXCEEDED',
+        message: 'No staff seats are available for this school plan.',
+        details: composedDetails,
+        retryable: false,
+      };
+    }
+
+    if (
       combined.includes('target must be a teacher') ||
       combined.includes('target must be school staff') ||
       combined.includes('cannot infer preschool') ||
