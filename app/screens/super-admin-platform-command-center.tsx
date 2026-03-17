@@ -6,7 +6,7 @@
  * Styles in lib/screen-styles/super-admin-command-center.styles.ts.
  */
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, FlatList } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
@@ -142,7 +142,9 @@ function ActivityRow({ a, styles }: { a: RecentActivity; styles: any }) {
 export default function PlatformCommandCenterScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
-  const styles = useMemo(() => createStyles(theme), [theme]);
+  const { width: screenWidth } = useWindowDimensions();
+  const isTablet = screenWidth > 768;
+  const styles = useMemo(() => createStyles(theme, screenWidth), [theme, screenWidth]);
   const { data, isLoading, isRefreshing, error, refetch, onRefresh } = useCommandCenter();
 
   if (!isSuperAdmin(profile?.role)) {
@@ -216,9 +218,15 @@ export default function PlatformCommandCenterScreen() {
       >
         {/* ── KPI Cards ── */}
         <SectionHeader title="Key Metrics" styles={styles} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
-          {d.kpis.map(k => <KPICardView key={k.id} kpi={k} styles={styles} />)}
-        </ScrollView>
+        {isTablet ? (
+          <View style={styles.kpiScroll}>
+            {d.kpis.map(k => <KPICardView key={k.id} kpi={k} styles={styles} />)}
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
+            {d.kpis.map(k => <KPICardView key={k.id} kpi={k} styles={styles} />)}
+          </ScrollView>
+        )}
 
         {/* ── Error Heatmap ── */}
         {d.errorHeatmap.length > 0 && (
