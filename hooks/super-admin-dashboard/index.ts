@@ -34,6 +34,9 @@ function buildQuickActions(stats: DashboardStats | null): QuickAction[] {
     { id: 'whatsapp-integration', title: 'WhatsApp Hub', description: 'Manage WhatsApp communications', icon: 'logo-whatsapp', route: '/screens/super-admin-whatsapp', color: '#25d366' },
     { id: 'system-monitoring', title: 'System Monitoring', description: 'View system health and performance', icon: 'analytics', route: '/screens/super-admin-system-monitoring', color: '#f59e0b' },
     { id: 'devops', title: 'DevOps & Integrations', description: 'GitHub, EAS, Vercel, Claude & Campaigns', icon: 'git-branch', route: '/screens/super-admin-devops', color: '#059669' },
+    { id: 'team-chat', title: 'Team Chat', description: 'Internal team messaging & channels', icon: 'chatbubbles', route: '/screens/super-admin-team-chat', color: '#6366f1' },
+    { id: 'content-studio', title: 'Content Studio', description: 'Create social posts, emails & campaigns', icon: 'create', route: '/screens/super-admin-content-studio', color: '#ec4899' },
+    { id: 'team-activity', title: 'Team Activity', description: 'Platform team actions & audit log', icon: 'time', route: '/screens/super-admin-team-activity', color: '#14b8a6' },
     { id: 'system-test', title: 'System Tests', description: 'Run comprehensive system validation', icon: 'checkmark-circle', route: '/screens/super-admin-system-test', color: '#8b5cf6' },
   ];
 }

@@ -22,6 +22,7 @@ import {
   StationeryChecklistSection,
 } from '../parent';
 import { JoinLiveLesson } from '@/components/calls/JoinLiveLesson';
+import { TodayRoutineSection } from './TodayRoutineSection';
 import { OnboardingHint } from '@/components/ui/OnboardingHint';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { UpcomingBirthdaysCard } from '../UpcomingBirthdaysCard';
@@ -194,6 +195,15 @@ export const ParentDashboardContentSections: React.FC<ParentDashboardContentSect
           />
         )}
       </CollapsibleSection>
+
+      {/* Today's Routine — shows published daily program blocks */}
+      <TodayRoutineSection
+        preschoolId={preschoolId}
+        activeChildId={activeChildId}
+        children={children}
+        collapsedSections={collapsedSections}
+        toggleSection={toggleSection}
+      />
 
       {/* Upcoming Reminder Timeline */}
       <CollapsibleSection

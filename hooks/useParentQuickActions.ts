@@ -33,10 +33,11 @@ interface UseParentQuickActionsOptions {
   isFeesDueSoon: boolean;
   feesDueSubtitle?: string;
   isDashOrbUnlocked: boolean;
+  hasPublishedRoutine?: boolean;
   isDev?: boolean;
 }
 export function useParentQuickActions(options: UseParentQuickActionsOptions) {
-  const { resolvedSchoolType, organizationId, isEarlyLearner, isFeesDueSoon, feesDueSubtitle, isDashOrbUnlocked, isDev } = options;
+  const { resolvedSchoolType, organizationId, isEarlyLearner, isFeesDueSoon, feesDueSubtitle, isDashOrbUnlocked, hasPublishedRoutine, isDev } = options;
   const { t } = useTranslation();
   const { theme } = useTheme();
   const isK12School = resolvedSchoolType === 'k12_school';
@@ -50,7 +51,7 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
       : t('parent.dash_tutor_locked', { defaultValue: 'Upgrade to unlock Dash Tutor.' });
     const actions: ParentQuickAction[] = [
       { id: 'view_homework', title: t('parent.view_homework', { defaultValue: "My Child's Homework" }), icon: 'book', color: theme.primary },
-      { id: 'daily_program', title: t('parent.daily_program', { defaultValue: 'Daily Program' }), icon: 'time-outline', color: '#06B6D4', subtitle: t('parent.daily_program_subtitle', { defaultValue: 'View today\'s school routine and timings' }) },
+      { id: 'daily_program', title: t('parent.daily_program', { defaultValue: 'Daily Program' }), icon: 'time-outline', color: '#06B6D4', subtitle: t('parent.daily_program_subtitle', { defaultValue: 'View today\'s school routine and timings' }), glow: hasPublishedRoutine },
       { id: 'weekly_menu', title: t('parent.weekly_menu', { defaultValue: 'Weekly Menu' }), icon: 'restaurant-outline', color: '#F59E0B', subtitle: t('parent.weekly_menu_subtitle', { defaultValue: 'See breakfast, lunch, and snack plans.' }) },
       { id: 'stationery', title: t('parent.stationery', { defaultValue: 'Stationery Checklist' }), icon: 'checkbox-outline', color: '#14B8A6', subtitle: t('parent.stationery_subtitle', { defaultValue: 'Track bought items and what is still needed.' }) },
       { id: 'assigned_lessons', title: t('parent.assigned_lessons', { defaultValue: 'Assigned Lessons' }), icon: 'library', color: '#10B981' },
@@ -126,6 +127,7 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
     isFeesDueSoon,
     feesDueSubtitle,
     isDashOrbUnlocked,
+    hasPublishedRoutine,
     isDev,
     organizationId,
     resolvedSchoolType,

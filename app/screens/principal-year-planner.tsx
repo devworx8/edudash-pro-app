@@ -11,6 +11,7 @@ import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { extractOrganizationId } from '@/lib/tenant/compat';
 import { useYearPlanner } from '@/hooks/principal/useYearPlanner';
 import { useTermSuggestionAI } from '@/hooks/useTermSuggestionAI';
+import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import {
   TermCard,
   TermFormModal,
@@ -44,6 +45,7 @@ export default function PrincipalYearPlannerScreen() {
   const styles = createStyles(theme);
 
   const orgId = extractOrganizationId(profile);
+  const { showAlert, alertProps } = useAlertModal();
 
   const {
     terms,
@@ -55,7 +57,7 @@ export default function PrincipalYearPlannerScreen() {
     handleDelete,
     handleTogglePublish,
     handlePublishPlan,
-  } = useYearPlanner({ orgId, userId: user?.id });
+  } = useYearPlanner({ orgId, userId: user?.id, showAlert });
 
   const [viewTab, setViewTab] = useState<'terms' | 'monthly'>('terms');
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
@@ -310,6 +312,7 @@ export default function PrincipalYearPlannerScreen() {
         />
         </View>
       </ScrollView>
+      <AlertModal {...alertProps} />
     </DesktopLayout>
   );
 }

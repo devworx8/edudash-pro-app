@@ -116,17 +116,31 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
         {
           text: user.is_active ? 'Deactivate' : 'Activate',
           style: user.is_active ? 'destructive' : 'default',
-          onPress: () => {
-            track('superadmin_admin_user_status_changed', {
-              user_id: user.id,
-              new_status: !user.is_active,
-              changed_by: profile?.id,
-            });
-            showAlert({
-              title: 'Success',
-              message: `${user.full_name} has been ${user.is_active ? 'deactivated' : 'activated'}`,
-              type: 'success',
-            });
+          onPress: async () => {
+            try {
+              const newStatus = !user.is_active;
+              const { error } = await assertSupabase()
+                .from('profiles')
+                .update({ is_active: newStatus })
+                .eq('id', user.id);
+
+              if (error) throw error;
+
+              track('superadmin_admin_user_status_changed', {
+                user_id: user.id,
+                new_status: newStatus,
+                changed_by: profile?.id,
+              });
+              showAlert({
+                title: 'Success',
+                message: `${user.full_name} has been ${user.is_active ? 'deactivated' : 'activated'}`,
+                type: 'success',
+              });
+              await loadAdminUsers();
+            } catch (error: any) {
+              logger.error('Failed to toggle user status:', error);
+              showAlert({ title: 'Error', message: error.message || 'Failed to update user status', type: 'error' });
+            }
           },
         },
       ],
@@ -143,13 +157,46 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            track('superadmin_admin_user_deleted', {
-              user_id: user.id,
-              user_role: user.role,
-              deleted_by: profile?.id,
-            });
-            showAlert({ title: 'Success', message: `${user.full_name} has been deleted`, type: 'success' });
+          onPress: async () => {
+            try {
+              const supabase = assertSupabase();
+              const { data: { session } } = await supabase.auth.getSession();
+
+              if (!session?.access_token) {
+                showAlert({ title: 'Error', message: 'You must be logged in', type: 'error' });
+                return;
+              }
+
+              const response = await fetch(
+                `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/superadmin-delete-user`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    confirm: true,
+                    target_user_id: user.id,
+                    reason: `Deleted by superadmin ${profile?.id}`,
+                  }),
+                }
+              );
+
+              const result = await response.json();
+              if (!response.ok) throw new Error(result.error || 'Failed to delete user');
+
+              track('superadmin_admin_user_deleted', {
+                user_id: user.id,
+                user_role: user.role,
+                deleted_by: profile?.id,
+              });
+              showAlert({ title: 'Success', message: `${user.full_name} has been deleted`, type: 'success' });
+              await loadAdminUsers();
+            } catch (error: any) {
+              logger.error('Failed to delete admin user:', error);
+              showAlert({ title: 'Error', message: error.message || 'Failed to delete user', type: 'error' });
+            }
           },
         },
       ],

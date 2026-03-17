@@ -9,6 +9,7 @@ import { getAdUnitId } from '@/lib/ads/config';
 import { PLACEMENT_KEYS } from '@/lib/ads/placements';
 import { track } from '@/lib/analytics';
 import * as Device from 'expo-device';
+import { logger } from '@/lib/logger';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface AdBannerProps {
@@ -50,13 +51,47 @@ export default function AdBanner({
           });
         }
       } catch (error) {
-        console.warn('Error checking ads eligibility:', error);
+        logger.warn('Error checking ads eligibility:', error);
         setShowAds(false);
       }
     };
 
     checkAdsEligibility();
   }, [placement, profile, user?.id]);
+
+  const handleAdFailedToLoad = useCallback((error: any) => {
+    setAdLoaded(false);
+    const errorMsg = error?.message || error?.code || 'Unknown error';
+    setLastError(errorMsg);
+    
+    const attempt = retryCountRef.current;
+    track('edudash.ad.banner_failed', {
+      placement,
+      error: error?.message || 'Unknown error',
+      user_id: user?.id,
+      platform: Platform.OS,
+      retry_attempt: attempt,
+    });
+
+    // Retry up to 3 times with exponential backoff (15s, 30s, 60s)
+    if (attempt < 3) {
+      const delay = 15_000 * Math.pow(2, attempt);
+      retryTimerRef.current = setTimeout(() => {
+        retryCountRef.current = attempt + 1;
+        setAdFailed(false);
+        setRetryKey((k) => k + 1);
+      }, delay);
+    } else {
+      setAdFailed(true);
+    }
+  }, [placement, user?.id]);
+
+  // Clean up retry timer on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, []);
 
   // Don't show anything if ads are not eligible
   if (!showAds) {
@@ -102,45 +137,11 @@ export default function AdBanner({
     
     track('edudash.ad.banner_loaded', {
       placement,
-      ad_unit_id: unitId.slice(-8), // Last 8 chars for tracking
+      ad_unit_id: unitId.slice(-8),
       user_id: user?.id,
       platform: Platform.OS,
     });
   };
-
-  const handleAdFailedToLoad = useCallback((error: any) => {
-    setAdLoaded(false);
-    const errorMsg = error?.message || error?.code || 'Unknown error';
-    setLastError(errorMsg);
-    
-    const attempt = retryCountRef.current;
-    track('edudash.ad.banner_failed', {
-      placement,
-      error: error?.message || 'Unknown error',
-      user_id: user?.id,
-      platform: Platform.OS,
-      retry_attempt: attempt,
-    });
-
-    // Retry up to 3 times with exponential backoff (15s, 30s, 60s)
-    if (attempt < 3) {
-      const delay = 15_000 * Math.pow(2, attempt);
-      retryTimerRef.current = setTimeout(() => {
-        retryCountRef.current = attempt + 1;
-        setAdFailed(false);
-        setRetryKey((k) => k + 1);
-      }, delay);
-    } else {
-      setAdFailed(true);
-    }
-  }, [placement, user?.id]);
-
-  // Clean up retry timer on unmount
-  useEffect(() => {
-    return () => {
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    };
-  }, []);
 
   const handleAdOpened = () => {
     track('edudash.ad.banner_clicked', {
@@ -192,7 +193,7 @@ function FallbackBanner({ theme, placement, reason }: { theme: any; placement: s
       platform: Platform.OS,
     });
     // TODO: Navigate to pricing/upgrade screen
-    console.log('Navigate to upgrade screen');
+    logger.info('Navigate to upgrade screen');
   };
 
   return (

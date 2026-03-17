@@ -17,6 +17,14 @@ const NEXT_GEN_PARENT_SHARED_ROUTES = new Set([
 ]);
 
 // Role-prefix → allowed roles. Screens without a role prefix are accessible to all.
+// Per-screen overrides checked BEFORE the prefix map.
+// Use this for screens whose name starts with a role prefix but needs a different audience.
+const SCREEN_ROLE_OVERRIDES: Record<string, Set<string>> = {
+  'student-management':  new Set(['principal', 'principal_admin', 'teacher', 'super_admin']),
+  'student-detail':      new Set(['principal', 'principal_admin', 'teacher', 'parent', 'super_admin']),
+  'student-enrollment':  new Set(['principal', 'principal_admin', 'super_admin']),
+};
+
 const ROLE_PREFIX_MAP: Record<string, Set<string>> = {
   'parent-':       new Set(['parent', 'super_admin']),
   'teacher-':      new Set(['teacher', 'principal', 'principal_admin', 'super_admin']),
@@ -31,6 +39,11 @@ const ROLE_PREFIX_MAP: Record<string, Set<string>> = {
 function isRoleAllowedForScreen(screenName: string, role: string | null): boolean {
   if (!role) return false;
   const normalizedRole = role.toLowerCase();
+
+  // Check exact screen overrides first
+  const override = SCREEN_ROLE_OVERRIDES[screenName];
+  if (override) return override.has(normalizedRole);
+
   for (const [prefix, allowedRoles] of Object.entries(ROLE_PREFIX_MAP)) {
     if (screenName.startsWith(prefix)) {
       return allowedRoles.has(normalizedRole);

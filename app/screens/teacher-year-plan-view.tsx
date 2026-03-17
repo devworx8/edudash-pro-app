@@ -16,6 +16,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { extractOrganizationId } from '@/lib/tenant/compat';
 import { useYearPlanner } from '@/hooks/principal/useYearPlanner';
+import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import {
   TermCard,
   groupTermsByYear,
@@ -42,6 +43,7 @@ export default function TeacherYearPlanViewScreen() {
   const styles = createStyles(theme);
 
   const orgId = extractOrganizationId(profile);
+  const { showAlert, alertProps } = useAlertModal();
 
   const {
     terms,
@@ -49,7 +51,7 @@ export default function TeacherYearPlanViewScreen() {
     loading,
     refreshing,
     handleRefresh,
-  } = useYearPlanner({ orgId, userId: user?.id });
+  } = useYearPlanner({ orgId, userId: user?.id, showAlert });
 
   const [viewTab, setViewTab] = useState<'terms' | 'monthly'>('terms');
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
@@ -218,6 +220,7 @@ export default function TeacherYearPlanViewScreen() {
             ))
         )}
       </ScrollView>
+      <AlertModal {...alertProps} />
     </DesktopLayout>
   );
 }

@@ -1,8 +1,8 @@
 // Custom hook for year planner - WARP.md compliant (≤200 lines)
 
 import { useState, useEffect, useCallback } from 'react';
-import { Alert } from 'react-native';
 import { assertSupabase } from '@/lib/supabase';
+import { logger } from '@/lib/logger';
 import type { AcademicTerm } from '@/types/ecd-planning';
 import type {
   TermFormData,
@@ -11,14 +11,17 @@ import type {
   YearPlanMonthlyEntryRow,
 } from '@/components/principal/year-planner/types';
 
+type ShowAlert = (config: { title: string; message?: string; type?: 'info' | 'warning' | 'success' | 'error'; buttons?: Array<{ text: string; onPress?: () => void | Promise<void>; style?: 'default' | 'cancel' | 'destructive' }> }) => void;
+
 interface UseYearPlannerProps {
   orgId: string | null;
   userId: string | undefined;
+  showAlert: ShowAlert;
 }
 
 interface UseYearPlannerReturn extends YearPlannerState, YearPlannerActions {}
 
-export function useYearPlanner({ orgId, userId }: UseYearPlannerProps): UseYearPlannerReturn {
+export function useYearPlanner({ orgId, userId, showAlert }: UseYearPlannerProps): UseYearPlannerReturn {
   const [terms, setTerms] = useState<AcademicTerm[]>([]);
   const [monthlyEntries, setMonthlyEntries] = useState<YearPlanMonthlyEntryRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,8 +53,8 @@ export function useYearPlanner({ orgId, userId }: UseYearPlannerProps): UseYearP
       if (entriesRes.error) throw entriesRes.error;
       setMonthlyEntries((entriesRes.data as YearPlanMonthlyEntryRow[]) || []);
     } catch (error: unknown) {
-      console.error('Error fetching year planner:', error);
-      Alert.alert('Error', 'Failed to load year planner');
+      logger.error('Error fetching year planner:', error);
+      showAlert({ title: 'Error', message: 'Failed to load year planner', type: 'error' });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -72,12 +75,12 @@ export function useYearPlanner({ orgId, userId }: UseYearPlannerProps): UseYearP
     editingTerm: AcademicTerm | null
   ): Promise<boolean> => {
     if (!formData.name.trim()) {
-      Alert.alert('Validation Error', 'Please enter a term name');
+      showAlert({ title: 'Validation Error', message: 'Please enter a term name', type: 'warning' });
       return false;
     }
 
     if (!orgId || !userId) {
-      Alert.alert('Error', 'Organization or user not found');
+      showAlert({ title: 'Error', message: 'Organization or user not found', type: 'error' });
       return false;
     }
 
@@ -104,44 +107,49 @@ export function useYearPlanner({ orgId, userId }: UseYearPlannerProps): UseYearP
           .eq('id', editingTerm.id);
 
         if (error) throw error;
-        Alert.alert('Success', 'Term updated successfully');
+        showAlert({ title: 'Success', message: 'Term updated successfully', type: 'success' });
       } else {
         const { error } = await supabase.from('academic_terms').insert(termData);
 
         if (error) throw error;
-        Alert.alert('Success', 'Term created successfully');
+        showAlert({ title: 'Success', message: 'Term created successfully', type: 'success' });
       }
 
       await fetchTerms();
       return true;
     } catch (error: any) {
-      console.error('Error saving term:', error);
-      Alert.alert('Error', error.message || 'Failed to save term');
+      logger.error('Error saving term:', error);
+      showAlert({ title: 'Error', message: error.message || 'Failed to save term', type: 'error' });
       return false;
     }
   };
 
   const handleDelete = (term: AcademicTerm) => {
-    Alert.alert('Delete Term', `Are you sure you want to delete "${term.name}"?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            const supabase = assertSupabase();
-            const { error } = await supabase.from('academic_terms').delete().eq('id', term.id);
+    showAlert({
+      title: 'Delete Term',
+      message: `Are you sure you want to delete "${term.name}"?`,
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const supabase = assertSupabase();
+              const { error } = await supabase.from('academic_terms').delete().eq('id', term.id);
 
-            if (error) throw error;
-            Alert.alert('Success', 'Term deleted successfully');
-            fetchTerms();
-          } catch (error: any) {
-            console.error('Error deleting term:', error);
-            Alert.alert('Error', 'Failed to delete term');
-          }
+              if (error) throw error;
+              showAlert({ title: 'Success', message: 'Term deleted successfully', type: 'success' });
+              fetchTerms();
+            } catch (error: any) {
+              logger.error('Error deleting term:', error);
+              showAlert({ title: 'Error', message: 'Failed to delete term', type: 'error' });
+            }
+          },
         },
-      },
-    ]);
+      ],
+    });
   };
 
   const handleTogglePublish = async (term: AcademicTerm) => {
@@ -155,14 +163,15 @@ export function useYearPlanner({ orgId, userId }: UseYearPlannerProps): UseYearP
       if (error) throw error;
       fetchTerms();
     } catch (error: any) {
-      Alert.alert('Error', 'Failed to update term');
+      logger.error('Error toggling term publish:', error);
+      showAlert({ title: 'Error', message: 'Failed to update term', type: 'error' });
     }
   };
 
   const handlePublishPlan = useCallback(
     async (academicYear?: number) => {
       if (!orgId) {
-        Alert.alert('Error', 'Organization not found');
+        showAlert({ title: 'Error', message: 'Organization not found', type: 'error' });
         return;
       }
       const year =
@@ -181,19 +190,21 @@ export function useYearPlanner({ orgId, userId }: UseYearPlannerProps): UseYearP
         const termsCount = d?.terms_published ?? 0;
         const themesCount = d?.themes_published ?? 0;
         if (termsCount === 0 && themesCount === 0) {
-          Alert.alert(
-            'No plan to publish',
-            `No terms or themes found for ${year}. Save a plan from AI Year Planner first.`,
-          );
+          showAlert({
+            title: 'No plan to publish',
+            message: `No terms or themes found for ${year}. Save a plan from AI Year Planner first.`,
+            type: 'warning',
+          });
           return;
         }
-        Alert.alert(
-          'Plan published',
-          `${themesCount} theme(s) are now visible to teachers for lesson alignment.`,
-        );
+        showAlert({
+          title: 'Plan published',
+          message: `${themesCount} theme(s) are now visible to teachers for lesson alignment.`,
+          type: 'success',
+        });
         fetchTerms();
       } catch (err: unknown) {
-        Alert.alert('Publish failed', err instanceof Error ? err.message : 'Could not publish plan.');
+        showAlert({ title: 'Publish failed', message: err instanceof Error ? err.message : 'Could not publish plan.', type: 'error' });
       }
     },
     [orgId, terms, fetchTerms],

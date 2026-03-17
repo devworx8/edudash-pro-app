@@ -45,6 +45,7 @@ import { useParentSectionAttention } from '@/hooks/useParentSectionAttention';
 import { useParentDashboardNavigation } from '@/hooks/useParentDashboardNavigation';
 import { useParentMetrics } from '@/hooks/useParentMetrics';
 import { useParentDashboardState } from '@/hooks/useParentDashboardState';
+import { usePublishedRoutineStatus } from '@/hooks/usePublishedRoutineStatus';
 import { createParentDashboardStyles, getLayoutMetrics } from './parent/ParentDashboard.styles';
 import {
   createTempLessonFromSuggestion,
@@ -101,6 +102,9 @@ export const NewEnhancedParentDashboard: React.FC<NewEnhancedParentDashboardProp
     feesDueSoon: ds.feesDueSoon,
   });
 
+  // Routine status for glow badge
+  const routineStatus = usePublishedRoutineStatus(ds.resolvedOrganizationId);
+
   // Quick Actions
   const { quickActions, hasLockedActions, missionControlSections, groupedQuickActions } = useParentQuickActions({
     resolvedSchoolType: ds.resolvedSchoolType,
@@ -109,6 +113,7 @@ export const NewEnhancedParentDashboard: React.FC<NewEnhancedParentDashboardProp
     isFeesDueSoon: ds.isFeesDueSoon,
     feesDueSubtitle: ds.feesDueSubtitle,
     isDashOrbUnlocked: ds.isDashOrbUnlocked,
+    hasPublishedRoutine: routineStatus.hasPublished,
     isDev: __DEV__,
   });
 
