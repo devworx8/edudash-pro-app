@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { assertSupabase } from '@/lib/supabase';
 import { track } from '@/lib/analytics';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { logger } from '@/lib/logger';
 import type { ModerationItem, ModerationFilters } from '@/lib/screen-styles/super-admin-moderation.styles';
 import type { ShowAlertFn, UseSuperAdminModerationReturn } from './types';
@@ -33,7 +33,7 @@ export function useSuperAdminModeration(showAlert: ShowAlertFn): UseSuperAdminMo
   // ── Fetch ──────────────────────────────────────────────────────────────────
 
   const loadItems = useCallback(async () => {
-    if (!isSuperAdmin(profile?.role)) {
+    if (!isPlatformStaff(profile?.role)) {
       showAlert({ title: 'Access Denied', message: 'Super admin privileges required', buttons: [{ text: 'OK' }] });
       return;
     }

@@ -6,20 +6,31 @@
  * Styles in lib/screen-styles/super-admin-command-center.styles.ts.
  */
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, useWindowDimensions } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  useWindowDimensions,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { createStyles } from '@/lib/screen-styles/super-admin-command-center.styles';
 import {
-  useCommandCenter, SEVERITY_COLORS,
-  type KPICard, type ErrorHeatmapEntry, type LiveIncident,
-  type PlatformHealthMetric, type RecentActivity,
+  useCommandCenter,
+  SEVERITY_COLORS,
+  type KPICard,
+  type ErrorHeatmapEntry,
+  type LiveIncident,
+  type PlatformHealthMetric,
+  type RecentActivity,
 } from '@/hooks/super-admin-command-center';
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -43,20 +54,42 @@ function KPICardView({ kpi, styles }: { kpi: KPICard; styles: any }) {
           <Ionicons name={kpi.icon as any} size={16} color={kpi.color} />
         </View>
         {kpi.change !== undefined && (
-          <View style={[styles.kpiChange, { backgroundColor: kpi.change >= 0 ? '#ef444418' : '#22c55e18' }]}>
-            <Ionicons name={kpi.change >= 0 ? 'trending-up' : 'trending-down'} size={10} color={kpi.change >= 0 ? '#ef4444' : '#22c55e'} />
-            <Text style={[styles.kpiChangeText, { color: kpi.change >= 0 ? '#ef4444' : '#22c55e' }]}>
+          <View
+            style={[
+              styles.kpiChange,
+              { backgroundColor: kpi.change >= 0 ? '#ef444418' : '#22c55e18' },
+            ]}
+          >
+            <Ionicons
+              name={kpi.change >= 0 ? 'trending-up' : 'trending-down'}
+              size={10}
+              color={kpi.change >= 0 ? '#ef4444' : '#22c55e'}
+            />
+            <Text
+              style={[styles.kpiChangeText, { color: kpi.change >= 0 ? '#ef4444' : '#22c55e' }]}
+            >
               {Math.abs(kpi.change)}%
             </Text>
           </View>
         )}
       </View>
-      <Text style={styles.kpiValue}>{typeof kpi.value === 'number' ? kpi.value.toLocaleString() : kpi.value}</Text>
+      <Text style={styles.kpiValue}>
+        {typeof kpi.value === 'number' ? kpi.value.toLocaleString() : kpi.value}
+      </Text>
       <Text style={styles.kpiLabel}>{kpi.label}</Text>
       {kpi.sparkline && kpi.sparkline.length > 0 && (
         <View style={styles.kpiSparkline}>
           {kpi.sparkline.map((v, i) => (
-            <View key={i} style={[styles.kpiSparkBar, { height: Math.max((v / maxSpark) * 18, 2), backgroundColor: `${kpi.color}${i === kpi.sparkline!.length - 1 ? 'CC' : '55'}` }]} />
+            <View
+              key={i}
+              style={[
+                styles.kpiSparkBar,
+                {
+                  height: Math.max((v / maxSpark) * 18, 2),
+                  backgroundColor: `${kpi.color}${i === kpi.sparkline!.length - 1 ? 'CC' : '55'}`,
+                },
+              ]}
+            />
           ))}
         </View>
       )}
@@ -74,8 +107,17 @@ function HeatmapCellView({ entry, styles }: { entry: ErrorHeatmapEntry; styles: 
         <Text style={styles.heatmapCategory}>{entry.category}</Text>
         <Text style={styles.heatmapCount}>{entry.count}</Text>
         <View style={styles.heatmapTrend}>
-          <Ionicons name={entry.trend === 'up' ? 'arrow-up' : 'arrow-down'} size={10} color={entry.trend === 'up' ? '#ef4444' : '#22c55e'} />
-          <Text style={[styles.heatmapTrendText, { color: entry.trend === 'up' ? '#ef4444' : '#22c55e' }]}>
+          <Ionicons
+            name={entry.trend === 'up' ? 'arrow-up' : 'arrow-down'}
+            size={10}
+            color={entry.trend === 'up' ? '#ef4444' : '#22c55e'}
+          />
+          <Text
+            style={[
+              styles.heatmapTrendText,
+              { color: entry.trend === 'up' ? '#ef4444' : '#22c55e' },
+            ]}
+          >
             {entry.trend === 'up' ? 'Rising' : 'Falling'}
           </Text>
         </View>
@@ -89,7 +131,9 @@ function IncidentCard({ inc, styles }: { inc: LiveIncident; styles: any }) {
   return (
     <View style={styles.incidentCard}>
       <View style={styles.incidentHeader}>
-        <Text style={styles.incidentTitle} numberOfLines={1}>{inc.title}</Text>
+        <Text style={styles.incidentTitle} numberOfLines={1}>
+          {inc.title}
+        </Text>
         <View style={[styles.incidentSeverity, { backgroundColor: `${sevColor}30` }]}>
           <Text style={[styles.incidentSeverityText, { color: sevColor }]}>{inc.severity}</Text>
         </View>
@@ -129,7 +173,9 @@ function ActivityRow({ a, styles }: { a: RecentActivity; styles: any }) {
       </View>
       <View style={styles.activityContent}>
         <Text style={styles.activityAction}>{a.actionLabel}</Text>
-        <Text style={styles.activityActor}>{a.actorName} · {a.actorRole}</Text>
+        <Text style={styles.activityActor}>
+          {a.actorName} · {a.actorRole}
+        </Text>
         {!!a.detail && <Text style={styles.activityDetail}>{a.detail}</Text>}
       </View>
       <Text style={styles.activityTime}>{timeAgo(a.timestamp)}</Text>
@@ -147,7 +193,7 @@ export default function PlatformCommandCenterScreen() {
   const styles = useMemo(() => createStyles(theme, screenWidth), [theme, screenWidth]);
   const { data, isLoading, isRefreshing, error, refetch, onRefresh } = useCommandCenter();
 
-  if (!isSuperAdmin(profile?.role)) {
+  if (!isPlatformStaff(profile?.role)) {
     return (
       <SafeAreaView style={styles.deniedContainer}>
         <ThemedStatusBar />
@@ -213,18 +259,28 @@ export default function PlatformCommandCenterScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#8b5cf6" />}
+        refreshControl={
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} tintColor="#8b5cf6" />
+        }
         showsVerticalScrollIndicator={false}
       >
         {/* ── KPI Cards ── */}
         <SectionHeader title="Key Metrics" styles={styles} />
         {isTablet ? (
           <View style={styles.kpiScroll}>
-            {d.kpis.map(k => <KPICardView key={k.id} kpi={k} styles={styles} />)}
+            {d.kpis.map((k) => (
+              <KPICardView key={k.id} kpi={k} styles={styles} />
+            ))}
           </View>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.kpiScroll}>
-            {d.kpis.map(k => <KPICardView key={k.id} kpi={k} styles={styles} />)}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.kpiScroll}
+          >
+            {d.kpis.map((k) => (
+              <KPICardView key={k.id} kpi={k} styles={styles} />
+            ))}
           </ScrollView>
         )}
 
@@ -233,26 +289,34 @@ export default function PlatformCommandCenterScreen() {
           <>
             <SectionHeader title="Error Heatmap (24h)" badge={d.totalErrors24h} styles={styles} />
             <View style={styles.heatmapGrid}>
-              {d.errorHeatmap.map((e, i) => <HeatmapCellView key={i} entry={e} styles={styles} />)}
+              {d.errorHeatmap.map((e, i) => (
+                <HeatmapCellView key={i} entry={e} styles={styles} />
+              ))}
             </View>
           </>
         )}
 
         {/* ── Live Incidents ── */}
-        <SectionHeader title="Live Incidents" badge={d.liveIncidents.length || undefined} styles={styles} />
+        <SectionHeader
+          title="Live Incidents"
+          badge={d.liveIncidents.length || undefined}
+          styles={styles}
+        />
         {d.liveIncidents.length === 0 ? (
           <View style={styles.noIncidents}>
             <Ionicons name="checkmark-circle" size={28} color="#22c55e" />
             <Text style={styles.noIncidentsText}>All clear — no active incidents</Text>
           </View>
         ) : (
-          d.liveIncidents.map(inc => <IncidentCard key={inc.id} inc={inc} styles={styles} />)
+          d.liveIncidents.map((inc) => <IncidentCard key={inc.id} inc={inc} styles={styles} />)
         )}
 
         {/* ── Platform Health ── */}
         <SectionHeader title="Platform Health" styles={styles} />
         <View style={styles.healthGrid}>
-          {d.health.map((h, i) => <HealthTile key={i} h={h} styles={styles} />)}
+          {d.health.map((h, i) => (
+            <HealthTile key={i} h={h} styles={styles} />
+          ))}
         </View>
 
         {/* ── Role & Tier Distribution (side by side) ── */}
@@ -260,7 +324,7 @@ export default function PlatformCommandCenterScreen() {
         <View style={styles.distRow}>
           <View style={styles.distCard}>
             <Text style={styles.distTitle}>By Role</Text>
-            {d.roleDistribution.slice(0, 6).map(r => (
+            {d.roleDistribution.slice(0, 6).map((r) => (
               <View key={r.role} style={styles.distItem}>
                 <View style={[styles.distDot, { backgroundColor: r.color }]} />
                 <Text style={styles.distLabel}>{r.role}</Text>
@@ -270,7 +334,7 @@ export default function PlatformCommandCenterScreen() {
           </View>
           <View style={styles.distCard}>
             <Text style={styles.distTitle}>By Tier</Text>
-            {d.tierDistribution.slice(0, 6).map(t => (
+            {d.tierDistribution.slice(0, 6).map((t) => (
               <View key={t.tier} style={styles.distItem}>
                 <View style={[styles.distDot, { backgroundColor: t.color }]} />
                 <Text style={styles.distLabel}>{t.tier}</Text>
@@ -288,7 +352,15 @@ export default function PlatformCommandCenterScreen() {
               <Text style={styles.aiUsageLabel}>{ai.label}</Text>
               <Text style={styles.aiUsageValue}>{ai.value.toLocaleString()}</Text>
               <View style={styles.aiProgressBar}>
-                <View style={[styles.aiProgressFill, { width: `${Math.min((ai.value / ai.limit) * 100, 100)}%`, backgroundColor: ai.color }]} />
+                <View
+                  style={[
+                    styles.aiProgressFill,
+                    {
+                      width: `${Math.min((ai.value / ai.limit) * 100, 100)}%`,
+                      backgroundColor: ai.color,
+                    },
+                  ]}
+                />
               </View>
             </View>
           ))}
@@ -302,7 +374,7 @@ export default function PlatformCommandCenterScreen() {
             <Text style={styles.emptyText}>No recent activity</Text>
           </View>
         ) : (
-          d.recentActivity.map(a => <ActivityRow key={a.id} a={a} styles={styles} />)
+          d.recentActivity.map((a) => <ActivityRow key={a.id} a={a} styles={styles} />)
         )}
       </ScrollView>
     </SafeAreaView>

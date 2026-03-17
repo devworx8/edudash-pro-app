@@ -1,11 +1,21 @@
 import React from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Modal, TextInput, Switch, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  Switch,
+  ActivityIndicator,
+} from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
@@ -42,7 +52,7 @@ export default function SuperAdminAdminManagementScreen() {
     handleDeleteUser,
   } = useSuperAdminAdminManagement(showAlert);
 
-  if (!profile || !isSuperAdmin(profile.role)) {
+  if (!profile || !isPlatformStaff(profile.role)) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ title: 'Admin Management', headerShown: false }} />
@@ -58,7 +68,7 @@ export default function SuperAdminAdminManagementScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'Admin Management', headerShown: false }} />
       <ThemedStatusBar />
-      
+
       {/* Header */}
       <SafeAreaView style={styles.header}>
         <View style={styles.headerContent}>
@@ -69,10 +79,7 @@ export default function SuperAdminAdminManagementScreen() {
             <Ionicons name="people" size={28} color="#3b82f6" />
             <Text style={styles.title}>Admin Management</Text>
           </View>
-          <TouchableOpacity 
-            style={styles.addButton}
-            onPress={() => setShowCreateModal(true)}
-          >
+          <TouchableOpacity style={styles.addButton} onPress={() => setShowCreateModal(true)}>
             <Ionicons name="add" size={24} color="#ffffff" />
           </TouchableOpacity>
         </View>
@@ -80,7 +87,9 @@ export default function SuperAdminAdminManagementScreen() {
 
       <ScrollView
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />
+        }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -97,11 +106,11 @@ export default function SuperAdminAdminManagementScreen() {
                   Manage administrative users and their permissions
                 </Text>
               </View>
-              
+
               {adminUsers.map((user) => {
                 const roleInfo = getRoleInfo(user.role);
                 const deptInfo = getDepartmentInfo(user.department);
-                
+
                 return (
                   <View key={user.id} style={styles.userCard}>
                     <View style={styles.userHeader}>
@@ -109,25 +118,47 @@ export default function SuperAdminAdminManagementScreen() {
                         <View style={styles.userAvatarContainer}>
                           <View style={[styles.userAvatar, { backgroundColor: roleInfo.color }]}>
                             <Text style={styles.userAvatarText}>
-                              {user.full_name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                              {user.full_name
+                                .split(' ')
+                                .map((n) => n[0])
+                                .join('')
+                                .toUpperCase()}
                             </Text>
                           </View>
-                          <View style={[
-                            styles.userStatusIndicator,
-                            { backgroundColor: user.is_active ? '#10b981' : '#6b7280' }
-                          ]} />
+                          <View
+                            style={[
+                              styles.userStatusIndicator,
+                              { backgroundColor: user.is_active ? '#10b981' : '#6b7280' },
+                            ]}
+                          />
                         </View>
-                        
+
                         <View style={styles.userDetails}>
                           <Text style={styles.userName}>{user.full_name}</Text>
                           <Text style={styles.userEmail}>{user.email}</Text>
                           <View style={styles.userMeta}>
-                            <View style={[styles.roleBadge, { backgroundColor: roleInfo.color + '20', borderColor: roleInfo.color }]}>
+                            <View
+                              style={[
+                                styles.roleBadge,
+                                {
+                                  backgroundColor: roleInfo.color + '20',
+                                  borderColor: roleInfo.color,
+                                },
+                              ]}
+                            >
                               <Text style={[styles.roleText, { color: roleInfo.color }]}>
                                 {roleInfo.label}
                               </Text>
                             </View>
-                            <View style={[styles.deptBadge, { backgroundColor: deptInfo.color + '20', borderColor: deptInfo.color }]}>
+                            <View
+                              style={[
+                                styles.deptBadge,
+                                {
+                                  backgroundColor: deptInfo.color + '20',
+                                  borderColor: deptInfo.color,
+                                },
+                              ]}
+                            >
                               <Text style={[styles.deptText, { color: deptInfo.color }]}>
                                 {deptInfo.name}
                               </Text>
@@ -139,20 +170,23 @@ export default function SuperAdminAdminManagementScreen() {
 
                     <View style={styles.userStats}>
                       <Text style={styles.statItem}>
-                        <Ionicons name="time" size={12} color="#6b7280" /> Last login: {formatLastLogin(user.last_login)}
+                        <Ionicons name="time" size={12} color="#6b7280" /> Last login:{' '}
+                        {formatLastLogin(user.last_login)}
                       </Text>
                       <Text style={styles.statItem}>
-                        <Ionicons name="calendar" size={12} color="#6b7280" /> Created: {new Date(user.created_at).toLocaleDateString()}
+                        <Ionicons name="calendar" size={12} color="#6b7280" /> Created:{' '}
+                        {new Date(user.created_at).toLocaleDateString()}
                       </Text>
                       {user.schools_assigned && user.schools_assigned.length > 0 && (
                         <Text style={styles.statItem}>
-                          <Ionicons name="school" size={12} color="#6b7280" /> {user.schools_assigned.length} schools assigned
+                          <Ionicons name="school" size={12} color="#6b7280" />{' '}
+                          {user.schools_assigned.length} schools assigned
                         </Text>
                       )}
                     </View>
 
                     <View style={styles.userActions}>
-                      <TouchableOpacity 
+                      <TouchableOpacity
                         style={styles.actionButton}
                         onPress={() => {
                           setSelectedUser(user);
@@ -162,24 +196,32 @@ export default function SuperAdminAdminManagementScreen() {
                         <Ionicons name="create" size={16} color="#3b82f6" />
                         <Text style={styles.actionButtonText}>Edit</Text>
                       </TouchableOpacity>
-                      
-                      <TouchableOpacity 
-                        style={[styles.actionButton, { backgroundColor: user.is_active ? '#f59e0b20' : '#10b98120' }]}
+
+                      <TouchableOpacity
+                        style={[
+                          styles.actionButton,
+                          { backgroundColor: user.is_active ? '#f59e0b20' : '#10b98120' },
+                        ]}
                         onPress={() => handleToggleUserStatus(user)}
                       >
-                        <Ionicons 
-                          name={user.is_active ? "pause" : "play"} 
-                          size={16} 
-                          color={user.is_active ? '#f59e0b' : '#10b981'} 
+                        <Ionicons
+                          name={user.is_active ? 'pause' : 'play'}
+                          size={16}
+                          color={user.is_active ? '#f59e0b' : '#10b981'}
                         />
-                        <Text style={[styles.actionButtonText, { 
-                          color: user.is_active ? '#f59e0b' : '#10b981' 
-                        }]}>
+                        <Text
+                          style={[
+                            styles.actionButtonText,
+                            {
+                              color: user.is_active ? '#f59e0b' : '#10b981',
+                            },
+                          ]}
+                        >
                           {user.is_active ? 'Deactivate' : 'Activate'}
                         </Text>
                       </TouchableOpacity>
-                      
-                      <TouchableOpacity 
+
+                      <TouchableOpacity
                         style={[styles.actionButton, { backgroundColor: '#ef444420' }]}
                         onPress={() => handleDeleteUser(user)}
                       >
@@ -190,13 +232,15 @@ export default function SuperAdminAdminManagementScreen() {
                   </View>
                 );
               })}
-              
+
               {adminUsers.length === 0 && (
                 <View style={styles.emptyContainer}>
                   <Ionicons name="people" size={48} color="#6b7280" />
                   <Text style={styles.emptyText}>No admin users</Text>
-                  <Text style={styles.emptySubText}>Create your first admin user to get started</Text>
-                  <TouchableOpacity 
+                  <Text style={styles.emptySubText}>
+                    Create your first admin user to get started
+                  </Text>
+                  <TouchableOpacity
                     style={styles.createButton}
                     onPress={() => setShowCreateModal(true)}
                   >
@@ -209,8 +253,10 @@ export default function SuperAdminAdminManagementScreen() {
             {/* Departments Overview */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Departments & Roles</Text>
-              <Text style={styles.sectionSubtitle}>Available departments and their permissions</Text>
-              
+              <Text style={styles.sectionSubtitle}>
+                Available departments and their permissions
+              </Text>
+
               {DEPARTMENTS.map((dept) => (
                 <View key={dept.id} style={styles.deptCard}>
                   <View style={styles.deptHeader}>
@@ -249,7 +295,11 @@ export default function SuperAdminAdminManagementScreen() {
               <Ionicons name="close" size={24} color="#ffffff" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Create Admin User</Text>
-            <TouchableOpacity onPress={handleCreateAdmin} disabled={isCreating} style={{ opacity: isCreating ? 0.5 : 1 }}>
+            <TouchableOpacity
+              onPress={handleCreateAdmin}
+              disabled={isCreating}
+              style={{ opacity: isCreating ? 0.5 : 1 }}
+            >
               {isCreating ? (
                 <ActivityIndicator size="small" color="#10b981" />
               ) : (
@@ -264,7 +314,7 @@ export default function SuperAdminAdminManagementScreen() {
               <TextInput
                 style={styles.formInput}
                 value={formData.full_name}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, full_name: text }))}
+                onChangeText={(text) => setFormData((prev) => ({ ...prev, full_name: text }))}
                 placeholder="Enter full name"
                 placeholderTextColor="#6b7280"
               />
@@ -275,7 +325,7 @@ export default function SuperAdminAdminManagementScreen() {
               <TextInput
                 style={styles.formInput}
                 value={formData.email}
-                onChangeText={(text) => setFormData(prev => ({ ...prev, email: text }))}
+                onChangeText={(text) => setFormData((prev) => ({ ...prev, email: text }))}
                 placeholder="admin@edudashpro.com"
                 placeholderTextColor="#6b7280"
                 keyboardType="email-address"
@@ -290,28 +340,36 @@ export default function SuperAdminAdminManagementScreen() {
                   key={role.value}
                   style={[
                     styles.roleOption,
-                    { 
-                      backgroundColor: formData.role === role.value ? role.color + '20' : 'transparent',
-                      borderColor: formData.role === role.value ? role.color : '#374151'
-                    }
+                    {
+                      backgroundColor:
+                        formData.role === role.value ? role.color + '20' : 'transparent',
+                      borderColor: formData.role === role.value ? role.color : '#374151',
+                    },
                   ]}
-onPress={() => setFormData(prev => ({ ...prev, role: role.value as any }))}
+                  onPress={() => setFormData((prev) => ({ ...prev, role: role.value as any }))}
                 >
                   <View style={styles.roleOptionContent}>
-                    <Text style={[styles.roleOptionTitle, { 
-                      color: formData.role === role.value ? role.color : '#ffffff' 
-                    }]}>
+                    <Text
+                      style={[
+                        styles.roleOptionTitle,
+                        {
+                          color: formData.role === role.value ? role.color : '#ffffff',
+                        },
+                      ]}
+                    >
                       {role.label}
                     </Text>
                     <Text style={styles.roleOptionDescription}>{role.description}</Text>
                   </View>
-                  <View style={[
-                    styles.radioButton,
-                    { 
-                      borderColor: formData.role === role.value ? role.color : '#6b7280',
-                      backgroundColor: formData.role === role.value ? role.color : 'transparent'
-                    }
-                  ]}>
+                  <View
+                    style={[
+                      styles.radioButton,
+                      {
+                        borderColor: formData.role === role.value ? role.color : '#6b7280',
+                        backgroundColor: formData.role === role.value ? role.color : 'transparent',
+                      },
+                    ]}
+                  >
                     {formData.role === role.value && (
                       <Ionicons name="checkmark" size={12} color="#ffffff" />
                     )}
@@ -327,28 +385,37 @@ onPress={() => setFormData(prev => ({ ...prev, role: role.value as any }))}
                   key={dept.id}
                   style={[
                     styles.deptOption,
-                    { 
-                      backgroundColor: formData.department === dept.id ? dept.color + '20' : 'transparent',
-                      borderColor: formData.department === dept.id ? dept.color : '#374151'
-                    }
+                    {
+                      backgroundColor:
+                        formData.department === dept.id ? dept.color + '20' : 'transparent',
+                      borderColor: formData.department === dept.id ? dept.color : '#374151',
+                    },
                   ]}
-                  onPress={() => setFormData(prev => ({ ...prev, department: dept.id }))}
+                  onPress={() => setFormData((prev) => ({ ...prev, department: dept.id }))}
                 >
                   <View style={styles.deptOptionContent}>
-                    <Text style={[styles.deptOptionTitle, { 
-                      color: formData.department === dept.id ? dept.color : '#ffffff' 
-                    }]}>
+                    <Text
+                      style={[
+                        styles.deptOptionTitle,
+                        {
+                          color: formData.department === dept.id ? dept.color : '#ffffff',
+                        },
+                      ]}
+                    >
                       {dept.name}
                     </Text>
                     <Text style={styles.deptOptionDescription}>{dept.description}</Text>
                   </View>
-                  <View style={[
-                    styles.radioButton,
-                    { 
-                      borderColor: formData.department === dept.id ? dept.color : '#6b7280',
-                      backgroundColor: formData.department === dept.id ? dept.color : 'transparent'
-                    }
-                  ]}>
+                  <View
+                    style={[
+                      styles.radioButton,
+                      {
+                        borderColor: formData.department === dept.id ? dept.color : '#6b7280',
+                        backgroundColor:
+                          formData.department === dept.id ? dept.color : 'transparent',
+                      },
+                    ]}
+                  >
                     {formData.department === dept.id && (
                       <Ionicons name="checkmark" size={12} color="#ffffff" />
                     )}
@@ -361,11 +428,13 @@ onPress={() => setFormData(prev => ({ ...prev, role: role.value as any }))}
               <View style={styles.switchRow}>
                 <View>
                   <Text style={styles.formLabel}>Active Status</Text>
-                  <Text style={styles.switchDescription}>User can log in and access assigned features</Text>
+                  <Text style={styles.switchDescription}>
+                    User can log in and access assigned features
+                  </Text>
                 </View>
                 <Switch
                   value={formData.is_active}
-                  onValueChange={(value) => setFormData(prev => ({ ...prev, is_active: value }))}
+                  onValueChange={(value) => setFormData((prev) => ({ ...prev, is_active: value }))}
                   trackColor={{ false: '#374151', true: '#3b82f620' }}
                   thumbColor={formData.is_active ? '#3b82f6' : '#9ca3af'}
                 />

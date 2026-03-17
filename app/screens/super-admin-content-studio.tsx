@@ -1,27 +1,30 @@
 import React from 'react';
-import {
-  View, Text, ScrollView, RefreshControl, TouchableOpacity,
-} from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { useSuperAdminContentStudio } from '@/hooks/useSuperAdminContentStudio';
 import {
-  CONTENT_TABS, SOCIAL_PLATFORMS, POST_STATUS_CONFIG,
+  CONTENT_TABS,
+  SOCIAL_PLATFORMS,
+  POST_STATUS_CONFIG,
 } from '@/hooks/super-admin-content-studio/types';
 import type { SocialPost, ContentTab } from '@/hooks/super-admin-content-studio/types';
 import type { PlatformAnnouncement } from '@/components/super-admin/announcements/types';
 import { createStyles } from '@/lib/screen-styles/super-admin-content-studio.styles';
 
 const ANNOUNCEMENT_TYPE_COLORS: Record<string, string> = {
-  info: '#3b82f6', warning: '#f59e0b', alert: '#ef4444',
-  maintenance: '#6366f1', feature: '#10b981',
+  info: '#3b82f6',
+  warning: '#f59e0b',
+  alert: '#ef4444',
+  maintenance: '#6366f1',
+  feature: '#10b981',
 };
 
 function formatDate(dateStr: string): string {
@@ -34,12 +37,20 @@ export default function SuperAdminContentStudioScreen() {
   const { showAlert, alertProps } = useAlertModal();
 
   const {
-    profile, activeTab, setActiveTab,
-    loading, refreshing, announcements, socialPosts, stats,
-    onRefresh, handleDeletePost, handleToggleAnnouncement,
+    profile,
+    activeTab,
+    setActiveTab,
+    loading,
+    refreshing,
+    announcements,
+    socialPosts,
+    stats,
+    onRefresh,
+    handleDeletePost,
+    handleToggleAnnouncement,
   } = useSuperAdminContentStudio(showAlert);
 
-  if (!profile || !isSuperAdmin(profile.role)) {
+  if (!profile || !isPlatformStaff(profile.role)) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ title: 'Content Studio', headerShown: false }} />
@@ -134,16 +145,10 @@ export default function SuperAdminContentStudioScreen() {
             )}
 
             {activeTab === 'social' && (
-              <SocialTab
-                posts={socialPosts}
-                styles={styles}
-                onDelete={handleDeletePost}
-              />
+              <SocialTab posts={socialPosts} styles={styles} onDelete={handleDeletePost} />
             )}
 
-            {activeTab === 'templates' && (
-              <TemplatesTab styles={styles} />
-            )}
+            {activeTab === 'templates' && <TemplatesTab styles={styles} />}
           </>
         )}
       </ScrollView>
@@ -155,7 +160,9 @@ export default function SuperAdminContentStudioScreen() {
 // ── Sub-components ──
 
 function AnnouncementsTab({
-  announcements, styles, onToggle,
+  announcements,
+  styles,
+  onToggle,
 }: {
   announcements: PlatformAnnouncement[];
   styles: ReturnType<typeof createStyles>;
@@ -175,9 +182,7 @@ function AnnouncementsTab({
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        Platform Announcements ({announcements.length})
-      </Text>
+      <Text style={styles.sectionTitle}>Platform Announcements ({announcements.length})</Text>
       {announcements.map((a) => {
         const typeColor = ANNOUNCEMENT_TYPE_COLORS[a.type] || '#64748b';
         return (
@@ -188,7 +193,9 @@ function AnnouncementsTab({
             activeOpacity={0.7}
           >
             <View style={styles.announcementHeader}>
-              <Text style={styles.announcementTitle} numberOfLines={1}>{a.title}</Text>
+              <Text style={styles.announcementTitle} numberOfLines={1}>
+                {a.title}
+              </Text>
               <Text
                 style={[
                   styles.announcementType,
@@ -208,9 +215,7 @@ function AnnouncementsTab({
               <Text style={styles.announcementMetaText}>
                 {a.views_count} views · {a.click_count} clicks
               </Text>
-              <Text style={styles.announcementMetaText}>
-                {formatDate(a.created_at)}
-              </Text>
+              <Text style={styles.announcementMetaText}>{formatDate(a.created_at)}</Text>
             </View>
           </TouchableOpacity>
         );
@@ -220,7 +225,9 @@ function AnnouncementsTab({
 }
 
 function SocialTab({
-  posts, styles, onDelete,
+  posts,
+  styles,
+  onDelete,
 }: {
   posts: SocialPost[];
   styles: ReturnType<typeof createStyles>;
@@ -299,7 +306,16 @@ function TemplatesTab({ styles }: { styles: ReturnType<typeof createStyles> }) {
       <Text style={styles.sectionTitle}>Content Templates</Text>
       {templates.map((t) => (
         <View key={t.name} style={styles.templateCard}>
-          <View style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: '#6366f120', justifyContent: 'center', alignItems: 'center' }}>
+          <View
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              backgroundColor: '#6366f120',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
             <Ionicons name={t.icon as any} size={20} color="#6366f1" />
           </View>
           <View style={{ flex: 1 }}>

@@ -7,7 +7,7 @@ import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { useTheme } from '@/contexts/ThemeContext';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { logger } from '@/lib/logger';
@@ -57,10 +57,10 @@ export default function SuperAdminAIUsageScreen() {
   const [usageRows, setUsageRows] = useState<AiUsageRow[]>([]);
   const [imageRows, setImageRows] = useState<ImageUsageRow[]>([]);
   const [search, setSearch] = useState('');
-  const isAllowed = Boolean(profile && isSuperAdmin(profile.role));
+  const isAllowed = Boolean(profile && isPlatformStaff(profile.role));
 
   const loadUsage = useCallback(async (isRefresh = false) => {
-    if (!isSuperAdmin(profile?.role)) {
+    if (!isPlatformStaff(profile?.role)) {
       showAlert({ title: 'Access Denied', message: 'Super admin privileges required' });
       return;
     }

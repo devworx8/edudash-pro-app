@@ -1,14 +1,21 @@
 import React, { useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, RefreshControl, TouchableOpacity,
-  TextInput, FlatList, KeyboardAvoidingView, Platform,
+  View,
+  Text,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  TextInput,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
@@ -35,12 +42,21 @@ export default function SuperAdminTeamChatScreen() {
   const scrollRef = useRef<FlatList>(null);
 
   const {
-    profile, channels, activeChannel, messages, members,
-    loading, sendingMessage, refreshing,
-    selectChannel, handleSendMessage, onRefresh, goBackToChannels,
+    profile,
+    channels,
+    activeChannel,
+    messages,
+    members,
+    loading,
+    sendingMessage,
+    refreshing,
+    selectChannel,
+    handleSendMessage,
+    onRefresh,
+    goBackToChannels,
   } = useSuperAdminTeamChat(showAlert);
 
-  if (!profile || !isSuperAdmin(profile.role)) {
+  if (!profile || !isPlatformStaff(profile.role)) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ title: 'Team Chat', headerShown: false }} />
@@ -154,11 +170,7 @@ export default function SuperAdminTeamChatScreen() {
           contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 16 }}
           onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => (
-            <MessageBubble
-              message={item}
-              isOwn={item.sender_id === profile.id}
-              styles={styles}
-            />
+            <MessageBubble message={item} isOwn={item.sender_id === profile.id} styles={styles} />
           )}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -184,7 +196,10 @@ export default function SuperAdminTeamChatScreen() {
             returnKeyType="default"
           />
           <TouchableOpacity
-            style={[styles.sendButton, (!messageText.trim() || sendingMessage) && styles.sendButtonDisabled]}
+            style={[
+              styles.sendButton,
+              (!messageText.trim() || sendingMessage) && styles.sendButtonDisabled,
+            ]}
             onPress={onSend}
             disabled={!messageText.trim() || sendingMessage}
           >
@@ -258,12 +273,10 @@ function MessageBubble({
 
   return (
     <View style={[styles.messageRow, isOwn ? styles.messageRowOwn : styles.messageRowOther]}>
-      {!isOwn && (
-        <Text style={styles.messageSender}>
-          {message.sender?.full_name || 'Unknown'}
-        </Text>
-      )}
-      <View style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}>
+      {!isOwn && <Text style={styles.messageSender}>{message.sender?.full_name || 'Unknown'}</Text>}
+      <View
+        style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}
+      >
         <Text style={[styles.messageText, isOwn ? styles.messageTextOwn : styles.messageTextOther]}>
           {message.content}
         </Text>

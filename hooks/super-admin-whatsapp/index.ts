@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Linking } from 'react-native';
 import { track } from '@/lib/analytics';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { fetchWhatsAppData } from './fetchWhatsAppData';
 import { type ShowAlertConfig, type ConfigData, INITIAL_CONFIG } from './types';
 import type { WhatsAppConnection, WhatsAppTemplate, WhatsAppMetrics } from './types';
@@ -20,7 +20,7 @@ export function useSuperAdminWhatsApp(showAlert: (config: ShowAlertConfig) => vo
   const [isConfigured, setIsConfigured] = useState(false);
 
   const loadWhatsAppData = useCallback(async () => {
-    if (!isSuperAdmin(profile?.role)) {
+    if (!isPlatformStaff(profile?.role)) {
       showAlert({ title: 'Access Denied', message: 'Super admin privileges required' });
       return;
     }

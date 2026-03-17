@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
@@ -43,7 +43,7 @@ export default function SuperAdminAICommandCenter() {
   } = useSuperAdminAICommandCenter(showAlert);
 
   // Access check
-  if (!profile || !isSuperAdmin(profile.role)) {
+  if (!profile || !isPlatformStaff(profile.role)) {
     return (
       <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
         <ThemedStatusBar />

@@ -7,22 +7,30 @@
  */
 import React, { useMemo } from 'react';
 import {
-  View, Text, ScrollView, RefreshControl, TouchableOpacity, useWindowDimensions,
+  View,
+  Text,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { createStyles } from '@/lib/screen-styles/super-admin-team-activity.styles';
 import {
   useSuperAdminTeamActivity,
-  ACTIVITY_FILTERS, getActionConfig,
-  type PlatformActivity, type ActivityGroup, type ActivityStats,
+  ACTIVITY_FILTERS,
+  getActionConfig,
+  type PlatformActivity,
+  type ActivityGroup,
+  type ActivityStats,
 } from '@/hooks/super-admin-team-activity';
 
 // ── Helpers ─────────────────────────────────────────────────────────
@@ -37,8 +45,18 @@ function timeAgo(dateStr: string): string {
 
 // ── Sub-components ──────────────────────────────────────────────────
 
-function StatCard({ value, label, icon, color, styles }: {
-  value: number; label: string; icon: string; color: string; styles: any;
+function StatCard({
+  value,
+  label,
+  icon,
+  color,
+  styles,
+}: {
+  value: number;
+  label: string;
+  icon: string;
+  color: string;
+  styles: any;
 }) {
   return (
     <View style={styles.statCard}>
@@ -67,9 +85,10 @@ function ActivityPulse({ hourly, styles }: { hourly: number[]; styles: any }) {
                 styles.pulseBar,
                 {
                   height: Math.max((v / maxVal) * 32, 2),
-                  backgroundColor: v > 0
-                    ? `rgba(139,92,246,${0.3 + (v / maxVal) * 0.7})`
-                    : 'rgba(255,255,255,0.04)',
+                  backgroundColor:
+                    v > 0
+                      ? `rgba(139,92,246,${0.3 + (v / maxVal) * 0.7})`
+                      : 'rgba(255,255,255,0.04)',
                 },
               ]}
             />
@@ -122,7 +141,12 @@ function InsightsRow({ stats, styles }: { stats: ActivityStats; styles: any }) {
               <Text style={styles.categoryLabel}>{cat.label}</Text>
               <Text style={styles.categoryValue}>{count}</Text>
               <View style={styles.categoryBarBg}>
-                <View style={[styles.categoryBarFill, { width: `${(count / maxCat) * 100}%`, backgroundColor: cat.color }]} />
+                <View
+                  style={[
+                    styles.categoryBarFill,
+                    { width: `${(count / maxCat) * 100}%`, backgroundColor: cat.color },
+                  ]}
+                />
               </View>
             </View>
           );
@@ -132,11 +156,23 @@ function InsightsRow({ stats, styles }: { stats: ActivityStats; styles: any }) {
   );
 }
 
-function FilterBar({ filter, setFilter, stats, styles }: {
-  filter: string; setFilter: (f: any) => void; stats: ActivityStats; styles: any;
+function FilterBar({
+  filter,
+  setFilter,
+  stats,
+  styles,
+}: {
+  filter: string;
+  setFilter: (f: any) => void;
+  stats: ActivityStats;
+  styles: any;
 }) {
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterScroll}
+    >
       {ACTIVITY_FILTERS.map((f) => {
         const isActive = filter === f.id;
         const count = stats.byCategory[f.id] ?? 0;
@@ -150,7 +186,9 @@ function FilterBar({ filter, setFilter, stats, styles }: {
             <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{f.label}</Text>
             {count > 0 && (
               <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
-                <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>{count}</Text>
+                <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
+                  {count}
+                </Text>
               </View>
             )}
           </TouchableOpacity>
@@ -172,20 +210,33 @@ function DateGroupHeader({ group, styles }: { group: ActivityGroup; styles: any 
 }
 
 function ActivityTimelineItem({
-  activity, isLast, styles,
+  activity,
+  isLast,
+  styles,
 }: {
-  activity: PlatformActivity; isLast: boolean; styles: any;
+  activity: PlatformActivity;
+  isLast: boolean;
+  styles: any;
 }) {
   const config = getActionConfig(activity.action);
   const meta = activity.metadata || {};
-  const detail = (meta.email || meta.entity_name || meta.description || activity.entity_id || '') as string;
+  const detail = (meta.email ||
+    meta.entity_name ||
+    meta.description ||
+    activity.entity_id ||
+    '') as string;
 
   return (
     <View style={styles.activityRow}>
       {/* Timeline connector */}
       <View style={styles.timelineTrack}>
         <View style={styles.timelineLine} />
-        <View style={[styles.timelineNode, { borderColor: config.color, backgroundColor: `${config.color}30` }]} />
+        <View
+          style={[
+            styles.timelineNode,
+            { borderColor: config.color, backgroundColor: `${config.color}30` },
+          ]}
+        />
         {!isLast && <View style={styles.timelineLine} />}
       </View>
 
@@ -199,9 +250,7 @@ function ActivityTimelineItem({
           <Text style={styles.activityTime}>{timeAgo(activity.created_at)}</Text>
         </View>
         <View style={styles.activityMeta}>
-          <Text style={styles.activityActor}>
-            {activity.actor?.full_name || 'System'}
-          </Text>
+          <Text style={styles.activityActor}>{activity.actor?.full_name || 'System'}</Text>
           {activity.actor?.role ? (
             <View style={styles.activityRoleBadge}>
               <Text style={styles.activityRoleText}>{activity.actor.role}</Text>
@@ -209,7 +258,9 @@ function ActivityTimelineItem({
           ) : null}
         </View>
         {detail ? (
-          <Text style={styles.activityDetail} numberOfLines={1}>{detail}</Text>
+          <Text style={styles.activityDetail} numberOfLines={1}>
+            {detail}
+          </Text>
         ) : null}
       </View>
     </View>
@@ -220,15 +271,9 @@ function EmptyState({ hasFilter, styles }: { hasFilter: boolean; styles: any }) 
   return (
     <View style={styles.emptyContainer}>
       <View style={styles.emptyIconWrap}>
-        <Ionicons
-          name={hasFilter ? 'filter-outline' : 'pulse-outline'}
-          size={36}
-          color="#8b5cf6"
-        />
+        <Ionicons name={hasFilter ? 'filter-outline' : 'pulse-outline'} size={36} color="#8b5cf6" />
       </View>
-      <Text style={styles.emptyText}>
-        {hasFilter ? 'No matching activity' : 'No activity yet'}
-      </Text>
+      <Text style={styles.emptyText}>{hasFilter ? 'No matching activity' : 'No activity yet'}</Text>
       <Text style={styles.emptySubText}>
         {hasFilter
           ? 'Try selecting a different filter to see more results.'
@@ -260,11 +305,19 @@ export default function SuperAdminTeamActivityScreen() {
   const { showAlert, alertProps } = useAlertModal();
 
   const {
-    profile, groups, allActivities, loading, refreshing,
-    filter, setFilter, stats, onRefresh, activities,
+    profile,
+    groups,
+    allActivities,
+    loading,
+    refreshing,
+    filter,
+    setFilter,
+    stats,
+    onRefresh,
+    activities,
   } = useSuperAdminTeamActivity(showAlert);
 
-  if (!profile || !isSuperAdmin(profile.role)) {
+  if (!profile || !isPlatformStaff(profile.role)) {
     return (
       <SafeAreaView style={styles.deniedContainer}>
         <Stack.Screen options={{ title: 'Team Activity', headerShown: false }} />
@@ -309,14 +362,34 @@ export default function SuperAdminTeamActivityScreen() {
       ) : (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8b5cf6" />}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#8b5cf6" />
+          }
           showsVerticalScrollIndicator={false}
         >
           {/* ── Stat Cards ── */}
           <View style={styles.statsRow}>
-            <StatCard value={stats.today} label="Today" icon="flash" color="#3b82f6" styles={styles} />
-            <StatCard value={stats.thisWeek} label="This Week" icon="trending-up" color="#10b981" styles={styles} />
-            <StatCard value={stats.uniqueActors} label="Active" icon="people" color="#8b5cf6" styles={styles} />
+            <StatCard
+              value={stats.today}
+              label="Today"
+              icon="flash"
+              color="#3b82f6"
+              styles={styles}
+            />
+            <StatCard
+              value={stats.thisWeek}
+              label="This Week"
+              icon="trending-up"
+              color="#10b981"
+              styles={styles}
+            />
+            <StatCard
+              value={stats.uniqueActors}
+              label="Active"
+              icon="people"
+              color="#8b5cf6"
+              styles={styles}
+            />
           </View>
 
           {/* ── Activity Pulse ── */}
@@ -327,7 +400,11 @@ export default function SuperAdminTeamActivityScreen() {
           <InsightsRow stats={stats} styles={styles} />
 
           {/* ── Filter Chips ── */}
-          <SectionHeader title="Activity Timeline" badge={activities.length || undefined} styles={styles} />
+          <SectionHeader
+            title="Activity Timeline"
+            badge={activities.length || undefined}
+            styles={styles}
+          />
           <FilterBar filter={filter} setFilter={setFilter} stats={stats} styles={styles} />
 
           {/* ── Timeline ── */}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { supabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import { fetchTeamChannels } from './fetchChannels';
@@ -28,7 +28,7 @@ export function useSuperAdminTeamChat(showAlert: (config: ShowAlertConfig) => vo
 
   // Load channels
   const loadChannels = useCallback(async () => {
-    if (!isSuperAdmin(profile?.role)) return;
+    if (!isPlatformStaff(profile?.role)) return;
     const result = await fetchTeamChannels(userId);
     setChannels(result);
   }, [profile?.role, userId]);

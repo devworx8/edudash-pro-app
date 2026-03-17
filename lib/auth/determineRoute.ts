@@ -99,6 +99,11 @@ function routeForIndependentUser(
   switch (role) {
     case 'super_admin':
       return { path: '/screens/super-admin-dashboard' };
+    case 'system_admin':
+    case 'content_moderator':
+    case 'support_admin':
+    case 'billing_admin':
+      return { path: '/screens/platform-admin-dashboard' };
     case 'admin':
       return { path: '/screens/org-onboarding' };
     case 'principal_admin':
@@ -110,6 +115,7 @@ function routeForIndependentUser(
     case 'student':
       return { path: '/screens/learner-dashboard', params: { standalone: 'true' } };
     default:
+      // Independent user with no matching route — fall through
       return null;
   }
 }
@@ -244,6 +250,12 @@ export function determineUserRoute(
     case 'super_admin':
       return { path: '/screens/super-admin-dashboard' };
 
+    case 'system_admin':
+    case 'content_moderator':
+    case 'support_admin':
+    case 'billing_admin':
+      return { path: '/screens/platform-admin-dashboard' };
+
     case 'admin': {
       debugWarn('[ROUTE DEBUG] Admin routing FALLBACK - member_type should have been used!', {
         memberType, hasOrganization, orgId: profile.organization_id,
@@ -302,7 +314,7 @@ export function validateUserAccess(profile: EnhancedUserProfile | null): {
     return { hasAccess: false, reason: 'No user profile found', suggestedAction: 'Complete your profile setup' };
   }
   const role = normalizeRole(profile.role) as Role;
-  if (role && ['parent', 'teacher', 'principal_admin', 'admin', 'super_admin', 'student', 'learner'].includes(role)) {
+  if (role && ['parent', 'teacher', 'principal_admin', 'admin', 'super_admin', 'student', 'learner', 'independent_user', 'system_admin', 'content_moderator', 'support_admin', 'billing_admin'].includes(role)) {
     console.log('[validateUserAccess] User has valid role:', role, '- granting access');
     return { hasAccess: true };
   }
@@ -319,6 +331,10 @@ export function getRouteForRole(role: Role | string | null): string {
   const normalized = normalizeRole(role as string);
   switch (normalized) {
     case 'super_admin': return '/screens/super-admin-dashboard';
+    case 'system_admin':
+    case 'content_moderator':
+    case 'support_admin':
+    case 'billing_admin': return '/screens/platform-admin-dashboard';
     case 'admin': return '/screens/org-admin-dashboard';
     case 'principal_admin': return '/screens/principal-dashboard';
     case 'teacher': return '/screens/teacher-dashboard';

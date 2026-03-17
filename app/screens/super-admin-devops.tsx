@@ -1,6 +1,6 @@
 /**
  * Super Admin DevOps & Integrations Dashboard
- * 
+ *
  * Provides access to:
  * - GitHub (commits, PRs, deployments)
  * - EAS/Expo (builds, OTA updates, submissions)
@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '@/lib/supabase';
 import { track } from '@/lib/analytics';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
@@ -108,7 +108,7 @@ export default function SuperAdminDevOpsScreen() {
   const [activeTab, setActiveTab] = useState<'overview' | 'github' | 'eas' | 'ai'>('overview');
 
   const fetchDevOpsData = useCallback(async () => {
-    if (!isSuperAdmin(profile?.role)) {
+    if (!isPlatformStaff(profile?.role)) {
       return;
     }
 
@@ -123,7 +123,7 @@ export default function SuperAdminDevOpsScreen() {
 
       if (dbIntegrations && dbIntegrations.length > 0) {
         // Update integration status from DB
-        const updatedIntegrations = INTEGRATIONS.map(int => {
+        const updatedIntegrations = INTEGRATIONS.map((int) => {
           const dbInt = dbIntegrations.find((d: any) => d.integration_type === int.type);
           if (dbInt) {
             return {
@@ -139,7 +139,6 @@ export default function SuperAdminDevOpsScreen() {
 
       // Note: In production, you would fetch real data from GitHub/EAS APIs
       // For now, showing static data with links to external dashboards
-
     } catch (error) {
       logger.error('Failed to fetch DevOps data:', error);
     } finally {
@@ -172,7 +171,8 @@ export default function SuperAdminDevOpsScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Open EAS Dashboard',
-          onPress: () => Linking.openURL('https://expo.dev/accounts/dashsoil/projects/edudash-pro/builds'),
+          onPress: () =>
+            Linking.openURL('https://expo.dev/accounts/dashsoil/projects/edudash-pro/builds'),
         },
       ],
     });
@@ -181,18 +181,20 @@ export default function SuperAdminDevOpsScreen() {
   const handlePublishUpdate = () => {
     showAlert({
       title: 'Publish OTA Update',
-      message: 'This will publish an over-the-air update to all users.\n\nNote: You can also run this from terminal:\neas update --branch production',
+      message:
+        'This will publish an over-the-air update to all users.\n\nNote: You can also run this from terminal:\neas update --branch production',
       buttons: [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Open EAS Updates',
-          onPress: () => Linking.openURL('https://expo.dev/accounts/dashsoil/projects/edudash-pro/updates'),
+          onPress: () =>
+            Linking.openURL('https://expo.dev/accounts/dashsoil/projects/edudash-pro/updates'),
         },
       ],
     });
   };
 
-  if (!profile || !isSuperAdmin(profile.role)) {
+  if (!profile || !isPlatformStaff(profile.role)) {
     return (
       <View style={styles.container}>
         <Stack.Screen options={{ title: 'DevOps', headerShown: false }} />
@@ -221,14 +223,25 @@ export default function SuperAdminDevOpsScreen() {
               </View>
               <Text style={styles.integrationName}>{integration.name}</Text>
               <View style={styles.integrationStatus}>
-                <View style={[
-                  styles.statusDot,
-                  { backgroundColor: integration.status === 'connected' ? '#10b981' : 
-                    integration.status === 'error' ? '#ef4444' : '#6b7280' }
-                ]} />
+                <View
+                  style={[
+                    styles.statusDot,
+                    {
+                      backgroundColor:
+                        integration.status === 'connected'
+                          ? '#10b981'
+                          : integration.status === 'error'
+                            ? '#ef4444'
+                            : '#6b7280',
+                    },
+                  ]}
+                />
                 <Text style={styles.statusText}>
-                  {integration.status === 'connected' ? 'Connected' : 
-                   integration.status === 'error' ? 'Error' : 'Not Connected'}
+                  {integration.status === 'connected'
+                    ? 'Connected'
+                    : integration.status === 'error'
+                      ? 'Error'
+                      : 'Not Connected'}
                 </Text>
               </View>
             </TouchableOpacity>
@@ -240,33 +253,24 @@ export default function SuperAdminDevOpsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
         <View style={styles.actionsGrid}>
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => handleTriggerBuild('android')}
-          >
+          <TouchableOpacity style={styles.actionCard} onPress={() => handleTriggerBuild('android')}>
             <Ionicons name="logo-android" size={28} color="#3ddc84" />
             <Text style={styles.actionTitle}>Build Android</Text>
             <Text style={styles.actionSubtitle}>EAS Build</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => handleTriggerBuild('ios')}
-          >
+
+          <TouchableOpacity style={styles.actionCard} onPress={() => handleTriggerBuild('ios')}>
             <Ionicons name="logo-apple" size={28} color="#FFFFFF" />
             <Text style={styles.actionTitle}>Build iOS</Text>
             <Text style={styles.actionSubtitle}>EAS Build</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={handlePublishUpdate}
-          >
+
+          <TouchableOpacity style={styles.actionCard} onPress={handlePublishUpdate}>
             <Ionicons name="cloud-upload" size={28} color="#8b5cf6" />
             <Text style={styles.actionTitle}>OTA Update</Text>
             <Text style={styles.actionSubtitle}>Push to Users</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.actionCard}
             onPress={() => Linking.openURL('https://github.com/DashSoil/NewDash/pulls')}
@@ -290,16 +294,18 @@ export default function SuperAdminDevOpsScreen() {
             <Text style={styles.linkText}>Claude API Usage & Costs</Text>
             <Ionicons name="open-outline" size={16} color="#6b7280" />
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.linkItem}
-            onPress={() => Linking.openURL('https://supabase.com/dashboard/project/lvvvjywrmpcqrpvuptdi/reports')}
+            onPress={() =>
+              Linking.openURL('https://supabase.com/dashboard/project/lvvvjywrmpcqrpvuptdi/reports')
+            }
           >
             <Ionicons name="bar-chart" size={20} color="#3ecf8e" />
             <Text style={styles.linkText}>Supabase Usage & Reports</Text>
             <Ionicons name="open-outline" size={16} color="#6b7280" />
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.linkItem}
             onPress={() => Linking.openURL('https://github.com/DashSoil/NewDash/actions')}
@@ -308,10 +314,12 @@ export default function SuperAdminDevOpsScreen() {
             <Text style={styles.linkText}>GitHub Actions / CI</Text>
             <Ionicons name="open-outline" size={16} color="#6b7280" />
           </TouchableOpacity>
-          
+
           <TouchableOpacity
             style={styles.linkItem}
-            onPress={() => Linking.openURL('https://expo.dev/accounts/dashsoil/projects/edudash-pro/submissions')}
+            onPress={() =>
+              Linking.openURL('https://expo.dev/accounts/dashsoil/projects/edudash-pro/submissions')
+            }
           >
             <Ionicons name="storefront" size={20} color="#000020" />
             <Text style={styles.linkText}>App Store Submissions</Text>
@@ -349,9 +357,13 @@ export default function SuperAdminDevOpsScreen() {
             onPress={() => setActiveTab(tab)}
           >
             <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'overview' ? 'Overview' : 
-               tab === 'github' ? 'GitHub' : 
-               tab === 'eas' ? 'EAS/Expo' : 'AI Usage'}
+              {tab === 'overview'
+                ? 'Overview'
+                : tab === 'github'
+                  ? 'GitHub'
+                  : tab === 'eas'
+                    ? 'EAS/Expo'
+                    : 'AI Usage'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -359,7 +371,9 @@ export default function SuperAdminDevOpsScreen() {
 
       <ScrollView
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00f5ff" />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#00f5ff" />
+        }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -369,10 +383,10 @@ export default function SuperAdminDevOpsScreen() {
         ) : (
           renderOverview()
         )}
-        
+
         <View style={styles.bottomPadding} />
       </ScrollView>
-      
+
       <AlertModal {...alertProps} />
     </View>
   );

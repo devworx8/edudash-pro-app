@@ -29,6 +29,9 @@ export const COMMUNITY_SCHOOL_ID = '00000000-0000-0000-0000-000000000001';
  * Normalise free-form role strings to canonical `Role` values.
  * Returns `null` for unrecognised input.
  */
+/** Sub-admin roles that are distinct platform admin types (NOT org admins). */
+const PLATFORM_ADMIN_ROLES = ['content_moderator', 'support_admin', 'billing_admin', 'system_admin'];
+
 export function normalizeRole(r?: string | null): string | null {
   if (!r) return null;
   const s = String(r).trim().toLowerCase();
@@ -40,6 +43,9 @@ export function normalizeRole(r?: string | null): string | null {
   if (s.includes('teacher')) return 'teacher';
   if (s.includes('parent')) return 'parent';
   if (s.includes('student') || s.includes('learner')) return 'student';
+
+  // Platform admin sub-roles — keep distinct for RBAC routing
+  if (PLATFORM_ADMIN_ROLES.includes(s)) return s;
 
   // Handle exact matches for the canonical types (including 'admin')
   if (['super_admin', 'principal_admin', 'admin', 'teacher', 'parent', 'student'].includes(s)) {

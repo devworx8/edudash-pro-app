@@ -2,7 +2,7 @@
 import { useCallback, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { fetchCommandCenterData } from './fetchData';
 import type { CommandCenterData } from './types';
 
@@ -27,7 +27,7 @@ export function useCommandCenter(): UseCommandCenterReturn {
   const queryClient = useQueryClient();
   const isRefreshingRef = useRef(false);
 
-  const enabled = isSuperAdmin(profile?.role);
+  const enabled = isPlatformStaff(profile?.role);
 
   const { data, isLoading, error, refetch, isFetching } = useQuery<CommandCenterData>({
     queryKey: ['command-center'],

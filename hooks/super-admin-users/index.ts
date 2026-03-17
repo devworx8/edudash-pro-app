@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { assertSupabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { logger } from '@/lib/logger';
 import type { UserRecord, UserFilters } from '@/lib/screen-styles/super-admin-users.styles';
 import type { ShowAlertFn, ActionDeps, UseSuperAdminUsersReturn } from './types';
@@ -33,7 +33,7 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
 
   // ─── Fetch all users ────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
-    if (!isSuperAdmin(profile?.role)) {
+    if (!isPlatformStaff(profile?.role)) {
       showAlert({ title: 'Access Denied', message: 'Super admin privileges required' });
       return;
     }
@@ -191,7 +191,7 @@ export function useSuperAdminUsers(showAlert: ShowAlertFn): UseSuperAdminUsersRe
 
   // ─── Return ─────────────────────────────────────────────────────────────
   return {
-    hasAccess: !!profile && isSuperAdmin(profile.role),
+    hasAccess: !!profile && isPlatformStaff(profile.role),
     users,
     filteredUsers,
     totalUsers,

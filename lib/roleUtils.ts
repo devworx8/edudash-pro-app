@@ -4,6 +4,10 @@
 
 export type UserRole = 'student' | 'parent' | 'teacher' | 'principal' | 'principal_admin' | 'super_admin';
 
+/** Platform admin sub-roles that operate at the platform (not organization) level. */
+export const PLATFORM_ADMIN_ROLES = ['system_admin', 'content_moderator', 'support_admin', 'billing_admin'] as const;
+export type PlatformAdminRole = typeof PLATFORM_ADMIN_ROLES[number];
+
 /**
  * Check if a user has super admin privileges
  * Handles all possible super admin role variants for maximum compatibility
@@ -19,6 +23,27 @@ export function isSuperAdmin(role?: string | null): boolean {
          normalizedRole === 'superadmin' ||
          normalizedRole === 'super-admin' ||
          normalizedRole === 'platform_admin';
+}
+
+/**
+ * Check if a user has any platform-level admin privileges.
+ * Includes super_admin AND all platform admin sub-roles.
+ * Use this for screen guards where any platform staff should have access.
+ */
+export function isPlatformStaff(role?: string | null): boolean {
+  if (!role) return false;
+  if (isSuperAdmin(role)) return true;
+  const r = String(role).trim().toLowerCase();
+  return (PLATFORM_ADMIN_ROLES as readonly string[]).includes(r);
+}
+
+/**
+ * Check if a user has a platform admin sub-role (NOT super_admin).
+ */
+export function isPlatformAdmin(role?: string | null): boolean {
+  if (!role) return false;
+  const r = String(role).trim().toLowerCase();
+  return (PLATFORM_ADMIN_ROLES as readonly string[]).includes(r);
 }
 
 /**
@@ -56,9 +81,18 @@ export function getRoleDisplayName(role?: string | null): string {
     case 'super_admin':
     case 'superadmin':
     case 'super-admin':
-    case 'admin':
     case 'platform_admin':
       return 'Super Admin';
+    case 'admin':
+      return 'Admin';
+    case 'system_admin':
+      return 'System Admin';
+    case 'content_moderator':
+      return 'Content Moderator';
+    case 'support_admin':
+      return 'Support Admin';
+    case 'billing_admin':
+      return 'Billing Admin';
     case 'principal':
       return 'Principal';
     case 'principal_admin':

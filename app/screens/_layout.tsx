@@ -20,20 +20,40 @@ const NEXT_GEN_PARENT_SHARED_ROUTES = new Set([
 // Role-prefix → allowed roles. Screens without a role prefix are accessible to all.
 // Per-screen overrides checked BEFORE the prefix map.
 // Use this for screens whose name starts with a role prefix but needs a different audience.
+const PLATFORM_STAFF = ['system_admin', 'content_moderator', 'support_admin', 'billing_admin', 'super_admin'];
+
 const SCREEN_ROLE_OVERRIDES: Record<string, Set<string>> = {
-  'student-management':  new Set(['principal', 'principal_admin', 'teacher', 'super_admin']),
-  'student-detail':      new Set(['principal', 'principal_admin', 'teacher', 'parent', 'super_admin']),
-  'student-enrollment':  new Set(['principal', 'principal_admin', 'super_admin']),
+  'student-management': new Set(['principal', 'principal_admin', 'teacher', 'super_admin']),
+  'student-detail': new Set(['principal', 'principal_admin', 'teacher', 'parent', 'super_admin']),
+  'student-enrollment': new Set(['principal', 'principal_admin', 'super_admin']),
+  // Platform admin sub-roles → per-screen access to shared super-admin screens
+  'super-admin-platform-command-center': new Set(['system_admin', 'super_admin']),
+  'super-admin-system-monitoring': new Set(['system_admin', 'super_admin']),
+  'super-admin-devops': new Set(['system_admin', 'super_admin']),
+  'super-admin-system-test': new Set(['system_admin', 'super_admin']),
+  'super-admin-ai-command-center': new Set(['system_admin', 'super_admin']),
+  'super-admin-moderation': new Set(['content_moderator', 'super_admin']),
+  'super-admin-content-studio': new Set(['content_moderator', 'super_admin']),
+  'super-admin-announcements': new Set(PLATFORM_STAFF),
+  'super-admin-users': new Set(['content_moderator', 'support_admin', 'super_admin']),
+  'super-admin-organizations': new Set(['content_moderator', 'support_admin', 'billing_admin', 'super_admin']),
+  'super-admin-whatsapp': new Set(['content_moderator', 'support_admin', 'super_admin']),
+  'super-admin-team-chat': new Set(PLATFORM_STAFF),
+  'super-admin-team-activity': new Set(PLATFORM_STAFF),
+  'super-admin-ai-quotas': new Set(['billing_admin', 'super_admin']),
+  'super-admin-ai-usage': new Set(['billing_admin', 'super_admin']),
+  'super-admin-admin-management': new Set(['support_admin', 'billing_admin', 'super_admin']),
 };
 
 const ROLE_PREFIX_MAP: Record<string, Set<string>> = {
-  'parent-':       new Set(['parent', 'super_admin']),
-  'teacher-':      new Set(['teacher', 'principal', 'principal_admin', 'super_admin']),
-  'principal-':    new Set(['principal', 'principal_admin', 'super_admin']),
-  'student-':      new Set(['student', 'learner', 'parent', 'super_admin']),
-  'super-admin-':  new Set(['super_admin']),
-  'admin-':        new Set(['principal', 'principal_admin', 'super_admin']),
-  'org-admin':     new Set(['principal', 'principal_admin', 'super_admin']),
+  'parent-': new Set(['parent', 'super_admin']),
+  'teacher-': new Set(['teacher', 'principal', 'principal_admin', 'super_admin']),
+  'principal-': new Set(['principal', 'principal_admin', 'super_admin']),
+  'student-': new Set(['student', 'learner', 'parent', 'super_admin']),
+  'super-admin-': new Set(['super_admin']),
+  'platform-admin-': new Set(PLATFORM_STAFF),
+  'admin-': new Set(['principal', 'principal_admin', 'super_admin']),
+  'org-admin': new Set(['principal', 'principal_admin', 'super_admin']),
 };
 
 /** Returns true if `role` is allowed to access `screenName`. */

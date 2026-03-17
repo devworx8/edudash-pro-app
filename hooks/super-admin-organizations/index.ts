@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { router } from 'expo-router';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { logger } from '@/lib/logger';
 import type {
   Organization,
@@ -47,7 +47,7 @@ export function useSuperAdminOrganizations({
 
   // ── Access check ───────────────────────────────────────────
   useEffect(() => {
-    if (!isSuperAdmin(profile?.role)) {
+    if (!isPlatformStaff(profile?.role)) {
       showAlert({ title: 'Access Denied', message: 'Super admin access required' });
       router.back();
     }

@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { fetchPlatformActivity } from './fetchActivity';
 import { matchesFilter, groupByDate, buildStats } from './types';
 import type { ShowAlertConfig, ActivityFilter, ActivityStats, ActivityGroup } from './types';
@@ -12,7 +12,7 @@ export type { PlatformActivity, ActivityFilter, ActivityStats, ActivityGroup } f
 export function useSuperAdminTeamActivity(_showAlert?: (config: ShowAlertConfig) => void) {
   const { profile } = useAuth();
   const [filter, setFilter] = useState<ActivityFilter>('all');
-  const enabled = isSuperAdmin(profile?.role);
+  const enabled = isPlatformStaff(profile?.role);
 
   const { data: allActivities = [], isLoading, isRefetching, refetch } = useQuery({
     queryKey: ['superadmin', 'team-activity'],

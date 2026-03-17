@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { isSuperAdmin } from '@/lib/roleUtils';
+import { isPlatformStaff } from '@/lib/roleUtils';
 import { assertSupabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import {
@@ -25,7 +25,7 @@ export function useSuperAdminContentStudio(showAlert: (config: ShowAlertConfig) 
   const [generating, setGenerating] = useState(false);
 
   const loadContent = useCallback(async () => {
-    if (!isSuperAdmin(profile?.role)) return;
+    if (!isPlatformStaff(profile?.role)) return;
     const [anncs, posts] = await Promise.all([fetchAnnouncements(), fetchSocialPosts()]);
     setAnnouncements(anncs);
     setSocialPosts(posts);
