@@ -9,6 +9,7 @@ import React from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DashOrb } from '@/components/dash-orb/DashOrb';
+import { PremiumCosmicOrb } from '@/components/dash-orb/PremiumCosmicOrb';
 import { s } from '@/app/screens/dash-voice.styles';
 import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
 import type { CapabilityTier } from '@/lib/tiers';
@@ -133,7 +134,7 @@ export function DashVoiceOrbSection({
     />
   ) : null;
 
-  // All tiers now use DashOrb 3D sphere visual
+  const isPremiumTier = orbTier === 'premium' || orbTier === 'enterprise';
 
   // Map processing/speaking state to DashOrb state prop
   const dashOrbState = isSpeaking ? 'speaking' as const
@@ -144,10 +145,14 @@ export function DashVoiceOrbSection({
   return (
     <>
       <View style={[s.orbContainer, { minHeight: orbRenderSize + 40, marginBottom: showTranscript ? 10 : 16 }]}>
-        {/* VoiceOrb handles audio logic in a hidden container; DashOrb is always the visual */}
+        {/* VoiceOrb handles audio logic in a hidden container */}
         {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
         <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
-          <DashOrb size={orbRenderSize} state={dashOrbState} />
+          {isPremiumTier ? (
+            <PremiumCosmicOrb size={orbRenderSize} isProcessing={isProcessing} isSpeaking={isSpeaking} />
+          ) : (
+            <DashOrb size={orbRenderSize} state={dashOrbState} />
+          )}
         </TouchableOpacity>
       </View>
 

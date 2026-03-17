@@ -6,6 +6,7 @@ import { ThemeOverrideProvider, useTheme } from '../../contexts/ThemeContext';
 import { nextGenK12Parent } from '../../contexts/theme/nextGenK12Parent';
 import { resolveSchoolTypeFromProfile } from '../../lib/schoolTypeResolver';
 import { resolveDashboard } from '../../hooks/auth/dashboardResolution';
+import { normalizeRole } from '../../lib/roleUtils';
 import ThemedStatusBar from '../../components/ui/ThemedStatusBar';
 
 const NEXT_GEN_PARENT_SHARED_ROUTES = new Set([
@@ -38,7 +39,7 @@ const ROLE_PREFIX_MAP: Record<string, Set<string>> = {
 /** Returns true if `role` is allowed to access `screenName`. */
 function isRoleAllowedForScreen(screenName: string, role: string | null): boolean {
   if (!role) return false;
-  const normalizedRole = role.toLowerCase();
+  const normalizedRole = normalizeRole(role) ?? role.toLowerCase();
 
   // Check exact screen overrides first
   const override = SCREEN_ROLE_OVERRIDES[screenName];

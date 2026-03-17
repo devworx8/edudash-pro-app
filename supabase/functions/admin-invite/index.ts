@@ -7,7 +7,7 @@
  * Expected body: {
  *   email: string,
  *   full_name: string,
- *   role: 'admin' | 'moderator' | 'support' | 'viewer',
+ *   role: 'admin' | 'content_moderator' | 'support_admin' | 'billing_admin' | 'system_admin',
  *   department: string,
  *   send_email?: boolean
  * }
@@ -25,7 +25,7 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error('SUPABASE_SERVICE_ROLE_KEY is required');
 }
 
-const VALID_ROLES = ['admin', 'moderator', 'support', 'viewer'];
+const VALID_ROLES = ['admin', 'content_moderator', 'support_admin', 'billing_admin', 'system_admin'];
 
 const isSuperAdminRole = (role: string | null | undefined): boolean => {
   const r = String(role || '').toLowerCase();

@@ -381,7 +381,7 @@ export default function DashVoiceScreen() {
           showTranscript={showTranscript}
           isSpeaking={isSpeaking}
           isProcessing={isProcessing}
-          tierStatus={tierStatus}
+          tierStatus={capabilityTier === 'enterprise' ? null : tierStatus}
           onBack={() => { stopDashActivity('navigation_back', true); router.back(); }}
           onStop={() => stopDashActivity('header_stop_button')}
           onSearch={() => { stopDashActivity('open_search', true); router.push('/screens/app-search?scope=dash&q=dash'); }}
