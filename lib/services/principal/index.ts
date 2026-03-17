@@ -4,7 +4,6 @@
  * Exports all principal-related enhanced services:
  * - Teacher Invite Service (enhanced)
  * - Teacher Approval Service (enhanced)
- * - Routine Sharing Service
  */
 
 // Teacher Invite
@@ -30,16 +29,5 @@ export {
   type TeacherApprovalStats,
 } from '../teacherApprovalService.enhanced';
 
-// Routine Sharing
-export {
-  RoutineSharingService,
-  RoutineShareError,
-  type RoutineShare,
-  type RoutineShareRecipient,
-  type ShareRoutineParams,
-  type RoutineChangeNotification,
-} from '../routineSharingService';
-
 // Legacy compatibility
 export { getPendingTeachers, approveTeacher, rejectTeacher, getApprovalStats } from '../teacherApprovalService.enhanced';
-export { shareRoutine, getSharedRoutinesForTeacher, getSharedRoutinesForParent } from '../routineSharingService';
