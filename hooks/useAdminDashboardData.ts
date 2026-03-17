@@ -27,8 +27,8 @@ export function useAdminDashboardData(params: UseAdminDashboardDataParams): UseA
       return AdminWorkflowService.getDashboardBundle(orgId, orgType, 'mobile');
     },
     enabled: queryEnabled,
-    staleTime: 30_000,
-    refetchInterval: 60_000,
+    staleTime: 2 * 60_000,
+    refetchInterval: 5 * 60_000,
   });
 
   return {

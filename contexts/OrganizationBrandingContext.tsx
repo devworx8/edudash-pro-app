@@ -169,6 +169,7 @@ export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProvider
           event: 'UPDATE',
           schema: 'public',
           table: 'organizations',
+          filter: `id=eq.${organizationId}`,
         },
         (payload) => {
           if (payload.new?.id === organizationId && payload.new?.dashboard_settings) {

@@ -45,16 +45,16 @@ export async function fetchDashboardData(): Promise<DashboardFetchResult> {
 
   // ── Batch 2: Tenant + subscription + user counts ──────────────
   const [preschoolsRes, schoolsRes, subsRes, usersRes] = await Promise.all([
-    supabase.from('preschools').select('id').eq('is_active', true),
-    supabase.from('schools').select('id').eq('is_active', true),
+    supabase.from('preschools').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('schools').select('id', { count: 'exact', head: true }).eq('is_active', true),
     supabase.from('subscriptions')
       .select('id,seats_total,plan_id,status,billing_frequency')
       .eq('status', 'active'),
-    supabase.from('profiles').select('id').limit(1000),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }),
   ]);
 
-  const preschoolCount = (preschoolsRes.data || []).length;
-  const schoolCount = (schoolsRes.data || []).length;
+  const preschoolCount = preschoolsRes.count ?? 0;
+  const schoolCount = schoolsRes.count ?? 0;
   const totalOrgs = preschoolCount + schoolCount;
   if (__DEV__) {
     logger.debug(`Tenant count: ${preschoolCount} preschools + ${schoolCount} K-12 = ${totalOrgs}`);
@@ -119,7 +119,7 @@ export async function fetchDashboardData(): Promise<DashboardFetchResult> {
   }
 
   // ── Stats ─────────────────────────────────────────────────────
-  const totalUsers = (usersRes.data || []).length;
+  const totalUsers = usersRes.count ?? 0;
   const rpcStats = dashboardRes.data?.data?.user_stats;
   const stats: DashboardStats = {
     total_users: totalUsers || rpcStats?.total_users || 0,

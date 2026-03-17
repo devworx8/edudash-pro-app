@@ -26,7 +26,7 @@ interface PresenceRecord {
 }
 
 interface UsePresenceOptions {
-  heartbeatInterval?: number; // ms, default 30000 (30s)
+  heartbeatInterval?: number; // ms, default 60000 (60s)
   awayTimeout?: number; // ms, default 300000 (5 min)
 }
 
@@ -48,7 +48,7 @@ export function usePresence(
   options: UsePresenceOptions = {}
 ): UsePresenceReturn {
   const { 
-    heartbeatInterval = 30000, 
+    heartbeatInterval = 60000, 
     awayTimeout = 300000 
   } = options;
 

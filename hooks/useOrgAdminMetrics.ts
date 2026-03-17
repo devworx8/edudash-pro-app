@@ -127,8 +127,8 @@ export function useOrgAdminMetrics() {
       };
     },
     enabled: !!orgId,
-    refetchInterval: 60000, // Refetch every minute
-    staleTime: 30000, // Consider data stale after 30 seconds
+    refetchInterval: 5 * 60_000, // Refetch every 5 minutes
+    staleTime: 5 * 60_000, // Consider data stale after 5 minutes
   });
 }
 

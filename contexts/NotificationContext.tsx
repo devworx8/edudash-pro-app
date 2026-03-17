@@ -398,7 +398,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     queryFn: () => fetchUnreadMessageCount(userId!),
     enabled: !!userId,
     staleTime: STALE_TIMES.messages,
-    refetchInterval: 30 * 1000, // Refetch every 30 seconds as backup
+    refetchInterval: 2 * 60 * 1000, // Refetch every 2 minutes (Realtime handles instant updates)
   });
 
   const callsQuery = useQuery({
@@ -406,7 +406,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
     queryFn: () => fetchMissedCallsCount(userId!),
     enabled: !!userId,
     staleTime: STALE_TIMES.calls,
-    refetchInterval: 60 * 1000, // Refetch every minute
+    refetchInterval: 3 * 60 * 1000, // Refetch every 3 minutes
   });
 
   const announcementsQuery = useQuery({
