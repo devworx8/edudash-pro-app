@@ -14,6 +14,8 @@ import type {
   ClassFormData,
   ActiveTab,
   UseClassTeacherManagementResult,
+  ClassTeacherAssignment,
+  ClassTeacherRole,
 } from './types';
 import { INITIAL_CLASS_FORM } from './utils';
 
@@ -57,6 +59,12 @@ interface TeacherProfileRow {
   created_at: string | null;
 }
 
+interface ClassTeacherRow {
+  class_id: string;
+  teacher_id: string;
+  role: string | null;
+}
+
 interface TeacherCandidateMeta {
   profile?: TeacherProfileRow;
   teacherRecordId?: string | null;
@@ -73,6 +81,16 @@ const normalizeTeacherRole = (role: string | null | undefined): Teacher['role'] 
   if (normalized === 'admin') return 'admin';
   if (normalized === 'principal_admin') return 'principal_admin';
   return 'teacher';
+};
+
+const normalizeClassTeacherRole = (role: string | null | undefined): ClassTeacherRole => {
+  return String(role || '').toLowerCase() === 'lead' ? 'lead' : 'assistant';
+};
+
+const isMissingClassTeachersTable = (error: { code?: string | null; message?: string | null } | null | undefined): boolean => {
+  if (!error) return false;
+  if (error.code === '42P01') return true;
+  return /class_teachers/i.test(error.message || '');
 };
 
 const isTeacherMembership = (row: TeacherMembershipRow): boolean => {
@@ -110,6 +128,9 @@ export function useClassTeacherManagement({
   const [showClassModal, setShowClassModal] = useState(false);
   const [showTeacherAssignment, setShowTeacherAssignment] = useState(false);
   const [selectedClass, setSelectedClass] = useState<ClassInfo | null>(null);
+  const [assignmentTeacherId, setAssignmentTeacherId] = useState('');
+  const [assignmentRole, setAssignmentRole] = useState<ClassTeacherRole>('lead');
+  const [classTeachersAvailable, setClassTeachersAvailable] = useState(true);
   const [activeTab, setActiveTab] = useState<ActiveTab>('classes');
   const [classForm, setClassForm] = useState<ClassFormData>(INITIAL_CLASS_FORM);
   const [roleUpdateTeacherId, setRoleUpdateTeacherId] = useState<string | null>(null);
@@ -158,11 +179,32 @@ export function useClassTeacherManagement({
         active: boolean | null;
       }>;
 
+      const classIds = classRows.map((row) => row.id);
+      let classTeacherRows: ClassTeacherRow[] = [];
+      if (classIds.length > 0 && classTeachersAvailable) {
+        const { data: classTeacherData, error: classTeacherError } = await supabase
+          .from('class_teachers')
+          .select('class_id,teacher_id,role')
+          .in('class_id', classIds);
+
+        if (classTeacherError) {
+          if (isMissingClassTeachersTable(classTeacherError)) {
+            setClassTeachersAvailable(false);
+          } else {
+            console.warn('[ClassTeacherManagement] Error loading class_teachers:', classTeacherError);
+          }
+        }
+        classTeacherRows = (classTeacherData || []) as ClassTeacherRow[];
+      }
+
       const teacherMembers = (teacherMembersResult.data || []) as TeacherMembershipRow[];
       const teacherRows = (teacherRowsResult.data || []) as TeacherRow[];
 
       const classTeacherRefs = Array.from(
         new Set(classRows.map((row) => row.teacher_id).filter((id): id is string => Boolean(id)))
+      );
+      const classTeacherJoinRefs = Array.from(
+        new Set(classTeacherRows.map((row) => row.teacher_id).filter((id): id is string => Boolean(id)))
       );
 
       const membershipTeacherRefs = Array.from(
@@ -182,7 +224,9 @@ export function useClassTeacherManagement({
         )
       );
 
-      const lookupRefs = Array.from(new Set([...classTeacherRefs, ...membershipTeacherRefs, ...teacherTableRefs]));
+      const lookupRefs = Array.from(
+        new Set([...classTeacherRefs, ...classTeacherJoinRefs, ...membershipTeacherRefs, ...teacherTableRefs])
+      );
 
       let profiles: TeacherProfileRow[] = [];
       if (lookupRefs.length > 0) {
@@ -231,11 +275,50 @@ export function useClassTeacherManagement({
         return profileById.get(refId) || profileByAuthId.get(refId) || null;
       };
 
+      const classTeachersByClassId = new Map<string, ClassTeacherRow[]>();
+      classTeacherRows.forEach((row) => {
+        const existing = classTeachersByClassId.get(row.class_id) || [];
+        classTeachersByClassId.set(row.class_id, existing.concat(row));
+      });
+
+      const buildAssignment = (
+        teacherRef: string,
+        role: ClassTeacherRole,
+        fallbackName?: string
+      ): ClassTeacherAssignment => {
+        const profile = resolveProfile(teacherRef);
+        const name =
+          `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() ||
+          profile?.email ||
+          fallbackName ||
+          'Teacher';
+
+        return {
+          teacher_id: profile?.id || teacherRef,
+          auth_user_id: profile?.auth_user_id || undefined,
+          teacher_name: name,
+          role,
+        };
+      };
+
       const processedClasses: ClassInfo[] = classRows.map((row) => {
-        const teacherProfile = resolveProfile(row.teacher_id);
-        const teacherName = teacherProfile
-          ? `${teacherProfile.first_name || ''} ${teacherProfile.last_name || ''}`.trim() || teacherProfile.email || undefined
-          : undefined;
+        const assignments = (classTeachersByClassId.get(row.id) || []).map((assignmentRow) =>
+          buildAssignment(assignmentRow.teacher_id, normalizeClassTeacherRole(assignmentRow.role))
+        );
+
+        if (assignments.length === 0 && row.teacher_id) {
+          assignments.push(buildAssignment(row.teacher_id, 'lead'));
+        }
+
+        assignments.sort((a, b) => {
+          if (a.role === b.role) {
+            return a.teacher_name.localeCompare(b.teacher_name);
+          }
+          if (a.role === 'lead') return -1;
+          if (b.role === 'lead') return 1;
+          return 0;
+        });
+        const leadAssignment = assignments.find((assignment) => assignment.role === 'lead');
 
         return {
           id: row.id,
@@ -244,18 +327,19 @@ export function useClassTeacherManagement({
           capacity: row.max_capacity || 0,
           current_enrollment: 0,
           room_number: row.room_number || undefined,
-          teacher_id: teacherProfile?.id || row.teacher_id || undefined,
-          teacher_name: teacherName,
+          teacher_id: leadAssignment?.teacher_id,
+          teacher_name: leadAssignment?.teacher_name,
+          teacher_assignments: assignments,
           is_active: row.active ?? true,
         } as ClassInfo;
       });
 
-      const classIds = processedClasses.map((c) => c.id);
-      if (classIds.length > 0) {
+      const processedClassIds = processedClasses.map((c) => c.id);
+      if (processedClassIds.length > 0) {
         const { data: enrollments, error: enrollmentError } = await supabase
           .from('students')
           .select('class_id')
-          .in('class_id', classIds);
+          .in('class_id', processedClassIds);
 
         if (enrollmentError) {
           console.warn('[ClassTeacherManagement] Enrollment count warning:', enrollmentError);
@@ -274,16 +358,13 @@ export function useClassTeacherManagement({
       setClasses(processedClasses);
 
       const classesByTeacherRef = new Map<string, ClassInfo[]>();
-      classRows.forEach((row, index) => {
-        const classInfo = processedClasses[index];
-        const teacherProfile = resolveProfile(row.teacher_id);
-        const keys = new Set<string>();
-
-        if (row.teacher_id) keys.add(row.teacher_id);
-        if (classInfo.teacher_id) keys.add(classInfo.teacher_id);
-        if (teacherProfile?.auth_user_id) keys.add(teacherProfile.auth_user_id);
-
-        keys.forEach((key) => pushClassIndex(classesByTeacherRef, key, classInfo));
+      processedClasses.forEach((classInfo) => {
+        classInfo.teacher_assignments.forEach((assignment) => {
+          pushClassIndex(classesByTeacherRef, assignment.teacher_id, classInfo);
+          if (assignment.auth_user_id) {
+            pushClassIndex(classesByTeacherRef, assignment.auth_user_id, classInfo);
+          }
+        });
       });
 
       const candidateByProfileId = new Map<string, TeacherCandidateMeta>();
@@ -391,6 +472,7 @@ export function useClassTeacherManagement({
             id: profileId,
             teacher_record_id: candidate.teacherRecordId || undefined,
             user_id: candidate.profile?.auth_user_id || candidate.userIdHint || profileId,
+            auth_user_id: candidate.profile?.auth_user_id || undefined,
             full_name: fullName,
             email: candidate.profile?.email || candidate.emailHint || 'No email',
             phone: candidate.profile?.phone || undefined,
@@ -418,7 +500,7 @@ export function useClassTeacherManagement({
       setLoading(false);
       setRefreshing(false);
     }
-  }, [userId, orgId]);
+  }, [userId, orgId, classTeachersAvailable, showAlert]);
 
   useEffect(() => {
     if (orgId && userId) {
@@ -443,6 +525,9 @@ export function useClassTeacherManagement({
       const schoolId = orgId;
       const client = assertSupabase();
 
+      const selectedLead = activeTeachers.find((teacher) => teacher.id === classForm.teacher_id);
+      const leadAuthUserId = selectedLead?.auth_user_id || selectedLead?.user_id || null;
+
       const { data: newClass, error } = await client
         .from('classes')
         .insert({
@@ -450,7 +535,7 @@ export function useClassTeacherManagement({
           grade_level: classForm.grade_level.trim(),
           max_capacity: classForm.capacity,
           room_number: classForm.room_number.trim() || null,
-          teacher_id: classForm.teacher_id || null,
+          teacher_id: leadAuthUserId,
           preschool_id: schoolId,
           active: true,
         })
@@ -460,6 +545,23 @@ export function useClassTeacherManagement({
       if (error) {
         showAlert({ title: 'Error', message: error.message || 'Failed to create class', type: 'error' });
         return;
+      }
+
+      if (newClass?.id && classForm.teacher_id && classTeachersAvailable) {
+        const { error: assignmentError } = await client
+          .from('class_teachers')
+          .upsert(
+            {
+              class_id: newClass.id,
+              teacher_id: classForm.teacher_id,
+              role: 'lead',
+            },
+            { onConflict: 'class_id,teacher_id' }
+          );
+
+        if (assignmentError) {
+          console.warn('[ClassTeacherManagement] Lead assignment warning:', assignmentError);
+        }
       }
 
       // Auto-create class messaging group if org setting is enabled
@@ -495,43 +597,130 @@ export function useClassTeacherManagement({
       console.error('[ClassTeacherManagement] create class failed:', error);
       showAlert({ title: 'Error', message: 'Failed to create class', type: 'error' });
     }
-  }, [classForm, orgId, loadData]);
+  }, [classForm, orgId, activeTeachers, classTeachersAvailable, loadData, showAlert]);
 
   const handleAssignTeacher = useCallback(async () => {
-    if (!selectedClass || !classForm.teacher_id) return;
+    if (!selectedClass || !assignmentTeacherId) return;
 
     try {
-      const { error } = await assertSupabase()
-        .from('classes')
-        .update({ teacher_id: classForm.teacher_id })
-        .eq('id', selectedClass.id);
+      const client = assertSupabase();
+      const targetRole = assignmentRole;
+      if (!classTeachersAvailable) {
+        if (targetRole !== 'lead') {
+          showAlert({
+            title: 'Upgrade Required',
+            message: 'Assistant teacher assignments require the class_teachers table. Please run the migration first.',
+            type: 'warning',
+          });
+          return;
+        }
 
-      if (error) {
+        const selectedTeacher = teachers.find((teacher) => teacher.id === assignmentTeacherId);
+        const leadAuthUserId = selectedTeacher?.auth_user_id || selectedTeacher?.user_id || assignmentTeacherId;
+        const { error: legacyAssignError } = await client
+          .from('classes')
+          .update({ teacher_id: leadAuthUserId })
+          .eq('id', selectedClass.id);
+
+        if (legacyAssignError) {
+          showAlert({ title: 'Error', message: legacyAssignError.message || 'Failed to assign teacher', type: 'error' });
+          return;
+        }
+
+        showAlert({ title: 'Success', message: 'Lead teacher assigned successfully', type: 'success' });
+        setShowTeacherAssignment(false);
+        setSelectedClass(null);
+        setAssignmentTeacherId('');
+        setAssignmentRole('lead');
+        loadData();
+        return;
+      }
+      const existingAssignment = selectedClass.teacher_assignments.find(
+        (assignment) => assignment.teacher_id === assignmentTeacherId
+      );
+
+      if (targetRole === 'lead') {
+        await client
+          .from('class_teachers')
+          .delete()
+          .eq('class_id', selectedClass.id)
+          .eq('role', 'lead')
+          .neq('teacher_id', assignmentTeacherId);
+      }
+
+      const { error: upsertError } = await client
+        .from('class_teachers')
+        .upsert(
+          {
+            class_id: selectedClass.id,
+            teacher_id: assignmentTeacherId,
+            role: targetRole,
+          },
+          { onConflict: 'class_id,teacher_id' }
+        );
+
+      if (upsertError) {
+        if (isMissingClassTeachersTable(upsertError)) {
+          setClassTeachersAvailable(false);
+          showAlert({
+            title: 'Upgrade Required',
+            message: 'Assistant teacher assignments require the class_teachers table. Please run the migration first.',
+            type: 'warning',
+          });
+          return;
+        }
         console.error('[ClassTeacherManagement] assign teacher failed:', {
           classId: selectedClass.id,
-          teacherId: classForm.teacher_id,
-          error,
+          teacherId: assignmentTeacherId,
+          error: upsertError,
         });
-        showAlert({ title: 'Error', message: error.message || 'Failed to assign teacher', type: 'error' });
+        showAlert({ title: 'Error', message: upsertError.message || 'Failed to assign teacher', type: 'error' });
         return;
       }
 
-      showAlert({ title: 'Success', message: 'Teacher assigned successfully', type: 'success' });
+      if (targetRole === 'lead') {
+        const selectedTeacher = teachers.find((teacher) => teacher.id === assignmentTeacherId);
+        const leadAuthUserId = selectedTeacher?.auth_user_id || selectedTeacher?.user_id || null;
+        const { error: leadUpdateError } = await client
+          .from('classes')
+          .update({ teacher_id: leadAuthUserId })
+          .eq('id', selectedClass.id);
+
+        if (leadUpdateError) {
+          console.warn('[ClassTeacherManagement] lead teacher sync warning:', leadUpdateError);
+        }
+      } else if (existingAssignment?.role === 'lead') {
+        const { error: leadClearError } = await client
+          .from('classes')
+          .update({ teacher_id: null })
+          .eq('id', selectedClass.id);
+
+        if (leadClearError) {
+          console.warn('[ClassTeacherManagement] lead teacher clear warning:', leadClearError);
+        }
+      }
+
+      showAlert({
+        title: 'Success',
+        message: targetRole === 'lead' ? 'Lead teacher assigned successfully' : 'Assistant teacher assigned successfully',
+        type: 'success',
+      });
       setShowTeacherAssignment(false);
       setSelectedClass(null);
-      setClassForm((prev) => ({ ...prev, teacher_id: '' }));
+      setAssignmentTeacherId('');
+      setAssignmentRole('lead');
       loadData();
     } catch (error) {
       console.error('[ClassTeacherManagement] assign teacher exception:', error);
       showAlert({ title: 'Error', message: 'Failed to assign teacher', type: 'error' });
     }
-  }, [selectedClass, classForm.teacher_id, loadData]);
+  }, [selectedClass, assignmentTeacherId, assignmentRole, teachers, classTeachersAvailable, loadData, showAlert]);
 
   const handleRemoveTeacher = useCallback(
-    (classInfo: ClassInfo) => {
+    (classInfo: ClassInfo, assignment: ClassTeacherAssignment) => {
       showAlert({
         title: 'Remove Teacher',
-        message: `Remove ${classInfo.teacher_name} from ${classInfo.name}?`,
+        message: `Remove ${assignment.teacher_name} from ${classInfo.name}?`,
         type: 'warning',
         buttons: [
           { text: 'Cancel', style: 'cancel' },
@@ -540,14 +729,48 @@ export function useClassTeacherManagement({
             style: 'destructive',
             onPress: async () => {
               try {
-                const { error } = await assertSupabase()
-                  .from('classes')
-                  .update({ teacher_id: null })
-                  .eq('id', classInfo.id);
+                const client = assertSupabase();
+                if (!classTeachersAvailable) {
+                  if (assignment.role !== 'lead') {
+                    showAlert({
+                      title: 'Upgrade Required',
+                      message: 'Assistant teachers are stored in class_teachers. Please run the migration first.',
+                      type: 'warning',
+                    });
+                    return;
+                  }
 
-                if (error) {
-                  showAlert({ title: 'Error', message: error.message || 'Failed to remove teacher', type: 'error' });
-                  return;
+                  const { error: legacyClearError } = await client
+                    .from('classes')
+                    .update({ teacher_id: null })
+                    .eq('id', classInfo.id);
+
+                  if (legacyClearError) {
+                    showAlert({ title: 'Error', message: legacyClearError.message || 'Failed to remove teacher', type: 'error' });
+                    return;
+                  }
+                } else {
+                  const { error } = await client
+                    .from('class_teachers')
+                    .delete()
+                    .eq('class_id', classInfo.id)
+                    .eq('teacher_id', assignment.teacher_id);
+
+                  if (error) {
+                    showAlert({ title: 'Error', message: error.message || 'Failed to remove teacher', type: 'error' });
+                    return;
+                  }
+                }
+
+                if (assignment.role === 'lead') {
+                  const { error: leadClearError } = await client
+                    .from('classes')
+                    .update({ teacher_id: null })
+                    .eq('id', classInfo.id);
+
+                  if (leadClearError) {
+                    console.warn('[ClassTeacherManagement] lead clear warning:', leadClearError);
+                  }
                 }
 
                 showAlert({ title: 'Success', message: 'Teacher removed from class', type: 'success' });
@@ -561,7 +784,7 @@ export function useClassTeacherManagement({
         ],
       });
     },
-    [loadData]
+    [classTeachersAvailable, loadData, showAlert]
   );
 
   const handleDeleteTeacher = useCallback(
@@ -683,6 +906,8 @@ export function useClassTeacherManagement({
     showClassModal,
     showTeacherAssignment,
     selectedClass,
+    assignmentTeacherId,
+    assignmentRole,
     activeTab,
     classForm,
     roleUpdateTeacherId,
@@ -698,6 +923,8 @@ export function useClassTeacherManagement({
     setShowClassModal,
     setShowTeacherAssignment,
     setSelectedClass,
+    setAssignmentTeacherId,
+    setAssignmentRole,
     setActiveTab,
     setClassForm,
     onRefresh,

@@ -45,8 +45,8 @@ export default function MyClassScreen() {
   const [selectedClassIndex, setSelectedClassIndex] = useState(0);
 
   const organizationId = profile?.preschool_id || profile?.organization_id;
-  // Use user.id (auth user ID) as teacher_id since classes.teacher_id references auth.users(id)
-  const teacherId = user?.id || profile?.id;
+  const teacherProfileId = profile?.id || null;
+  const teacherAuthId = user?.id || null;
 
   // Fetch all of teacher's assigned classes
   const { 
@@ -55,29 +55,73 @@ export default function MyClassScreen() {
     refetch: refetchClass,
     error: classError 
   } = useQuery<ClassInfo[]>({
-    queryKey: ['my-classes', teacherId, organizationId],
+    queryKey: ['my-classes', teacherProfileId, teacherAuthId, organizationId],
     queryFn: async () => {
-      if (!teacherId || !organizationId) return [];
+      if ((!teacherProfileId && !teacherAuthId) || !organizationId) return [];
       
-      logger.debug(TAG, 'Fetching classes for teacher:', teacherId, 'org:', organizationId);
-      
-      const { data, error } = await assertSupabase()
-        .from('classes')
-        .select('id, name, grade_level, max_capacity, room_number')
-        .eq('teacher_id', teacherId)
-        .eq('preschool_id', organizationId)
-        .eq('active', true)
-        .order('name', { ascending: true });
+      logger.debug(TAG, 'Fetching classes for teacher:', teacherProfileId || teacherAuthId, 'org:', organizationId);
 
-      if (error) {
-        console.error('[MyClass] Error fetching classes:', error);
-        throw error;
+      const client = assertSupabase();
+      let joinedClassIds: string[] = [];
+
+      if (teacherProfileId) {
+        const { data: classTeacherRows, error: classTeacherError } = await client
+          .from('class_teachers')
+          .select('class_id, role')
+          .eq('teacher_id', teacherProfileId);
+
+        if (classTeacherError) {
+          console.warn('[MyClass] class_teachers lookup warning:', classTeacherError);
+        }
+
+        joinedClassIds = (classTeacherRows || []).map((row: { class_id: string }) => row.class_id);
       }
-      
-      logger.debug(TAG, 'Found classes:', data?.length || 0);
-      return data || [];
+
+      const combinedById = new Map<string, ClassInfo>();
+      if (joinedClassIds.length > 0) {
+        const { data: joinedClasses, error: joinedError } = await client
+          .from('classes')
+          .select('id, name, grade_level, max_capacity, room_number')
+          .in('id', joinedClassIds)
+          .eq('preschool_id', organizationId)
+          .eq('active', true)
+          .order('name', { ascending: true });
+
+        if (joinedError) {
+          console.error('[MyClass] Error fetching joined classes:', joinedError);
+          throw joinedError;
+        }
+
+        (joinedClasses || []).forEach((cls: ClassInfo) => combinedById.set(cls.id, cls));
+      }
+
+      const legacyTeacherIds = Array.from(new Set([teacherAuthId, teacherProfileId].filter(Boolean)));
+      if (legacyTeacherIds.length > 0) {
+        const { data: legacyClasses, error: legacyError } = await client
+          .from('classes')
+          .select('id, name, grade_level, max_capacity, room_number')
+          .in('teacher_id', legacyTeacherIds)
+          .eq('preschool_id', organizationId)
+          .eq('active', true)
+          .order('name', { ascending: true });
+
+        if (legacyError) {
+          console.warn('[MyClass] Legacy class lookup warning:', legacyError);
+        }
+
+        (legacyClasses || []).forEach((cls: ClassInfo) => {
+          if (!combinedById.has(cls.id)) {
+            combinedById.set(cls.id, cls);
+          }
+        });
+      }
+
+      const data = Array.from(combinedById.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+      logger.debug(TAG, 'Found classes:', data.length || 0);
+      return data;
     },
-    enabled: !!teacherId && !!organizationId,
+    enabled: (!!teacherProfileId || !!teacherAuthId) && !!organizationId,
   });
 
   // Get currently selected class

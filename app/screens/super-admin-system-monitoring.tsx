@@ -13,6 +13,7 @@ import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { logger } from '@/lib/logger';
 import { percentWidth } from '@/lib/progress/clampPercent';
+import { PlatformErrorMonitor } from '@/components/super-admin/platform-monitoring';
 import {
   type SystemHealth,
   type ErrorLog,
@@ -402,10 +403,15 @@ export default function SuperAdminSystemMonitoringScreen() {
               </View>
             </View>
 
+            {/* AI Error Monitor — 3-Tier Detection */}
+            <View style={styles.section}>
+              <PlatformErrorMonitor theme={{ colors: theme }} />
+            </View>
+
             {/* Recent Error Logs */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Recent System Logs</Text>
-              
+
               {errorLogs.map((log) => (
                 <View key={log.id} style={styles.logItem}>
                   <View style={styles.logHeader}>

@@ -115,7 +115,7 @@ export function ClassModal({
           </View>
 
           <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Assign Teacher (Optional)</Text>
+            <Text style={styles.formLabel}>Assign Lead Teacher (Optional)</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={classForm.teacher_id}
@@ -124,7 +124,7 @@ export function ClassModal({
                 }
                 style={styles.formPicker}
               >
-                <Picker.Item label="No teacher assigned" value="" />
+                <Picker.Item label="No lead teacher assigned" value="" />
                 {activeTeachers.map((teacher) => (
                   <Picker.Item
                     key={teacher.id}

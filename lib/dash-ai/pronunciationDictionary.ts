@@ -46,15 +46,15 @@ export interface PronunciationEntry {
 const BRAND_NAMES: PronunciationEntry[] = [
   {
     pattern: /\bEduDash\s*Pro\b/gi,
-    alias: 'Edju-da-dash Pro',
-    ipa: 'ˌɛdʒuːdəˈdæʃ proʊ',
-    note: 'SA pronunciation: "edju-da-dash pro" — single compound name',
+    alias: 'Edyoo-dash Pro',
+    ipa: 'ˌɛdjuːˈdæʃ proʊ',
+    note: 'SA pronunciation: "ed-yoo-dash pro" — single compound name',
   },
   {
     pattern: /\bEduDash\b/gi,
-    alias: 'Edju-da-dash',
-    ipa: 'ˌɛdʒuːdəˈdæʃ',
-    note: 'SA pronunciation: "edju-da-dash" — without "Pro" suffix',
+    alias: 'Edyoo-dash',
+    ipa: 'ˌɛdjuːˈdæʃ',
+    note: 'SA pronunciation: "ed-yoo-dash" — without "Pro" suffix',
   },
   {
     pattern: /\bDash\s*AI\b/gi,

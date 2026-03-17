@@ -2,6 +2,10 @@ import { Platform, StyleSheet } from 'react-native';
 import { nextGenRadii } from '@/contexts/theme/nextGenTokens';
 import { uiTokens } from '@/lib/ui/tokens';
 
+const SHELL_PADDING_TOP = 4;
+const SHELL_PADDING_BOTTOM_WEB = 0;
+const SHELL_PADDING_BOTTOM_NATIVE = 8;
+
 export interface BottomTabBarStyleOptions {
   hasCenterTab: boolean;
   isCompact: boolean;
@@ -15,16 +19,42 @@ export interface BottomTabBarStyleOptions {
   isK12ParentNextGenNav: boolean;
 }
 
+type BottomTabBarLayoutInputs = Pick<BottomTabBarStyleOptions, 'isCompact' | 'isK12ParentNextGenNav'>;
+
+function resolveBottomTabBarLayout({ isCompact, isK12ParentNextGenNav }: BottomTabBarLayoutInputs) {
+  const containerPaddingTop = isK12ParentNextGenNav ? (isCompact ? 2 : 4) : (isCompact ? 6 : 8);
+  const tabMinHeight = isK12ParentNextGenNav ? (isCompact ? 44 : 48) : (isCompact ? 48 : 54);
+  const centerOrbMarginTop = isK12ParentNextGenNav ? (isCompact ? -3 : -5) : (isCompact ? -22 : -28);
+
+  return { containerPaddingTop, tabMinHeight, centerOrbMarginTop };
+}
+
+export function getBottomTabBarHeight(options: {
+  isCompact: boolean;
+  navBottomPadding: number;
+  isK12ParentNextGenNav: boolean;
+}): number {
+  const { containerPaddingTop, tabMinHeight } = resolveBottomTabBarLayout({
+    isCompact: options.isCompact,
+    isK12ParentNextGenNav: options.isK12ParentNextGenNav,
+  });
+  const dockPaddingBottom = Math.max(options.navBottomPadding, uiTokens.spacing.xs);
+  const shellPaddingBottom = Platform.OS === 'web' ? SHELL_PADDING_BOTTOM_WEB : SHELL_PADDING_BOTTOM_NATIVE;
+
+  return tabMinHeight + containerPaddingTop + dockPaddingBottom + SHELL_PADDING_TOP + shellPaddingBottom;
+}
+
 export function createBottomTabBarStyles(options: BottomTabBarStyleOptions) {
-  const containerPaddingTop = options.isK12ParentNextGenNav ? (options.isCompact ? 2 : 4) : (options.isCompact ? 6 : 8);
-  const tabMinHeight = options.isK12ParentNextGenNav ? (options.isCompact ? 44 : 48) : (options.isCompact ? 48 : 54);
-  const centerOrbMarginTop = options.isK12ParentNextGenNav ? (options.isCompact ? -3 : -5) : (options.isCompact ? -22 : -28);
+  const { containerPaddingTop, tabMinHeight, centerOrbMarginTop } = resolveBottomTabBarLayout({
+    isCompact: options.isCompact,
+    isK12ParentNextGenNav: options.isK12ParentNextGenNav,
+  });
 
   return StyleSheet.create({
     shell: {
       paddingHorizontal: 10,
-      paddingTop: 4,
-      paddingBottom: Platform.OS === 'web' ? 0 : 8,
+      paddingTop: SHELL_PADDING_TOP,
+      paddingBottom: Platform.OS === 'web' ? SHELL_PADDING_BOTTOM_WEB : SHELL_PADDING_BOTTOM_NATIVE,
       backgroundColor: 'transparent',
     },
     dock: {

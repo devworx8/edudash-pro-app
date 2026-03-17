@@ -1,5 +1,5 @@
 import React from 'react';
-import { Dimensions, Platform, View } from 'react-native';
+import { Platform, View, useWindowDimensions } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -16,10 +16,7 @@ import { buildVisibleTabs, getBottomTabVariant, isBottomTabActive, shouldHideBot
 import { createBottomTabBarStyles } from './bottom-tabs/styles';
 import { DASH_SEARCH_ROUTE, MESSAGE_TAB_IDS, ROLES_WITH_CENTER_TAB } from './bottom-tabs/tabs';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-const isSmallScreen = screenWidth < 360;
-const isShortScreen = screenHeight < 700;
-const isCompact = isSmallScreen || isShortScreen;
+const WEB_DESKTOP_BREAKPOINT = 1024;
 
 export { ROLES_WITH_CENTER_TAB };
 
@@ -32,8 +29,19 @@ export function BottomTabBar() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const flags = getFeatureFlagsSync();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isSmallScreen = screenWidth < 360;
+  const isShortScreen = screenHeight < 700;
+  const isCompact = isSmallScreen || isShortScreen;
+  const isWeb = Platform.OS === 'web';
+  const isCoarsePointer =
+    isWeb && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
+  const hasTouchPoints =
+    isWeb && typeof navigator !== 'undefined' && (navigator.maxTouchPoints || 0) > 0;
+  const isTouchDevice = isCoarsePointer || hasTouchPoints;
+  const isWebDesktop = isWeb && screenWidth >= WEB_DESKTOP_BREAKPOINT && !isTouchDevice;
 
-  if (!user || !profile || shouldHideBottomTabBar(pathname)) {
+  if (!user || !profile || shouldHideBottomTabBar(pathname) || isWebDesktop) {
     return null;
   }
 
@@ -44,7 +52,7 @@ export function BottomTabBar() {
 
   const sortedTabs = sortBottomTabs(visibleTabs);
   const variant = getBottomTabVariant(pathname, roleState, flags);
-  const navBottomPadding = Platform.OS === 'web' ? 0 : Math.max(insets.bottom, uiTokens.spacing.xs);
+  const navBottomPadding = Math.max(insets.bottom, uiTokens.spacing.xs);
   const styles = createBottomTabBarStyles({
     hasCenterTab: visibleTabs.some((tab) => tab.isCenterTab),
     isCompact,

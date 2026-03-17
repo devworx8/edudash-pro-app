@@ -378,9 +378,9 @@ function stripMarkdownAndMeta(text: string, preservePhonicsMarkers: boolean): st
     // Horizontal rules (---, ***, ___)
     .replace(/^[-*_]{3,}$/gm, '')
     .replace(/^\s*[-*+\u2022\u25e6\u25aa\u00b7]\s*/gm, '')
-    // Convert "1. text" → [pause] "Number 1, text" — the comma after the number
+    // Convert "1. text" → [pause] "Item 1. text" — the period after the number
     // gives Azure TTS a natural breath-pause between list items.
-    .replace(/^\s*(\d+)[.)]\s*/gm, '\n\nNumber $1, ')
+    .replace(/^\s*(\d+)[.)]\s*/gm, '\n\nItem $1. ')
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
     .replace(/^>\s*/gm, '')
     // Strip simple HTML tags (e.g. <b>, </div>, <br/>) but keep inner text

@@ -6,7 +6,7 @@ import '../polyfills/react-use';
 
 import 'react-native-get-random-values';
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Platform, LogBox } from 'react-native';
+import { View, StyleSheet, Platform, LogBox, useWindowDimensions } from 'react-native';
 import { logger } from '@/lib/logger';
 
 const TAG = 'RootLayout';
@@ -39,7 +39,7 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext';
 import { SubscriptionProvider } from '../contexts/SubscriptionContext';
 import { AdsProvider } from '../contexts/AdsContext';
 import { DashAIProvider } from '../contexts/DashAIContext';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardPreferencesProvider } from '../contexts/DashboardPreferencesContext';
 import { UpdatesProvider } from '../contexts/UpdatesProvider';
 import { TermsProvider } from '../contexts/TerminologyContext';
@@ -54,6 +54,9 @@ import type { IDashAIAssistant } from '../services/dash-ai/DashAICompat';
 import { DraggableDashFAB } from '../components/ui/DraggableDashFAB';
 import { BottomTabBar } from '../components/navigation/BottomTabBar';
 import { roleHasCenterDashTab } from '@/lib/navigation/navManifest';
+import { isHiddenBottomNavPath } from '@/components/navigation/bottom-tabs/tabs';
+import { buildVisibleTabs, getBottomTabVariant } from '@/components/navigation/bottom-tabs/helpers';
+import { getBottomTabBarHeight } from '@/components/navigation/bottom-tabs/styles';
 import { AnimatedSplash } from '../components/ui/AnimatedSplash';
 import { CallProvider } from '../components/calls/CallProvider';
 import { NotificationProvider } from '../contexts/NotificationContext';
@@ -81,9 +84,12 @@ import { patchNativeEventEmitterModules } from '../lib/nativeEventEmitterPatch';
 import { parseDeepLinkUrl } from '../lib/utils/deepLink';
 import { assertSupabase } from '../lib/supabase';
 import { checkAndRefreshTokenIfNeeded, registerPushDevice } from '../lib/notifications';
-import { resolveExplicitSchoolTypeFromProfile } from '../lib/schoolTypeResolver';
+import { resolveExplicitSchoolTypeFromProfile, resolveSchoolTypeFromProfile } from '../lib/schoolTypeResolver';
 import { initPerformanceMonitoring } from '../lib/perf';
 import { installThemedNativeAlert } from '@/lib/ui/installThemedNativeAlert';
+import { getFeatureFlagsSync } from '@/lib/featureFlags';
+import { uiTokens } from '@/lib/ui/tokens';
+import { useFinancePrivacyMode } from '@/hooks/useFinancePrivacyMode';
 
 patchNativeEventEmitterModules();
 
@@ -95,41 +101,7 @@ const STACK_SCREEN_OPTIONS = {
   animationTypeForReplace: 'push' as const,
   contentStyle: { backgroundColor: 'transparent' },
 };
-// Web uses a fixed bottom tab bar; keep enough clearance for the bar without
-// leaving a large dead strip above it on shorter dashboards.
-const WEB_BOTTOM_NAV_SCROLL_CLEARANCE = 48;
-
-const shouldHideBottomNavForPath = (pathname?: string | null): boolean => {
-  if (!pathname) return true;
-
-  return (
-    pathname === '/' ||
-    pathname.includes('/(auth)') ||
-    pathname.includes('/sign-in') ||
-    pathname.includes('/register') ||
-    pathname.includes('/landing') ||
-    pathname.includes('/onboarding') ||
-    pathname.includes('org-onboarding') ||
-    pathname.includes('principal-onboarding') ||
-    pathname.includes('school-registration') ||
-    pathname.includes('parent-child-registration') ||
-    pathname.includes('learner-registration') ||
-    pathname.includes('parent-registration') ||
-    pathname.includes('teacher-registration') ||
-    pathname.includes('teacher-approval-pending') ||
-    pathname.includes('/auth-callback') ||
-    pathname.includes('/invite/') ||
-    pathname.includes('message-thread') ||
-    pathname.includes('/screens/dash-assistant') ||
-    pathname.includes('/screens/dash-voice') ||
-    pathname.includes('/screens/dash-orb') ||
-    pathname.includes('/screens/dash-tutor') ||
-    pathname.startsWith('/screens/ai-') ||
-    pathname.includes('/screens/worksheet-viewer') ||
-    pathname.includes('/screens/lesson-viewer') ||
-    pathname.includes('exam-generation')
-  );
-};
+const WEB_DESKTOP_BREAKPOINT = 1024;
 
 /** Bridge that reads user role from AuthContext and passes to SpotlightTourProvider */
 function SpotlightTourBridge({ children }: { children: React.ReactNode }) {
@@ -148,10 +120,13 @@ function LayoutContent() {
   const { loading: authLoading, profileLoading, user, profile } = useAuth();
   const { isDark, theme } = useTheme();
   const loadingOverlay = useLoadingOverlay();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const pushRegistrationRef = useRef<{ userId: string; attempted: boolean } | null>(null);
 
   // App preferences for FAB visibility
   const { showDashFAB, powerUserModeEnabled, tutorialCompleted } = useAppPreferencesSafe();
+  const { hideFeesOnDashboards } = useFinancePrivacyMode();
 
   // Route guards (auth + mobile web)
   useAuthGuard();
@@ -200,7 +175,7 @@ function LayoutContent() {
   }, [user?.id]);
 
   // Determine if FAB should be visible (user pref + route logic + must be logged in)
-  const normalizedRole = String(profile?.role || '').toLowerCase();
+  const normalizedRole = String(profile?.role || 'parent').toLowerCase();
   const isPrincipalRole = normalizedRole === 'principal' || normalizedRole === 'principal_admin';
   const hasExplicitSchoolType = Boolean(resolveExplicitSchoolTypeFromProfile(profile));
   const hasAdminCenterDashTab = normalizedRole === 'admin' && hasExplicitSchoolType;
@@ -208,11 +183,36 @@ function LayoutContent() {
     isReadyForFAB && !shouldHideFAB && powerUserModeEnabled && showDashFAB && !!user;
   const hasCenterDashTab = roleHasCenterDashTab(normalizedRole) || hasAdminCenterDashTab;
   const shouldRenderFAB = shouldShowFAB && (!hasCenterDashTab || isPrincipalRole);
+  const resolvedSchoolType = resolveSchoolTypeFromProfile(profile);
+  const featureFlags = getFeatureFlagsSync();
+  const bottomTabVariant = getBottomTabVariant(
+    pathname,
+    { userRole: normalizedRole, resolvedSchoolType },
+    featureFlags,
+  );
+  const isWeb = Platform.OS === 'web';
+  const isCoarsePointer =
+    isWeb && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
+  const hasTouchPoints =
+    isWeb && typeof navigator !== 'undefined' && (navigator.maxTouchPoints || 0) > 0;
+  const isTouchDevice = isCoarsePointer || hasTouchPoints;
+  const isWebDesktop = isWeb && windowWidth >= WEB_DESKTOP_BREAKPOINT && !isTouchDevice;
+  const isCompactWeb = windowWidth < 360 || windowHeight < 700;
+  const navBottomPadding = Math.max(insets.bottom, uiTokens.spacing.xs);
+  const webBottomNavClearance = getBottomTabBarHeight({
+    isCompact: isCompactWeb,
+    navBottomPadding,
+    isK12ParentNextGenNav: bottomTabVariant.isK12ParentNextGenNav,
+  });
+  const { tabs: visibleTabs } = buildVisibleTabs(profile, hideFeesOnDashboards);
+  const hasVisibleBottomTabs = visibleTabs.length > 0;
   const shouldReserveBottomNavSpace =
-    Platform.OS === 'web' &&
+    isWeb &&
+    !isWebDesktop &&
     Boolean(user) &&
     Boolean(profile) &&
-    !shouldHideBottomNavForPath(pathname);
+    hasVisibleBottomTabs &&
+    !isHiddenBottomNavPath(pathname || null);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -233,8 +233,8 @@ function LayoutContent() {
       <View
         style={[
           styles.contentContainer,
-          Platform.OS === 'web' && shouldReserveBottomNavSpace
-            ? { paddingBottom: WEB_BOTTOM_NAV_SCROLL_CLEARANCE }
+          isWeb && shouldReserveBottomNavSpace
+            ? { paddingBottom: webBottomNavClearance }
             : null,
         ]}
       >

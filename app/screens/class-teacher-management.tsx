@@ -53,6 +53,8 @@ export default function ClassTeacherManagementScreen() {
     showClassModal,
     showTeacherAssignment,
     selectedClass,
+    assignmentTeacherId,
+    assignmentRole,
     activeTab,
     classForm,
     roleUpdateTeacherId,
@@ -66,6 +68,8 @@ export default function ClassTeacherManagementScreen() {
     setShowClassModal,
     setShowTeacherAssignment,
     setSelectedClass,
+    setAssignmentTeacherId,
+    setAssignmentRole,
     setActiveTab,
     setClassForm,
     onRefresh,
@@ -239,7 +243,10 @@ export default function ClassTeacherManagementScreen() {
                   onRemoveTeacher={handleRemoveTeacher}
                   onAssignTeacher={(cls) => {
                     setSelectedClass(cls);
-                    setClassForm((prev) => ({ ...prev, teacher_id: cls.teacher_id || '' }));
+                    setAssignmentTeacherId('');
+                    setAssignmentRole(
+                      cls.teacher_assignments.some((assignment) => assignment.role === 'lead') ? 'assistant' : 'lead'
+                    );
                     setShowTeacherAssignment(true);
                   }}
                   onViewStudents={navigateTo.classStudents}
@@ -281,11 +288,14 @@ export default function ClassTeacherManagementScreen() {
         visible={showTeacherAssignment}
         theme={theme}
         selectedClass={selectedClass}
-        teacherId={classForm.teacher_id}
+        teacherId={assignmentTeacherId}
+        role={assignmentRole}
+        hasLead={Boolean(selectedClass?.teacher_assignments.some((assignment) => assignment.role === 'lead'))}
         activeTeachers={activeTeachers}
         onClose={() => setShowTeacherAssignment(false)}
         onAssign={handleAssignTeacher}
-        onTeacherChange={(id) => setClassForm((prev) => ({ ...prev, teacher_id: id }))}
+        onTeacherChange={setAssignmentTeacherId}
+        onRoleChange={setAssignmentRole}
       />
       <AlertModalComponent />
     </SafeAreaView>

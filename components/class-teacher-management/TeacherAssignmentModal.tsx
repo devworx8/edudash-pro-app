@@ -7,17 +7,20 @@ import React from 'react';
 import { View, Text, TouchableOpacity, Modal, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Picker } from '@react-native-picker/picker';
-import type { ClassInfo, ClassFormData, Teacher } from './types';
+import type { ClassInfo, ClassTeacherRole, Teacher } from './types';
 
 interface TeacherAssignmentModalProps {
   visible: boolean;
   theme: any;
   selectedClass: ClassInfo | null;
   teacherId: string;
+  role: ClassTeacherRole;
+  hasLead: boolean;
   activeTeachers: Teacher[];
   onClose: () => void;
   onAssign: () => void;
   onTeacherChange: (teacherId: string) => void;
+  onRoleChange: (role: ClassTeacherRole) => void;
 }
 
 export function TeacherAssignmentModal({
@@ -25,10 +28,13 @@ export function TeacherAssignmentModal({
   theme,
   selectedClass,
   teacherId,
+  role,
+  hasLead,
   activeTeachers,
   onClose,
   onAssign,
   onTeacherChange,
+  onRoleChange,
 }: TeacherAssignmentModalProps) {
   const styles = getStyles(theme);
 
@@ -77,6 +83,23 @@ export function TeacherAssignmentModal({
               ))}
             </Picker>
           </View>
+
+          <Text style={[styles.pickerLabel, { marginTop: 20 }]}>Assignment Role</Text>
+          <View style={styles.pickerContainer}>
+            <Picker
+              selectedValue={role}
+              onValueChange={(value) => onRoleChange(value as ClassTeacherRole)}
+              style={styles.picker}
+            >
+              <Picker.Item label="Lead Teacher" value="lead" />
+              <Picker.Item label="Assistant Teacher" value="assistant" />
+            </Picker>
+          </View>
+          {hasLead && role === 'lead' && (
+            <Text style={styles.roleHint}>
+              Assigning a new lead will replace the current lead teacher.
+            </Text>
+          )}
         </View>
       </SafeAreaView>
     </Modal>
@@ -131,5 +154,10 @@ const getStyles = (theme: any) =>
     picker: {
       backgroundColor: theme.surface,
       color: theme.text,
+    },
+    roleHint: {
+      marginTop: 10,
+      fontSize: 12,
+      color: theme.textSecondary,
     },
   });

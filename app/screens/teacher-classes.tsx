@@ -13,6 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
 import { removeTeacherFromSchool } from '@/lib/services/teacherRemovalService';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
+import { SubPageHeader } from '@/components/SubPageHeader';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface ClassInfo {
@@ -23,6 +24,7 @@ interface ClassInfo {
   max_capacity: number;
   current_enrollment: number;
   active: boolean;
+  role: 'lead' | 'assistant' | null;
 }
 
 interface TeacherInfo {
@@ -46,6 +48,8 @@ export default function TeacherClassesScreen() {
   const styles = createStyles(theme);
   const { showAlert, alertProps } = useAlertModal();
   const orgId = profile?.organization_id || (profile as any)?.preschool_id;
+  const headerTitle = teacherInfo?.name || 'Teacher Classes';
+  const headerSubtitle = teacherInfo ? 'Teacher Classes' : undefined;
 
   const fetchData = useCallback(async () => {
     if (!teacherId) return;
@@ -81,17 +85,57 @@ export default function TeacherClassesScreen() {
         new Set([teacherData.id, teacherData.auth_user_id].filter((v): v is string => Boolean(v)))
       );
 
-      // Fetch classes assigned to this teacher
-      const { data: classesData, error: classesError } = await supabase
+      const { data: classTeacherRows, error: classTeacherError } = await supabase
+        .from('class_teachers')
+        .select('class_id, role')
+        .eq('teacher_id', teacherData.id);
+
+      if (classTeacherError) {
+        console.warn('[TeacherClasses] Error loading class_teachers:', classTeacherError);
+      }
+
+      const classRoleMap = new Map<string, 'lead' | 'assistant'>();
+      (classTeacherRows || []).forEach((row: { class_id: string; role: string | null }) => {
+        classRoleMap.set(row.class_id, row.role === 'lead' ? 'lead' : 'assistant');
+      });
+
+      let classesData: any[] = [];
+      const classIdsFromJoin = Array.from(classRoleMap.keys());
+      if (classIdsFromJoin.length > 0) {
+        const { data: joinedClasses, error: joinClassesError } = await supabase
+          .from('classes')
+          .select('*')
+          .in('id', classIdsFromJoin)
+          .order('name', { ascending: true });
+
+        if (joinClassesError) throw joinClassesError;
+        classesData = joinedClasses || [];
+      }
+
+      const { data: legacyClasses, error: legacyError } = await supabase
         .from('classes')
         .select('*')
         .in('teacher_id', teacherRefIds)
         .order('name', { ascending: true });
 
-      if (classesError) throw classesError;
+      if (legacyError) {
+        console.warn('[TeacherClasses] Legacy class lookup warning:', legacyError);
+      }
+
+      const combinedById = new Map<string, any>();
+      (classesData || []).forEach((cls: any) => combinedById.set(cls.id, cls));
+      (legacyClasses || []).forEach((cls: any) => {
+        if (!combinedById.has(cls.id)) {
+          combinedById.set(cls.id, cls);
+        }
+      });
+
+      const combinedClasses = Array.from(combinedById.values()).sort((a, b) =>
+        String(a.name || '').localeCompare(String(b.name || ''))
+      );
 
       // Get student counts for each class
-      const classIds = (classesData || []).map((c: any) => c.id);
+      const classIds = combinedClasses.map((c: any) => c.id);
       let enrollmentCounts: Record<string, number> = {};
 
       if (classIds.length > 0) {
@@ -105,7 +149,7 @@ export default function TeacherClassesScreen() {
         });
       }
 
-      const transformedClasses: ClassInfo[] = (classesData || []).map((c: any) => ({
+      const transformedClasses: ClassInfo[] = combinedClasses.map((c: any) => ({
         id: c.id,
         name: c.name,
         grade_level: c.grade_level,
@@ -113,6 +157,7 @@ export default function TeacherClassesScreen() {
         max_capacity: c.max_capacity || 0,
         current_enrollment: enrollmentCounts[c.id] || 0,
         active: c.active,
+        role: classRoleMap.get(c.id) || null,
       }));
 
       setClasses(transformedClasses);
@@ -202,8 +247,14 @@ export default function TeacherClassesScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: 'Teacher Classes', headerShown: true }} />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <SubPageHeader
+          title="Teacher Classes"
+          onBack={navigateBack}
+          backgroundColor={theme.background}
+          textColor={theme.text}
+        />
         <View style={styles.loadingContainer}>
           <EduDashSpinner size="large" color={theme.primary} />
           <Text style={styles.loadingText}>Loading teacher information...</Text>
@@ -214,8 +265,14 @@ export default function TeacherClassesScreen() {
 
   if (!teacherInfo) {
     return (
-      <SafeAreaView style={styles.container}>
-        <Stack.Screen options={{ title: 'Teacher Classes', headerShown: true }} />
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <SubPageHeader
+          title="Teacher Classes"
+          onBack={navigateBack}
+          backgroundColor={theme.background}
+          textColor={theme.text}
+        />
         <View style={styles.errorContainer}>
           <Ionicons name="warning-outline" size={48} color={theme.error} />
           <Text style={styles.errorText}>Teacher not found</Text>
@@ -229,16 +286,13 @@ export default function TeacherClassesScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: teacherInfo.name,
-          headerShown: true,
-          headerLeft: () => (
-            <TouchableOpacity onPress={navigateBack} style={styles.headerButton}>
-              <Ionicons name="arrow-back" size={24} color={theme.text} />
-            </TouchableOpacity>
-          ),
-        }}
+      <Stack.Screen options={{ headerShown: false }} />
+      <SubPageHeader
+        title={headerTitle}
+        subtitle={headerSubtitle}
+        onBack={navigateBack}
+        backgroundColor={theme.background}
+        textColor={theme.text}
       />
 
       <ScrollView
@@ -288,15 +342,29 @@ export default function TeacherClassesScreen() {
                       <Text style={styles.roomNumber}>Room {classInfo.room_number}</Text>
                     )}
                   </View>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: classInfo.active ? '#10b981' : '#ef4444' },
-                    ]}
-                  >
-                    <Text style={styles.statusText}>
-                      {classInfo.active ? 'Active' : 'Inactive'}
-                    </Text>
+                  <View style={styles.badgeStack}>
+                    {classInfo.role && (
+                      <View
+                        style={[
+                          styles.roleBadge,
+                          classInfo.role === 'lead' ? styles.roleBadgeLead : styles.roleBadgeAssistant,
+                        ]}
+                      >
+                        <Text style={styles.roleBadgeText}>
+                          {classInfo.role === 'lead' ? 'Lead' : 'Assistant'}
+                        </Text>
+                      </View>
+                    )}
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: classInfo.active ? '#10b981' : '#ef4444' },
+                      ]}
+                    >
+                      <Text style={styles.statusText}>
+                        {classInfo.active ? 'Active' : 'Inactive'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
 
@@ -388,9 +456,6 @@ const createStyles = (theme: any) =>
     backButtonText: {
       color: '#fff',
       fontWeight: '600',
-    },
-    headerButton: {
-      padding: 8,
     },
     teacherCard: {
       flexDirection: 'row',
@@ -491,6 +556,26 @@ const createStyles = (theme: any) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
+    },
+    badgeStack: {
+      alignItems: 'flex-end',
+      gap: 6,
+    },
+    roleBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    roleBadgeLead: {
+      backgroundColor: '#2563eb',
+    },
+    roleBadgeAssistant: {
+      backgroundColor: '#475569',
+    },
+    roleBadgeText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: '#fff',
     },
     classInfo: {
       flex: 1,

@@ -86,6 +86,7 @@ const HIDDEN_ROUTE_FRAGMENTS = [
   '/invite/',
   'message-thread',
   '/screens/dash-tutor',
+  '/screens/ai-',
   'exam-generation',
   '/screens/dash-assistant',
   '/screens/dash-voice',

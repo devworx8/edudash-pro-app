@@ -3,6 +3,15 @@
  * Extracted from app/screens/class-teacher-management.tsx
  */
 
+export type ClassTeacherRole = 'lead' | 'assistant';
+
+export interface ClassTeacherAssignment {
+  teacher_id: string;
+  auth_user_id?: string;
+  teacher_name: string;
+  role: ClassTeacherRole;
+}
+
 export interface ClassInfo {
   id: string;
   name: string;
@@ -12,6 +21,7 @@ export interface ClassInfo {
   room_number?: string;
   teacher_id?: string;
   teacher_name?: string;
+  teacher_assignments: ClassTeacherAssignment[];
   is_active: boolean;
 }
 
@@ -19,6 +29,7 @@ export interface Teacher {
   id: string;
   teacher_record_id?: string;
   user_id?: string;
+  auth_user_id?: string;
   full_name: string;
   email: string;
   phone?: string;
@@ -48,6 +59,8 @@ export interface ClassTeacherState {
   showClassModal: boolean;
   showTeacherAssignment: boolean;
   selectedClass: ClassInfo | null;
+  assignmentTeacherId: string;
+  assignmentRole: ClassTeacherRole;
   activeTab: ActiveTab;
   classForm: ClassFormData;
   roleUpdateTeacherId: string | null;
@@ -57,13 +70,15 @@ export interface ClassTeacherActions {
   loadData: () => Promise<void>;
   handleCreateClass: () => Promise<void>;
   handleAssignTeacher: () => Promise<void>;
-  handleRemoveTeacher: (classInfo: ClassInfo) => void;
+  handleRemoveTeacher: (classInfo: ClassInfo, assignment: ClassTeacherAssignment) => void;
   handleDeleteTeacher: (teacher: Teacher) => void;
   handleSetTeacherRole: (teacher: Teacher, role: 'teacher' | 'admin') => Promise<void>;
   handleToggleClassStatus: (classInfo: ClassInfo) => Promise<void>;
   setShowClassModal: (show: boolean) => void;
   setShowTeacherAssignment: (show: boolean) => void;
   setSelectedClass: (classInfo: ClassInfo | null) => void;
+  setAssignmentTeacherId: (teacherId: string) => void;
+  setAssignmentRole: (role: ClassTeacherRole) => void;
   setActiveTab: (tab: ActiveTab) => void;
   setClassForm: React.Dispatch<React.SetStateAction<ClassFormData>>;
   onRefresh: () => void;

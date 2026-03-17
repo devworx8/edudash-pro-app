@@ -6,14 +6,14 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Switch, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { ClassInfo, Teacher } from './types';
+import type { ClassInfo, ClassTeacherAssignment } from './types';
 import { getClassStatusColor } from './utils';
 
 interface ClassCardProps {
   classInfo: ClassInfo;
   theme: any;
   onToggleStatus: (classInfo: ClassInfo) => void;
-  onRemoveTeacher: (classInfo: ClassInfo) => void;
+  onRemoveTeacher: (classInfo: ClassInfo, assignment: ClassTeacherAssignment) => void;
   onAssignTeacher: (classInfo: ClassInfo) => void;
   onViewStudents: (classId: string) => void;
   onEditClass: (classId: string) => void;
@@ -30,6 +30,7 @@ export function ClassCard({
 }: ClassCardProps) {
   const styles = getStyles(theme);
   const statusColor = getClassStatusColor(classInfo, theme);
+  const hasTeachers = classInfo.teacher_assignments.length > 0;
 
   return (
     <View style={styles.classCard}>
@@ -60,23 +61,47 @@ export function ClassCard({
         </View>
 
         <View style={styles.teacherInfo}>
-          {classInfo.teacher_name ? (
-            <View style={styles.assignedTeacher}>
-              <Text style={styles.teacherLabel}>Teacher</Text>
-              <Text style={styles.teacherName}>{classInfo.teacher_name}</Text>
-              <TouchableOpacity onPress={() => onRemoveTeacher(classInfo)}>
-                <Ionicons name="close-circle" size={20} color={theme.error} />
-              </TouchableOpacity>
+          <Text style={styles.teacherLabel}>Teachers</Text>
+          {hasTeachers ? (
+            <View style={styles.teacherList}>
+              {classInfo.teacher_assignments.map((assignment) => (
+                <View key={`${assignment.teacher_id}-${assignment.role}`} style={styles.teacherRow}>
+                  <View style={styles.teacherBadge}>
+                    <Text style={styles.teacherName}>{assignment.teacher_name}</Text>
+                    <View
+                      style={[
+                        styles.roleChip,
+                        assignment.role === 'lead' && styles.roleChipLead,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.roleChipText,
+                          assignment.role === 'lead' && styles.roleChipTextLead,
+                        ]}
+                      >
+                        {assignment.role === 'lead' ? 'Lead' : 'Assistant'}
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => onRemoveTeacher(classInfo, assignment)}>
+                    <Ionicons name="close-circle" size={18} color={theme.error} />
+                  </TouchableOpacity>
+                </View>
+              ))}
             </View>
           ) : (
-            <TouchableOpacity
-              style={styles.assignTeacherButton}
-              onPress={() => onAssignTeacher(classInfo)}
-            >
-              <Ionicons name="person-add" size={16} color={theme.primary} />
-              <Text style={styles.assignTeacherText}>Assign Teacher</Text>
-            </TouchableOpacity>
+            <Text style={styles.noTeacherText}>No teachers assigned</Text>
           )}
+          <TouchableOpacity
+            style={styles.assignTeacherButton}
+            onPress={() => onAssignTeacher(classInfo)}
+          >
+            <Ionicons name="person-add" size={16} color={theme.primary} />
+            <Text style={styles.assignTeacherText}>
+              {hasTeachers ? 'Add Teacher' : 'Assign Teacher'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -185,18 +210,58 @@ const getStyles = (theme: any) =>
       flex: 1,
       alignItems: 'flex-end',
     },
-    assignedTeacher: {
-      alignItems: 'flex-end',
-    },
     teacherLabel: {
       fontSize: 12,
       color: theme.textSecondary,
-      marginBottom: 4,
+      marginBottom: 6,
+    },
+    teacherList: {
+      width: '100%',
+      gap: 6,
+      marginBottom: 8,
+    },
+    teacherRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+    },
+    teacherBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexShrink: 1,
     },
     teacherName: {
       fontSize: 14,
       fontWeight: '500',
       color: theme.text,
+      maxWidth: 140,
+    },
+    roleChip: {
+      borderRadius: 999,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderWidth: 1,
+      borderColor: theme.border,
+      backgroundColor: theme.elevated,
+    },
+    roleChipLead: {
+      borderColor: theme.primary + '55',
+      backgroundColor: theme.primary + '1a',
+    },
+    roleChipText: {
+      fontSize: 10,
+      fontWeight: '600',
+      color: theme.textSecondary,
+    },
+    roleChipTextLead: {
+      color: theme.primary,
+    },
+    noTeacherText: {
+      fontSize: 12,
+      color: theme.textSecondary,
+      marginBottom: 8,
     },
     assignTeacherButton: {
       flexDirection: 'row',

@@ -18,6 +18,7 @@ import { logger } from '@/lib/logger';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface Teacher {
   id: string;
+  auth_user_id?: string | null;
   name: string;
   email: string;
 }
@@ -33,6 +34,11 @@ interface ClassData {
   preschool_id: string;
 }
 
+interface ClassTeacherAssignment {
+  teacher_id: string;
+  role: 'lead' | 'assistant';
+}
+
 export default function EditClassScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
@@ -43,6 +49,7 @@ export default function EditClassScreen() {
   const [saving, setSaving] = useState(false);
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [formData, setFormData] = useState<ClassData | null>(null);
+  const [assistantTeachers, setAssistantTeachers] = useState<Teacher[]>([]);
 
   const styles = createStyles(theme);
   const orgId = profile?.organization_id || (profile as any)?.preschool_id;
@@ -61,22 +68,58 @@ export default function EditClassScreen() {
         .single();
 
       if (classError) throw classError;
-      setFormData(classData);
+      const { data: classTeacherRows, error: classTeacherError } = await supabase
+        .from('class_teachers')
+        .select('teacher_id, role')
+        .eq('class_id', classId);
+
+      if (classTeacherError) {
+        logger.warn('EditClass', 'Error loading class_teachers:', classTeacherError);
+      }
 
       // Fetch available teachers
       const { data: teachersData, error: teachersError } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name, email')
+        .select('id, auth_user_id, first_name, last_name, email')
         .eq('preschool_id', orgId)
         .ilike('role', '%teacher%');
 
       if (!teachersError && teachersData) {
         const transformedTeachers: Teacher[] = teachersData.map((t: any) => ({
           id: t.id,
+          auth_user_id: t.auth_user_id,
           name: `${t.first_name || ''} ${t.last_name || ''}`.trim() || t.email,
           email: t.email,
         }));
         setTeachers(transformedTeachers);
+
+        const teacherById = new Map(transformedTeachers.map((teacher) => [teacher.id, teacher]));
+        const teacherByAuthId = new Map(
+          transformedTeachers
+            .filter((teacher) => teacher.auth_user_id)
+            .map((teacher) => [teacher.auth_user_id as string, teacher])
+        );
+
+        const assignments = (classTeacherRows || []) as ClassTeacherAssignment[];
+        const leadAssignment = assignments.find((row) => row.role === 'lead');
+        const leadProfile =
+          (leadAssignment && teacherById.get(leadAssignment.teacher_id)) ||
+          (classData.teacher_id ? teacherByAuthId.get(classData.teacher_id) : undefined) ||
+          (classData.teacher_id ? teacherById.get(classData.teacher_id) : undefined);
+
+        const assistants = assignments
+          .filter((row) => row.role === 'assistant')
+          .map((row) => teacherById.get(row.teacher_id))
+          .filter((row): row is Teacher => Boolean(row));
+
+        setAssistantTeachers(assistants);
+        setFormData({
+          ...classData,
+          teacher_id: leadProfile?.id || null,
+        });
+      } else {
+        setAssistantTeachers([]);
+        setFormData(classData);
       }
     } catch (error: any) {
       logger.error('EditClass', 'Error fetching class:', error);
@@ -115,6 +158,9 @@ export default function EditClassScreen() {
     try {
       const supabase = assertSupabase();
 
+      const selectedLead = teachers.find((teacher) => teacher.id === formData.teacher_id);
+      const leadAuthUserId = selectedLead?.auth_user_id || null;
+
       const { error } = await supabase
         .from('classes')
         .update({
@@ -122,12 +168,42 @@ export default function EditClassScreen() {
           grade_level: formData.grade_level.trim(),
           max_capacity: formData.max_capacity,
           room_number: formData.room_number?.trim() || null,
-          teacher_id: formData.teacher_id || null,
+          teacher_id: leadAuthUserId,
           active: formData.active,
         })
         .eq('id', classId);
 
       if (error) throw error;
+
+      if (formData.teacher_id) {
+        await supabase
+          .from('class_teachers')
+          .delete()
+          .eq('class_id', classId)
+          .eq('role', 'lead')
+          .neq('teacher_id', formData.teacher_id);
+
+        const { error: leadAssignError } = await supabase
+          .from('class_teachers')
+          .upsert(
+            {
+              class_id: classId,
+              teacher_id: formData.teacher_id,
+              role: 'lead',
+            },
+            { onConflict: 'class_id,teacher_id' }
+          );
+
+        if (leadAssignError) {
+          logger.warn('EditClass', 'Lead assignment warning:', leadAssignError);
+        }
+      } else {
+        await supabase
+          .from('class_teachers')
+          .delete()
+          .eq('class_id', classId)
+          .eq('role', 'lead');
+      }
 
       showAlert({ title: 'Success', message: 'Class updated successfully', buttons: [
         { text: 'OK', onPress: navigateBack },
@@ -266,9 +342,9 @@ export default function EditClassScreen() {
             />
           </View>
 
-          {/* Assigned Teacher */}
+          {/* Lead Teacher */}
           <View style={styles.formGroup}>
-            <Text style={styles.label}>Assigned Teacher</Text>
+            <Text style={styles.label}>Lead Teacher</Text>
             <View style={styles.pickerContainer}>
               <Picker
                 selectedValue={formData.teacher_id || ''}
@@ -277,13 +353,27 @@ export default function EditClassScreen() {
                 }
                 style={styles.picker}
               >
-                <Picker.Item label="No teacher assigned" value="" />
+                <Picker.Item label="No lead teacher assigned" value="" />
                 {teachers.map((teacher) => (
                   <Picker.Item key={teacher.id} label={teacher.name} value={teacher.id} />
                 ))}
               </Picker>
             </View>
           </View>
+
+          {assistantTeachers.length > 0 && (
+            <View style={styles.formGroup}>
+              <Text style={styles.label}>Assistant Teachers</Text>
+              {assistantTeachers.map((teacher) => (
+                <Text key={teacher.id} style={styles.sublabel}>
+                  {teacher.name}
+                </Text>
+              ))}
+              <Text style={[styles.sublabel, { marginTop: 6 }]}>
+                Manage assistants in Class & Teacher Management.
+              </Text>
+            </View>
+          )}
 
           {/* Active Status */}
           <View style={styles.switchRow}>

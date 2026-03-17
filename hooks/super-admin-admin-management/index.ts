@@ -90,6 +90,15 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
 
       const result = await response.json();
       if (!response.ok || !result.success) {
+        // 409 = duplicate email — show user-friendly message, don't log as error
+        if (response.status === 409) {
+          showAlert({
+            title: 'User Already Exists',
+            message: `An account with this email (${formData.email}) already exists. You can find them in the admin list or assign them a new role.`,
+            type: 'warning',
+          });
+          return;
+        }
         throw new Error(result.error || 'Failed to send invitation');
       }
 
@@ -199,7 +208,18 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
               );
 
               const result = await response.json();
-              if (!response.ok) throw new Error(result.error || 'Failed to delete user');
+              if (!response.ok) {
+                // 409 = user is principal of an org — need to reassign first
+                if (response.status === 409 && result.error?.includes('principal')) {
+                  showAlert({
+                    title: 'Cannot Delete',
+                    message: `${user.full_name} is still a principal of one or more organizations. Reassign the principal role first, then try again.`,
+                    type: 'warning',
+                  });
+                  return;
+                }
+                throw new Error(result.error || 'Failed to delete user');
+              }
 
               track('superadmin_admin_user_deleted', {
                 user_id: user.id,

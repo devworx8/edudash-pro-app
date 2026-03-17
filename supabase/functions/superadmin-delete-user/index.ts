@@ -121,18 +121,27 @@ serve(async (req: Request) => {
       });
     }
 
-    // Best-effort cleanup (ignore missing tables / constraint errors).
-    const cleanup = async (fn: () => Promise<unknown>) => {
-      try { await fn(); } catch { /* ignore */ }
-    };
+    // Clear all FK references in a single DB transaction via RPC.
+    // This nullifies audit columns, deletes owned records, and validates
+    // the user isn't a principal of any organization.
+    const { data: cleanupResult, error: cleanupError } = await supabase
+      .rpc('prepare_user_for_deletion', { p_target_user_id: targetUserId });
 
-    await cleanup(() => supabase.from('push_devices').delete().eq('user_id', targetUserId));
-    await cleanup(() => supabase.from('push_subscriptions').delete().eq('user_id', targetUserId));
-    await cleanup(() => supabase.from('notifications').delete().eq('user_id', targetUserId));
-    await cleanup(() => supabase.from('profiles').delete().or(`id.eq.${targetUserId},auth_user_id.eq.${targetUserId}`));
-    await cleanup(() => supabase.from('users').delete().or(`id.eq.${targetUserId},auth_user_id.eq.${targetUserId}`));
+    if (cleanupError) {
+      console.error('[superadmin-delete-user] Cleanup RPC failed:', cleanupError.message);
+      // Surface principal-reassignment errors directly to the caller
+      if (cleanupError.message?.includes('principal')) {
+        return new Response(
+          JSON.stringify({ error: cleanupError.message }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      throw new Error(`Pre-deletion cleanup failed: ${cleanupError.message}`);
+    }
 
-    // Delete the auth user (actual account deletion)
+    console.log('[superadmin-delete-user] Cleanup done:', JSON.stringify(cleanupResult));
+
+    // Now safe to delete the auth user — all FK refs cleared
     const { error: deleteError } = await supabase.auth.admin.deleteUser(targetUserId);
     if (deleteError) {
       throw new Error(deleteError.message || 'Failed to delete auth user');
