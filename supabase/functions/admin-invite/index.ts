@@ -164,6 +164,10 @@ serve(async (req: Request) => {
     const newUserId = authData.user.id;
 
     // Create profile record
+    // The profiles table role CHECK only allows: parent, teacher, principal, superadmin, admin, instructor, student
+    // Specialized admin roles (content_moderator, etc.) are stored in user_metadata for now
+    const profileRole = ['admin', 'parent', 'teacher', 'principal', 'superadmin', 'instructor', 'student'].includes(role) ? role : 'admin';
+
     const { error: profileError } = await supabase
       .from('profiles')
       .upsert({
@@ -171,8 +175,7 @@ serve(async (req: Request) => {
         auth_user_id: newUserId,
         email,
         full_name: fullName,
-        role,
-        department,
+        role: profileRole,
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),

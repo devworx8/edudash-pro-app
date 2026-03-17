@@ -25,6 +25,7 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM_DATA);
+  const [isCreating, setIsCreating] = useState(false);
 
   const loadAdminUsers = useCallback(async () => {
     if (!isSuperAdmin(profile?.role)) {
@@ -48,6 +49,7 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
   }, [loadAdminUsers]);
 
   const handleCreateAdmin = async () => {
+    if (isCreating) return;
     try {
       if (!formData.email || !formData.full_name) {
         showAlert({ title: 'Validation Error', message: 'Please fill in all required fields', type: 'warning' });
@@ -111,6 +113,8 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
     } catch (error: any) {
       logger.error('Failed to invite admin user:', error);
       showAlert({ title: 'Error', message: error.message || 'Failed to send invitation. Please try again.', type: 'error' });
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -231,6 +235,7 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
     formData,
     setFormData,
     onRefresh,
+    isCreating,
     handleCreateAdmin,
     handleToggleUserStatus,
     handleDeleteUser,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Modal, TextInput, Switch } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Modal, TextInput, Switch, ActivityIndicator } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
@@ -37,6 +37,7 @@ export default function SuperAdminAdminManagementScreen() {
     setFormData,
     onRefresh,
     handleCreateAdmin,
+    isCreating,
     handleToggleUserStatus,
     handleDeleteUser,
   } = useSuperAdminAdminManagement(showAlert);
@@ -248,8 +249,12 @@ export default function SuperAdminAdminManagementScreen() {
               <Ionicons name="close" size={24} color="#ffffff" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Create Admin User</Text>
-            <TouchableOpacity onPress={handleCreateAdmin}>
-              <Text style={styles.saveButton}>Create</Text>
+            <TouchableOpacity onPress={handleCreateAdmin} disabled={isCreating} style={{ opacity: isCreating ? 0.5 : 1 }}>
+              {isCreating ? (
+                <ActivityIndicator size="small" color="#10b981" />
+              ) : (
+                <Text style={styles.saveButton}>Create</Text>
+              )}
             </TouchableOpacity>
           </View>
 

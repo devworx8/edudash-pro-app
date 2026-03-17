@@ -475,12 +475,30 @@ export function openRolePicker(user: UserRecord, deps: ActionDeps): void {
 
   showAlert({
     title: 'Update User Role',
-    message: 'Select new role for this user:',
+    message: `Select new role for ${user.email}:`,
     buttons: [
       { text: 'Cancel', style: 'cancel' },
+      { text: 'Admin roles…', onPress: () => openAdminSubRolePicker(user, deps) },
       { text: 'Principal', onPress: () => updateUserRole(user, 'principal', deps) },
       { text: 'Teacher', onPress: () => updateUserRole(user, 'teacher', deps) },
       { text: 'Parent', onPress: () => updateUserRole(user, 'parent', deps) },
+    ],
+  });
+}
+
+function openAdminSubRolePicker(user: UserRecord, deps: ActionDeps): void {
+  const { showAlert } = deps;
+
+  showAlert({
+    title: 'Select Admin Role',
+    message: `Choose admin role for ${user.email}:`,
+    buttons: [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'General Admin', onPress: () => updateUserRole(user, 'admin', deps) },
+      { text: 'Content Moderator', onPress: () => updateUserRole(user, 'content_moderator', deps) },
+      { text: 'Support Admin', onPress: () => updateUserRole(user, 'support_admin', deps) },
+      { text: 'Billing Admin', onPress: () => updateUserRole(user, 'billing_admin', deps) },
+      { text: 'System Admin', onPress: () => updateUserRole(user, 'system_admin', deps) },
     ],
   });
 }
