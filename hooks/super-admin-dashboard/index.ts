@@ -20,6 +20,7 @@ const SENTRY_ISSUES_URL = process.env.EXPO_PUBLIC_SENTRY_ISSUES_URL || 'https://
 /** Build the quick-actions list (badges depend on live stats) */
 function buildQuickActions(stats: DashboardStats | null): QuickAction[] {
   return [
+    { id: 'platform-command-center', title: 'Platform Command Center', description: 'KPI metrics, error heatmap, incidents & health', icon: 'grid', route: '/screens/super-admin-platform-command-center', color: '#8b5cf6', badge: stats?.pending_issues || 0 },
     { id: 'sentry-errors', title: 'Sentry / Errors', description: 'View runtime errors and fix priorities', icon: 'bug', route: '/screens/super-admin-dashboard', color: '#ef4444', badge: stats?.pending_issues || 0, externalUrl: SENTRY_ISSUES_URL },
     { id: 'ai-command-center', title: 'Dash AI Command Center', description: 'Admin controls for agentic AI operations', icon: 'flash', route: '/screens/super-admin-ai-command-center', color: '#00f5ff', badge: 0 },
     { id: 'voice-orb', title: 'Voice Orb', description: 'Hands-free voice commands (full screen)', icon: 'mic', route: '/screens/dash-voice?mode=ops', color: '#8b5cf6', badge: 0 },

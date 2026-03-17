@@ -673,6 +673,7 @@ const APP_WIDE_ROUTE_CANDIDATES: string[] = [
   '/screens/super-admin-announcements',
   '/screens/super-admin-dashboard',
   '/screens/super-admin-moderation',
+  '/screens/super-admin-platform-command-center',
   '/screens/super-admin-system-monitoring',
   '/screens/super-admin-system-test',
   '/screens/super-admin-users',
