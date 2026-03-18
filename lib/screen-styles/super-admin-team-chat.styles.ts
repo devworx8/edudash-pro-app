@@ -2,257 +2,236 @@ import { StyleSheet, Platform } from 'react-native';
 
 export function createStyles(theme: any) {
   return StyleSheet.create({
-    container: {
+    // ── Layout ───────────────────────────────────────
+    root: {
       flex: 1,
-      backgroundColor: theme.background || '#0f172a',
+      backgroundColor: '#0f172a',
     },
-    header: {
-      backgroundColor: theme.headerBackground || '#1e293b',
-      paddingBottom: 12,
-    },
-    headerContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 16,
-      gap: 12,
-    },
-    backButton: {
-      padding: 8,
-    },
-    headerTitleContainer: {
+    splitRow: {
       flex: 1,
       flexDirection: 'row',
-      alignItems: 'center',
-      gap: 10,
     },
-    title: {
-      fontSize: 22,
-      fontWeight: '700',
-      color: '#ffffff',
-    },
-    subtitle: {
-      fontSize: 13,
-      color: '#94a3b8',
-      marginTop: 2,
-    },
-    content: {
-      flex: 1,
-    },
-    loadingContainer: {
+    accessDenied: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingTop: 80,
+      gap: 16,
     },
-    loadingText: {
-      color: '#94a3b8',
-      marginTop: 12,
-      fontSize: 14,
-    },
-    // Channel list
-    channelItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border || '#1e293b',
-      gap: 12,
-    },
-    channelIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    channelInfo: {
-      flex: 1,
-    },
-    channelName: {
+    accessDeniedText: {
+      color: '#ef4444',
       fontSize: 16,
       fontWeight: '600',
-      color: '#ffffff',
     },
-    channelPreview: {
-      fontSize: 13,
-      color: '#94a3b8',
-      marginTop: 2,
-    },
-    channelMeta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginTop: 4,
-    },
-    channelMetaText: {
-      fontSize: 11,
-      color: '#64748b',
-    },
-    unreadBadge: {
-      backgroundColor: '#3b82f6',
-      borderRadius: 10,
-      minWidth: 20,
-      height: 20,
+
+    // ── No channel selected (desktop idle state) ─────
+    noChannel: {
+      flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 6,
+      gap: 12,
+      backgroundColor: '#0f172a',
     },
-    unreadText: {
-      fontSize: 11,
+    noChannelTitle: {
+      fontSize: 18,
       fontWeight: '700',
-      color: '#ffffff',
+      color: '#334155',
+      marginTop: 4,
     },
-    // Chat view
+    noChannelSub: {
+      fontSize: 14,
+      color: '#475569',
+    },
+
+    // ── Chat Pane ────────────────────────────────────
+    chatPane: {
+      flex: 1,
+      backgroundColor: '#0f172a',
+    },
     chatHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.border || '#1e293b',
-      backgroundColor: theme.headerBackground || '#1e293b',
+      paddingVertical: 14,
       gap: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: '#1e293b',
+      backgroundColor: '#0c1222',
     },
-    chatHeaderInfo: {
-      flex: 1,
-    },
-    chatHeaderName: {
+    chatTitle: {
       fontSize: 17,
-      fontWeight: '700',
-      color: '#ffffff',
+      fontWeight: '800',
+      color: '#f1f5f9',
+      letterSpacing: -0.3,
     },
-    chatHeaderMembers: {
+    chatSub: {
       fontSize: 12,
-      color: '#94a3b8',
+      color: '#64748b',
       marginTop: 2,
     },
-    messagesContainer: {
-      flex: 1,
-      paddingHorizontal: 16,
+    headerIconBtn: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: '#1e293b',
+      justifyContent: 'center',
+      alignItems: 'center',
     },
-    messageRow: {
-      marginVertical: 4,
-      maxWidth: '85%',
+
+    // ── Empty chat ───────────────────────────────────
+    emptyChat: {
+      alignItems: 'center',
+      paddingHorizontal: 32,
     },
-    messageRowOwn: {
-      alignSelf: 'flex-end',
+    emptyChatCircle: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: '#1e293b',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 20,
     },
-    messageRowOther: {
-      alignSelf: 'flex-start',
+    emptyChatTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: '#475569',
+      marginBottom: 8,
     },
-    messageSender: {
-      fontSize: 11,
-      fontWeight: '600',
-      color: '#3b82f6',
-      marginBottom: 2,
-    },
-    messageBubble: {
-      borderRadius: 16,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
-    },
-    messageBubbleOwn: {
-      backgroundColor: '#3b82f6',
-      borderBottomRightRadius: 4,
-    },
-    messageBubbleOther: {
-      backgroundColor: theme.card || '#1e293b',
-      borderBottomLeftRadius: 4,
-    },
-    messageText: {
-      fontSize: 15,
+    emptyChatSub: {
+      fontSize: 14,
+      color: '#64748b',
+      textAlign: 'center',
       lineHeight: 20,
     },
-    messageTextOwn: {
+
+    // ── Messages (Slack-style) ───────────────────────
+    msgRow: {
+      flexDirection: 'row',
+      paddingVertical: 2,
+    },
+    msgRowSpaced: {
+      marginTop: 16,
+    },
+    msgAvatarCol: {
+      width: 40,
+      alignItems: 'center',
+      paddingTop: 2,
+    },
+    msgAvatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    msgAvatarText: {
+      fontSize: 12,
+      fontWeight: '800',
       color: '#ffffff',
     },
-    messageTextOther: {
+    msgAvatarSpacer: {
+      width: 32,
+    },
+    msgBody: {
+      flex: 1,
+      paddingLeft: 8,
+    },
+    msgMeta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 3,
+    },
+    msgName: {
+      fontSize: 14,
+      fontWeight: '700',
       color: '#e2e8f0',
     },
-    messageTime: {
-      fontSize: 10,
-      color: '#64748b',
-      marginTop: 4,
-      alignSelf: 'flex-end',
+    msgRolePill: {
+      borderRadius: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
     },
-    systemMessage: {
+    msgRoleLabel: {
+      fontSize: 10,
+      fontWeight: '600',
+      textTransform: 'capitalize',
+    },
+    msgTimestamp: {
+      fontSize: 11,
+      color: '#475569',
+    },
+    msgContent: {
+      fontSize: 14,
+      color: '#cbd5e1',
+      lineHeight: 21,
+    },
+
+    // ── System messages ──────────────────────────────
+    systemMsg: {
       alignSelf: 'center',
-      backgroundColor: 'transparent',
       paddingVertical: 8,
     },
-    systemText: {
+    systemMsgText: {
       fontSize: 12,
-      color: '#64748b',
+      color: '#475569',
       fontStyle: 'italic',
-      textAlign: 'center',
     },
-    // Input area
-    inputContainer: {
+
+    // ── Date separator ───────────────────────────────
+    dateSep: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 20,
+      gap: 12,
+    },
+    dateSepLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: '#1e293b',
+    },
+    dateSepLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#475569',
+      paddingHorizontal: 8,
+    },
+
+    // ── Input bar ────────────────────────────────────
+    inputBar: {
       flexDirection: 'row',
       alignItems: 'flex-end',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      gap: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
       borderTopWidth: 1,
-      borderTopColor: theme.border || '#1e293b',
-      backgroundColor: theme.headerBackground || '#1e293b',
-      gap: 8,
-      ...(Platform.OS === 'ios' ? { paddingBottom: 24 } : {}),
+      borderTopColor: '#1e293b',
+      backgroundColor: '#0c1222',
     },
     textInput: {
       flex: 1,
-      minHeight: 40,
+      minHeight: 44,
       maxHeight: 120,
-      borderRadius: 20,
-      backgroundColor: theme.background || '#0f172a',
+      borderRadius: 12,
+      backgroundColor: '#1e293b',
       paddingHorizontal: 16,
-      paddingVertical: 10,
-      fontSize: 15,
-      color: '#ffffff',
+      paddingVertical: 12,
+      fontSize: 14,
+      color: '#e2e8f0',
+      borderWidth: 1,
+      borderColor: '#334155',
+      ...(Platform.OS === 'web' ? { outlineStyle: 'none' } as any : {}),
     },
-    sendButton: {
-      width: 40,
-      height: 40,
-      borderRadius: 20,
+    sendBtn: {
+      width: 44,
+      height: 44,
+      borderRadius: 12,
       backgroundColor: '#3b82f6',
       justifyContent: 'center',
       alignItems: 'center',
     },
-    sendButtonDisabled: {
-      opacity: 0.5,
-    },
-    // Empty state
-    emptyContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      paddingTop: 60,
-      paddingHorizontal: 32,
-    },
-    emptyText: {
-      color: '#94a3b8',
-      fontSize: 16,
-      fontWeight: '600',
-      marginTop: 16,
-    },
-    emptySubText: {
-      color: '#64748b',
-      fontSize: 14,
-      textAlign: 'center',
-      marginTop: 8,
-    },
-    // Members sidebar
-    membersButton: {
-      padding: 8,
-    },
-    deniedContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    deniedText: {
-      color: '#ef4444',
-      fontSize: 16,
-      fontWeight: '600',
+    sendBtnOff: {
+      opacity: 0.3,
     },
   });
 }

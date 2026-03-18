@@ -112,7 +112,13 @@ export function useSuperAdminTeamChat(showAlert: (config: ShowAlertConfig) => vo
       setSendingMessage(true);
 
       const sent = await sendTeamMessage(activeChannel.id, userId, content, replyToId);
-      if (!sent) {
+      if (sent) {
+        // Optimistic: add to local state immediately (Realtime will deduplicate)
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === sent.id)) return prev;
+          return [...prev, sent];
+        });
+      } else {
         showAlert({
           title: 'Send Failed',
           message: 'Could not send message. Please try again.',

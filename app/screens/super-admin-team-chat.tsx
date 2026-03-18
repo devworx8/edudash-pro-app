@@ -2,13 +2,12 @@ import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
-  RefreshControl,
   TouchableOpacity,
   TextInput,
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,23 +15,56 @@ import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { isPlatformStaff } from '@/lib/roleUtils';
-import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { useSuperAdminTeamChat } from '@/hooks/useSuperAdminTeamChat';
-import { CHANNEL_TYPE_CONFIG } from '@/hooks/super-admin-team-chat/types';
-import type { TeamChannel, TeamMessage } from '@/hooks/super-admin-team-chat/types';
+import type { TeamMessage } from '@/hooks/super-admin-team-chat/types';
 import { createStyles } from '@/lib/screen-styles/super-admin-team-chat.styles';
+import ChannelSidebar from '@/components/team-chat/ChannelSidebar';
+
+// ── Utilities ────────────────────────────────────────────────────────────────
+
+const AVATAR_COLORS = [
+  '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b',
+  '#ec4899', '#ef4444', '#6366f1', '#14b8a6',
+];
+
+function hashColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h);
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+}
+
+function initials(name: string): string {
+  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+}
 
 function formatTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function getDateLabel(dateStr: string): string {
   const d = new Date(dateStr);
   const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  if (isToday) {
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  if (d.toDateString() === now.toDateString()) return 'Today';
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
+
+function shouldShowHeader(msgs: TeamMessage[], i: number): boolean {
+  if (i === 0) return true;
+  if (msgs[i - 1].sender_id !== msgs[i].sender_id) return true;
+  return new Date(msgs[i].created_at).getTime() - new Date(msgs[i - 1].created_at).getTime() > 300_000;
+}
+
+function shouldShowDate(msgs: TeamMessage[], i: number): boolean {
+  if (i === 0) return true;
+  return new Date(msgs[i - 1].created_at).toDateString() !== new Date(msgs[i].created_at).toDateString();
+}
+
+// ── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function SuperAdminTeamChatScreen() {
   const { theme } = useTheme();
@@ -40,248 +72,302 @@ export default function SuperAdminTeamChatScreen() {
   const { showAlert, alertProps } = useAlertModal();
   const [messageText, setMessageText] = useState('');
   const scrollRef = useRef<FlatList>(null);
+  const { width } = useWindowDimensions();
+  const isWide = width >= 768;
 
   const {
-    profile,
-    channels,
-    activeChannel,
-    messages,
-    members,
-    loading,
-    sendingMessage,
-    refreshing,
-    selectChannel,
-    handleSendMessage,
-    onRefresh,
-    goBackToChannels,
+    profile, channels, activeChannel, messages, members,
+    loading, sendingMessage, selectChannel, handleSendMessage, goBackToChannels,
   } = useSuperAdminTeamChat(showAlert);
 
   if (!profile || !isPlatformStaff(profile.role)) {
     return (
-      <View style={styles.container}>
-        <Stack.Screen options={{ title: 'Team Chat', headerShown: false }} />
+      <View style={styles.root}>
+        <Stack.Screen options={{ headerShown: false }} />
         <ThemedStatusBar />
-        <SafeAreaView style={styles.deniedContainer}>
-          <Text style={styles.deniedText}>Access Denied - Super Admin Only</Text>
+        <SafeAreaView style={styles.accessDenied}>
+          <Ionicons name="lock-closed" size={48} color="#ef4444" />
+          <Text style={styles.accessDeniedText}>Access Denied</Text>
         </SafeAreaView>
       </View>
     );
   }
 
   const onSend = async () => {
-    if (!messageText.trim()) return;
+    if (!messageText.trim() || sendingMessage) return;
     const text = messageText;
     setMessageText('');
     await handleSendMessage(text);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
   };
 
-  // ── Channel List View ──
-  if (!activeChannel) {
-    return (
-      <View style={styles.container}>
-        <Stack.Screen options={{ title: 'Team Chat', headerShown: false }} />
-        <ThemedStatusBar />
+  const handleKeyPress = (e: any) => {
+    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
 
-        <SafeAreaView style={styles.header}>
-          <View style={styles.headerContent}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={24} color="#ffffff" />
-            </TouchableOpacity>
-            <View style={styles.headerTitleContainer}>
-              <Ionicons name="chatbubbles" size={28} color="#6366f1" />
-              <View>
-                <Text style={styles.title}>Team Chat</Text>
-                <Text style={styles.subtitle}>{channels.length} channels</Text>
+  // ── Desktop: split layout ──
+  if (isWide) {
+    return (
+      <View style={styles.root}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ThemedStatusBar />
+        <SafeAreaView style={{ flex: 1 }}>
+          <View style={styles.splitRow}>
+            <ChannelSidebar
+              channels={channels}
+              activeChannelId={activeChannel?.id}
+              onSelect={selectChannel}
+              members={members}
+              loading={loading}
+              isWide
+            />
+            {activeChannel ? (
+              <ChatPane
+                channel={activeChannel}
+                messages={messages}
+                members={members}
+                myId={profile.id}
+                messageText={messageText}
+                setMessageText={setMessageText}
+                sendingMessage={sendingMessage}
+                onSend={onSend}
+                onKeyPress={handleKeyPress}
+                scrollRef={scrollRef}
+                styles={styles}
+              />
+            ) : (
+              <View style={styles.noChannel}>
+                <Ionicons name="chatbubbles-outline" size={56} color="#1e293b" />
+                <Text style={styles.noChannelTitle}>Select a channel</Text>
+                <Text style={styles.noChannelSub}>
+                  Choose a channel from the sidebar to start chatting
+                </Text>
               </View>
-            </View>
+            )}
           </View>
         </SafeAreaView>
-
-        <ScrollView
-          style={styles.content}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3b82f6" />
-          }
-        >
-          {loading ? (
-            <View style={styles.loadingContainer}>
-              <EduDashSpinner size="large" color="#3b82f6" />
-              <Text style={styles.loadingText}>Loading channels...</Text>
-            </View>
-          ) : channels.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubbles-outline" size={48} color="#64748b" />
-              <Text style={styles.emptyText}>No channels yet</Text>
-              <Text style={styles.emptySubText}>
-                Run the database migration to create default team channels.
-              </Text>
-            </View>
-          ) : (
-            channels.map((channel) => (
-              <ChannelListItem
-                key={channel.id}
-                channel={channel}
-                styles={styles}
-                onPress={() => selectChannel(channel)}
-              />
-            ))
-          )}
-        </ScrollView>
         <AlertModal {...alertProps} />
       </View>
     );
   }
 
-  // ── Chat View ──
-  return (
-    <View style={styles.container}>
-      <Stack.Screen options={{ title: activeChannel.name, headerShown: false }} />
-      <ThemedStatusBar />
-
-      {/* Chat Header */}
-      <SafeAreaView style={{ backgroundColor: styles.chatHeader.backgroundColor }}>
-        <View style={styles.chatHeader}>
-          <TouchableOpacity onPress={goBackToChannels} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#ffffff" />
-          </TouchableOpacity>
-          <View style={styles.chatHeaderInfo}>
-            <Text style={styles.chatHeaderName}># {activeChannel.name}</Text>
-            <Text style={styles.chatHeaderMembers}>
-              {members.length} member{members.length !== 1 ? 's' : ''}
-            </Text>
-          </View>
-          <TouchableOpacity style={styles.membersButton}>
-            <Ionicons name="people" size={22} color="#94a3b8" />
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        {/* Messages */}
-        <FlatList
-          ref={scrollRef}
-          data={messages}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingVertical: 12, paddingHorizontal: 16 }}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-          renderItem={({ item }) => (
-            <MessageBubble message={item} isOwn={item.sender_id === profile.id} styles={styles} />
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="chatbubble-outline" size={40} color="#64748b" />
-              <Text style={styles.emptyText}>No messages yet</Text>
-              <Text style={styles.emptySubText}>
-                Be the first to say something in #{activeChannel.name}
-              </Text>
-            </View>
-          }
-        />
-
-        {/* Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            style={styles.textInput}
-            value={messageText}
-            onChangeText={setMessageText}
-            placeholder={`Message #${activeChannel.name}`}
-            placeholderTextColor="#64748b"
-            multiline
-            maxLength={4000}
-            returnKeyType="default"
-          />
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!messageText.trim() || sendingMessage) && styles.sendButtonDisabled,
-            ]}
-            onPress={onSend}
-            disabled={!messageText.trim() || sendingMessage}
-          >
-            <Ionicons name="send" size={18} color="#ffffff" />
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-      <AlertModal {...alertProps} />
-    </View>
-  );
-}
-
-// ── Sub-components ──
-
-function ChannelListItem({
-  channel,
-  styles,
-  onPress,
-}: {
-  channel: TeamChannel;
-  styles: ReturnType<typeof createStyles>;
-  onPress: () => void;
-}) {
-  const config = CHANNEL_TYPE_CONFIG[channel.channel_type] || CHANNEL_TYPE_CONFIG.custom;
-  return (
-    <TouchableOpacity style={styles.channelItem} onPress={onPress} activeOpacity={0.7}>
-      <View style={[styles.channelIcon, { backgroundColor: config.color + '20' }]}>
-        <Ionicons name={config.icon as any} size={22} color={config.color} />
-      </View>
-      <View style={styles.channelInfo}>
-        <Text style={styles.channelName}># {channel.name}</Text>
-        <Text style={styles.channelPreview} numberOfLines={1}>
-          {channel.last_message?.content || channel.description || 'No messages yet'}
-        </Text>
-        <View style={styles.channelMeta}>
-          <Text style={styles.channelMetaText}>
-            {channel.member_count || 0} member{(channel.member_count || 0) !== 1 ? 's' : ''}
-          </Text>
-          {channel.last_message && (
-            <Text style={styles.channelMetaText}>
-              · {formatTime(channel.last_message.created_at)}
-            </Text>
-          )}
-        </View>
-      </View>
-      {(channel.unread_count || 0) > 0 && (
-        <View style={styles.unreadBadge}>
-          <Text style={styles.unreadText}>{channel.unread_count}</Text>
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-}
-
-function MessageBubble({
-  message,
-  isOwn,
-  styles,
-}: {
-  message: TeamMessage;
-  isOwn: boolean;
-  styles: ReturnType<typeof createStyles>;
-}) {
-  if (message.content_type === 'system') {
+  // ── Mobile: stacked layout ──
+  if (activeChannel) {
     return (
-      <View style={styles.systemMessage}>
-        <Text style={styles.systemText}>{message.content}</Text>
+      <View style={styles.root}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ThemedStatusBar />
+        <SafeAreaView style={{ flex: 1 }}>
+          <ChatPane
+            channel={activeChannel}
+            messages={messages}
+            members={members}
+            myId={profile.id}
+            messageText={messageText}
+            setMessageText={setMessageText}
+            sendingMessage={sendingMessage}
+            onSend={onSend}
+            onKeyPress={handleKeyPress}
+            scrollRef={scrollRef}
+            styles={styles}
+            onBack={goBackToChannels}
+          />
+        </SafeAreaView>
+        <AlertModal {...alertProps} />
       </View>
     );
   }
 
   return (
-    <View style={[styles.messageRow, isOwn ? styles.messageRowOwn : styles.messageRowOther]}>
-      {!isOwn && <Text style={styles.messageSender}>{message.sender?.full_name || 'Unknown'}</Text>}
-      <View
-        style={[styles.messageBubble, isOwn ? styles.messageBubbleOwn : styles.messageBubbleOther]}
-      >
-        <Text style={[styles.messageText, isOwn ? styles.messageTextOwn : styles.messageTextOther]}>
-          {message.content}
-        </Text>
+    <View style={styles.root}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <ThemedStatusBar />
+      <SafeAreaView style={{ flex: 1 }}>
+        <ChannelSidebar
+          channels={channels}
+          activeChannelId={undefined}
+          onSelect={selectChannel}
+          members={members}
+          loading={loading}
+          isWide={false}
+          onBack={() => router.back()}
+        />
+      </SafeAreaView>
+      <AlertModal {...alertProps} />
+    </View>
+  );
+}
+
+// ── Chat Pane ────────────────────────────────────────────────────────────────
+
+function ChatPane({
+  channel, messages, members, myId, messageText, setMessageText,
+  sendingMessage, onSend, onKeyPress, scrollRef, styles, onBack,
+}: {
+  channel: { id: string; name: string; description: string | null };
+  messages: TeamMessage[];
+  members: { user_id: string }[];
+  myId: string;
+  messageText: string;
+  setMessageText: (t: string) => void;
+  sendingMessage: boolean;
+  onSend: () => void;
+  onKeyPress: (e: any) => void;
+  scrollRef: React.RefObject<FlatList>;
+  styles: ReturnType<typeof createStyles>;
+  onBack?: () => void;
+}) {
+  return (
+    <KeyboardAvoidingView
+      style={styles.chatPane}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      {/* ── Header ── */}
+      <View style={styles.chatHeader}>
+        {onBack && (
+          <TouchableOpacity onPress={onBack} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="arrow-back" size={24} color="#e2e8f0" />
+          </TouchableOpacity>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={styles.chatTitle}># {channel.name}</Text>
+          <Text style={styles.chatSub}>
+            {members.length} member{members.length !== 1 ? 's' : ''}
+            {channel.description ? ` · ${channel.description}` : ''}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.headerIconBtn}>
+          <Ionicons name="people-outline" size={20} color="#94a3b8" />
+        </TouchableOpacity>
       </View>
-      <Text style={styles.messageTime}>{formatTime(message.created_at)}</Text>
+
+      {/* ── Messages ── */}
+      <FlatList
+        ref={scrollRef}
+        data={messages}
+        keyExtractor={item => item.id}
+        contentContainerStyle={
+          messages.length === 0
+            ? { flex: 1, justifyContent: 'center' }
+            : { paddingVertical: 8, paddingHorizontal: 16 }
+        }
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
+        renderItem={({ item, index }) => (
+          <>
+            {shouldShowDate(messages, index) && (
+              <DateSeparator label={getDateLabel(item.created_at)} styles={styles} />
+            )}
+            <MessageBubble
+              message={item}
+              isOwn={item.sender_id === myId}
+              showSender={shouldShowHeader(messages, index)}
+              styles={styles}
+            />
+          </>
+        )}
+        ListEmptyComponent={
+          <View style={styles.emptyChat}>
+            <View style={styles.emptyChatCircle}>
+              <Ionicons name="chatbubble-ellipses-outline" size={36} color="#334155" />
+            </View>
+            <Text style={styles.emptyChatTitle}>No messages yet</Text>
+            <Text style={styles.emptyChatSub}>
+              Be the first to say something in #{channel.name}
+            </Text>
+          </View>
+        }
+      />
+
+      {/* ── Input ── */}
+      <View style={styles.inputBar}>
+        <TextInput
+          style={styles.textInput}
+          value={messageText}
+          onChangeText={setMessageText}
+          placeholder={`Message #${channel.name}`}
+          placeholderTextColor="#475569"
+          multiline
+          maxLength={4000}
+          returnKeyType="default"
+          onKeyPress={onKeyPress}
+        />
+        <TouchableOpacity
+          style={[styles.sendBtn, (!messageText.trim() || sendingMessage) && styles.sendBtnOff]}
+          onPress={onSend}
+          disabled={!messageText.trim() || sendingMessage}
+        >
+          <Ionicons name="send" size={16} color="#ffffff" />
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ── Message Bubble (Slack-style) ─────────────────────────────────────────────
+
+function MessageBubble({
+  message, isOwn, showSender, styles,
+}: {
+  message: TeamMessage;
+  isOwn: boolean;
+  showSender: boolean;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  if (message.content_type === 'system') {
+    return (
+      <View style={styles.systemMsg}>
+        <Text style={styles.systemMsgText}>{message.content}</Text>
+      </View>
+    );
+  }
+
+  const name = message.sender?.full_name || 'Unknown';
+  const color = hashColor(name);
+
+  return (
+    <View style={[styles.msgRow, showSender && styles.msgRowSpaced]}>
+      <View style={styles.msgAvatarCol}>
+        {showSender ? (
+          <View style={[styles.msgAvatar, { backgroundColor: isOwn ? '#3b82f6' : color }]}>
+            <Text style={styles.msgAvatarText}>{initials(name)}</Text>
+          </View>
+        ) : (
+          <View style={styles.msgAvatarSpacer} />
+        )}
+      </View>
+      <View style={styles.msgBody}>
+        {showSender && (
+          <View style={styles.msgMeta}>
+            <Text style={[styles.msgName, isOwn && { color: '#60a5fa' }]}>
+              {isOwn ? 'You' : name}
+            </Text>
+            {message.sender?.role && (
+              <View style={[styles.msgRolePill, { backgroundColor: color + '22' }]}>
+                <Text style={[styles.msgRoleLabel, { color }]}>
+                  {message.sender.role.replace(/_/g, ' ')}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.msgTimestamp}>{formatTime(message.created_at)}</Text>
+          </View>
+        )}
+        <Text style={styles.msgContent}>{message.content}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── Date Separator ───────────────────────────────────────────────────────────
+
+function DateSeparator({ label, styles }: { label: string; styles: ReturnType<typeof createStyles> }) {
+  return (
+    <View style={styles.dateSep}>
+      <View style={styles.dateSepLine} />
+      <Text style={styles.dateSepLabel}>{label}</Text>
+      <View style={styles.dateSepLine} />
     </View>
   );
 }
