@@ -18,10 +18,10 @@ interface AdBannerProps {
   showFallback?: boolean;
 }
 
-export default function AdBanner({ 
+export default function AdBanner({
   placement = PLACEMENT_KEYS.BANNER_PARENT_DASHBOARD,
   style,
-  showFallback = true 
+  showFallback = true,
 }: AdBannerProps) {
   const { theme } = useTheme();
   const { user, profile } = useAuth();
@@ -32,9 +32,14 @@ export default function AdBanner({
   const [lastError, setLastError] = useState('');
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isHuaweiNoGmsRiskDevice = Platform.OS === 'android'
-    && (String(Device.brand || '').toLowerCase().includes('huawei')
-      || String(Device.manufacturer || '').toLowerCase().includes('huawei'));
+  const isHuaweiNoGmsRiskDevice =
+    Platform.OS === 'android' &&
+    (String(Device.brand || '')
+      .toLowerCase()
+      .includes('huawei') ||
+      String(Device.manufacturer || '')
+        .toLowerCase()
+        .includes('huawei'));
 
   // Check if ads should be shown
   useEffect(() => {
@@ -42,7 +47,7 @@ export default function AdBanner({
       try {
         const eligible = await shouldShowAds(profile, 'free');
         setShowAds(eligible);
-        
+
         if (eligible) {
           track('edudash.ad.banner_eligible', {
             placement,
@@ -59,32 +64,35 @@ export default function AdBanner({
     checkAdsEligibility();
   }, [placement, profile, user?.id]);
 
-  const handleAdFailedToLoad = useCallback((error: any) => {
-    setAdLoaded(false);
-    const errorMsg = error?.message || error?.code || 'Unknown error';
-    setLastError(errorMsg);
-    
-    const attempt = retryCountRef.current;
-    track('edudash.ad.banner_failed', {
-      placement,
-      error: error?.message || 'Unknown error',
-      user_id: user?.id,
-      platform: Platform.OS,
-      retry_attempt: attempt,
-    });
+  const handleAdFailedToLoad = useCallback(
+    (error: any) => {
+      setAdLoaded(false);
+      const errorMsg = error?.message || error?.code || 'Unknown error';
+      setLastError(errorMsg);
 
-    // Retry up to 3 times with exponential backoff (15s, 30s, 60s)
-    if (attempt < 3) {
-      const delay = 15_000 * Math.pow(2, attempt);
-      retryTimerRef.current = setTimeout(() => {
-        retryCountRef.current = attempt + 1;
-        setAdFailed(false);
-        setRetryKey((k) => k + 1);
-      }, delay);
-    } else {
-      setAdFailed(true);
-    }
-  }, [placement, user?.id]);
+      const attempt = retryCountRef.current;
+      track('edudash.ad.banner_failed', {
+        placement,
+        error: error?.message || 'Unknown error',
+        user_id: user?.id,
+        platform: Platform.OS,
+        retry_attempt: attempt,
+      });
+
+      // Retry up to 3 times with exponential backoff (15s, 30s, 60s)
+      if (attempt < 3) {
+        const delay = 15_000 * Math.pow(2, attempt);
+        retryTimerRef.current = setTimeout(() => {
+          retryCountRef.current = attempt + 1;
+          setAdFailed(false);
+          setRetryKey((k) => k + 1);
+        }, delay);
+      } else {
+        setAdFailed(true);
+      }
+    },
+    [placement, user?.id],
+  );
 
   // Clean up retry timer on unmount
   useEffect(() => {
@@ -117,7 +125,13 @@ export default function AdBanner({
       error: e instanceof Error ? e.message : String(e),
       platform: Platform.OS,
     });
-    return showFallback ? <FallbackBanner theme={theme} placement={placement} reason={`SDK require failed: ${e instanceof Error ? e.message : String(e)}`} /> : null;
+    return showFallback ? (
+      <FallbackBanner
+        theme={theme}
+        placement={placement}
+        reason={`SDK require failed: ${e instanceof Error ? e.message : String(e)}`}
+      />
+    ) : null;
   }
 
   const unitId = getAdUnitId(placement);
@@ -127,14 +141,20 @@ export default function AdBanner({
       platform: Platform.OS,
       test_mode: String(process.env.EXPO_PUBLIC_ADMOB_TEST_IDS_ONLY),
     });
-    return showFallback ? <FallbackBanner theme={theme} placement={placement} reason={`No unit ID for ${placement} (TEST_IDS_ONLY=${process.env.EXPO_PUBLIC_ADMOB_TEST_IDS_ONLY})`} /> : null;
+    return showFallback ? (
+      <FallbackBanner
+        theme={theme}
+        placement={placement}
+        reason={`No unit ID for ${placement} (TEST_IDS_ONLY=${process.env.EXPO_PUBLIC_ADMOB_TEST_IDS_ONLY})`}
+      />
+    ) : null;
   }
 
   // Handle ad events
   const handleAdLoaded = () => {
     setAdLoaded(true);
     setAdFailed(false);
-    
+
     track('edudash.ad.banner_loaded', {
       placement,
       ad_unit_id: unitId.slice(-8),
@@ -154,7 +174,13 @@ export default function AdBanner({
 
   // Show fallback if ad failed and fallback is enabled
   if (adFailed && showFallback) {
-    return <FallbackBanner theme={theme} placement={placement} reason={`Load failed after ${retryCountRef.current} retries: ${lastError}`} />;
+    return (
+      <FallbackBanner
+        theme={theme}
+        placement={placement}
+        reason={`Load failed after ${retryCountRef.current} retries: ${lastError}`}
+      />
+    );
   }
 
   return (
@@ -165,9 +191,9 @@ export default function AdBanner({
           <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Loading...</Text>
         </View>
       )}
-      <BannerAd 
+      <BannerAd
         key={retryKey}
-        unitId={unitId} 
+        unitId={unitId}
         size={BannerAdSize.ANCHORED_ADAPTIVE_BANNER}
         requestOptions={{ requestNonPersonalizedAdsOnly: true }}
         onAdLoaded={handleAdLoaded}
@@ -175,8 +201,18 @@ export default function AdBanner({
         onAdOpened={handleAdOpened}
       />
       {/* TODO: Remove debug line once ad serving is confirmed */}
-      <Text style={{ fontSize: 8, color: theme.textSecondary, textAlign: 'center', marginTop: 1, opacity: 0.45 }}>
-        {adLoaded ? `✓ ad:${unitId.slice(-10)}` : `⏳ ${unitId.slice(-10)} r:${retryCountRef.current}`}
+      <Text
+        style={{
+          fontSize: 8,
+          color: theme.textSecondary,
+          textAlign: 'center',
+          marginTop: 1,
+          opacity: 0.45,
+        }}
+      >
+        {adLoaded
+          ? `✓ ad:${unitId.slice(-10)}`
+          : `⏳ ${unitId.slice(-10)} r:${retryCountRef.current}`}
         {lastError ? ` | ${lastError.slice(0, 50)}` : ''}
       </Text>
     </View>
@@ -185,7 +221,15 @@ export default function AdBanner({
 
 // Fallback banner component for when ads fail to load
 // TODO: Remove `reason` debug overlay once ad serving is confirmed working
-function FallbackBanner({ theme, placement, reason }: { theme: any; placement: string; reason?: string }) {
+function FallbackBanner({
+  theme,
+  placement,
+  reason,
+}: {
+  theme: any;
+  placement: string;
+  reason?: string;
+}) {
   const handleUpgradePress = () => {
     track('edudash.ad.fallback_clicked', {
       placement,
@@ -198,7 +242,7 @@ function FallbackBanner({ theme, placement, reason }: { theme: any; placement: s
 
   return (
     <View style={[styles.container, styles.fallbackContainer]}>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.fallbackCard}
         onPress={handleUpgradePress}
         activeOpacity={0.8}
@@ -221,7 +265,14 @@ function FallbackBanner({ theme, placement, reason }: { theme: any; placement: s
           </View>
           {/* TODO: Remove debug line once ad serving is confirmed */}
           {reason ? (
-            <Text style={{ fontSize: 8, color: 'rgba(255,255,255,0.55)', textAlign: 'center', paddingBottom: 4 }}>
+            <Text
+              style={{
+                fontSize: 8,
+                color: 'rgba(255,255,255,0.55)',
+                textAlign: 'center',
+                paddingBottom: 4,
+              }}
+            >
               Ad debug: {reason}
             </Text>
           ) : null}

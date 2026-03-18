@@ -57,9 +57,13 @@ interface DashVoiceOrbSectionProps {
 const hiddenOrbStyle = StyleSheet.create({
   hidden: { position: 'absolute', width: 0, height: 0, overflow: 'hidden', opacity: 0 },
   micBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
     marginTop: 12,
   },
 });
@@ -104,7 +108,11 @@ export function DashVoiceOrbSection({
       onStartListening={() => {
         onStartListening();
         if (!voiceDictationProbeRef.current) {
-          voiceDictationProbeRef.current = { platform: 'mobile', source: 'dash_voice_orb', stt_start_at: new Date().toISOString() };
+          voiceDictationProbeRef.current = {
+            platform: 'mobile',
+            source: 'dash_voice_orb',
+            stt_start_at: new Date().toISOString(),
+          };
         } else if (!voiceDictationProbeRef.current.stt_start_at) {
           voiceDictationProbeRef.current.stt_start_at = new Date().toISOString();
         }
@@ -112,7 +120,11 @@ export function DashVoiceOrbSection({
       onPartialTranscript={(text: string) => {
         onPartialTranscript(text);
         if (!voiceDictationProbeRef.current) {
-          voiceDictationProbeRef.current = { platform: 'mobile', source: 'dash_voice_orb', stt_start_at: new Date().toISOString() };
+          voiceDictationProbeRef.current = {
+            platform: 'mobile',
+            source: 'dash_voice_orb',
+            stt_start_at: new Date().toISOString(),
+          };
         }
         if (!voiceDictationProbeRef.current.first_partial_at && String(text || '').trim()) {
           voiceDictationProbeRef.current.first_partial_at = new Date().toISOString();
@@ -137,19 +149,31 @@ export function DashVoiceOrbSection({
   const isPremiumTier = orbTier === 'premium' || orbTier === 'enterprise';
 
   // Map processing/speaking state to DashOrb state prop
-  const dashOrbState = isSpeaking ? 'speaking' as const
-    : isProcessing ? 'thinking' as const
-    : isListening ? 'listening' as const
-    : 'idle' as const;
+  const dashOrbState = isSpeaking
+    ? ('speaking' as const)
+    : isProcessing
+      ? ('thinking' as const)
+      : isListening
+        ? ('listening' as const)
+        : ('idle' as const);
 
   return (
     <>
-      <View style={[s.orbContainer, { minHeight: orbRenderSize + 40, marginBottom: showTranscript ? 10 : 16 }]}>
+      <View
+        style={[
+          s.orbContainer,
+          { minHeight: orbRenderSize + 40, marginBottom: showTranscript ? 10 : 16 },
+        ]}
+      >
         {/* VoiceOrb handles audio logic in a hidden container */}
         {voiceOrbElement && <View style={hiddenOrbStyle.hidden}>{voiceOrbElement}</View>}
         <TouchableOpacity activeOpacity={0.92} onPress={handleVisibleOrbPress}>
           {isPremiumTier ? (
-            <PremiumCosmicOrb size={orbRenderSize} isProcessing={isProcessing} isSpeaking={isSpeaking} />
+            <PremiumCosmicOrb
+              size={orbRenderSize}
+              isProcessing={isProcessing}
+              isSpeaking={isSpeaking}
+            />
           ) : (
             <DashOrb size={orbRenderSize} state={dashOrbState} />
           )}
@@ -158,7 +182,9 @@ export function DashVoiceOrbSection({
 
       {/* Single mic button: reflects mute + listening state. Tap = unmute or toggle listening. Long press = toggle mute. */}
       {VoiceOrb && (
-        <View style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 12 }}>
+        <View
+          style={{ alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 12 }}
+        >
           <TouchableOpacity
             style={[
               hiddenOrbStyle.micBtn,

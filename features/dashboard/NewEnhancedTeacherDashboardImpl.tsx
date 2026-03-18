@@ -1,6 +1,6 @@
 /**
  * New Enhanced Teacher Dashboard - Modern UI/UX Implementation
- * 
+ *
  * Features:
  * - Clean grid-based layout with improved visual hierarchy
  * - Mobile-first responsive design with <2s load time
@@ -30,12 +30,18 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { track } from '@/lib/analytics';
 import { getTierColor, getTierLabel } from '@/lib/utils/tierUtils';
-import { createTeacherDashboardStyles, getLayoutMetrics } from '@/components/dashboard/teacher/teacherDashboard.styles';
+import {
+  createTeacherDashboardStyles,
+  getLayoutMetrics,
+} from '@/components/dashboard/teacher/teacherDashboard.styles';
 import { PendingParentLinkRequests } from '@/components/dashboard/PendingParentLinkRequests';
 import { TeacherMetricsCard } from '@/components/dashboard/teacher/TeacherMetricsCard';
 import { TeacherQuickActionCard } from '@/components/dashboard/teacher/TeacherQuickActionCard';
 import { BirthdayDonationRegister } from '@/components/dashboard/teacher/BirthdayDonationRegister';
-import { useNewEnhancedTeacherState, type TeacherQuickAction } from '@/hooks/useNewEnhancedTeacherState';
+import {
+  useNewEnhancedTeacherState,
+  type TeacherQuickAction,
+} from '@/hooks/useNewEnhancedTeacherState';
 import { useUnreadMessages } from '@/contexts/NotificationContext';
 import { useQuery } from '@tanstack/react-query';
 import { ParentJoinService } from '@/lib/services/parentJoinService';
@@ -57,9 +63,12 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
   const { width } = useWindowDimensions();
   const layout = useMemo(() => getLayoutMetrics(width), [width]);
   const [routineReminderStatus, setRoutineReminderStatus] = useState<string | null>(null);
-  
-  const styles = useMemo(() => createTeacherDashboardStyles(theme, insets.top, insets.bottom, layout), [theme, insets.top, insets.bottom, layout]);
-  
+
+  const styles = useMemo(
+    () => createTeacherDashboardStyles(theme, insets.top, insets.bottom, layout),
+    [theme, insets.top, insets.bottom, layout],
+  );
+
   // Clear any stuck dashboardSwitching flag on mount to prevent loading issues after hot reload
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).dashboardSwitching) {
@@ -67,10 +76,10 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
       delete (window as any).dashboardSwitching;
     }
   }, []);
-  
+
   // State management hook
   const state = useNewEnhancedTeacherState();
-  
+
   const {
     data: dashboardData,
     loading,
@@ -81,10 +90,11 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
 
   const organizationId = profile?.organization_id || (profile as any)?.preschool_id || null;
   const isStandaloneTeacher = !organizationId;
-  const {
-    students: allTeacherStudents,
-    loading: teacherStudentsLoading,
-  } = useTeacherStudents({ teacherId: user?.id || null, organizationId, limit: 0 });
+  const { students: allTeacherStudents, loading: teacherStudentsLoading } = useTeacherStudents({
+    teacherId: user?.id || null,
+    organizationId,
+    limit: 0,
+  });
   const teacherStudents = allTeacherStudents.slice(0, 4);
 
   const unreadMessageCount = useUnreadMessages();
@@ -117,8 +127,16 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
 
   const classSummary = useMemo(() => {
     const classes = dashboardData?.myClasses || [];
-    const totalStudents = dashboardData?.totalStudents || classes.reduce((sum: number, cls: { studentCount?: number }) => sum + (cls.studentCount || 0), 0);
-    const presentToday = classes.reduce((sum: number, cls: { presentToday?: number }) => sum + (cls.presentToday || 0), 0);
+    const totalStudents =
+      dashboardData?.totalStudents ||
+      classes.reduce(
+        (sum: number, cls: { studentCount?: number }) => sum + (cls.studentCount || 0),
+        0,
+      );
+    const presentToday = classes.reduce(
+      (sum: number, cls: { presentToday?: number }) => sum + (cls.presentToday || 0),
+      0,
+    );
     const attendanceRate = totalStudents > 0 ? Math.round((presentToday / totalStudents) * 100) : 0;
     const classCount = classes.length;
 
@@ -186,13 +204,15 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
     const routine = dashboardData?.todayRoutine;
     if (!routine) {
       setRoutineReminderStatus(
-        t('teacher.routine_reminders_no_program', { defaultValue: 'No daily routine found for today.' })
+        t('teacher.routine_reminders_no_program', {
+          defaultValue: 'No daily routine found for today.',
+        }),
       );
       return;
     }
 
     setRoutineReminderStatus(
-      t('teacher.routine_reminders_scheduling', { defaultValue: 'Scheduling reminders...' })
+      t('teacher.routine_reminders_scheduling', { defaultValue: 'Scheduling reminders...' }),
     );
     try {
       const result = await scheduleTeacherRoutineReminders(routine);
@@ -200,7 +220,7 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
         t('teacher.routine_reminders_done', {
           defaultValue: '{{count}} reminders scheduled',
           count: result.scheduled,
-        })
+        }),
       );
       track('teacher.dashboard.daily_program_reminders_scheduled', {
         user_id: user?.id,
@@ -212,7 +232,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
     } catch (error) {
       console.warn('[TeacherDashboard] Failed to schedule routine reminders:', error);
       setRoutineReminderStatus(
-        t('teacher.routine_reminders_failed', { defaultValue: 'Could not schedule reminders right now.' })
+        t('teacher.routine_reminders_failed', {
+          defaultValue: 'Could not schedule reminders right now.',
+        }),
       );
     }
   }, [dashboardData?.todayRoutine, t, user?.id]);
@@ -256,8 +278,11 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
       {
         id: 'next_lesson',
         label: t('teacher.next_lesson', { defaultValue: 'Next Lesson' }),
-        value: classSummary.nextClass?.name || t('teacher.no_class', { defaultValue: 'No class yet' }),
-        sub: classSummary.nextClass?.nextLesson || t('teacher.no_upcoming_lessons', { defaultValue: 'No upcoming lesson' }),
+        value:
+          classSummary.nextClass?.name || t('teacher.no_class', { defaultValue: 'No class yet' }),
+        sub:
+          classSummary.nextClass?.nextLesson ||
+          t('teacher.no_upcoming_lessons', { defaultValue: 'No upcoming lesson' }),
         icon: 'time-outline' as const,
         color: theme.primary,
       },
@@ -265,9 +290,10 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
         id: 'attendance',
         label: t('teacher.attendance_today', { defaultValue: 'Attendance' }),
         value: `${classSummary.attendanceRate}%`,
-        sub: classSummary.totalStudents > 0
-          ? `${classSummary.presentToday}/${classSummary.totalStudents} ${t('teacher.present', { defaultValue: 'present' })}`
-          : t('teacher.no_students', { defaultValue: 'No students yet' }),
+        sub:
+          classSummary.totalStudents > 0
+            ? `${classSummary.presentToday}/${classSummary.totalStudents} ${t('teacher.present', { defaultValue: 'present' })}`
+            : t('teacher.no_students', { defaultValue: 'No students yet' }),
         icon: 'checkmark-circle-outline' as const,
         color: theme.success,
       },
@@ -293,20 +319,44 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
     return groups;
   }, [quickActions]);
 
-  const actionSections = useMemo(() => ([
-    { id: 'lessons', title: t('teacher.actions_lessons', { defaultValue: 'Lessons & Activities' }), icon: 'book-outline' },
-    { id: 'classroom', title: t('teacher.actions_classroom', { defaultValue: 'Classroom' }), icon: 'school-outline' },
-    { id: 'communication', title: t('teacher.actions_communication', { defaultValue: 'Communication' }), icon: 'chatbubbles-outline' },
-    { id: 'reports', title: t('teacher.student_insights', { defaultValue: 'Student Insights' }), icon: 'bar-chart-outline' },
-    { id: 'ai', title: t('teacher.advanced_tools', { defaultValue: 'Advanced Tools' }), icon: 'sparkles-outline' },
-  ]), [t]);
-
+  const actionSections = useMemo(
+    () => [
+      {
+        id: 'lessons',
+        title: t('teacher.actions_lessons', { defaultValue: 'Lessons & Activities' }),
+        icon: 'book-outline',
+      },
+      {
+        id: 'classroom',
+        title: t('teacher.actions_classroom', { defaultValue: 'Classroom' }),
+        icon: 'school-outline',
+      },
+      {
+        id: 'communication',
+        title: t('teacher.actions_communication', { defaultValue: 'Communication' }),
+        icon: 'chatbubbles-outline',
+      },
+      {
+        id: 'reports',
+        title: t('teacher.student_insights', { defaultValue: 'Student Insights' }),
+        icon: 'bar-chart-outline',
+      },
+      {
+        id: 'ai',
+        title: t('teacher.advanced_tools', { defaultValue: 'Advanced Tools' }),
+        icon: 'sparkles-outline',
+      },
+    ],
+    [t],
+  );
 
   if (loading && !dashboardData) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={theme.primary} />
-        <Text style={styles.loadingText}>{t('common.loading', { defaultValue: 'Loading dashboard...' })}</Text>
+        <Text style={styles.loadingText}>
+          {t('common.loading', { defaultValue: 'Loading dashboard...' })}
+        </Text>
         {isLoadingFromCache && (
           <Text style={[styles.loadingText, { fontSize: 12, marginTop: 4 }]}>
             {t('common.loading_cached', { defaultValue: 'Loading cached data...' })}
@@ -320,12 +370,15 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
     return (
       <View style={styles.loadingContainer}>
         <Ionicons name="alert-circle-outline" size={48} color={theme.error || '#DC2626'} />
-        <Text style={[styles.loadingText, { color: theme.error || '#DC2626', fontWeight: '600', marginTop: 12 }]}>
+        <Text
+          style={[
+            styles.loadingText,
+            { color: theme.error || '#DC2626', fontWeight: '600', marginTop: 12 },
+          ]}
+        >
           {t('common.error_title', { defaultValue: 'Something went wrong' })}
         </Text>
-        <Text style={[styles.loadingText, { fontSize: 13, marginTop: 4 }]}>
-          {error}
-        </Text>
+        <Text style={[styles.loadingText, { fontSize: 13, marginTop: 4 }]}>{error}</Text>
         <TouchableOpacity
           onPress={refresh}
           style={[styles.retryButton, { backgroundColor: theme.primary }]}
@@ -346,7 +399,11 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
         refreshControl={
           <RefreshControl
             refreshing={state.refreshing}
-            onRefresh={() => state.handleRefresh(async () => { await Promise.resolve(refresh()); })}
+            onRefresh={() =>
+              state.handleRefresh(async () => {
+                await Promise.resolve(refresh());
+              })
+            }
             colors={[theme.primary]}
             tintColor={theme.primary}
           />
@@ -369,9 +426,7 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
 
               <View style={styles.heroSummaryRow}>
                 <View style={styles.heroMetricPrimary}>
-                  <Text style={styles.heroMetricPrimaryValue}>
-                    {classSummary.totalStudents}
-                  </Text>
+                  <Text style={styles.heroMetricPrimaryValue}>{classSummary.totalStudents}</Text>
                   <Text style={styles.heroMetricPrimaryLabel}>
                     {t('teacher.total_students', { defaultValue: 'Total students' })}
                   </Text>
@@ -382,11 +437,12 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
                     {classSummary.classCount} {t('teacher.classes', { defaultValue: 'Classes' })}
                   </Text>
                   <Text style={styles.heroAttendanceText}>
-                    {t('teacher.attendance_today', { defaultValue: 'Attendance' })}: {classSummary.attendanceRate}%
+                    {t('teacher.attendance_today', { defaultValue: 'Attendance' })}:{' '}
+                    {classSummary.attendanceRate}%
                   </Text>
                 </View>
               </View>
-              
+
               {/* School info with tier badge */}
               {dashboardData?.schoolName && (
                 <View style={styles.schoolCard}>
@@ -394,11 +450,18 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
                     <Text style={styles.schoolIcon}>🏫</Text>
                   </View>
                   <View style={styles.schoolTextContainer}>
-                    <Text style={styles.schoolLabel}>{t('teacher.your_school', { defaultValue: 'Your School' })}</Text>
+                    <Text style={styles.schoolLabel}>
+                      {t('teacher.your_school', { defaultValue: 'Your School' })}
+                    </Text>
                     <Text style={styles.schoolName}>{dashboardData.schoolName}</Text>
                   </View>
                   {dashboardData?.schoolTier && (
-                    <View style={[styles.tierBadge, { backgroundColor: getTierColor(dashboardData.schoolTier, theme) }]}>
+                    <View
+                      style={[
+                        styles.tierBadge,
+                        { backgroundColor: getTierColor(dashboardData.schoolTier, theme) },
+                      ]}
+                    >
                       <Text style={styles.tierBadgeText}>
                         {getTierLabel(dashboardData.schoolTier)}
                       </Text>
@@ -417,22 +480,33 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
                 <Ionicons name="school-outline" size={18} color={theme.primary} />
               </View>
               <Text style={styles.standaloneTitle}>
-                {t('teacher.standalone_workspace_active', { defaultValue: 'Standalone Workspace Active' })}
+                {t('teacher.standalone_workspace_active', {
+                  defaultValue: 'Standalone Workspace Active',
+                })}
               </Text>
             </View>
             <Text style={styles.standaloneDescription}>
               {t('teacher.standalone_workspace_hint', {
-                defaultValue: 'You can keep teaching independently. Join a school anytime using a principal invite token or school code.',
+                defaultValue:
+                  'You can keep teaching independently. Join a school anytime using a principal invite token or school code.',
               })}
             </Text>
             <View style={styles.standaloneActionsRow}>
-              <TouchableOpacity style={styles.standalonePrimaryButton} onPress={openTeacherInviteAccept} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={styles.standalonePrimaryButton}
+                onPress={openTeacherInviteAccept}
+                activeOpacity={0.85}
+              >
                 <Ionicons name="mail-open-outline" size={16} color="#EAF0FF" />
                 <Text style={styles.standalonePrimaryButtonText}>
                   {t('teacher.accept_invite_token', { defaultValue: 'Accept Invite Token' })}
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.standaloneSecondaryButton} onPress={openJoinByCode} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={styles.standaloneSecondaryButton}
+                onPress={openJoinByCode}
+                activeOpacity={0.85}
+              >
                 <Ionicons name="key-outline" size={16} color={theme.primary} />
                 <Text style={styles.standaloneSecondaryButtonText}>
                   {t('teacher.join_by_code', { defaultValue: 'Join by Code' })}
@@ -476,7 +550,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           onPress={openTutorMode}
           activeOpacity={0.9}
           accessibilityRole="button"
-          accessibilityLabel={t('teacher.interactive_tutor_mode', { defaultValue: 'Interactive Tutor Mode' })}
+          accessibilityLabel={t('teacher.interactive_tutor_mode', {
+            defaultValue: 'Interactive Tutor Mode',
+          })}
         >
           <LinearGradient
             colors={['#23214D', '#5A409D']}
@@ -491,10 +567,14 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
               <Ionicons name="sparkles" size={18} color="#EAF0FF" />
             </View>
             <Text style={styles.tutorModeTitle}>
-              {t('teacher.tutor_mode_title', { defaultValue: 'CAPS-aligned tutor sessions for your class' })}
+              {t('teacher.tutor_mode_title', {
+                defaultValue: 'CAPS-aligned tutor sessions for your class',
+              })}
             </Text>
             <Text style={styles.tutorModeDescription}>
-              {t('teacher.tutor_mode_description', { defaultValue: 'Launch guided learning instantly with Diagnose → Teach → Practice.' })}
+              {t('teacher.tutor_mode_description', {
+                defaultValue: 'Launch guided learning instantly with Diagnose → Teach → Practice.',
+              })}
             </Text>
             <View style={styles.tutorModeButton}>
               <Text style={styles.tutorModeButtonText}>
@@ -512,8 +592,8 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
             <Ionicons name="time-outline" size={18} color="#EAF0FF" />
           </View>
           <Text style={styles.routineTitle}>
-            {dashboardData?.todayRoutine?.title
-              || t('teacher.routine_title_default', { defaultValue: 'Today\'s Routine' })}
+            {dashboardData?.todayRoutine?.title ||
+              t('teacher.routine_title_default', { defaultValue: "Today's Routine" })}
           </Text>
           <Text style={styles.routineDescription}>
             {dashboardData?.todayRoutine
@@ -554,7 +634,10 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
               </View>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.routineSecondaryButton, !dashboardData?.todayRoutine && styles.routineSecondaryButtonDisabled]}
+              style={[
+                styles.routineSecondaryButton,
+                !dashboardData?.todayRoutine && styles.routineSecondaryButtonDisabled,
+              ]}
               onPress={handleScheduleRoutineReminders}
               activeOpacity={0.9}
               disabled={!dashboardData?.todayRoutine}
@@ -578,14 +661,18 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
 
         {/* What to Teach Today — AI suggestion card */}
         <TeachTodaySuggestion
-          todayRoutine={dashboardData?.todayRoutine ? {
-            title: dashboardData.todayRoutine.title ?? undefined,
-            nextBlockTitle: dashboardData.todayRoutine.nextBlockTitle ?? undefined,
-            weekStartDate: dashboardData.todayRoutine.weekStartDate,
-            termId: dashboardData.todayRoutine.termId ?? undefined,
-            themeId: dashboardData.todayRoutine.themeId ?? undefined,
-            themeName: dashboardData.todayRoutine.title ?? undefined,
-          } : null}
+          todayRoutine={
+            dashboardData?.todayRoutine
+              ? {
+                  title: dashboardData.todayRoutine.title ?? undefined,
+                  nextBlockTitle: dashboardData.todayRoutine.nextBlockTitle ?? undefined,
+                  weekStartDate: dashboardData.todayRoutine.weekStartDate,
+                  termId: dashboardData.todayRoutine.termId ?? undefined,
+                  themeId: dashboardData.todayRoutine.themeId ?? undefined,
+                  themeName: dashboardData.todayRoutine.title ?? undefined,
+                }
+              : null
+          }
           classNames={(dashboardData?.myClasses || []).map((c: { name: string }) => c.name)}
           onOpenTutor={openTutorMode}
           onOpenPlanner={openDailyProgramPlanner}
@@ -596,37 +683,41 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('dashboard.overview')}
           sectionId="teacher-overview"
           icon="stats-chart"
-          hint={t('dashboard.hints.teacher_overview', { defaultValue: 'Class metrics, alerts, and quick status checks.' })}
+          hint={t('dashboard.hints.teacher_overview', {
+            defaultValue: 'Class metrics, alerts, and quick status checks.',
+          })}
         >
           <View style={styles.metricsGrid}>
-            {metrics.reduce<typeof metrics[]>((rows, metric, i) => {
-              if (i % 2 === 0) rows.push(metrics.slice(i, i + 2));
-              return rows;
-            }, []).map((row, rowIndex, allRows) => (
-              <View
-                key={rowIndex}
-                style={[
-                  styles.metricRow,
-                  rowIndex === allRows.length - 1 && styles.metricRowLast,
-                ]}
-              >
-                {row.map((metric, index) => (
-                  <TeacherMetricsCard
-                    key={`${rowIndex}-${index}`}
-                    title={metric.title}
-                    value={metric.value}
-                    icon={metric.icon}
-                    color={metric.color}
-                    trend={metric.trend}
-                    fillContainer
-                    onPress={() => {
-                      track('teacher.dashboard.metric_clicked', { metric: metric.title });
-                    }}
-                  />
-                ))}
-                {row.length === 1 && <View style={{ flex: 1 }} />}
-              </View>
-            ))}
+            {metrics
+              .reduce<(typeof metrics)[]>((rows, metric, i) => {
+                if (i % 2 === 0) rows.push(metrics.slice(i, i + 2));
+                return rows;
+              }, [])
+              .map((row, rowIndex, allRows) => (
+                <View
+                  key={rowIndex}
+                  style={[
+                    styles.metricRow,
+                    rowIndex === allRows.length - 1 && styles.metricRowLast,
+                  ]}
+                >
+                  {row.map((metric, index) => (
+                    <TeacherMetricsCard
+                      key={`${rowIndex}-${index}`}
+                      title={metric.title}
+                      value={metric.value}
+                      icon={metric.icon}
+                      color={metric.color}
+                      trend={metric.trend}
+                      fillContainer
+                      onPress={() => {
+                        track('teacher.dashboard.metric_clicked', { metric: metric.title });
+                      }}
+                    />
+                  ))}
+                  {row.length === 1 && <View style={{ flex: 1 }} />}
+                </View>
+              ))}
           </View>
         </CollapsibleSection>
 
@@ -635,7 +726,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('teacher.current_class_overview', { defaultValue: 'Current Class Overview' })}
           sectionId="teacher-current-class"
           icon="school-outline"
-          hint={t('teacher.current_class_overview_hint', { defaultValue: 'Attendance and readiness across your active classes.' })}
+          hint={t('teacher.current_class_overview_hint', {
+            defaultValue: 'Attendance and readiness across your active classes.',
+          })}
         >
           {(dashboardData?.myClasses || []).map((classroom, index, arr) => (
             <View
@@ -651,13 +744,12 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
               <View style={styles.classOverviewContent}>
                 <Text style={styles.classOverviewTitle}>{classroom.name}</Text>
                 <Text style={styles.classOverviewSubtitle}>
-                  {classroom.studentCount} {t('teacher.students', { defaultValue: 'students' })} • {classroom.room || t('teacher.room_tbd', { defaultValue: 'Room TBD' })}
+                  {classroom.studentCount} {t('teacher.students', { defaultValue: 'students' })} •{' '}
+                  {classroom.room || t('teacher.room_tbd', { defaultValue: 'Room TBD' })}
                 </Text>
               </View>
               <View style={styles.classOverviewMetrics}>
-                <Text style={styles.classOverviewAttendance}>
-                  {classroom.attendanceRate ?? 0}%
-                </Text>
+                <Text style={styles.classOverviewAttendance}>{classroom.attendanceRate ?? 0}%</Text>
                 <Text style={styles.classOverviewAttendanceLabel}>
                   {t('teacher.attendance_today', { defaultValue: 'Attendance' })}
                 </Text>
@@ -668,11 +760,20 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
             <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
               <Ionicons name="school-outline" size={36} color="rgba(234,240,255,0.4)" />
               <Text style={[styles.emptyText, { textAlign: 'center', lineHeight: 18 }]}>
-                {t('teacher.no_class_detail', { defaultValue: 'Your classes will appear here once the principal assigns you. Contact your school admin.' })}
+                {t('teacher.no_class_detail', {
+                  defaultValue:
+                    'Your classes will appear here once the principal assigns you. Contact your school admin.',
+                })}
               </Text>
               {isStandaloneTeacher && (
                 <TouchableOpacity
-                  style={{ backgroundColor: '#5A409D', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginTop: 4 }}
+                  style={{
+                    backgroundColor: '#5A409D',
+                    borderRadius: 10,
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    marginTop: 4,
+                  }}
                   onPress={openTeacherInviteAccept}
                   activeOpacity={0.85}
                 >
@@ -690,7 +791,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('dashboard.quick_actions')}
           sectionId="teacher-quick-actions"
           icon="flash"
-          hint={t('dashboard.hints.teacher_quick_actions', { defaultValue: 'Create lessons, homework, messages, and tasks fast.' })}
+          hint={t('dashboard.hints.teacher_quick_actions', {
+            defaultValue: 'Create lessons, homework, messages, and tasks fast.',
+          })}
         >
           {actionSections.map((section) => {
             const actions = groupedActions[section.id] || [];
@@ -703,7 +806,18 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
                   </View>
                   <Text style={styles.actionSectionTitle}>{section.title}</Text>
                   {section.id === 'communication' && unreadMessageCount > 0 && (
-                    <View style={{ backgroundColor: '#DC2626', borderRadius: 10, minWidth: 20, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, marginLeft: 6 }}>
+                    <View
+                      style={{
+                        backgroundColor: '#DC2626',
+                        borderRadius: 10,
+                        minWidth: 20,
+                        height: 20,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        paddingHorizontal: 6,
+                        marginLeft: 6,
+                      }}
+                    >
                       <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }}>
                         {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
                       </Text>
@@ -711,32 +825,34 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
                   )}
                 </View>
                 <View style={styles.actionsGrid}>
-                  {actions.reduce<TeacherQuickAction[][]>((rows, _action, i) => {
-                    if (i % 2 === 0) rows.push(actions.slice(i, i + 2));
-                    return rows;
-                  }, []).map((row, rowIndex, allRows) => (
-                    <View
-                      key={rowIndex}
-                      style={[
-                        styles.actionRow,
-                        rowIndex === allRows.length - 1 && styles.actionRowLast,
-                      ]}
-                    >
-                      {row.map((action) => (
-                        <TeacherQuickActionCard
-                          key={action.id || action.title}
-                          title={action.title}
-                          icon={action.icon}
-                          color={action.color}
-                          onPress={action.onPress}
-                          disabled={action.disabled}
-                          fillContainer
-                          subtitle={action.disabled ? t('dashboard.upgrade_required') : undefined}
-                        />
-                      ))}
-                      {row.length === 1 && <View style={{ flex: 1 }} />}
-                    </View>
-                  ))}
+                  {actions
+                    .reduce<TeacherQuickAction[][]>((rows, _action, i) => {
+                      if (i % 2 === 0) rows.push(actions.slice(i, i + 2));
+                      return rows;
+                    }, [])
+                    .map((row, rowIndex, allRows) => (
+                      <View
+                        key={rowIndex}
+                        style={[
+                          styles.actionRow,
+                          rowIndex === allRows.length - 1 && styles.actionRowLast,
+                        ]}
+                      >
+                        {row.map((action) => (
+                          <TeacherQuickActionCard
+                            key={action.id || action.title}
+                            title={action.title}
+                            icon={action.icon}
+                            color={action.color}
+                            onPress={action.onPress}
+                            disabled={action.disabled}
+                            fillContainer
+                            subtitle={action.disabled ? t('dashboard.upgrade_required') : undefined}
+                          />
+                        ))}
+                        {row.length === 1 && <View style={{ flex: 1 }} />}
+                      </View>
+                    ))}
                 </View>
               </View>
             );
@@ -748,7 +864,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('teacher.upcoming_assignments', { defaultValue: 'Upcoming Assignments' })}
           sectionId="teacher-upcoming-assignments"
           icon="document-text-outline"
-          hint={t('teacher.upcoming_assignments_hint', { defaultValue: 'Review due work and keep submissions on track.' })}
+          hint={t('teacher.upcoming_assignments_hint', {
+            defaultValue: 'Review due work and keep submissions on track.',
+          })}
         >
           {assignmentRows.map((assignment, index) => (
             <View
@@ -772,7 +890,11 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
                 ]}
               >
                 <Ionicons
-                  name={assignment.status === 'overdue' ? 'alert-circle-outline' : 'document-text-outline'}
+                  name={
+                    assignment.status === 'overdue'
+                      ? 'alert-circle-outline'
+                      : 'document-text-outline'
+                  }
                   size={18}
                   color={assignment.status === 'overdue' ? theme.warning : theme.primary}
                 />
@@ -780,19 +902,29 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
               <View style={styles.assignmentInfo}>
                 <Text style={styles.assignmentTitle}>{assignment.title}</Text>
                 <Text style={styles.assignmentSubTitle}>
-                  {t('teacher.due', { defaultValue: 'Due' })} {assignment.dueDate} • {assignment.submitted}/{assignment.total} {t('teacher.submitted', { defaultValue: 'submitted' })}
+                  {t('teacher.due', { defaultValue: 'Due' })} {assignment.dueDate} •{' '}
+                  {assignment.submitted}/{assignment.total}{' '}
+                  {t('teacher.submitted', { defaultValue: 'submitted' })}
                 </Text>
                 {assignment.total > 0 && (
-                  <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 6, overflow: 'hidden' }}>
+                  <View
+                    style={{
+                      height: 4,
+                      borderRadius: 2,
+                      backgroundColor: 'rgba(255,255,255,0.08)',
+                      marginTop: 6,
+                      overflow: 'hidden',
+                    }}
+                  >
                     <View
                       style={{
                         height: '100%',
                         borderRadius: 2,
                         width: `${Math.min(100, Math.round((assignment.submitted / assignment.total) * 100))}%`,
                         backgroundColor:
-                          (assignment.submitted / assignment.total) > 0.75
+                          assignment.submitted / assignment.total > 0.75
                             ? '#3C8E62'
-                            : (assignment.submitted / assignment.total) > 0.50
+                            : assignment.submitted / assignment.total > 0.5
                               ? '#F59E0B'
                               : '#DC2626',
                       }}
@@ -819,10 +951,18 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
             <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
               <Ionicons name="document-text-outline" size={36} color="rgba(234,240,255,0.4)" />
               <Text style={[styles.emptyText, { textAlign: 'center', lineHeight: 18 }]}>
-                {t('teacher.no_assignments_detail', { defaultValue: 'Create your first assignment to track student progress.' })}
+                {t('teacher.no_assignments_detail', {
+                  defaultValue: 'Create your first assignment to track student progress.',
+                })}
               </Text>
               <TouchableOpacity
-                style={{ backgroundColor: '#5A409D', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginTop: 4 }}
+                style={{
+                  backgroundColor: '#5A409D',
+                  borderRadius: 10,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  marginTop: 4,
+                }}
                 onPress={() => router.push('/screens/create-assignment' as any)}
                 activeOpacity={0.85}
               >
@@ -839,7 +979,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('dashboard.recent_activity', { defaultValue: 'Recent Activity' })}
           sectionId="teacher-recent-activity"
           icon="pulse-outline"
-          hint={t('teacher.recent_activity_hint', { defaultValue: 'Latest assignment and event timeline.' })}
+          hint={t('teacher.recent_activity_hint', {
+            defaultValue: 'Latest assignment and event timeline.',
+          })}
         >
           <View style={styles.recentActivityPanel}>
             {recentActivityRows.map((item, index) => (
@@ -864,7 +1006,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
               <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
                 <Ionicons name="pulse-outline" size={36} color="rgba(234,240,255,0.4)" />
                 <Text style={[styles.emptyText, { textAlign: 'center', lineHeight: 18 }]}>
-                  {t('dashboard.no_activity_detail', { defaultValue: 'Activity will appear as students submit work and attend class.' })}
+                  {t('dashboard.no_activity_detail', {
+                    defaultValue: 'Activity will appear as students submit work and attend class.',
+                  })}
                 </Text>
               </View>
             )}
@@ -876,7 +1020,9 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('dashboard.birthday_donations.title', { defaultValue: 'Birthday Donations' })}
           sectionId="teacher-birthday-donations"
           icon="gift"
-          hint={t('dashboard.hints.teacher_birthdays', { defaultValue: 'Track donations and class birthday contributions.' })}
+          hint={t('dashboard.hints.teacher_birthdays', {
+            defaultValue: 'Track donations and class birthday contributions.',
+          })}
         >
           <BirthdayDonationRegister organizationId={organizationId} />
         </CollapsibleSection>
@@ -886,17 +1032,23 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('dashboard.my_students', { defaultValue: 'My Students' })}
           sectionId="teacher-students"
           icon="people"
-          hint={t('dashboard.hints.teacher_students', { defaultValue: 'Quick access to student profiles and notes.' })}
+          hint={t('dashboard.hints.teacher_students', {
+            defaultValue: 'Quick access to student profiles and notes.',
+          })}
         >
           {teacherStudentsLoading ? (
-            <Text style={styles.loadingText}>{t('common.loading', { defaultValue: 'Loading...' })}</Text>
+            <Text style={styles.loadingText}>
+              {t('common.loading', { defaultValue: 'Loading...' })}
+            </Text>
           ) : (
             teacherStudents.map((student) => (
               <StudentSummaryCard
                 key={student.id}
                 student={student}
                 onPress={() => router.push(`/screens/student-detail?id=${student.id}` as any)}
-                subtitle={student.className || t('common.noClass', { defaultValue: 'No class assigned' })}
+                subtitle={
+                  student.className || t('common.noClass', { defaultValue: 'No class assigned' })
+                }
               />
             ))
           )}
@@ -904,10 +1056,19 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
             <View style={{ alignItems: 'center', paddingVertical: 20, gap: 10 }}>
               <Ionicons name="people-outline" size={36} color="rgba(234,240,255,0.4)" />
               <Text style={[styles.emptyText, { textAlign: 'center', lineHeight: 18 }]}>
-                {t('dashboard.no_students_detail', { defaultValue: 'Students will appear once enrolled in your class.' })}
+                {t('dashboard.no_students_detail', {
+                  defaultValue: 'Students will appear once enrolled in your class.',
+                })}
               </Text>
               <TouchableOpacity
-                style={{ borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10, marginTop: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.16)' }}
+                style={{
+                  borderRadius: 10,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  marginTop: 4,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.16)',
+                }}
                 onPress={() => router.push('/screens/teacher-dashboard?section=enrollment' as any)}
                 activeOpacity={0.85}
               >
@@ -924,12 +1085,13 @@ export const NewEnhancedTeacherDashboard: React.FC<NewEnhancedTeacherDashboardPr
           title={t('dashboard.parent_link_requests', { defaultValue: 'Parent Link Requests' })}
           sectionId="teacher-parent-links"
           icon="link"
-          hint={t('dashboard.hints.teacher_parent_links', { defaultValue: 'Approve or review new parent-child links.' })}
+          hint={t('dashboard.hints.teacher_parent_links', {
+            defaultValue: 'Approve or review new parent-child links.',
+          })}
           defaultCollapsed={pendingLinkRequestCount === 0}
         >
           <PendingParentLinkRequests />
         </CollapsibleSection>
-
       </ScrollView>
     </View>
   );

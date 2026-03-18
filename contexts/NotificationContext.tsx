@@ -10,14 +10,7 @@
  * @fileoverview Provides NotificationProvider and useNotificationContext
  */
 
-import React, {
-  createContext,
-  useContext,
-  useEffect,
-  useCallback,
-  useRef,
-  useMemo,
-} from 'react';
+import React, { createContext, useContext, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -86,8 +79,7 @@ const isNetworkError = (error: any) => {
 };
 
 const isWebRuntime = (): boolean =>
-  Platform.OS === 'web' ||
-  (typeof window !== 'undefined' && typeof document !== 'undefined');
+  Platform.OS === 'web' || (typeof window !== 'undefined' && typeof document !== 'undefined');
 
 const isNotificationUnavailableOnWeb = (error: unknown): boolean => {
   const msg = String((error as any)?.message || error || '').toLowerCase();
@@ -122,17 +114,23 @@ async function fetchUnreadMessageCount(userId: string): Promise<number> {
   const client = assertSupabase();
 
   try {
-  // Get all thread participations with last_read_at
+    // Get all thread participations with last_read_at
     const { data: participantData, error: participantError } = await client
-    .from('message_participants')
-    .select('thread_id, last_read_at')
-    .eq('user_id', userId);
+      .from('message_participants')
+      .select('thread_id, last_read_at')
+      .eq('user_id', userId);
 
     if (participantError) {
       if (isNetworkError(participantError)) {
-        logger.warn('NotificationContext', 'Network error fetching message participants, returning 0.');
+        logger.warn(
+          'NotificationContext',
+          'Network error fetching message participants, returning 0.',
+        );
       } else {
-        console.error('[NotificationContext] Error fetching message participants:', participantError);
+        console.error(
+          '[NotificationContext] Error fetching message participants:',
+          participantError,
+        );
       }
       return 0;
     }
@@ -142,24 +140,31 @@ async function fetchUnreadMessageCount(userId: string): Promise<number> {
       return 0;
     }
 
-  // Count unread messages across all threads
-  let totalUnread = 0;
+    // Count unread messages across all threads
+    let totalUnread = 0;
     const threadCounts: Array<{ thread_id: string; unread: number }> = [];
 
-  for (const participant of participantData) {
+    for (const participant of participantData) {
       const { count, error: messageError } = await client
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('thread_id', participant.thread_id)
+        .from('messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('thread_id', participant.thread_id)
         .gt('created_at', participant.last_read_at || '1970-01-01')
-      .neq('sender_id', userId)
-      .is('deleted_at', null);
+        .neq('sender_id', userId)
+        .is('deleted_at', null);
 
       if (messageError) {
         if (isNetworkError(messageError)) {
-          logger.warn('NotificationContext', `Network error counting messages for thread ${participant.thread_id}`);
+          logger.warn(
+            'NotificationContext',
+            `Network error counting messages for thread ${participant.thread_id}`,
+          );
         } else {
-          logger.warn('NotificationContext', `Error counting messages for thread ${participant.thread_id}:`, messageError);
+          logger.warn(
+            'NotificationContext',
+            `Error counting messages for thread ${participant.thread_id}:`,
+            messageError,
+          );
         }
         continue;
       }
@@ -178,7 +183,7 @@ async function fetchUnreadMessageCount(userId: string): Promise<number> {
       sampleThreads: threadCounts.slice(0, 3),
     });
 
-  return totalUnread;
+    return totalUnread;
   } catch (error) {
     if (isNetworkError(error)) {
       logger.warn('NotificationContext', 'Network error fetching unread messages (exception).');
@@ -198,23 +203,23 @@ async function fetchMissedCallsCount(userId: string): Promise<number> {
   const lastSeen = await AsyncStorage.getItem(lastSeenKey);
 
   try {
-  // Build query for missed calls (unanswered calls to this user)
+    // Build query for missed calls (unanswered calls to this user)
     // A call is missed if:
     // 1. User is the callee (incoming call)
     // 2. Status is 'missed' OR (status is 'ended' AND answered_at is null)
-  let query = client
-    .from('active_calls')
+    let query = client
+      .from('active_calls')
       .select('id, status, answered_at, duration_seconds', { count: 'exact' })
-    .eq('callee_id', userId)
+      .eq('callee_id', userId)
       .or('status.eq.missed,and(status.eq.ended,answered_at.is.null)');
 
-  // Only count calls after last seen timestamp
-  if (lastSeen) {
-    query = query.gt('started_at', lastSeen);
-  }
+    // Only count calls after last seen timestamp
+    if (lastSeen) {
+      query = query.gt('started_at', lastSeen);
+    }
 
     const { data, count, error } = await query;
-    
+
     if (error) {
       if (isNetworkError(error)) {
         logger.warn('NotificationContext', 'Network error fetching missed calls.');
@@ -223,25 +228,29 @@ async function fetchMissedCallsCount(userId: string): Promise<number> {
       }
       return 0;
     }
-    
+
     // Filter to ensure we only count truly missed calls
     // (status='missed' OR (status='ended' AND answered_at IS NULL AND duration is 0 or null))
-    const missedCount = data?.filter(call => 
-      call.status === 'missed' || 
-      (call.status === 'ended' && !call.answered_at && (call.duration_seconds === null || call.duration_seconds === 0))
-    ).length || 0;
-    
+    const missedCount =
+      data?.filter(
+        (call) =>
+          call.status === 'missed' ||
+          (call.status === 'ended' &&
+            !call.answered_at &&
+            (call.duration_seconds === null || call.duration_seconds === 0)),
+      ).length || 0;
+
     logger.debug('NotificationContext', `Missed calls count for user ${userId}:`, {
       rawCount: count,
       filteredCount: missedCount,
       lastSeen: lastSeen || 'never',
-      sampleCalls: data?.slice(0, 3).map(c => ({ 
-        status: c.status, 
-        answered_at: c.answered_at, 
-        duration: c.duration_seconds 
-      }))
+      sampleCalls: data?.slice(0, 3).map((c) => ({
+        status: c.status,
+        answered_at: c.answered_at,
+        duration: c.duration_seconds,
+      })),
     });
-    
+
     return missedCount;
   } catch (error) {
     if (isNetworkError(error)) {
@@ -300,9 +309,7 @@ interface NotificationProviderProps {
   children: React.ReactNode;
 }
 
-export const NotificationProvider: React.FC<NotificationProviderProps> = ({
-  children,
-}) => {
+export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children }) => {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const subscriptionsRef = useRef<Array<{ unsubscribe: () => void }>>([]);
@@ -329,7 +336,9 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       }
     };
     void loadPrefs();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -378,14 +387,14 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
   // -------------------------------------------------------------------------
   useEffect(() => {
     if (!userId) return;
-    
+
     // Invalidate ALL old notification-related queries to force fresh data
     // This ensures the new unified system takes over from old cached hooks
     queryClient.invalidateQueries({ queryKey: ['parent', 'unread-count'] });
     queryClient.invalidateQueries({ queryKey: ['missed-calls-count'] });
     queryClient.invalidateQueries({ queryKey: ['unread-announcements-count'] });
     queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    
+
     logger.debug('NotificationContext', 'Cleared old notification caches for user:', userId);
   }, [userId, queryClient]);
 
@@ -450,7 +459,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
           calls: counts.calls,
           announcements: counts.announcements,
         });
-        logger.debug('NotificationContext', `Badge synced via coordinator: messages=${counts.messages}, calls=${counts.calls}, announcements=${counts.announcements}`);
+        logger.debug(
+          'NotificationContext',
+          `Badge synced via coordinator: messages=${counts.messages}, calls=${counts.calls}, announcements=${counts.announcements}`,
+        );
       }
       // For PWA, we could update document.title or use the Badging API
       // when running in browser context
@@ -487,24 +499,27 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
   // Mark As Read Functions
   // -------------------------------------------------------------------------
 
-  const markMessagesRead = useCallback(async (threadId: string) => {
-    if (!userId) return;
+  const markMessagesRead = useCallback(
+    async (threadId: string) => {
+      if (!userId) return;
 
-    try {
-      const client = assertSupabase();
-      await client.rpc('mark_thread_messages_as_read', {
-        thread_id: threadId,
-        reader_id: userId,
-      });
+      try {
+        const client = assertSupabase();
+        await client.rpc('mark_thread_messages_as_read', {
+          thread_id: threadId,
+          reader_id: userId,
+        });
 
-      // Immediately invalidate message count query
-      await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(userId) });
-      // Also invalidate legacy key
-      await queryClient.invalidateQueries({ queryKey: ['parent', 'unread-count', userId] });
-    } catch {
-      // Silent fail
-    }
-  }, [userId, queryClient]);
+        // Immediately invalidate message count query
+        await queryClient.invalidateQueries({ queryKey: QUERY_KEYS.messages(userId) });
+        // Also invalidate legacy key
+        await queryClient.invalidateQueries({ queryKey: ['parent', 'unread-count', userId] });
+      } catch {
+        // Silent fail
+      }
+    },
+    [userId, queryClient],
+  );
 
   const markCallsSeen = useCallback(async () => {
     if (!userId) return;
@@ -591,9 +606,16 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
                 p_thread_id: msg.thread_id,
                 p_user_id: userId,
               });
-              logger.debug('NotificationContext', `Marked messages delivered for thread ${msg.thread_id}`);
+              logger.debug(
+                'NotificationContext',
+                `Marked messages delivered for thread ${msg.thread_id}`,
+              );
             } catch (deliverError) {
-              logger.warn('NotificationContext', 'Failed to mark messages delivered:', deliverError);
+              logger.warn(
+                'NotificationContext',
+                'Failed to mark messages delivered:',
+                deliverError,
+              );
             }
           }
 
@@ -602,7 +624,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
           if (!canScheduleLocalBanner) {
             logger.debug(
               'NotificationContext',
-              'Skipping local message banner: scheduleNotificationAsync unavailable on this platform'
+              'Skipping local message banner: scheduleNotificationAsync unavailable on this platform',
             );
             return;
           }
@@ -615,12 +637,14 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
               .single();
 
             const senderName = senderProfile
-              ? `${senderProfile.first_name || ''} ${senderProfile.last_name || ''}`.trim() || 'Someone'
+              ? `${senderProfile.first_name || ''} ${senderProfile.last_name || ''}`.trim() ||
+                'Someone'
               : 'Someone';
 
-            const messagePreview = msg.content?.length > 50
-              ? `${msg.content.substring(0, 47)}...`
-              : msg.content || 'New message';
+            const messagePreview =
+              msg.content?.length > 50
+                ? `${msg.content.substring(0, 47)}...`
+                : msg.content || 'New message';
 
             await Notifications.scheduleNotificationAsync({
               identifier: `message-${msg.id}`,
@@ -643,18 +667,21 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
             }
 
-            logger.debug('NotificationContext', `Showed notification for message from ${senderName}`);
+            logger.debug(
+              'NotificationContext',
+              `Showed notification for message from ${senderName}`,
+            );
           } catch (notifError) {
             if (isNotificationUnavailableOnWeb(notifError)) {
               logger.debug(
                 'NotificationContext',
-                'Skipping local message banner: expo-notifications local scheduling unavailable on web'
+                'Skipping local message banner: expo-notifications local scheduling unavailable on web',
               );
               return;
             }
             logger.warn('NotificationContext', 'Failed to show message notification:', notifError);
           }
-        }
+        },
       )
       .subscribe();
 
@@ -672,15 +699,13 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
         () => {
           // Invalidate calls count when call status changes
           queryClient.invalidateQueries({ queryKey: QUERY_KEYS.calls(userId) });
-        }
+        },
       )
       .subscribe();
 
     // Subscribe to new announcements (scoped to the user's school)
     const orgId: string | null =
-      (profile as any)?.preschool_id ||
-      (profile as any)?.organization_id ||
-      null;
+      (profile as any)?.preschool_id || (profile as any)?.organization_id || null;
 
     const announcementsChannelConfig: Record<string, unknown> = {
       event: 'INSERT',
@@ -693,80 +718,76 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
 
     const announcementsSubscription = client
       .channel(`notifications-announcements-${userId}`)
-      .on(
-        'postgres_changes',
-        announcementsChannelConfig as any,
-        async (payload: any) => {
-          // Invalidate count so badge + dot updates immediately
-          queryClient.invalidateQueries({ queryKey: QUERY_KEYS.announcements(userId) });
+      .on('postgres_changes', announcementsChannelConfig as any, async (payload: any) => {
+        // Invalidate count so badge + dot updates immediately
+        queryClient.invalidateQueries({ queryKey: QUERY_KEYS.announcements(userId) });
 
-          // Show in-app notification banner when app is in foreground
-          const isForeground = AppState.currentState === 'active';
-          if (!isForeground) return;
+        // Show in-app notification banner when app is in foreground
+        const isForeground = AppState.currentState === 'active';
+        if (!isForeground) return;
 
-          const announcement = payload.new as {
-            id?: string;
-            title?: string;
-            content?: string;
-            priority?: string;
-          } | null;
+        const announcement = payload.new as {
+          id?: string;
+          title?: string;
+          content?: string;
+          priority?: string;
+        } | null;
 
-          const title = announcement?.title || 'New School Announcement';
-          const preview = announcement?.content
-            ? announcement.content.length > 80
-              ? `${announcement.content.substring(0, 77)}…`
-              : announcement.content
-            : 'A new announcement from your school.';
+        const title = announcement?.title || 'New School Announcement';
+        const preview = announcement?.content
+          ? announcement.content.length > 80
+            ? `${announcement.content.substring(0, 77)}…`
+            : announcement.content
+          : 'A new announcement from your school.';
 
-          const canScheduleLocalBanner = canScheduleLocalNotification();
-          if (!canScheduleLocalBanner) {
+        const canScheduleLocalBanner = canScheduleLocalNotification();
+        if (!canScheduleLocalBanner) {
+          logger.debug(
+            'NotificationContext',
+            'Skipping local announcement banner: scheduleNotificationAsync unavailable on this platform',
+          );
+          return;
+        }
+
+        try {
+          await Notifications.scheduleNotificationAsync({
+            identifier: `announcement-${announcement?.id ?? Date.now()}`,
+            content: {
+              title: `📢 ${title}`,
+              body: preview,
+              data: {
+                type: 'announcement',
+                announcement_id: announcement?.id,
+                screen: 'announcements',
+              },
+              sound: soundEnabledRef.current ? 'default' : undefined,
+            },
+            trigger: null,
+          });
+
+          if (hapticsEnabledRef.current) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+          }
+
+          logger.debug('NotificationContext', 'Showed in-app banner for announcement:', title);
+        } catch (notifError) {
+          if (isNotificationUnavailableOnWeb(notifError)) {
             logger.debug(
               'NotificationContext',
-              'Skipping local announcement banner: scheduleNotificationAsync unavailable on this platform'
+              'Skipping local announcement banner: expo-notifications local scheduling unavailable on web',
             );
             return;
           }
-
-          try {
-            await Notifications.scheduleNotificationAsync({
-              identifier: `announcement-${announcement?.id ?? Date.now()}`,
-              content: {
-                title: `📢 ${title}`,
-                body: preview,
-                data: {
-                  type: 'announcement',
-                  announcement_id: announcement?.id,
-                  screen: 'announcements',
-                },
-                sound: soundEnabledRef.current ? 'default' : undefined,
-              },
-              trigger: null,
-            });
-
-            if (hapticsEnabledRef.current) {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-            }
-
-            logger.debug('NotificationContext', 'Showed in-app banner for announcement:', title);
-          } catch (notifError) {
-            if (isNotificationUnavailableOnWeb(notifError)) {
-              logger.debug(
-                'NotificationContext',
-                'Skipping local announcement banner: expo-notifications local scheduling unavailable on web'
-              );
-              return;
-            }
-            logger.warn('NotificationContext', 'Failed to show announcement notification:', notifError);
-          }
+          logger.warn(
+            'NotificationContext',
+            'Failed to show announcement notification:',
+            notifError,
+          );
         }
-      )
+      })
       .subscribe();
 
-    subscriptionsRef.current = [
-      messagesSubscription,
-      callsSubscription,
-      announcementsSubscription,
-    ];
+    subscriptionsRef.current = [messagesSubscription, callsSubscription, announcementsSubscription];
 
     return () => {
       subscriptionsRef.current.forEach((sub) => sub.unsubscribe());
@@ -818,14 +839,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({
       markAnnouncementsSeen,
       refresh,
       syncBadge,
-    ]
+    ],
   );
 
-  return (
-    <NotificationContext.Provider value={value}>
-      {children}
-    </NotificationContext.Provider>
-  );
+  return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 };
 
 // ============================================================================
@@ -840,9 +857,7 @@ export const useNotificationContext = (): NotificationContextValue => {
   const context = useContext(NotificationContext);
 
   if (!context) {
-    throw new Error(
-      'useNotificationContext must be used within a NotificationProvider'
-    );
+    throw new Error('useNotificationContext must be used within a NotificationProvider');
   }
 
   return context;

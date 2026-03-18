@@ -129,8 +129,8 @@ function ChannelRow({ ch, active, onPress }: { ch: TeamChannel; active: boolean;
         active && { backgroundColor: '#1e293b', borderLeftWidth: 3, borderLeftColor: cfg.color },
       ]}
     >
-      <View style={[s.chIcon, { backgroundColor: cfg.color + '18' }]}>
-        <Ionicons name={cfg.icon as any} size={16} color={active ? cfg.color : '#64748b'} />
+      <View style={[s.chIcon, { backgroundColor: cfg.color + '20' }]}>
+        <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />
       </View>
       <View style={{ flex: 1 }}>
         <Text
@@ -185,9 +185,9 @@ const s = StyleSheet.create({
     borderBottomWidth: 1, borderBottomColor: '#1e293b',
   },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#f1f5f9', letterSpacing: -0.3 },
-  headerSub: { fontSize: 12, color: '#64748b', marginTop: 2 },
+  headerSub: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
   sectionLabel: {
-    fontSize: 11, fontWeight: '700', color: '#475569',
+    fontSize: 11, fontWeight: '700', color: '#94a3b8',
     letterSpacing: 0.8, textTransform: 'uppercase',
     paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6,
   },
@@ -201,11 +201,11 @@ const s = StyleSheet.create({
     width: 30, height: 30, borderRadius: 8,
     justifyContent: 'center', alignItems: 'center',
   },
-  chName: { fontSize: 14, fontWeight: '500', color: '#94a3b8' },
-  chNameHighlight: { color: '#f1f5f9', fontWeight: '700' },
-  chPreview: { fontSize: 12, color: '#475569', marginTop: 2 },
+  chName: { fontSize: 14, fontWeight: '600', color: '#cbd5e1' },
+  chNameHighlight: { color: '#ffffff', fontWeight: '700' },
+  chPreview: { fontSize: 12, color: '#64748b', marginTop: 2 },
   chMeta: { alignItems: 'flex-end', gap: 4 },
-  chTime: { fontSize: 10, color: '#475569' },
+  chTime: { fontSize: 10, color: '#64748b' },
   badge: {
     minWidth: 18, height: 18, borderRadius: 9,
     justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
@@ -224,6 +224,6 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   avatarText: { fontSize: 11, fontWeight: '700', color: '#fff' },
-  memberName: { fontSize: 13, color: '#94a3b8', flex: 1 },
+  memberName: { fontSize: 13, color: '#cbd5e1', flex: 1 },
   onlineDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' },
 });

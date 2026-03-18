@@ -1,11 +1,19 @@
 /**
  * ProfileSwitcher - Multi-account switcher component
- * 
+ *
  * Allows users to switch between stored biometric accounts without signing out.
  * Uses EnhancedBiometricAuth for multi-account storage and session restoration.
  */
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +26,11 @@ import { track } from '@/lib/analytics';
 import { assertSupabase } from '@/lib/supabase';
 import { clearAllNavigationLocks } from '@/lib/routeAfterLogin';
 import { routeAfterLogin } from '@/lib/routeAfterLogin';
-import { signOutAndRedirect, setAccountSwitchInProgress, setAccountSwitchPending } from '@/lib/authActions';
+import {
+  signOutAndRedirect,
+  setAccountSwitchInProgress,
+  setAccountSwitchPending,
+} from '@/lib/authActions';
 import { reactivateUserTokens } from '@/lib/pushTokenUtils';
 import { registerPushDevice } from '@/lib/notifications';
 import { MAX_BIOMETRIC_ACCOUNTS } from '@/services/biometricStorage';
@@ -119,9 +131,9 @@ export function ProfileSwitcher({
 
       // Get stored accounts
       const storedAccounts = await EnhancedBiometricAuth.getBiometricAccounts();
-      
+
       // Mark current user as active
-      const accountsWithActive = storedAccounts.map(acc => ({
+      const accountsWithActive = storedAccounts.map((acc) => ({
         ...acc,
         isActive: acc.userId === user?.id,
       }));
@@ -163,317 +175,81 @@ export function ProfileSwitcher({
   }, [visible, loadAccounts]);
 
   // Switch to a different account
-  const handleSwitchAccount = useCallback(async (account: StoredAccount) => {
-    if (account.isActive) {
-      onClose();
-      return;
-    }
-
-    let deferSwitchCleanupToRouteFallback = false;
-    try {
-      setSwitching(account.userId);
-      
-      track('account.switch_attempt', {
-        from_user_id: user?.id,
-        to_user_id: account.userId,
-        method: biometricAvailable ? 'biometric' : 'token',
-      });
-      if (__DEV__) {
-        console.log('[AccountSwitch] Start', {
-          from: user?.id,
-          to: account.userId,
-          method: biometricAvailable ? 'biometric' : 'token',
-          path: pathnameRef.current,
-        });
-      }
-
-      // Use biometric auth when available, otherwise restore via stored refresh token.
-      // Token-based restore is safe — the user is already authenticated on this device.
-      // Flag so AuthContext skips SIGNED_OUT cleanup when Supabase emits it during session replace.
-      setAccountSwitchInProgress(true);
-
-      // Snapshot the outgoing user's live refresh token before we swap sessions.
-      // TOKEN_REFRESHED saves tokens via fire-and-forget dynamic import which can
-      // silently lag or fail — this explicit save guarantees freshness.
-      if (user?.id) {
-        try {
-          const { data: liveSession } = await assertSupabase().auth.getSession();
-          if (
-            liveSession?.session?.user?.id === user.id &&
-            liveSession.session.refresh_token
-          ) {
-            const { setRefreshTokenForUser } = await import('@/services/biometricStorage');
-            await setRefreshTokenForUser(user.id, liveSession.session.refresh_token);
-          }
-        } catch {
-          // Non-fatal — proceed with switch even if snapshot fails
-        }
-      }
-
-      const result = biometricAvailable
-        ? await EnhancedBiometricAuth.authenticateWithBiometricForUser(account.userId)
-        : await EnhancedBiometricAuth.restoreSessionForUser(account.userId);
-
-      if (__DEV__) {
-        console.log('[AccountSwitch] Result', {
-          success: result.success,
-          sessionRestored: result.sessionRestored,
-          to: account.userId,
-          error: result.error ?? null,
-          path: pathnameRef.current,
-        });
-      }
-      if (!result.success) {
-        track('account.switch_failed', {
-          from_user_id: user?.id,
-          to_user_id: account.userId,
-          method: biometricAvailable ? 'biometric' : 'token',
-          reason: result.reason || 'restore_error',
-          requires_password: !!result.requiresPassword,
-        });
-        showAlert({
-          title: t('account.switch_failed', { defaultValue: 'Switch Failed' }),
-          message: result.error || t('account.biometric_failed', { defaultValue: 'Biometric authentication failed' }),
-          type: 'error',
-          buttons: result.requiresPassword
-            ? [
-                { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
-                {
-                  text: t('account.sign_in_manually', { defaultValue: 'Sign in' }),
-                  style: 'default',
-                  onPress: () => {
-                    onClose();
-                    signOutAndRedirect({
-                      clearBiometrics: false,
-                      resetApp: false,
-                      redirectTo: `/(auth)/sign-in?switch=1&email=${encodeURIComponent(account.email)}`,
-                    });
-                  },
-                },
-              ]
-            : [{ text: t('common.ok', { defaultValue: 'OK' }), style: 'default' }],
-        });
+  const handleSwitchAccount = useCallback(
+    async (account: StoredAccount) => {
+      if (account.isActive) {
+        onClose();
         return;
       }
 
-      track('account.switch_success', {
-        from_user_id: user?.id,
-        to_user_id: account.userId,
-        session_restored: result.sessionRestored,
-      });
-      if (__DEV__) {
-        console.log('[AccountSwitch] Success', {
-          to: account.userId,
-          sessionRestored: result.sessionRestored,
-          path: pathnameRef.current,
-        });
-      }
-
-      onClose();
-      onAccountSwitched?.(account);
-
-      clearAllNavigationLocks();
-
-      // Reactivate push tokens for switched user so they receive notifications
+      let deferSwitchCleanupToRouteFallback = false;
       try {
-        await reactivateUserTokens(account.userId);
-        const supabase = assertSupabase();
-        await registerPushDevice(supabase, { id: account.userId, email: account.email });
-      } catch (pushErr) {
-        console.warn('[ProfileSwitcher] Push token reactivation failed (non-fatal):', pushErr);
-      }
+        setSwitching(account.userId);
 
-      // Route handoff:
-      // Prefer auth pipeline, but when user remains on account/auth screens immediately
-      // after successful restore, proactively resolve dashboard route.
-      const currentPath = pathnameRef.current || '';
-      const shouldForceRoute =
-        currentPath.includes('/screens/account') ||
-        currentPath.includes('/(auth)/sign-in') ||
-        currentPath.includes('/sign-in');
-      if (__DEV__) {
-        console.log('[AccountSwitch] Route handoff decision', {
-          currentPath,
-          shouldForceRoute,
-          expectedUserId: account.userId,
+        track('account.switch_attempt', {
+          from_user_id: user?.id,
+          to_user_id: account.userId,
+          method: biometricAvailable ? 'biometric' : 'token',
         });
-      }
-      if (shouldForceRoute) {
-        try {
-          const supabase = assertSupabase();
-          const { data: activeUserData } = await supabase.auth.getUser();
-          const activeUser = activeUserData?.user || null;
-          if (activeUser?.id === account.userId) {
-            const nextProfile = await fetchEnhancedUserProfile(activeUser.id).catch(() => null);
-            await routeAfterLogin(activeUser, nextProfile);
-            if (__DEV__) {
-              console.log('[AccountSwitch] Route handoff applied', {
-                userId: activeUser.id,
-                currentPath,
-              });
-            }
-          }
-        } catch (routeErr) {
-          console.warn('[AccountSwitch] Immediate route handoff failed:', routeErr);
+        if (__DEV__) {
+          console.log('[AccountSwitch] Start', {
+            from: user?.id,
+            to: account.userId,
+            method: biometricAvailable ? 'biometric' : 'token',
+            path: pathnameRef.current,
+          });
         }
-      }
 
-      // Fallback router handoff:
-      // In some account-switch races the auth event updates session/profile but route
-      // does not advance. If user is still on account/auth screens after a short delay,
-      // force route resolution once.
-      if (routeFallbackTimerRef.current) {
-        clearTimeout(routeFallbackTimerRef.current);
-      }
-      deferSwitchCleanupToRouteFallback = true;
-      routeFallbackTimerRef.current = setTimeout(async () => {
-        try {
-          const supabase = assertSupabase();
-          const { data: activeUserData } = await supabase.auth.getUser();
-          const activeUser = activeUserData?.user || null;
-          const currentPath = pathnameRef.current || '';
-          const stuckPath =
-            currentPath.includes('/screens/account') ||
-            currentPath.includes('/(auth)/sign-in') ||
-            currentPath.includes('/sign-in');
+        // Use biometric auth when available, otherwise restore via stored refresh token.
+        // Token-based restore is safe — the user is already authenticated on this device.
+        // Flag so AuthContext skips SIGNED_OUT cleanup when Supabase emits it during session replace.
+        setAccountSwitchInProgress(true);
 
-          if (__DEV__) {
-            console.log('[AccountSwitch] Route fallback check', {
-              expectedUserId: account.userId,
-              activeUserId: activeUser?.id || null,
-              currentPath,
-              stuckPath,
-            });
+        // Snapshot the outgoing user's live refresh token before we swap sessions.
+        // TOKEN_REFRESHED saves tokens via fire-and-forget dynamic import which can
+        // silently lag or fail — this explicit save guarantees freshness.
+        if (user?.id) {
+          try {
+            const { data: liveSession } = await assertSupabase().auth.getSession();
+            if (liveSession?.session?.user?.id === user.id && liveSession.session.refresh_token) {
+              const { setRefreshTokenForUser } = await import('@/services/biometricStorage');
+              await setRefreshTokenForUser(user.id, liveSession.session.refresh_token);
+            }
+          } catch {
+            // Non-fatal — proceed with switch even if snapshot fails
           }
-
-          if (!activeUser?.id || activeUser.id !== account.userId || !stuckPath) {
-            return;
-          }
-
-          const nextProfile = await fetchEnhancedUserProfile(activeUser.id).catch(() => null);
-          await routeAfterLogin(activeUser, nextProfile);
-          if (__DEV__) {
-            console.log('[AccountSwitch] Route fallback invoked', {
-              userId: activeUser.id,
-              pathBefore: currentPath,
-            });
-          }
-        } catch (routeErr) {
-          console.warn('[AccountSwitch] Route fallback failed:', routeErr);
-        } finally {
-          routeFallbackTimerRef.current = null;
-          setAccountSwitchInProgress(false);
-          deferSwitchCleanupToRouteFallback = false;
         }
-      }, 1200);
-    } catch (error) {
-      track('account.switch_failed', {
-        from_user_id: user?.id,
-        to_user_id: account.userId,
-        method: biometricAvailable ? 'biometric' : 'token',
-        reason: 'restore_error',
-        requires_password: false,
-      });
-      console.error('Account switch error:', error);
-      showAlert({
-        title: t('common.error', { defaultValue: 'Error' }),
-        message: t('account.switch_error', { defaultValue: 'Failed to switch account. Please try again.' }),
-        type: 'error',
-        buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), style: 'default' }],
-      });
-    } finally {
-      if (!deferSwitchCleanupToRouteFallback) {
-        setAccountSwitchInProgress(false);
-      }
-      setSwitching(null);
-    }
-  }, [user?.id, onClose, onAccountSwitched, t, biometricAvailable, showAlert]);
 
-  // Remove an account from stored list
-  const handleRemoveAccount = useCallback(async (account: StoredAccount) => {
-    if (account.isActive) {
-      showAlert({
-        title: t('account.cannot_remove_active', { defaultValue: 'Cannot Remove' }),
-        message: t('account.cannot_remove_active_message', { defaultValue: 'You cannot remove the currently active account.' }),
-        type: 'warning',
-        buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), style: 'default' }],
-      });
-      return;
-    }
+        const result = biometricAvailable
+          ? await EnhancedBiometricAuth.authenticateWithBiometricForUser(account.userId)
+          : await EnhancedBiometricAuth.restoreSessionForUser(account.userId);
 
-    showAlert({
-      title: t('account.remove_account', { defaultValue: 'Remove Account' }),
-      message: t('account.remove_account_confirm', { 
-        defaultValue: `Remove ${account.email} from quick switch? You can add it back by signing in again.`,
-        email: account.email 
-      }),
-      type: 'warning',
-      buttons: [
-        { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
-        {
-          text: t('common.remove', { defaultValue: 'Remove' }),
-          style: 'destructive',
-          onPress: async () => {
-            let globalRevokeStatus:
-              | 'revoked_global'
-              | 'token_missing'
-              | 'token_invalid'
-              | 'wrong_user'
-              | 'error' = 'error';
-            let globalRevokeError: string | undefined;
-            try {
-              track('account.remove.global_revoke_attempt', {
-                target_user_id: account.userId,
-              });
-              const revokeResult =
-                await EnhancedBiometricAuth.revokeSavedAccountSessionsGlobally(
-                  account.userId,
-                );
-              globalRevokeStatus = revokeResult.globalRevokeStatus;
-              globalRevokeError = revokeResult.error;
-              track('account.remove.global_revoke_result', {
-                target_user_id: account.userId,
-                status: globalRevokeStatus,
-                error: globalRevokeError ?? null,
-              });
-            } catch (error) {
-              globalRevokeStatus = 'error';
-              globalRevokeError = String(
-                (error as any)?.message || 'Global revoke failed',
-              );
-              track('account.remove.global_revoke_result', {
-                target_user_id: account.userId,
-                status: globalRevokeStatus,
-                error: globalRevokeError,
-              });
-            }
-
-            try {
-              await EnhancedBiometricAuth.removeBiometricSession(account.userId);
-              track('account.removed_from_switcher', {
-                user_id: account.userId,
-                global_revoke_status: globalRevokeStatus,
-              });
-              await loadAccounts();
-            } catch (error) {
-              console.error('Failed to remove account:', error);
-            }
-
-            if (globalRevokeStatus !== 'revoked_global') {
-              showAlert({
-                title: t('account.removed_local_only', {
-                  defaultValue: 'Removed on this device',
-                }),
-                message: t('account.removed_local_only_message', {
-                  defaultValue:
-                    'This account was removed from your saved list here. To fully sign it out everywhere, sign in to that account with password and sign out globally.',
-                }),
-                type: 'warning',
-                buttons: [
-                  {
-                    text: t('common.ok', { defaultValue: 'OK' }),
-                    style: 'default',
-                  },
+        if (__DEV__) {
+          console.log('[AccountSwitch] Result', {
+            success: result.success,
+            sessionRestored: result.sessionRestored,
+            to: account.userId,
+            error: result.error ?? null,
+            path: pathnameRef.current,
+          });
+        }
+        if (!result.success) {
+          track('account.switch_failed', {
+            from_user_id: user?.id,
+            to_user_id: account.userId,
+            method: biometricAvailable ? 'biometric' : 'token',
+            reason: result.reason || 'restore_error',
+            requires_password: !!result.requiresPassword,
+          });
+          showAlert({
+            title: t('account.switch_failed', { defaultValue: 'Switch Failed' }),
+            message:
+              result.error ||
+              t('account.biometric_failed', { defaultValue: 'Biometric authentication failed' }),
+            type: 'error',
+            buttons: result.requiresPassword
+              ? [
+                  { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
                   {
                     text: t('account.sign_in_manually', { defaultValue: 'Sign in' }),
                     style: 'default',
@@ -486,14 +262,256 @@ export function ProfileSwitcher({
                       });
                     },
                   },
-                ],
+                ]
+              : [{ text: t('common.ok', { defaultValue: 'OK' }), style: 'default' }],
+          });
+          return;
+        }
+
+        track('account.switch_success', {
+          from_user_id: user?.id,
+          to_user_id: account.userId,
+          session_restored: result.sessionRestored,
+        });
+        if (__DEV__) {
+          console.log('[AccountSwitch] Success', {
+            to: account.userId,
+            sessionRestored: result.sessionRestored,
+            path: pathnameRef.current,
+          });
+        }
+
+        onClose();
+        onAccountSwitched?.(account);
+
+        clearAllNavigationLocks();
+
+        // Reactivate push tokens for switched user so they receive notifications
+        try {
+          await reactivateUserTokens(account.userId);
+          const supabase = assertSupabase();
+          await registerPushDevice(supabase, { id: account.userId, email: account.email });
+        } catch (pushErr) {
+          console.warn('[ProfileSwitcher] Push token reactivation failed (non-fatal):', pushErr);
+        }
+
+        // Route handoff:
+        // Prefer auth pipeline, but when user remains on account/auth screens immediately
+        // after successful restore, proactively resolve dashboard route.
+        const currentPath = pathnameRef.current || '';
+        const shouldForceRoute =
+          currentPath.includes('/screens/account') ||
+          currentPath.includes('/(auth)/sign-in') ||
+          currentPath.includes('/sign-in');
+        if (__DEV__) {
+          console.log('[AccountSwitch] Route handoff decision', {
+            currentPath,
+            shouldForceRoute,
+            expectedUserId: account.userId,
+          });
+        }
+        if (shouldForceRoute) {
+          try {
+            const supabase = assertSupabase();
+            const { data: activeUserData } = await supabase.auth.getUser();
+            const activeUser = activeUserData?.user || null;
+            if (activeUser?.id === account.userId) {
+              const nextProfile = await fetchEnhancedUserProfile(activeUser.id).catch(() => null);
+              await routeAfterLogin(activeUser, nextProfile);
+              if (__DEV__) {
+                console.log('[AccountSwitch] Route handoff applied', {
+                  userId: activeUser.id,
+                  currentPath,
+                });
+              }
+            }
+          } catch (routeErr) {
+            console.warn('[AccountSwitch] Immediate route handoff failed:', routeErr);
+          }
+        }
+
+        // Fallback router handoff:
+        // In some account-switch races the auth event updates session/profile but route
+        // does not advance. If user is still on account/auth screens after a short delay,
+        // force route resolution once.
+        if (routeFallbackTimerRef.current) {
+          clearTimeout(routeFallbackTimerRef.current);
+        }
+        deferSwitchCleanupToRouteFallback = true;
+        routeFallbackTimerRef.current = setTimeout(async () => {
+          try {
+            const supabase = assertSupabase();
+            const { data: activeUserData } = await supabase.auth.getUser();
+            const activeUser = activeUserData?.user || null;
+            const currentPath = pathnameRef.current || '';
+            const stuckPath =
+              currentPath.includes('/screens/account') ||
+              currentPath.includes('/(auth)/sign-in') ||
+              currentPath.includes('/sign-in');
+
+            if (__DEV__) {
+              console.log('[AccountSwitch] Route fallback check', {
+                expectedUserId: account.userId,
+                activeUserId: activeUser?.id || null,
+                currentPath,
+                stuckPath,
               });
             }
+
+            if (!activeUser?.id || activeUser.id !== account.userId || !stuckPath) {
+              return;
+            }
+
+            const nextProfile = await fetchEnhancedUserProfile(activeUser.id).catch(() => null);
+            await routeAfterLogin(activeUser, nextProfile);
+            if (__DEV__) {
+              console.log('[AccountSwitch] Route fallback invoked', {
+                userId: activeUser.id,
+                pathBefore: currentPath,
+              });
+            }
+          } catch (routeErr) {
+            console.warn('[AccountSwitch] Route fallback failed:', routeErr);
+          } finally {
+            routeFallbackTimerRef.current = null;
+            setAccountSwitchInProgress(false);
+            deferSwitchCleanupToRouteFallback = false;
+          }
+        }, 1200);
+      } catch (error) {
+        track('account.switch_failed', {
+          from_user_id: user?.id,
+          to_user_id: account.userId,
+          method: biometricAvailable ? 'biometric' : 'token',
+          reason: 'restore_error',
+          requires_password: false,
+        });
+        console.error('Account switch error:', error);
+        showAlert({
+          title: t('common.error', { defaultValue: 'Error' }),
+          message: t('account.switch_error', {
+            defaultValue: 'Failed to switch account. Please try again.',
+          }),
+          type: 'error',
+          buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), style: 'default' }],
+        });
+      } finally {
+        if (!deferSwitchCleanupToRouteFallback) {
+          setAccountSwitchInProgress(false);
+        }
+        setSwitching(null);
+      }
+    },
+    [user?.id, onClose, onAccountSwitched, t, biometricAvailable, showAlert],
+  );
+
+  // Remove an account from stored list
+  const handleRemoveAccount = useCallback(
+    async (account: StoredAccount) => {
+      if (account.isActive) {
+        showAlert({
+          title: t('account.cannot_remove_active', { defaultValue: 'Cannot Remove' }),
+          message: t('account.cannot_remove_active_message', {
+            defaultValue: 'You cannot remove the currently active account.',
+          }),
+          type: 'warning',
+          buttons: [{ text: t('common.ok', { defaultValue: 'OK' }), style: 'default' }],
+        });
+        return;
+      }
+
+      showAlert({
+        title: t('account.remove_account', { defaultValue: 'Remove Account' }),
+        message: t('account.remove_account_confirm', {
+          defaultValue: `Remove ${account.email} from quick switch? You can add it back by signing in again.`,
+          email: account.email,
+        }),
+        type: 'warning',
+        buttons: [
+          { text: t('common.cancel', { defaultValue: 'Cancel' }), style: 'cancel' },
+          {
+            text: t('common.remove', { defaultValue: 'Remove' }),
+            style: 'destructive',
+            onPress: async () => {
+              let globalRevokeStatus:
+                | 'revoked_global'
+                | 'token_missing'
+                | 'token_invalid'
+                | 'wrong_user'
+                | 'error' = 'error';
+              let globalRevokeError: string | undefined;
+              try {
+                track('account.remove.global_revoke_attempt', {
+                  target_user_id: account.userId,
+                });
+                const revokeResult = await EnhancedBiometricAuth.revokeSavedAccountSessionsGlobally(
+                  account.userId,
+                );
+                globalRevokeStatus = revokeResult.globalRevokeStatus;
+                globalRevokeError = revokeResult.error;
+                track('account.remove.global_revoke_result', {
+                  target_user_id: account.userId,
+                  status: globalRevokeStatus,
+                  error: globalRevokeError ?? null,
+                });
+              } catch (error) {
+                globalRevokeStatus = 'error';
+                globalRevokeError = String((error as any)?.message || 'Global revoke failed');
+                track('account.remove.global_revoke_result', {
+                  target_user_id: account.userId,
+                  status: globalRevokeStatus,
+                  error: globalRevokeError,
+                });
+              }
+
+              try {
+                await EnhancedBiometricAuth.removeBiometricSession(account.userId);
+                track('account.removed_from_switcher', {
+                  user_id: account.userId,
+                  global_revoke_status: globalRevokeStatus,
+                });
+                await loadAccounts();
+              } catch (error) {
+                console.error('Failed to remove account:', error);
+              }
+
+              if (globalRevokeStatus !== 'revoked_global') {
+                showAlert({
+                  title: t('account.removed_local_only', {
+                    defaultValue: 'Removed on this device',
+                  }),
+                  message: t('account.removed_local_only_message', {
+                    defaultValue:
+                      'This account was removed from your saved list here. To fully sign it out everywhere, sign in to that account with password and sign out globally.',
+                  }),
+                  type: 'warning',
+                  buttons: [
+                    {
+                      text: t('common.ok', { defaultValue: 'OK' }),
+                      style: 'default',
+                    },
+                    {
+                      text: t('account.sign_in_manually', { defaultValue: 'Sign in' }),
+                      style: 'default',
+                      onPress: () => {
+                        onClose();
+                        signOutAndRedirect({
+                          clearBiometrics: false,
+                          resetApp: false,
+                          redirectTo: `/(auth)/sign-in?switch=1&email=${encodeURIComponent(account.email)}`,
+                        });
+                      },
+                    },
+                  ],
+                });
+              }
+            },
           },
-        },
-      ],
-    });
-  }, [t, loadAccounts, showAlert, onClose]);
+        ],
+      });
+    },
+    [t, loadAccounts, showAlert, onClose],
+  );
 
   // Add new account — navigate to sign-in WITHOUT signing out.
   // Supabase replaces the session when signInWithPassword is called for a
@@ -513,7 +531,8 @@ export function ProfileSwitcher({
           currentSession?.refresh_token,
         );
       } catch (storeErr) {
-        if (__DEV__) console.warn('[ProfileSwitcher] Failed to store current account before add:', storeErr);
+        if (__DEV__)
+          console.warn('[ProfileSwitcher] Failed to store current account before add:', storeErr);
       }
     }
     onClose();
@@ -536,9 +555,12 @@ export function ProfileSwitcher({
     const diffDays = Math.floor(diffMs / 86400000);
 
     if (diffMins < 1) return t('time.just_now', { defaultValue: 'Just now' });
-    if (diffMins < 60) return t('time.minutes_ago', { defaultValue: '{{count}} min ago', count: diffMins });
-    if (diffHours < 24) return t('time.hours_ago', { defaultValue: '{{count}}h ago', count: diffHours });
-    if (diffDays < 7) return t('time.days_ago', { defaultValue: '{{count}}d ago', count: diffDays });
+    if (diffMins < 60)
+      return t('time.minutes_ago', { defaultValue: '{{count}} min ago', count: diffMins });
+    if (diffHours < 24)
+      return t('time.hours_ago', { defaultValue: '{{count}}h ago', count: diffHours });
+    if (diffDays < 7)
+      return t('time.days_ago', { defaultValue: '{{count}}d ago', count: diffDays });
     return date.toLocaleDateString();
   };
 
@@ -551,15 +573,18 @@ export function ProfileSwitcher({
     return email.substring(0, 2).toUpperCase();
   };
 
-  const handleSwitchWithPassword = useCallback((account: StoredAccount) => {
-    onClose();
-    setAccountSwitchPending();
-    router.replace(`/(auth)/sign-in?switch=1&email=${encodeURIComponent(account.email)}` as any);
-  }, [onClose]);
+  const handleSwitchWithPassword = useCallback(
+    (account: StoredAccount) => {
+      onClose();
+      setAccountSwitchPending();
+      router.replace(`/(auth)/sign-in?switch=1&email=${encodeURIComponent(account.email)}` as any);
+    },
+    [onClose],
+  );
 
   const renderAccountItem = ({ item }: { item: StoredAccount }) => {
     const isSwitching = switching === item.userId;
-    
+
     return (
       <View
         style={[
@@ -585,10 +610,9 @@ export function ProfileSwitcher({
               {item.email}
             </Text>
             <Text style={[styles.accountMeta, { color: theme.textSecondary }]}>
-              {item.isActive 
+              {item.isActive
                 ? t('account.active_now', { defaultValue: 'Active now' })
-                : formatLastUsed(item.lastUsed)
-              }
+                : formatLastUsed(item.lastUsed)}
             </Text>
           </View>
         </TouchableOpacity>
@@ -635,7 +659,9 @@ export function ProfileSwitcher({
         {t('account.no_accounts', { defaultValue: 'No Saved Accounts' })}
       </Text>
       <Text style={[styles.emptySubtitle, { color: theme.textSecondary }]}>
-        {t('account.no_accounts_hint', { defaultValue: 'Sign in with another account to enable quick switching' })}
+        {t('account.no_accounts_hint', {
+          defaultValue: 'Sign in with another account to enable quick switching',
+        })}
       </Text>
     </View>
   );
@@ -644,13 +670,18 @@ export function ProfileSwitcher({
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <TouchableOpacity style={styles.backdropTouchable} onPress={onClose} activeOpacity={1} />
-        
-        <View style={[styles.container, { backgroundColor: theme.background, paddingBottom: insets.bottom }]}>
+
+        <View
+          style={[
+            styles.container,
+            { backgroundColor: theme.background, paddingBottom: insets.bottom },
+          ]}
+        >
           {/* Handle bar */}
           <View style={styles.handleContainer}>
             <View style={[styles.handle, { backgroundColor: theme.textSecondary + '40' }]} />
           </View>
-          
+
           {/* Header */}
           <View style={styles.header}>
             <Text style={[styles.title, { color: theme.text }]}>
@@ -662,7 +693,8 @@ export function ProfileSwitcher({
                     defaultValue: `Tap an account to switch instantly (up to ${MAX_BIOMETRIC_ACCOUNTS} saved accounts).`,
                   })
                 : t('account.switch_account_desc_no_biometric', {
-                    defaultValue: 'Tap to try quick switch, or use password to sign in to an account.',
+                    defaultValue:
+                      'Tap to try quick switch, or use password to sign in to an account.',
                   })}
             </Text>
             <Text style={[styles.debugText, { color: theme.textSecondary }]}>
@@ -685,7 +717,7 @@ export function ProfileSwitcher({
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
               >
-                {accounts.map(item => (
+                {accounts.map((item) => (
                   <React.Fragment key={item.userId}>
                     {renderAccountItem({ item } as any)}
                   </React.Fragment>

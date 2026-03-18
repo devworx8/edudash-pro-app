@@ -19,7 +19,9 @@ export interface PrincipalGettingStartedCardProps {
   stats?: SchoolStats | null;
 }
 
-export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardProps> = ({ stats }) => {
+export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardProps> = ({
+  stats,
+}) => {
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { width } = useWindowDimensions();
@@ -43,37 +45,54 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
       {
         id: 'teachers',
         title: t('onboarding.invite_teachers', { defaultValue: 'Invite teachers' }),
-        subtitle: t('onboarding.invite_teachers_sub', { defaultValue: 'Send an invite link. They sign up on their phone in seconds.' }),
+        subtitle: t('onboarding.invite_teachers_sub', {
+          defaultValue: 'Send an invite link. They sign up on their phone in seconds.',
+        }),
         done: teachers > 0,
         icon: 'people',
         route: '/screens/teacher-management',
-        cta: teachers > 0 ? t('common.manage', { defaultValue: 'Manage' }) : t('common.invite', { defaultValue: 'Invite' }),
+        cta:
+          teachers > 0
+            ? t('common.manage', { defaultValue: 'Manage' })
+            : t('common.invite', { defaultValue: 'Invite' }),
         priority: 1,
       },
       {
         id: 'classes',
         title: t('onboarding.create_classes', { defaultValue: 'Create classes' }),
-        subtitle: t('onboarding.create_classes_sub', { defaultValue: 'Group learners into classes so attendance and lessons work.' }),
+        subtitle: t('onboarding.create_classes_sub', {
+          defaultValue: 'Group learners into classes so attendance and lessons work.',
+        }),
         done: classes > 0,
         icon: 'library',
         route: '/screens/class-teacher-management',
-        cta: classes > 0 ? t('common.manage', { defaultValue: 'Manage' }) : t('common.create', { defaultValue: 'Create' }),
+        cta:
+          classes > 0
+            ? t('common.manage', { defaultValue: 'Manage' })
+            : t('common.create', { defaultValue: 'Create' }),
         priority: 2,
       },
       {
         id: 'students',
         title: t('onboarding.add_students', { defaultValue: 'Add students' }),
-        subtitle: t('onboarding.add_students_sub', { defaultValue: 'Add learners so parents can link and fees can be tracked.' }),
+        subtitle: t('onboarding.add_students_sub', {
+          defaultValue: 'Add learners so parents can link and fees can be tracked.',
+        }),
         done: students > 0,
         icon: 'school',
         route: '/screens/student-management',
-        cta: students > 0 ? t('common.manage', { defaultValue: 'Manage' }) : t('common.add', { defaultValue: 'Add' }),
+        cta:
+          students > 0
+            ? t('common.manage', { defaultValue: 'Manage' })
+            : t('common.add', { defaultValue: 'Add' }),
         priority: 3,
       },
       {
         id: 'parents',
         title: t('onboarding.invite_parents', { defaultValue: 'Invite parents' }),
-        subtitle: t('onboarding.invite_parents_sub', { defaultValue: 'Share an invite code via WhatsApp so parents can connect to their child.' }),
+        subtitle: t('onboarding.invite_parents_sub', {
+          defaultValue: 'Share an invite code via WhatsApp so parents can connect to their child.',
+        }),
         done: (stats?.parentLinks?.total ?? 0) > 0,
         icon: 'heart',
         route: '/screens/principal-parent-invite-code',
@@ -83,7 +102,10 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
       {
         id: 'fees',
         title: t('onboarding.set_fees', { defaultValue: 'Set up fees' }),
-        subtitle: t('onboarding.set_fees_sub', { defaultValue: 'Configure fee structures so payment reminders and tracking work automatically.' }),
+        subtitle: t('onboarding.set_fees_sub', {
+          defaultValue:
+            'Configure fee structures so payment reminders and tracking work automatically.',
+        }),
         done: (stats?.feeStructures?.total ?? 0) > 0,
         icon: 'cash',
         route: '/screens/finance-control-center?tab=overview',
@@ -111,9 +133,13 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
             <Ionicons name="sparkles" size={18} color={theme.primary} />
           </View>
           <View style={styles.headerText}>
-            <Text style={styles.title}>{t('onboarding.get_started', { defaultValue: 'Set up your school' })}</Text>
+            <Text style={styles.title}>
+              {t('onboarding.get_started', { defaultValue: 'Set up your school' })}
+            </Text>
             <Text style={styles.subtitle} numberOfLines={2}>
-              {t('onboarding.get_started_sub', { defaultValue: 'Complete these steps to unlock the full dashboard.' })}
+              {t('onboarding.get_started_sub', {
+                defaultValue: 'Complete these steps to unlock the full dashboard.',
+              })}
             </Text>
           </View>
         </View>
@@ -122,9 +148,19 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
       {/* Progress bar */}
       <View style={styles.progressRow}>
         <View style={[styles.progressTrack, { backgroundColor: `${theme.primary}12` }]}>
-          <View style={[styles.progressFill, { width: ratioToPercent(completedCount, totalSteps), backgroundColor: theme.success || '#10B981' }]} />
+          <View
+            style={[
+              styles.progressFill,
+              {
+                width: ratioToPercent(completedCount, totalSteps),
+                backgroundColor: theme.success || '#10B981',
+              },
+            ]}
+          />
         </View>
-        <Text style={[styles.progressText, { color: theme.textSecondary }]}>{completedCount}/{totalSteps}</Text>
+        <Text style={[styles.progressText, { color: theme.textSecondary }]}>
+          {completedCount}/{totalSteps}
+        </Text>
       </View>
 
       <View style={styles.steps}>
@@ -135,11 +171,16 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
             onPress={() => router.push(step.route as any)}
             activeOpacity={0.85}
           >
-            <View style={[styles.stepIcon, { backgroundColor: step.done ? `${theme.success}1A` : `${theme.primary}12` }]}>
+            <View
+              style={[
+                styles.stepIcon,
+                { backgroundColor: step.done ? `${theme.success}1A` : `${theme.primary}12` },
+              ]}
+            >
               <Ionicons
                 name={step.done ? 'checkmark' : step.icon}
                 size={18}
-                color={step.done ? (theme.success || '#10B981') : theme.primary}
+                color={step.done ? theme.success || '#10B981' : theme.primary}
               />
             </View>
             <View style={styles.stepText}>
@@ -152,7 +193,11 @@ export const PrincipalGettingStartedCard: React.FC<PrincipalGettingStartedCardPr
             </View>
             <View style={styles.stepCta}>
               <Text style={styles.ctaText}>{step.cta}</Text>
-              <Ionicons name="chevron-forward" size={16} color={theme.textTertiary || theme.textSecondary} />
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={theme.textTertiary || theme.textSecondary}
+              />
             </View>
           </TouchableOpacity>
         ))}

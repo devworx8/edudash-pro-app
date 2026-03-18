@@ -3,7 +3,14 @@
  * Provides organization-level branding like wallpaper, greeting, colors
  * across all member dashboards and screens
  */
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+  useCallback,
+} from 'react';
 import { assertSupabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 
@@ -48,7 +55,9 @@ interface OrganizationBrandingProviderProps {
   children: ReactNode;
 }
 
-export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProviderProps> = ({ children }) => {
+export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProviderProps> = ({
+  children,
+}) => {
   const [settings, setSettings] = useState<DashboardSettings | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +68,14 @@ export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProvider
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const supabase = assertSupabase();
-      const { data: { user } } = await supabase.auth.getUser();
-      
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       logger.debug(TAG, 'User:', user?.id);
-      
+
       if (!user) {
         logger.debug(TAG, 'No user found, skipping fetch');
         setIsLoading(false);
@@ -84,7 +95,7 @@ export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProvider
         logger.debug(TAG, 'Error querying membership:', memberError.message);
         logger.info('[Branding] Error querying membership:', memberError.message);
       }
-      
+
       // If user is in an organization with dashboard_settings, use that
       if (member?.organization_id && member.organizations) {
         const org = member.organizations as any;
@@ -92,7 +103,7 @@ export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProvider
         logger.debug(TAG, 'Dashboard settings:', org.dashboard_settings);
         setOrganizationId(org.id);
         setOrganizationName(org.name);
-        
+
         if (org.dashboard_settings) {
           setSettings(org.dashboard_settings as DashboardSettings);
           logger.debug(TAG, 'Settings applied from organization:', org.dashboard_settings);
@@ -123,7 +134,7 @@ export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProvider
 
       if (profile?.preschool_id) {
         logger.debug(TAG, 'User has preschool_id:', profile.preschool_id);
-        
+
         // Check if an organization has this preschool linked to it
         // Note: The FK is organizations.preschool_id → preschools.id (reverse direction)
         const { data: linkedOrg, error: linkedOrgError } = await supabase
@@ -176,7 +187,7 @@ export const OrganizationBrandingProvider: React.FC<OrganizationBrandingProvider
             logger.info('[Branding] Organization branding updated via realtime');
             setSettings(payload.new.dashboard_settings as DashboardSettings);
           }
-        }
+        },
       )
       .subscribe();
 

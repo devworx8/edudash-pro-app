@@ -4,7 +4,7 @@ import {
   Text,
   TouchableOpacity,
   TextInput,
-  FlatList,
+  ScrollView,
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
@@ -18,7 +18,7 @@ import { isPlatformStaff } from '@/lib/roleUtils';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { useSuperAdminTeamChat } from '@/hooks/useSuperAdminTeamChat';
-import type { TeamMessage } from '@/hooks/super-admin-team-chat/types';
+import type { TeamMessage, TeamChannelMember } from '@/hooks/super-admin-team-chat/types';
 import { createStyles } from '@/lib/screen-styles/super-admin-team-chat.styles';
 import ChannelSidebar from '@/components/team-chat/ChannelSidebar';
 
@@ -71,7 +71,7 @@ export default function SuperAdminTeamChatScreen() {
   const styles = createStyles(theme);
   const { showAlert, alertProps } = useAlertModal();
   const [messageText, setMessageText] = useState('');
-  const scrollRef = useRef<FlatList>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const { width } = useWindowDimensions();
   const isWide = width >= 768;
 
@@ -209,17 +209,19 @@ function ChatPane({
 }: {
   channel: { id: string; name: string; description: string | null };
   messages: TeamMessage[];
-  members: { user_id: string }[];
+  members: TeamChannelMember[];
   myId: string;
   messageText: string;
   setMessageText: (t: string) => void;
   sendingMessage: boolean;
   onSend: () => void;
   onKeyPress: (e: any) => void;
-  scrollRef: React.RefObject<FlatList>;
+  scrollRef: React.RefObject<ScrollView>;
   styles: ReturnType<typeof createStyles>;
   onBack?: () => void;
 }) {
+  const [showMembers, setShowMembers] = useState(false);
+
   return (
     <KeyboardAvoidingView
       style={styles.chatPane}
@@ -239,36 +241,26 @@ function ChatPane({
             {channel.description ? ` · ${channel.description}` : ''}
           </Text>
         </View>
-        <TouchableOpacity style={styles.headerIconBtn}>
-          <Ionicons name="people-outline" size={20} color="#94a3b8" />
+        <TouchableOpacity
+          style={[styles.headerIconBtn, showMembers && styles.headerIconBtnActive]}
+          onPress={() => setShowMembers(prev => !prev)}
+        >
+          <Ionicons name={showMembers ? 'people' : 'people-outline'} size={20} color={showMembers ? '#3b82f6' : '#94a3b8'} />
         </TouchableOpacity>
       </View>
 
       {/* ── Messages ── */}
-      <FlatList
+      <ScrollView
         ref={scrollRef}
-        data={messages}
-        keyExtractor={item => item.id}
+        style={{ flex: 1 }}
         contentContainerStyle={
           messages.length === 0
-            ? { flex: 1, justifyContent: 'center' }
+            ? { flexGrow: 1, justifyContent: 'center' }
             : { paddingVertical: 8, paddingHorizontal: 16 }
         }
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-        renderItem={({ item, index }) => (
-          <>
-            {shouldShowDate(messages, index) && (
-              <DateSeparator label={getDateLabel(item.created_at)} styles={styles} />
-            )}
-            <MessageBubble
-              message={item}
-              isOwn={item.sender_id === myId}
-              showSender={shouldShowHeader(messages, index)}
-              styles={styles}
-            />
-          </>
-        )}
-        ListEmptyComponent={
+      >
+        {messages.length === 0 ? (
           <View style={styles.emptyChat}>
             <View style={styles.emptyChatCircle}>
               <Ionicons name="chatbubble-ellipses-outline" size={36} color="#334155" />
@@ -278,8 +270,27 @@ function ChatPane({
               Be the first to say something in #{channel.name}
             </Text>
           </View>
-        }
-      />
+        ) : (
+          messages.map((item, index) => (
+            <View key={item.id}>
+              {shouldShowDate(messages, index) && (
+                <DateSeparator label={getDateLabel(item.created_at)} styles={styles} />
+              )}
+              <MessageBubble
+                message={item}
+                isOwn={item.sender_id === myId}
+                showSender={shouldShowHeader(messages, index)}
+                styles={styles}
+              />
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      {/* ── Members Panel (Slack-style) ── */}
+      {showMembers && (
+        <MembersPanel members={members} myId={myId} styles={styles} />
+      )}
 
       {/* ── Input ── */}
       <View style={styles.inputBar}>
@@ -356,6 +367,73 @@ function MessageBubble({
         )}
         <Text style={styles.msgContent}>{message.content}</Text>
       </View>
+    </View>
+  );
+}
+
+// ── Members Panel (Slack-style) ──────────────────────────────────────────────
+
+function MembersPanel({
+  members, myId, styles,
+}: {
+  members: TeamChannelMember[];
+  myId: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
+  const sorted = [...members].sort((a, b) => {
+    if (a.user_id === myId) return -1;
+    if (b.user_id === myId) return 1;
+    if (a.role === 'owner' && b.role !== 'owner') return -1;
+    if (b.role === 'owner' && a.role !== 'owner') return 1;
+    return (a.profile?.full_name || '').localeCompare(b.profile?.full_name || '');
+  });
+
+  return (
+    <View style={styles.membersPanel}>
+      <View style={styles.membersPanelHeader}>
+        <Ionicons name="people" size={16} color="#94a3b8" />
+        <Text style={styles.membersPanelTitle}>
+          Members — {members.length}
+        </Text>
+      </View>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {sorted.map(m => {
+          const name = m.profile?.full_name || 'Unknown';
+          const role = m.profile?.role || 'member';
+          const isMe = m.user_id === myId;
+          const color = hashColor(name);
+          return (
+            <View key={m.user_id} style={styles.memberItem}>
+              <View style={styles.memberAvatarWrap}>
+                <View style={[styles.memberAvatar, { backgroundColor: isMe ? '#3b82f6' : color }]}>
+                  <Text style={styles.memberAvatarText}>{initials(name)}</Text>
+                </View>
+                <View style={styles.memberOnlineDot} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.memberName} numberOfLines={1}>
+                    {name}{isMe ? ' (you)' : ''}
+                  </Text>
+                  {m.role === 'owner' && (
+                    <View style={styles.memberOwnerBadge}>
+                      <Text style={styles.memberOwnerText}>Owner</Text>
+                    </View>
+                  )}
+                  {m.role === 'admin' && (
+                    <View style={styles.memberAdminBadge}>
+                      <Text style={styles.memberAdminText}>Admin</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.memberRole}>
+                  {role.replace(/_/g, ' ')}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
     </View>
   );
 }

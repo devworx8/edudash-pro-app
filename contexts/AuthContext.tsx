@@ -125,8 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // ── Sign out ──────────────────────────────
   const handleSignOutCallback = useCallback(async () => {
     try {
-      try { clearAllNavigationLocks(); } catch { /* noop */ }
-      try { await signOut({ preserveOtherSessions: true }); } catch { /* noop */ }
+      try {
+        clearAllNavigationLocks();
+      } catch {
+        /* noop */
+      }
+      try {
+        await signOut({ preserveOtherSessions: true });
+      } catch {
+        /* noop */
+      }
 
       setUser(null);
       setSession(null);
@@ -135,10 +143,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileLoading(false);
       lastUserIdRef.current = null;
 
-      try { queryClient.clear(); } catch { /* noop */ }
+      try {
+        queryClient.clear();
+      } catch {
+        /* noop */
+      }
       Promise.resolve().then(async () => {
-        try { await getPostHog()?.reset(); } catch { /* noop */ }
-        try { Sentry.setUser(null as any); } catch { /* noop */ }
+        try {
+          await getPostHog()?.reset();
+        } catch {
+          /* noop */
+        }
+        try {
+          Sentry.setUser(null as any);
+        } catch {
+          /* noop */
+        }
       });
     } catch (error) {
       logger.error('AuthContext', 'Sign out failed:', error);
@@ -160,15 +180,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const root = (globalThis as any)?.document?.documentElement;
       if (root && typeof (globalThis as any).matchMedia === 'function') {
         const dark = (globalThis as any).matchMedia('(prefers-color-scheme: dark)')?.matches;
-        if (dark) root.classList.add('dark'); else root.classList.remove('dark');
+        if (dark) root.classList.add('dark');
+        else root.classList.remove('dark');
       }
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
 
     // Boot
     (async () => {
       mark('auth_bootstrap_start');
       await bootSession({
-        mounted: { get current() { return mounted; } },
+        mounted: {
+          get current() {
+            return mounted;
+          },
+        },
         setUser,
         setSession,
         setProfile,
@@ -196,18 +223,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Sync storage (skip clear on SIGNED_OUT when switching account — next event will be SIGNED_IN)
           const skipSignOutCleanup = qEvent === 'SIGNED_OUT' && isAccountSwitchInProgress();
           if (skipSignOutCleanup && __DEV__) {
-            console.log('[AccountSwitch] SIGNED_OUT during switch — skipping cleanup, waiting for SIGNED_IN');
+            console.log(
+              '[AccountSwitch] SIGNED_OUT during switch — skipping cleanup, waiting for SIGNED_IN',
+            );
           }
           try {
             if (qEvent === 'SIGNED_OUT' && !skipSignOutCleanup) await clearStoredAuthData();
             else if (qEvent !== 'SIGNED_OUT') await syncSessionFromSupabase(qS ?? null);
-          } catch { /* noop */ }
+          } catch {
+            /* noop */
+          }
 
           // Single-session revocation is opt-in. Defaulting it on caused
           // users to get signed out on phone/web unexpectedly.
           // Skip during account switch to avoid revoking sessions while session swap is in-flight.
           const singleSessionEnabled = process.env.EXPO_PUBLIC_SINGLE_SESSION_ENABLED === 'true';
-          if (qEvent === 'SIGNED_IN' && qS?.user?.id && singleSessionEnabled && !isAccountSwitchInProgress()) {
+          if (
+            qEvent === 'SIGNED_IN' &&
+            qS?.user?.id &&
+            singleSessionEnabled &&
+            !isAccountSwitchInProgress()
+          ) {
             assertSupabase()
               .auth.signOut({ scope: 'others' } as { scope: 'others' })
               .catch(() => {});
@@ -237,19 +273,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Detect user switch (SIGNED_IN or TOKEN_REFRESHED when user actually changed)
           const userChanged =
             !!nextUserId &&
-            (
-              (lastUserIdRef.current && lastUserIdRef.current !== nextUserId) ||
-              (profileRef.current?.id && profileRef.current.id !== nextUserId)
-            );
-          const isSwitch =
-            (qEvent === 'SIGNED_IN' || qEvent === 'TOKEN_REFRESHED') && userChanged;
+            ((lastUserIdRef.current && lastUserIdRef.current !== nextUserId) ||
+              (profileRef.current?.id && profileRef.current.id !== nextUserId));
+          const isSwitch = (qEvent === 'SIGNED_IN' || qEvent === 'TOKEN_REFRESHED') && userChanged;
           if (isSwitch) {
             setProfile(null);
             setPermissions(createPermissionChecker(null));
             setProfileLoading(true);
-            if (__DEV__) console.log('[AccountSwitch] User changed in auth state — running SIGNED_IN pipeline', { event: qEvent, newUserId: nextUserId });
+            if (__DEV__)
+              console.log(
+                '[AccountSwitch] User changed in auth state — running SIGNED_IN pipeline',
+                { event: qEvent, newUserId: nextUserId },
+              );
           }
-          if (qEvent === 'SIGNED_IN' || (qEvent === 'TOKEN_REFRESHED' && userChanged)) setAccountSwitchInProgress(false);
+          if (qEvent === 'SIGNED_IN' || (qEvent === 'TOKEN_REFRESHED' && userChanged))
+            setAccountSwitchInProgress(false);
           lastUserIdRef.current = nextUserId;
 
           // Update session state only on token change (skip nulling out when switching account)
@@ -263,7 +301,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           try {
             // Run full sign-in pipeline for SIGNED_IN or when TOKEN_REFRESHED reflects an account switch
-            const runSignedInPipeline = (qEvent === 'SIGNED_IN' || (qEvent === 'TOKEN_REFRESHED' && userChanged)) && qS?.user;
+            const runSignedInPipeline =
+              (qEvent === 'SIGNED_IN' || (qEvent === 'TOKEN_REFRESHED' && userChanged)) && qS?.user;
             if (runSignedInPipeline) {
               const deps: SignedInDeps = {
                 mounted,
@@ -295,7 +334,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
           } catch (error) {
             logger.error('AuthContext', 'Auth state handler error:', error);
-            if (mounted && (qEvent === 'SIGNED_IN' || qEvent === 'TOKEN_REFRESHED')) setProfileLoading(false);
+            if (mounted && (qEvent === 'SIGNED_IN' || qEvent === 'TOKEN_REFRESHED'))
+              setProfileLoading(false);
           }
         }); // end authEventQueue.enqueue
       });
@@ -308,8 +348,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         clearTimeout(orgNameRefreshTimerRef.current);
         orgNameRefreshTimerRef.current = null;
       }
-      try { unsub?.subscription?.unsubscribe(); } catch { /* noop */ }
-      try { destroyVisibilityHandler(); } catch { /* noop */ }
+      try {
+        unsub?.subscription?.unsubscribe();
+      } catch {
+        /* noop */
+      }
+      try {
+        destroyVisibilityHandler();
+      } catch {
+        /* noop */
+      }
     };
   }, []);
 

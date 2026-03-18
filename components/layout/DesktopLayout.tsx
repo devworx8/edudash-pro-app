@@ -11,10 +11,11 @@ import { MobileNavDrawer } from '@/components/navigation/MobileNavDrawer';
 import { useNotificationBadgeCount } from '@/hooks/useNotificationCount';
 import { useFinancePrivacyMode } from '@/hooks/useFinancePrivacyMode';
 import { signOutAndRedirect } from '@/lib/authActions';
+import { isPlatformStaff } from '@/lib/roleUtils';
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
-  role?: 'principal' | 'teacher' | 'parent' | 'super_admin' | 'student';
+  role?: 'principal' | 'teacher' | 'parent' | 'super_admin' | 'system_admin' | 'content_moderator' | 'support_admin' | 'billing_admin' | 'student';
   title?: string; // Custom title for mobile header (overrides tenant slug)
   showBackButton?: boolean; // Show back button instead of hamburger menu
   mobileHeaderTopInsetOffset?: number; // Extra top spacing after safe-area inset on mobile header
@@ -44,7 +45,6 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'parent-aftercare', label: 'Register Aftercare', icon: 'business-outline', route: '/screens/parent-aftercare-registration', roles: ['parent'] },
   { id: 'parent-upgrade', label: 'Upgrade Plan', icon: 'arrow-up-circle-outline', route: '/screens/parent-upgrade', roles: ['parent'] },
   { id: 'parent-calendar', label: 'Calendar', icon: 'calendar-outline', route: '/screens/calendar', roles: ['parent'] },
-  { id: 'super-admin-dash', label: 'Dashboard', icon: 'shield-checkmark-outline', route: '/screens/super-admin-dashboard', roles: ['super_admin'] },
   
   // Principal/Teacher items
   { id: 'students', label: 'Students', icon: 'people-outline', route: '/screens/student-management', roles: ['principal', 'principal_admin', 'teacher'] },
@@ -72,14 +72,24 @@ const NAV_ITEMS: NavItem[] = [
   { id: 'children', label: 'My Children', icon: 'heart-outline', route: '/screens/parent-children', roles: ['parent'] },
   
   // Super Admin items
-  { id: 'users', label: 'Users', icon: 'people-circle-outline', route: '/screens/super-admin-users', roles: ['super_admin'] },
+  { id: 'super-admin-dash', label: 'Dashboard', icon: 'shield-checkmark-outline', route: '/screens/super-admin-dashboard', roles: ['super_admin'] },
+  { id: 'users', label: 'Users', icon: 'people-circle-outline', route: '/screens/super-admin-users', roles: ['super_admin', 'content_moderator', 'support_admin'] },
+  { id: 'organizations', label: 'Organizations', icon: 'business-outline', route: '/screens/super-admin-organizations', roles: ['super_admin', 'content_moderator', 'support_admin', 'billing_admin'] },
   { id: 'subscriptions', label: 'Subscriptions', icon: 'card-outline', route: '/screens/super-admin-subscriptions', roles: ['super_admin'] },
   { id: 'analytics', label: 'Analytics', icon: 'analytics-outline', route: '/screens/super-admin-analytics', roles: ['super_admin'] },
-  { id: 'monitoring', label: 'Monitoring', icon: 'pulse-outline', route: '/screens/super-admin-system-monitoring', roles: ['super_admin'] },
-  { id: 'ai-quotas', label: 'AI Quotas', icon: 'flash-outline', route: '/screens/super-admin-ai-quotas', roles: ['super_admin'] },
+  { id: 'monitoring', label: 'Monitoring', icon: 'pulse-outline', route: '/screens/super-admin-system-monitoring', roles: ['super_admin', 'system_admin'] },
+  { id: 'ai-quotas', label: 'AI Quotas', icon: 'flash-outline', route: '/screens/super-admin-ai-quotas', roles: ['super_admin', 'billing_admin'] },
+  { id: 'team-chat', label: 'Team Chat', icon: 'chatbubbles-outline', route: '/screens/super-admin-team-chat', roles: ['super_admin', 'system_admin', 'content_moderator', 'support_admin', 'billing_admin'] },
+  { id: 'announcements', label: 'Announcements', icon: 'megaphone-outline', route: '/screens/super-admin-announcements', roles: ['super_admin', 'system_admin', 'content_moderator', 'support_admin', 'billing_admin'] },
+  
+  // Platform sub-admin dashboard items
+  { id: 'platform-admin-dash', label: 'Dashboard', icon: 'shield-outline', route: '/screens/platform-admin-dashboard', roles: ['system_admin', 'content_moderator', 'support_admin', 'billing_admin'] },
+  { id: 'command-center', label: 'Command Center', icon: 'terminal-outline', route: '/screens/super-admin-platform-command-center', roles: ['system_admin'] },
+  { id: 'content-studio', label: 'Content Studio', icon: 'create-outline', route: '/screens/super-admin-content-studio', roles: ['content_moderator'] },
+  { id: 'moderation', label: 'Moderation', icon: 'flag-outline', route: '/screens/super-admin-moderation', roles: ['content_moderator'] },
   
   // Common items
-  { id: 'settings', label: 'Settings', icon: 'settings-outline', route: '/screens/settings', roles: ['principal', 'principal_admin', 'teacher', 'parent', 'super_admin'] },
+  { id: 'settings', label: 'Settings', icon: 'settings-outline', route: '/screens/settings', roles: ['principal', 'principal_admin', 'teacher', 'parent', 'super_admin', 'system_admin', 'content_moderator', 'support_admin', 'billing_admin'] },
 ];
 
 /**
@@ -165,7 +175,9 @@ export function DesktopLayout({
     ? normalizedTenantName
     : isOrgNameLoading
       ? 'Loading...'
-      : 'My School';
+      : isPlatformStaff(userRole)
+        ? 'EduDash Pro'
+        : 'My School';
 
   // Mobile layout styles (computed here for mobile header)
   const mobileStyles = React.useMemo(() => ({

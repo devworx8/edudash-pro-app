@@ -233,5 +233,100 @@ export function createStyles(theme: any) {
     sendBtnOff: {
       opacity: 0.3,
     },
+
+    // ── Members Panel ────────────────────────────────
+    headerIconBtnActive: {
+      backgroundColor: '#1e3a5f',
+      borderWidth: 1,
+      borderColor: '#3b82f6',
+    },
+    membersPanel: {
+      backgroundColor: '#0c1222',
+      borderTopWidth: 1,
+      borderTopColor: '#1e293b',
+      maxHeight: 260,
+    },
+    membersPanelHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: '#1e293b',
+    },
+    membersPanelTitle: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: '#94a3b8',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    memberItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      gap: 12,
+    },
+    memberAvatarWrap: {
+      position: 'relative',
+    },
+    memberAvatar: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    memberAvatarText: {
+      fontSize: 13,
+      fontWeight: '800',
+      color: '#ffffff',
+    },
+    memberOnlineDot: {
+      position: 'absolute',
+      bottom: -1,
+      right: -1,
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+      backgroundColor: '#22c55e',
+      borderWidth: 2,
+      borderColor: '#0c1222',
+    },
+    memberName: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#e2e8f0',
+    },
+    memberRole: {
+      fontSize: 12,
+      color: '#64748b',
+      textTransform: 'capitalize',
+      marginTop: 1,
+    },
+    memberOwnerBadge: {
+      backgroundColor: '#f59e0b20',
+      borderRadius: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+    },
+    memberOwnerText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#f59e0b',
+    },
+    memberAdminBadge: {
+      backgroundColor: '#3b82f620',
+      borderRadius: 4,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+    },
+    memberAdminText: {
+      fontSize: 10,
+      fontWeight: '700',
+      color: '#3b82f6',
+    },
   });
 }
