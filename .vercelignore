@@ -79,7 +79,7 @@ scripts/temp/
 # Not needed for web build
 supabase/
 migrations/
-reports/
+/reports/
 sql/
 server-examples/
 patches/
