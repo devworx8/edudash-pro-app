@@ -11,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 import { logger } from '@/lib/logger';
 import { useAlertModal, AlertModal } from '@/components/ui/AlertModal';
 
@@ -78,16 +79,17 @@ export default function EditTeacherScreen() {
         is_active: teacherRecord?.is_active ?? true,
       });
 
-      // Fetch assigned classes
-      const teacherRefIds = Array.from(
-        new Set([teacherData.id, teacherData.auth_user_id].filter((v): v is string => Boolean(v)))
-      );
-      const { data: classesData } = await supabase
-        .from('classes')
-        .select('name')
-        .in('teacher_id', teacherRefIds);
-
-      setAssignedClasses((classesData || []).map((c: any) => c.name));
+      // Fetch assigned classes (lead + assistant via class_teachers)
+      const classIds = await fetchTeacherClassIds(teacherData.id);
+      if (classIds.length > 0) {
+        const { data: classesData } = await supabase
+          .from('classes')
+          .select('name')
+          .in('id', classIds);
+        setAssignedClasses((classesData || []).map((c: any) => c.name));
+      } else {
+        setAssignedClasses([]);
+      }
     } catch (error: any) {
       console.error('Error fetching teacher:', error);
       showAlert({ title: 'Error', message: 'Failed to load teacher information', type: 'error' });

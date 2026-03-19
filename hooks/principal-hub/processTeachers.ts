@@ -192,43 +192,64 @@ async function loadTeacherFallbackStats(
   }
 
   const supabase = assertSupabase();
-  let classRows: Array<{ id: string; teacher_id: string | null }> = [];
+
+  // Build class-to-teacher mapping using BATCH queries (not per-teacher)
+  const classIdsByTeacherId = new Map<string, string[]>();
+  const teacherIds = teachersNeedingFallback
+    .map((t) => t.effectiveUserId || t.id)
+    .filter(Boolean) as string[];
 
   try {
-    const { data, error } = await supabase
+    // Batch 1: All class_teachers rows for these teachers, scoped to this school's classes
+    const { data: joinRows } = await supabase
+      .from('class_teachers')
+      .select('class_id, teacher_id')
+      .in('teacher_id', teacherIds);
+
+    // Filter join results to classes belonging to this school
+    let schoolClassIds: Set<string> | null = null;
+    const joinClassIds = (joinRows || []).map((r: any) => r.class_id as string);
+    if (joinClassIds.length > 0) {
+      const { data: scopedRows } = await supabase
+        .from('classes')
+        .select('id')
+        .in('id', joinClassIds)
+        .eq('preschool_id', preschoolId);
+      schoolClassIds = new Set((scopedRows || []).map((r: any) => r.id as string));
+    }
+
+    (joinRows || []).forEach((row: any) => {
+      if (!row?.teacher_id || !row?.class_id) return;
+      if (schoolClassIds && !schoolClassIds.has(row.class_id)) return;
+      const existing = classIdsByTeacherId.get(row.teacher_id) || [];
+      existing.push(row.class_id);
+      classIdsByTeacherId.set(row.teacher_id, existing);
+    });
+
+    // Batch 2: Legacy classes.teacher_id for all these teachers at this school
+    const { data: legacyRows } = await supabase
       .from('classes')
       .select('id, teacher_id')
+      .in('teacher_id', teacherIds)
       .eq('preschool_id', preschoolId)
-      .or('active.eq.true,active.is.null');
-    if (error) throw error;
-    classRows = (data || []).map((row: any) => ({
-      id: String(row.id),
-      teacher_id: row.teacher_id ? String(row.teacher_id) : null,
-    }));
+      .eq('active', true);
+
+    (legacyRows || []).forEach((row: any) => {
+      if (!row?.teacher_id || !row?.id) return;
+      const existing = classIdsByTeacherId.get(row.teacher_id) || [];
+      if (!existing.includes(row.id)) existing.push(row.id);
+      classIdsByTeacherId.set(row.teacher_id, existing);
+    });
   } catch (error) {
     logger.warn('[PrincipalHub] classes fallback lookup failed; defaulting teacher stats to zero', error);
     return statsByTeacherId;
   }
 
-  const classIdsByTeacherId = new Map<string, string[]>();
-  classRows.forEach((row) => {
-    if (!row.teacher_id) return;
-    const ids = classIdsByTeacherId.get(row.teacher_id) || [];
-    ids.push(row.id);
-    classIdsByTeacherId.set(row.teacher_id, ids);
-  });
-
-  const unassignedClassIds = classRows.filter((row) => !row.teacher_id).map((row) => row.id);
-  const soleTeacherId =
-    teachersNeedingFallback.length === 1 ? teachersNeedingFallback[0].effectiveUserId || teachersNeedingFallback[0].id : null;
-
   const allClassIds = Array.from(
     new Set(
       teachersNeedingFallback.flatMap((teacher) => {
-        const directIds = teacher.effectiveUserId ? classIdsByTeacherId.get(teacher.effectiveUserId) || [] : [];
-        if (directIds.length > 0) return directIds;
-        if (soleTeacherId && (teacher.effectiveUserId || teacher.id) === soleTeacherId) return unassignedClassIds;
-        return [];
+        const tid = teacher.effectiveUserId || teacher.id;
+        return tid ? classIdsByTeacherId.get(tid) || [] : [];
       }),
     ),
   );
@@ -284,10 +305,8 @@ async function loadTeacherFallbackStats(
   }
 
   teachersNeedingFallback.forEach((teacher) => {
-    let classIds = teacher.effectiveUserId ? classIdsByTeacherId.get(teacher.effectiveUserId) || [] : [];
-    if (classIds.length === 0 && soleTeacherId && (teacher.effectiveUserId || teacher.id) === soleTeacherId) {
-      classIds = unassignedClassIds;
-    }
+    const tid = teacher.effectiveUserId || teacher.id;
+    const classIds = tid ? classIdsByTeacherId.get(tid) || [] : [];
 
     const studentIds = classIds.flatMap((classId) => studentIdsByClassId.get(classId) || []);
     const attendanceTotals = studentIds.reduce(

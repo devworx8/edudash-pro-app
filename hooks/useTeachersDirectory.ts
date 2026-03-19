@@ -127,7 +127,7 @@ export function useTeachersDirectory(): UseTeachersDirectoryReturn {
         throw membersError;
       }
 
-      // Also fetch class assignments for these teachers
+      // Also fetch class assignments for these teachers (including assistant via class_teachers)
       const teacherUserIds = (members || []).map((m: any) => m.user_id).filter(Boolean);
       let classAssignmentsMap = new Map<string, string[]>();
       let teacherRecordIdByUserId = new Map<string, string>();
@@ -135,10 +135,14 @@ export function useTeachersDirectory(): UseTeachersDirectoryReturn {
       let teacherRecordIdByEmail = new Map<string, string>();
 
       if (teacherUserIds.length > 0) {
-        const [{ data: classData }, { data: teacherRecords }] = await Promise.all([
+        const [{ data: classData }, { data: classTeacherRows }, { data: teacherRecords }] = await Promise.all([
           client
             .from('classes')
             .select('id, name, teacher_id')
+            .in('teacher_id', teacherUserIds),
+          client
+            .from('class_teachers')
+            .select('class_id, teacher_id')
             .in('teacher_id', teacherUserIds),
           client
             .from('teachers')
@@ -147,10 +151,34 @@ export function useTeachersDirectory(): UseTeachersDirectoryReturn {
             .eq('is_active', true),
         ]);
 
+        // Build set of class IDs from class_teachers for name lookup
+        const ctClassIds = (classTeacherRows || []).map((r: any) => r.class_id).filter(Boolean);
+        let classNameMap = new Map<string, string>();
+        if (ctClassIds.length > 0) {
+          const { data: ctClasses } = await client
+            .from('classes')
+            .select('id, name')
+            .in('id', ctClassIds);
+          (ctClasses || []).forEach((cls: any) => {
+            classNameMap.set(cls.id, cls.name || cls.id);
+          });
+        }
+
+        // Add legacy classes.teacher_id assignments
         (classData || []).forEach((cls: any) => {
           const existing = classAssignmentsMap.get(cls.teacher_id) || [];
           existing.push(cls.name || cls.id);
           classAssignmentsMap.set(cls.teacher_id, existing);
+        });
+
+        // Add class_teachers join table assignments
+        (classTeacherRows || []).forEach((row: any) => {
+          const existing = classAssignmentsMap.get(row.teacher_id) || [];
+          const className = classNameMap.get(row.class_id) || row.class_id;
+          if (!existing.includes(className)) {
+            existing.push(className);
+          }
+          classAssignmentsMap.set(row.teacher_id, existing);
         });
 
         (teacherRecords || []).forEach((record: any) => {

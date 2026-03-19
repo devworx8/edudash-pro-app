@@ -28,6 +28,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { assertSupabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 import { logger } from '@/lib/logger';
 import { useClassTutorAnalytics, type TutorSessionSummary } from '@/hooks/useClassTutorAnalytics';
 import ClassTutorHeatmap from '@/components/teacher/ClassTutorHeatmap';
@@ -76,22 +77,20 @@ export default function TeacherTutorAnalyticsScreen() {
     (async () => {
       try {
         const supabase = assertSupabase();
-        // Teacher → teachers.user_id → teacher_id in classes
-        const { data: teacherRows } = await supabase
-          .from('teachers')
-          .select('id')
-          .eq('user_id', user.id);
-
-        const teacherIds = (teacherRows ?? []).map((t: any) => t.id);
-        if (teacherIds.length === 0) {
-          // Fallback: check classes.teacher_id directly
-          teacherIds.push(user.id);
+        // Use class_teachers + legacy merge to include assistant teacher assignments
+        const classIds = await fetchTeacherClassIds(user.id);
+        if (classIds.length === 0) {
+          if (!cancelled) {
+            setClasses([]);
+            setClassesLoading(false);
+          }
+          return;
         }
 
         const { data: classRows } = await supabase
           .from('classes')
           .select('id, name, grade_level')
-          .in('teacher_id', teacherIds)
+          .in('id', classIds)
           .order('name');
 
         if (cancelled) return;

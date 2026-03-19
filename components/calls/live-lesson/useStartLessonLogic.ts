@@ -6,6 +6,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Alert, Linking } from 'react-native';
 import { supabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 import type { AdvancedSettings } from './AdvancedLessonSettings';
 
 interface Class {
@@ -176,10 +177,19 @@ export function useStartLessonLogic(
   useEffect(() => {
     const fetchClasses = async () => {
       console.log('[useStartLessonLogic] Fetching classes for teacherId:', teacherId);
+      // Use class_teachers + legacy merge to include assistant teacher assignments
+      const classIds = await fetchTeacherClassIds(teacherId);
+      if (classIds.length === 0) {
+        console.log('[useStartLessonLogic] No class IDs found for teacher');
+        setClasses([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('classes')
         .select('id, name, grade_level')
-        .eq('teacher_id', teacherId)
+        .in('id', classIds)
         .eq('active', true)
         .order('name');
 

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { assertSupabase } from '@/lib/supabase'
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds'
 import { useQuery } from '@tanstack/react-query'
 import ThemedStatusBar from '@/components/ui/ThemedStatusBar'
 import { Stack, router } from 'expo-router'
@@ -123,23 +124,34 @@ export default function AttendanceScreen() {
   const { refreshing, onRefreshHandler } = useSimplePullToRefresh(handleRefresh, 'attendance')
 
   // Fetch classes filtered by teacher's school
-  // Teachers only see their own classes, principals see all
+  // Teachers only see their own classes (including assistant assignments), principals see all
   const classesQuery = useQuery({
     queryKey: ['teacher_classes_for_attendance', schoolId, profile?.id, isPrincipal],
     queryFn: async () => {
       if (!schoolId) return []
-      let query = assertSupabase()
+
+      // If teacher (not principal), resolve via class_teachers + legacy merge
+      if (isTeacher && !isPrincipal && profile?.id) {
+        const classIds = await fetchTeacherClassIds(profile.id, schoolId)
+        if (classIds.length === 0) return []
+        const { data, error } = await assertSupabase()
+          .from('classes')
+          .select('id, name, grade_level')
+          .in('id', classIds)
+          .eq('preschool_id', schoolId)
+          .eq('active', true)
+          .order('name')
+        if (error) throw error
+        return (data || []) as { id: string; name: string; grade_level?: string }[]
+      }
+
+      // Principals / admins see all classes in the school
+      const { data, error } = await assertSupabase()
         .from('classes')
         .select('id, name, grade_level')
         .eq('preschool_id', schoolId)
         .eq('active', true)
-      
-      // If teacher (not principal), only show their assigned classes
-      if (isTeacher && !isPrincipal && profile?.id) {
-        query = query.eq('teacher_id', profile.id)
-      }
-      
-      const { data, error } = await query.order('name')
+        .order('name')
       if (error) throw error
       return (data || []) as { id: string; name: string; grade_level?: string }[]
     },

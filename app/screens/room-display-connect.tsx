@@ -15,6 +15,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { assertSupabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 
 type ClassOption = {
@@ -72,26 +73,43 @@ export default function RoomDisplayConnectScreen() {
 
       try {
         setClassesLoading(true);
-        let query = assertSupabase()
-          .from('classes')
-          .select('id, name, teacher_id')
-          .eq('preschool_id', orgId)
-          .order('name', { ascending: true });
         if (!isPrincipal && (profileId || userId)) {
+          // Teacher: resolve via class_teachers + legacy merge
           const tid = profileId || userId;
-          query = query.eq('teacher_id', tid);
-        }
-        const { data, error: queryError } = await query;
-
-        if (queryError) throw queryError;
-        const rows = ((data || []) as Array<{ id?: string; name?: string }>)
-          .filter((row) => row.id)
-          .map((row) => ({
-            id: String(row.id || ''),
-            name: String(row.name || 'Class'),
-          }));
-        if (!cancelled) {
-          setClasses(rows);
+          const classIds = await fetchTeacherClassIds(tid!, orgId);
+          if (classIds.length === 0) {
+            if (!cancelled) setClasses([]);
+            return;
+          }
+          const { data, error: queryError } = await assertSupabase()
+            .from('classes')
+            .select('id, name')
+            .in('id', classIds)
+            .eq('preschool_id', orgId)
+            .order('name', { ascending: true });
+          if (queryError) throw queryError;
+          const rows = ((data || []) as Array<{ id?: string; name?: string }>)
+            .filter((row) => row.id)
+            .map((row) => ({
+              id: String(row.id || ''),
+              name: String(row.name || 'Class'),
+            }));
+          if (!cancelled) setClasses(rows);
+        } else {
+          // Principal: see all classes
+          const { data, error: queryError } = await assertSupabase()
+            .from('classes')
+            .select('id, name')
+            .eq('preschool_id', orgId)
+            .order('name', { ascending: true });
+          if (queryError) throw queryError;
+          const rows = ((data || []) as Array<{ id?: string; name?: string }>)
+            .filter((row) => row.id)
+            .map((row) => ({
+              id: String(row.id || ''),
+              name: String(row.name || 'Class'),
+            }));
+          if (!cancelled) setClasses(rows);
         }
       } catch {
         if (!cancelled) {

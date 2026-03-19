@@ -28,6 +28,7 @@ import { CacheIndicator } from '@/components/ui/CacheIndicator';
 import { EmptyActivityState } from '@/components/ui/EmptyState';
 import { offlineCacheService } from '@/lib/services/offlineCacheService';
 import { assertSupabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 
 type Activity = ActivityItem;
 
@@ -190,14 +191,8 @@ export default function ActivityDetailScreen() {
           (activity.metadata?.student_id && myStudentIds.includes(activity.metadata.student_id))
         );
       } else if (userRole === 'teacher') {
-        // Teachers see classroom-specific activities
-        const { data: myClasses } = await supabase
-          .from('classes')
-          .select('id')
-          .eq('teacher_id', userId)
-          .eq('preschool_id', schoolId);
-          
-        const myClassIds = myClasses?.map(c => c.id) || [];
+        // Teachers see classroom-specific activities (including assistant assignments)
+        const myClassIds = await fetchTeacherClassIds(userId, schoolId);
         
         filteredActivities = activities.filter(activity => 
           activity.type === 'announcement' ||

@@ -25,6 +25,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { extractOrganizationId } from '@/lib/tenant/compat';
 import { assertSupabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 import { logger } from '@/lib/logger';
 
 interface TimetableSlot {
@@ -71,15 +72,19 @@ export default function TeacherTimetableScreen() {
     if (!organizationId || !userId) return;
     try {
       const supabase = assertSupabase();
-      let query = supabase
+      // Get teacher's assigned class IDs (lead + assistant)
+      const classIds = await fetchTeacherClassIds(userId, organizationId);
+      // Show slots where teacher_id matches OR class_id is in assigned classes
+      const orFilters = [`teacher_id.eq.${userId}`];
+      if (classIds.length > 0) {
+        orFilters.push(`class_id.in.(${classIds.join(',')})`);
+      }
+      const { data, error } = await supabase
         .from('timetable_slots')
         .select('*')
         .eq('school_id', organizationId)
+        .or(orFilters.join(','))
         .order('start_time', { ascending: true });
-      if (userId) {
-        query = query.eq('teacher_id', userId);
-      }
-      const { data, error } = await query;
 
       if (error) throw error;
       setSlots((data as TimetableSlot[]) || []);

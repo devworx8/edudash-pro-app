@@ -8,6 +8,9 @@
 // Core fetcher
 export { fetchTeacherDashboardData } from './fetchTeacherDashboard';
 
+// Shared helper — resolves class IDs for both lead & assistant teachers
+export { fetchTeacherClassIds } from './fetchTeacherClassIds';
+
 // Utilities
 export {
   formatTimeAgo,

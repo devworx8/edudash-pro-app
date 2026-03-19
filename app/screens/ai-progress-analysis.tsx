@@ -7,6 +7,7 @@ import { ScreenHeader } from '@/components/ui/ScreenHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { assertSupabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 import { track } from '@/lib/analytics';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
@@ -85,11 +86,22 @@ export default function AIProgressAnalysisScreen() {
       logger.debug(TAG, 'Checking available data for teacher:', user.id);
       logger.debug(TAG, 'User object:', user);
       
-      // Try to get classes first (simpler approach)
+      // Try to get classes first — includes assistant teacher assignments
+      const classIds = await fetchTeacherClassIds(user.id);
+
+      if (classIds.length === 0) {
+        setAnalysisData({
+          studentProgress: [],
+          classAnalytics: [],
+          insights: ['No classes found. Create some classes and assignments to see progress analysis.']
+        });
+        return;
+      }
+
       const { data: classes, error: classesError } = await assertSupabase()
         .from('classes')
         .select(`*`)
-        .eq('teacher_id', user.id)
+        .in('id', classIds)
         .eq('active', true);
         
       if (classesError) {
@@ -108,14 +120,14 @@ export default function AIProgressAnalysisScreen() {
       
       logger.debug(TAG, 'Found classes:', classes.length, classes);
       
-      const classIds = classes.map(c => c.id);
+      const activeClassIds = classes.map(c => c.id);
 
       // Fetch real student data from homework_submissions joined with students and assignments
       const [studentsRes, submissionsRes] = await Promise.all([
         assertSupabase()
           .from('student_enrollments')
           .select('student_id, class_id, students(id, first_name, last_name)')
-          .in('class_id', classIds)
+          .in('class_id', activeClassIds)
           .eq('is_active', true),
         assertSupabase()
           .from('homework_submissions')

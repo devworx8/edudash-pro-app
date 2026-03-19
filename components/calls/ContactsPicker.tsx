@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useQuery } from '@tanstack/react-query';
 import { assertSupabase } from '@/lib/supabase';
+import { fetchTeacherClassIds } from '@/lib/dashboard/fetchTeacherClassIds';
 import { useAuth } from '@/contexts/AuthContext';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
@@ -52,23 +53,18 @@ export function ContactsPicker({ visible, onClose, onSelectContact }: ContactsPi
         // Parents can ONLY call teachers and principals (NOT other parents)
         allowedRoles = ['principal', 'teacher', 'principal_admin', 'admin'];
       } else if (profile?.role === 'teacher') {
-        // Teachers can call principals, other teachers, and parents FROM THEIR CLASS
+        // Teachers can call principals, other teachers, and parents FROM THEIR CLASSES
         allowedRoles = ['principal', 'teacher', 'principal_admin', 'admin'];
         
-        // Fetch teacher's assigned class
-        const { data: teacherClass } = await client
-          .from('classes')
-          .select('id')
-          .eq('teacher_id', profile.id)
-          .eq('active', true)
-          .maybeSingle();
+        // Fetch all classes the teacher is assigned to (lead + assistant)
+        const classIds = await fetchTeacherClassIds(profile.id);
         
-        if (teacherClass?.id) {
-          // Get parent IDs from students in teacher's class
+        if (classIds.length > 0) {
+          // Get parent IDs from students in ALL teacher's classes
           const { data: students } = await client
             .from('students')
             .select('parent_user_id')
-            .eq('class_id', teacherClass.id)
+            .in('class_id', classIds)
             .not('parent_user_id', 'is', null);
           
           const parentIds = [...new Set((students || []).map(s => s.parent_user_id).filter(Boolean))];

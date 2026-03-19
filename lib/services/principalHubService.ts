@@ -150,53 +150,82 @@ export class PrincipalHubService {
 
       if (error) throw error;
 
-      // Enhance with class and student counts
-      const enhancedTeachers = await Promise.all(
-        (teachers || []).map(async (teacher) => {
-          // Get classes assigned to this teacher
-          const { count: classesCount } = await supabase
-            .from('classes')
-            .select('id', { count: 'exact', head: true })
-            .eq('teacher_id', teacher.user_id)
-            .eq('active', true);
+      // Batch-resolve class assignments for ALL teachers (avoid N+1)
+      const teacherUserIds = (teachers || [])
+        .map((t) => t.user_id)
+        .filter(Boolean) as string[];
 
-          // Get classes first, then count students
-          const { data: teacherClasses } = await supabase
-            .from('classes')
-            .select('id')
-            .eq('teacher_id', teacher.user_id)
-            .eq('active', true);
-            
-          const classIds = (teacherClasses || []).map(c => c.id);
-          
-          // Get total students across teacher's classes
-          const { count: studentsCount } = await supabase
-            .from('students')
-            .select('id', { count: 'exact', head: true })
-            .in('class_id', classIds.length > 0 ? classIds : ['no-classes'])
-            .eq('status', 'active')
-            .eq('is_active', true);
+      // Batch 1: class_teachers join table rows for all teacher user_ids
+      const classIdsByUserId = new Map<string, string[]>();
+      if (teacherUserIds.length > 0) {
+        const { data: joinRows } = await supabase
+          .from('class_teachers')
+          .select('class_id, teacher_id')
+          .in('teacher_id', teacherUserIds);
 
-          // Handle users relation which could be array or object
-          const userInfo = Array.isArray(teacher.users) ? teacher.users[0] : teacher.users;
+        (joinRows || []).forEach((row: any) => {
+          if (!row?.teacher_id || !row?.class_id) return;
+          const existing = classIdsByUserId.get(row.teacher_id) || [];
+          existing.push(row.class_id);
+          classIdsByUserId.set(row.teacher_id, existing);
+        });
+
+        // Batch 2: Legacy classes.teacher_id
+        const { data: legacyRows } = await supabase
+          .from('classes')
+          .select('id, teacher_id')
+          .in('teacher_id', teacherUserIds)
+          .eq('preschool_id', preschoolId)
+          .eq('active', true);
+
+        (legacyRows || []).forEach((row: any) => {
+          if (!row?.teacher_id || !row?.id) return;
+          const existing = classIdsByUserId.get(row.teacher_id) || [];
+          if (!existing.includes(row.id)) existing.push(row.id);
+          classIdsByUserId.set(row.teacher_id, existing);
+        });
+      }
+
+      // Batch 3: student counts per class (one query for all classes)
+      const allClassIds = [...new Set(Array.from(classIdsByUserId.values()).flat())];
+      const studentsPerClass = new Map<string, number>();
+      if (allClassIds.length > 0) {
+        const { data: studentRows } = await supabase
+          .from('students')
+          .select('class_id')
+          .in('class_id', allClassIds)
+          .eq('status', 'active')
+          .eq('is_active', true);
+
+        (studentRows || []).forEach((row: any) => {
+          if (!row?.class_id) return;
+          studentsPerClass.set(row.class_id, (studentsPerClass.get(row.class_id) || 0) + 1);
+        });
+      }
+
+      const enhancedTeachers = (teachers || []).map((teacher) => {
+        const classIds = teacher.user_id ? classIdsByUserId.get(teacher.user_id) || [] : [];
+        const studentsCount = classIds.reduce((sum, cid) => sum + (studentsPerClass.get(cid) || 0), 0);
+
+        // Handle users relation which could be array or object
+        const userInfo = Array.isArray(teacher.users) ? teacher.users[0] : teacher.users;
           
-          return {
-            id: teacher.id,
-            auth_user_id: userInfo?.auth_user_id || '',
-            first_name: teacher.first_name,
-            last_name: teacher.last_name,
-            full_name: userInfo?.full_name || `${teacher.first_name} ${teacher.last_name}`,
-            email: teacher.email,
-            phone: teacher.phone,
-            subject_specialization: teacher.subject_specialization,
-            is_active: teacher.is_active,
-            created_at: teacher.created_at,
-            classes_assigned: classesCount || 0,
-            students_count: studentsCount || 0,
-            last_login: undefined // Would come from users table login tracking
-          };
-        })
-      );
+        return {
+          id: teacher.id,
+          auth_user_id: userInfo?.auth_user_id || '',
+          first_name: teacher.first_name,
+          last_name: teacher.last_name,
+          full_name: userInfo?.full_name || `${teacher.first_name} ${teacher.last_name}`,
+          email: teacher.email,
+          phone: teacher.phone,
+          subject_specialization: teacher.subject_specialization,
+          is_active: teacher.is_active,
+          created_at: teacher.created_at,
+          classes_assigned: classIds.length,
+          students_count: studentsCount,
+          last_login: undefined // Would come from users table login tracking
+        };
+      });
 
       return enhancedTeachers;
     } catch (error) {
