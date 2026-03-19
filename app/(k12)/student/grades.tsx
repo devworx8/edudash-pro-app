@@ -1,9 +1,11 @@
 import React from 'react';
 import { router } from 'expo-router';
 import { K12StudentFeatureScreen } from '@/domains/k12/components/K12StudentFeatureScreen';
+import { useStudentGrades } from '@/hooks/k12/useStudentGrades';
 
 export default function K12StudentGradesScreen() {
-  // TODO: Aggregate grades from assignment_submissions grouped by subject
+  const { items, loading } = useStudentGrades();
+
   return (
     <K12StudentFeatureScreen
       title="Grades"
@@ -16,7 +18,8 @@ export default function K12StudentGradesScreen() {
       onHeroPress={() =>
         router.push('/screens/dash-assistant?mode=tutor&source=k12_student&tutorMode=diagnostic' as any)
       }
-      items={[]}
+      items={items}
+      loading={loading}
       emptyMessage="No grades available yet. Complete some assignments first!"
     />
   );

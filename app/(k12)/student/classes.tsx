@@ -1,9 +1,11 @@
 import React from 'react';
 import { router } from 'expo-router';
 import { K12StudentFeatureScreen } from '@/domains/k12/components/K12StudentFeatureScreen';
+import { useStudentClasses } from '@/hooks/k12/useStudentClasses';
 
 export default function K12StudentClassesScreen() {
-  // TODO: Fetch enrolled classes from course_enrollments table
+  const { items, loading } = useStudentClasses();
+
   return (
     <K12StudentFeatureScreen
       title="Classes"
@@ -16,7 +18,8 @@ export default function K12StudentClassesScreen() {
       onHeroPress={() =>
         router.push('/screens/dash-assistant?mode=tutor&source=k12_student&tutorMode=diagnostic' as any)
       }
-      items={[]}
+      items={items}
+      loading={loading}
       emptyMessage="No classes enrolled yet. Ask your teacher to add you."
     />
   );

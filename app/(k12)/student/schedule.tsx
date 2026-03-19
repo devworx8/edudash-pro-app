@@ -1,9 +1,11 @@
 import React from 'react';
 import { router } from 'expo-router';
 import { K12StudentFeatureScreen } from '@/domains/k12/components/K12StudentFeatureScreen';
+import { useStudentSchedule } from '@/hooks/k12/useStudentSchedule';
 
 export default function K12StudentScheduleScreen() {
-  // TODO: Fetch timetable from class_schedule or timetable_slots
+  const { items, loading } = useStudentSchedule();
+
   return (
     <K12StudentFeatureScreen
       title="Schedule"
@@ -16,7 +18,8 @@ export default function K12StudentScheduleScreen() {
       onHeroPress={() =>
         router.push('/screens/dash-assistant?mode=tutor&source=k12_student&tutorMode=practice' as any)
       }
-      items={[]}
+      items={items}
+      loading={loading}
       emptyMessage="No schedule set up yet. Ask your school to add the timetable."
     />
   );

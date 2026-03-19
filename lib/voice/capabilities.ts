@@ -172,7 +172,9 @@ export async function getVoiceCapabilities(opts: CapabilityOptions = {}): Promis
   // Compute capabilities
   const isIndigenous = isIndigenousSA(language);
   const hasPicovoice = Platform.OS !== 'web' && checkPicovoiceAvailability();
-  const hasWebRTC = Platform.OS !== 'web' && checkWebRTCAvailability();
+  const hasWebRTC = Platform.OS === 'web'
+    ? (typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia)
+    : checkWebRTCAvailability();
   const isPremium = checkPremiumTier(tier);
 
   const streamingReasons: string[] = [];

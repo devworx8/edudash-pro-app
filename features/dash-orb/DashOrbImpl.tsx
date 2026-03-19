@@ -331,18 +331,16 @@ export default function DashOrb({
 
   // Dash TTS single source of truth: useVoiceTTS (Azure + device fallback; @/components/super-admin/voice-orb/useVoiceTTS)
   const voiceTTS = useVoiceTTS();
-  const { speak, stop: stopSpeaking, isSpeaking } = Platform.OS !== 'web'
-    ? voiceTTS
-    : { speak: async () => {}, stop: async () => {}, isSpeaking: false };
+  const { speak, stop: stopSpeaking, isSpeaking } = voiceTTS;
   const lastTTSErrorRef = useRef<string>('');
   
   // Voice input integration - useVoiceRecorder returns [state, actions, audioLevel] tuple
   const voiceRecorderHookResult = useVoiceRecorder();
-  const voiceRecorderResult = Platform.OS !== 'web' ? voiceRecorderHookResult : null;
+  const voiceRecorderResult = voiceRecorderHookResult;
   const voiceRecorderState = voiceRecorderResult ? voiceRecorderResult[0] : null;
   const voiceRecorderActions = voiceRecorderResult ? voiceRecorderResult[1] : null;
   const voiceSTTHookResult = useVoiceSTT({ preschoolId: profile?.organization_id || profile?.preschool_id || null });
-  const voiceSTT = Platform.OS !== 'web' ? voiceSTTHookResult : null;
+  const voiceSTT = voiceSTTHookResult;
   const orbState = useMemo<'idle' | 'listening' | 'thinking' | 'speaking'>(() => {
     if (isSpeaking) return 'speaking';
     if (isProcessing) return 'thinking';
@@ -418,7 +416,6 @@ export default function DashOrb({
   });
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
     if (!voiceEnabled) return;
     const err = voiceTTS.error?.trim();
     if (!err) return;
@@ -973,7 +970,7 @@ export default function DashOrb({
       timestamp: new Date(),
     }]);
 
-    const canUseOnDevice = Platform.OS !== 'web' && onDeviceVoice.isAvailable;
+    const canUseOnDevice = onDeviceVoice.isAvailable;
     if (canUseOnDevice) {
       try {
         setIsListeningForCommand(true);
@@ -1389,7 +1386,7 @@ export default function DashOrb({
           await refreshAutoScanBudget();
         }
 
-        if (voiceEnabled && Platform.OS !== 'web') {
+        if (voiceEnabled) {
           const resolvedTTSLocale = resolveResponseLocale({
             explicitOverride: requestLanguage.locale,
             responseText: result.text,
@@ -1535,7 +1532,7 @@ export default function DashOrb({
               },
               onSentenceReady: (sentence) => {
                 // Queue sentence for TTS (starts speaking while AI continues)
-                if (voiceEnabled && Platform.OS !== 'web') {
+                if (voiceEnabled) {
                   ttsSentenceQueueRef.current.push(sentence);
                   const sentenceLocale = resolveResponseLocale({
                     explicitOverride: requestLanguage.locale,

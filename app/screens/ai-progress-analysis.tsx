@@ -93,7 +93,7 @@ export default function AIProgressAnalysisScreen() {
         .eq('active', true);
         
       if (classesError) {
-        console.error('Error fetching classes:', classesError);
+        logger.error(TAG, 'Error fetching classes:', classesError);
         throw new Error(`Failed to fetch classes: ${classesError.message}`);
       }
 
@@ -108,44 +108,126 @@ export default function AIProgressAnalysisScreen() {
       
       logger.debug(TAG, 'Found classes:', classes.length, classes);
       
-      // For now, let's create some mock data to test the UI
-      // Since we need actual data to see how the current system works
-      setAnalysisData({
-        studentProgress: [
-          {
-            id: '1',
-            name: 'Sample Student',
-            recentGrades: [85, 90, 78, 92, 88],
-            averageGrade: 86.6,
-            improvement: 3.5,
-            subjects: { 'Mathematics': 90, 'Reading': 83 },
-            lastAssignment: 'Math Worksheet 5'
-          }
-        ],
-        classAnalytics: classes.map(cls => ({
+      const classIds = classes.map(c => c.id);
+
+      // Fetch real student data from homework_submissions joined with students and assignments
+      const [studentsRes, submissionsRes] = await Promise.all([
+        assertSupabase()
+          .from('student_enrollments')
+          .select('student_id, class_id, students(id, first_name, last_name)')
+          .in('class_id', classIds)
+          .eq('is_active', true),
+        assertSupabase()
+          .from('homework_submissions')
+          .select('id, student_id, grade, submitted_at, assignment:homework_assignments!homework_submissions_assignment_id_fkey(title, subject, class_id)')
+          .not('grade', 'is', null)
+          .order('submitted_at', { ascending: false })
+          .limit(500),
+      ]);
+
+      // Build student-to-class mapping
+      type EnrollRow = { student_id: string; class_id: string; students: { id: string; first_name: string; last_name: string } | null };
+      const enrollments = (studentsRes.data ?? []) as unknown as EnrollRow[];
+      const enrolledStudentIds = new Set(enrollments.map(e => e.student_id));
+
+      // Filter submissions to enrolled students in teacher's classes
+      const submissions = ((submissionsRes.data ?? []) as any[]).filter(s => enrolledStudentIds.has(s.student_id));
+
+      // Group submissions by student
+      const studentMap = new Map<string, { name: string; grades: number[]; subjects: Record<string, number[]>; lastAssignment: string }>();
+      for (const e of enrollments) {
+        if (!e.students) continue;
+        const sid = e.student_id;
+        if (!studentMap.has(sid)) {
+          studentMap.set(sid, {
+            name: `${e.students.first_name} ${e.students.last_name}`,
+            grades: [],
+            subjects: {},
+            lastAssignment: '',
+          });
+        }
+      }
+
+      for (const sub of submissions) {
+        const entry = studentMap.get(sub.student_id);
+        if (!entry) continue;
+        const grade = typeof sub.grade === 'number' ? sub.grade : parseFloat(sub.grade);
+        if (isNaN(grade)) continue;
+        entry.grades.push(grade);
+        const assignment = Array.isArray(sub.assignment) ? sub.assignment[0] : sub.assignment;
+        const subject = assignment?.subject || 'General';
+        if (!entry.subjects[subject]) entry.subjects[subject] = [];
+        entry.subjects[subject].push(grade);
+        if (!entry.lastAssignment && assignment?.title) entry.lastAssignment = assignment.title;
+      }
+
+      // Build student progress list
+      const studentProgress: StudentProgress[] = Array.from(studentMap.entries()).map(([id, s]) => {
+        const recent = s.grades.slice(0, 5);
+        const avg = recent.length > 0 ? recent.reduce((a, b) => a + b, 0) / recent.length : 0;
+        const older = s.grades.slice(5, 10);
+        const olderAvg = older.length > 0 ? older.reduce((a, b) => a + b, 0) / older.length : avg;
+        const subjectAvgs: Record<string, number> = {};
+        for (const [subj, grades] of Object.entries(s.subjects)) {
+          subjectAvgs[subj] = Math.round(grades.reduce((a, b) => a + b, 0) / grades.length);
+        }
+        return {
+          id,
+          name: s.name,
+          recentGrades: recent,
+          averageGrade: Math.round(avg * 10) / 10,
+          improvement: Math.round((avg - olderAvg) * 10) / 10,
+          subjects: subjectAvgs,
+          lastAssignment: s.lastAssignment || 'None',
+        };
+      });
+
+      // Build class analytics
+      const classAnalytics: ClassAnalytics[] = classes.map(cls => {
+        const classStudentIds = enrollments.filter(e => e.class_id === cls.id).map(e => e.student_id);
+        const classStudents = studentProgress.filter(s => classStudentIds.includes(s.id));
+        const totalStudents = classStudents.length;
+        const avgPerf = totalStudents > 0
+          ? Math.round(classStudents.reduce((a, s) => a + s.averageGrade, 0) / totalStudents * 10) / 10
+          : 0;
+        const improving = classStudents.filter(s => s.improvement > 0).length;
+        const struggling = classStudents.filter(s => s.averageGrade < 50).length;
+        return {
           classId: cls.id,
           className: cls.name,
-          totalStudents: 12, // Mock data
-          averagePerformance: 85.4,
-          improvingStudents: 8,
-          strugglingStudents: 2,
+          totalStudents,
+          averagePerformance: avgPerf,
+          improvingStudents: improving,
+          strugglingStudents: struggling,
           recentTrends: [
-            'Class average: 85.4%',
-            '8 students improving',
-            '2 students need support'
-          ]
-        })),
-        insights: [
-          `Found ${classes.length} classes in your account`,
-          'AI Progress Analysis is available but needs real student data',
-          'Add assignments and student submissions to see detailed analytics'
-        ]
+            `Class average: ${avgPerf}%`,
+            `${improving} student${improving !== 1 ? 's' : ''} improving`,
+            struggling > 0 ? `${struggling} student${struggling !== 1 ? 's' : ''} need${struggling === 1 ? 's' : ''} support` : 'All students above 50%',
+          ],
+        };
       });
-      
-      return; // Return early with mock data for now
+
+      const insights: string[] = [
+        `Found ${classes.length} class${classes.length !== 1 ? 'es' : ''} with ${studentProgress.length} student${studentProgress.length !== 1 ? 's' : ''}`,
+      ];
+      const overallAvg = studentProgress.length > 0
+        ? Math.round(studentProgress.reduce((a, s) => a + s.averageGrade, 0) / studentProgress.length)
+        : 0;
+      if (studentProgress.length > 0) {
+        insights.push(`Overall average across all students: ${overallAvg}%`);
+      }
+      const totalStruggling = classAnalytics.reduce((a, c) => a + c.strugglingStudents, 0);
+      if (totalStruggling > 0) {
+        insights.push(`${totalStruggling} student${totalStruggling !== 1 ? 's' : ''} below 50% — consider targeted intervention`);
+      }
+      if (studentProgress.length === 0) {
+        insights.push('Add assignments and grade submissions to see detailed analytics');
+      }
+
+      setAnalysisData({ studentProgress, classAnalytics, insights });
 
     } catch (error) {
-      console.error('Failed to fetch progress data:', error);
+      logger.error(TAG, 'Failed to fetch progress data:', error);
       showAlert({ title: 'Error', message: 'Failed to load progress analysis. Please try again.', type: 'error' });
     } finally {
       setLoading(false);

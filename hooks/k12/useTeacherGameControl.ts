@@ -57,10 +57,28 @@ export function useTeacherClasses() {
         data: { user },
       } = await sb.auth.getUser();
       if (!user) return [];
+
+      // Get class IDs from class_teachers (covers lead + assistant)
+      const { data: ctRows } = await sb
+        .from('class_teachers')
+        .select('class_id')
+        .eq('teacher_id', user.id);
+      const joinIds = (ctRows || []).map((r: { class_id: string }) => r.class_id);
+
+      // Also get classes where teacher_id is set directly (legacy)
+      const { data: legacyRows } = await sb
+        .from('classes')
+        .select('id')
+        .eq('teacher_id', user.id);
+      const legacyIds = (legacyRows || []).map((r: { id: string }) => r.id);
+
+      const allIds = [...new Set([...joinIds, ...legacyIds])];
+      if (allIds.length === 0) return [];
+
       const { data, error } = await sb
         .from('classes')
         .select('id, name, grade')
-        .eq('teacher_id', user.id)
+        .in('id', allIds)
         .order('name');
       if (error) throw error;
       return data ?? [];

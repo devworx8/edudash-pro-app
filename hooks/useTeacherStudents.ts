@@ -25,10 +25,32 @@ const fetchTeacherStudents = async (
   organizationId: string | null | undefined,
   limit: number,
 ): Promise<TeacherStudentSummary[]> => {
-  let query = assertSupabase()
+  const sb = assertSupabase();
+
+  // 1. Get class IDs from class_teachers join table (covers lead + assistant).
+  const { data: classTeacherRows } = await sb
+    .from('class_teachers')
+    .select('class_id')
+    .eq('teacher_id', teacherId);
+  const joinClassIds = (classTeacherRows || []).map((r: { class_id: string }) => r.class_id);
+
+  // 2. Also get classes where teacher_id is set directly (legacy).
+  let legacyQ = sb.from('classes').select('id').eq('teacher_id', teacherId).eq('active', true);
+  if (organizationId) {
+    legacyQ = legacyQ.or(`preschool_id.eq.${organizationId},organization_id.eq.${organizationId}`);
+  }
+  const { data: legacyRows } = await legacyQ;
+  const legacyClassIds = (legacyRows || []).map((r: { id: string }) => r.id);
+
+  // 3. Merge & deduplicate.
+  const allClassIds = [...new Set([...joinClassIds, ...legacyClassIds])];
+  if (allClassIds.length === 0) return [];
+
+  // 4. Fetch class + students for the merged set.
+  let query = sb
     .from('classes')
     .select('id, name, preschool_id, organization_id, students(id, first_name, last_name, avatar_url, date_of_birth, is_active, parent_id, guardian_id)')
-    .eq('teacher_id', teacherId)
+    .in('id', allClassIds)
     .eq('active', true);
 
   if (organizationId) {

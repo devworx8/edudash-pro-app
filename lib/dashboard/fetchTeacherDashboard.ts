@@ -158,6 +158,10 @@ async function fetchSchoolInfo(schoolId: string): Promise<{
 
 /**
  * Fetch classes with student counts and today's attendance.
+ *
+ * Checks both `classes.teacher_id` (lead teacher) AND the `class_teachers`
+ * join table (assistant teachers) so that assistant teachers see their
+ * assigned classes on the dashboard.
  */
 async function fetchClassesWithAttendance(
   teacherId: string,
@@ -166,13 +170,38 @@ async function fetchClassesWithAttendance(
   const supabase = assertSupabase();
   const today = new Date().toISOString().split('T')[0];
 
+  // 1. Collect class IDs from the class_teachers join table (covers both lead & assistant).
+  const { data: classTeacherRows } = await supabase
+    .from('class_teachers')
+    .select('class_id')
+    .eq('teacher_id', teacherId);
+
+  const joinClassIds = (classTeacherRows || []).map((r: { class_id: string }) => r.class_id);
+
+  // 2. Also query classes where teacher_id is set directly (legacy / backward-compat).
+  let legacyQuery = supabase
+    .from('classes')
+    .select('id')
+    .eq('teacher_id', teacherId)
+    .eq('active', true);
+  if (schoolId) {
+    legacyQuery = legacyQuery.eq('preschool_id', schoolId);
+  }
+  const { data: legacyRows } = await legacyQuery;
+  const legacyClassIds = (legacyRows || []).map((r: { id: string }) => r.id);
+
+  // 3. Merge & deduplicate.
+  const allClassIds = [...new Set([...joinClassIds, ...legacyClassIds])];
+  if (allClassIds.length === 0) return [];
+
+  // 4. Fetch full class details + students for the merged set.
   let classesQuery = supabase
     .from('classes')
     .select(`
       id, name, grade_level, room_number, preschool_id,
       students(id, first_name, last_name, is_active)
     `)
-    .eq('teacher_id', teacherId)
+    .in('id', allClassIds)
     .eq('active', true);
 
   if (schoolId) {

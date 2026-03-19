@@ -1,9 +1,11 @@
 import React from 'react';
 import { router } from 'expo-router';
 import { K12StudentFeatureScreen } from '@/domains/k12/components/K12StudentFeatureScreen';
+import { useStudentMessages } from '@/hooks/k12/useStudentMessages';
 
 export default function K12StudentMessagesScreen() {
-  // TODO: Fetch messages/notifications for student from messages table
+  const { items, loading } = useStudentMessages();
+
   return (
     <K12StudentFeatureScreen
       title="Messages"
@@ -16,7 +18,8 @@ export default function K12StudentMessagesScreen() {
       onHeroPress={() =>
         router.push('/screens/dash-assistant?source=k12_student&mode=tutor&tutorMode=explain' as any)
       }
-      items={[]}
+      items={items}
+      loading={loading}
       emptyMessage="No messages yet."
     />
   );
