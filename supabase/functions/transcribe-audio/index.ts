@@ -114,7 +114,7 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { audio_url, audio_base64, language, prompt } = body;
+    const { audio_url, audio_base64, audio_content_type, language, prompt } = body;
 
     if (!audio_url && !audio_base64) {
       return new Response(
@@ -122,6 +122,24 @@ serve(async (req: Request) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
       );
     }
+
+    // Resolve MIME type and file extension from client hint or sensible defaults.
+    // Whisper-1 auto-detects format, but correct metadata avoids future breakage.
+    const MIME_TO_EXT: Record<string, string> = {
+      'audio/webm': 'webm',
+      'audio/mp4': 'm4a',
+      'audio/x-m4a': 'm4a',
+      'audio/m4a': 'm4a',
+      'audio/aac': 'aac',
+      'audio/mpeg': 'mp3',
+      'audio/ogg': 'ogg',
+      'audio/wav': 'wav',
+      'audio/flac': 'flac',
+    };
+    const resolvedMime = (typeof audio_content_type === 'string' && MIME_TO_EXT[audio_content_type])
+      ? audio_content_type
+      : 'audio/webm';
+    const resolvedExt = MIME_TO_EXT[resolvedMime] || 'webm';
 
     // Get the audio data
     let audioBlob: Blob;
@@ -131,9 +149,26 @@ serve(async (req: Request) => {
       for (let i = 0; i < binaryStr.length; i++) {
         bytes[i] = binaryStr.charCodeAt(i);
       }
-      audioBlob = new Blob([bytes], { type: 'audio/webm' });
+      audioBlob = new Blob([bytes], { type: resolvedMime });
     } else {
-      // Download from URL
+      // Validate URL to prevent SSRF — only allow Supabase Storage signed URLs
+      const supabaseHost = new URL(SUPABASE_URL).host;
+      let audioUrlObj: URL;
+      try {
+        audioUrlObj = new URL(audio_url);
+      } catch {
+        return new Response(
+          JSON.stringify({ error: 'Invalid audio_url' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (audioUrlObj.host !== supabaseHost) {
+        return new Response(
+          JSON.stringify({ error: 'audio_url must point to project storage' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+
       const audioResp = await fetch(audio_url);
       if (!audioResp.ok) {
         throw new Error('Failed to download audio');
@@ -143,14 +178,14 @@ serve(async (req: Request) => {
 
     // Call OpenAI Whisper API
     const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('file', audioBlob, `audio.${resolvedExt}`);
     formData.append('model', 'whisper-1');
     const whisperLanguage = normalizeWhisperLanguage(language);
     if (whisperLanguage) {
       formData.append('language', whisperLanguage);
     }
     formData.append('response_format', 'json');
-    formData.append('temperature', '0');
+    formData.append('temperature', '0.0');
     formData.append('prompt', buildWhisperPrompt(prompt));
 
     const whisperResp = await fetch('https://api.openai.com/v1/audio/transcriptions', {

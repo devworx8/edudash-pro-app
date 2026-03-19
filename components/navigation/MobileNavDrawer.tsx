@@ -70,125 +70,8 @@ function ensureGlobalSearchItem(items: NavItem[]): NavItem[] {
 // Default nav items by role
 const getDefaultNavItems = (
   role: string,
-  memberType?: string,
   options?: { adminHomeRoute?: string }
 ): NavItem[] => {
-  // Check if user is CEO/President (member_type from organization membership)
-  if (memberType === 'ceo' || memberType === 'chief_executive_officer' || memberType === 'president') {
-    return [
-      { id: 'home', label: 'President Dashboard', icon: 'business', route: '/screens/membership/ceo-dashboard' },
-      { id: 'regional', label: 'Regional Managers', icon: 'people', route: '/screens/membership/regional-managers' },
-      { id: 'members', label: 'All Members', icon: 'person-circle', route: '/screens/membership/members' },
-      { id: 'finance', label: 'Financial Reports', icon: 'trending-up', route: '/screens/membership/finance' },
-      { id: 'analytics', label: 'Analytics', icon: 'analytics', route: '/screens/membership/analytics' },
-      { id: 'strategy', label: 'Strategic Plan', icon: 'bulb', route: '/screens/membership/strategy' },
-      { id: 'governance', label: 'Governance', icon: 'shield-checkmark', route: '/screens/membership/governance' },
-      { id: 'id-card', label: 'My ID Card', icon: 'card', route: '/screens/membership/id-card' },
-      { id: 'account', label: 'Account', icon: 'person-circle', route: '/screens/account' },
-      { id: 'settings', label: 'Settings', icon: 'settings', route: '/screens/membership/settings' },
-    ];
-  }
-  
-  // Check if user is Youth President or Youth Executive (Deputy, Secretary, Treasurer)
-  if (memberType === 'youth_president' || memberType === 'youth_deputy' || 
-      memberType === 'youth_secretary' || memberType === 'youth_treasurer') {
-    const isPresident = memberType === 'youth_president';
-    const isSecretary = memberType === 'youth_secretary';
-    const dashboardRoute = isSecretary 
-      ? '/screens/membership/youth-secretary-dashboard'
-      : '/screens/membership/youth-president-dashboard';
-    return [
-      { id: 'home', label: isSecretary ? 'Secretary Dashboard' : 'Youth Dashboard', icon: 'people', route: dashboardRoute },
-      { id: 'members', label: 'Youth Members', icon: 'person-circle', route: '/screens/membership/members-list' },
-      { id: 'events', label: 'Events', icon: 'calendar', route: '/screens/membership/events' },
-      { id: 'programs', label: 'Programs', icon: 'school', route: '/screens/membership/programs' },
-      // Both President and Secretary can recruit members
-      ...((isPresident || isSecretary) ? [{ id: 'invite', label: 'Recruit Members', icon: 'person-add', route: '/screens/membership/youth-invite-code' }] : []),
-      { id: 'budget', label: 'Budget Requests', icon: 'wallet', route: '/screens/membership/budget-requests' },
-      { id: 'announcements', label: 'Announcements', icon: 'megaphone', route: '/screens/membership/announcements' },
-      { id: 'reports', label: 'Reports', icon: 'bar-chart', route: '/screens/membership/reports' },
-      ...(isPresident ? [{ id: 'approvals', label: 'Approvals', icon: 'checkmark-circle', route: '/screens/membership/pending-approvals' }] : []),
-      { id: 'id-card', label: 'My ID Card', icon: 'card', route: '/screens/membership/id-card' },
-      { id: 'account', label: 'Account', icon: 'person-circle', route: '/screens/account' },
-      { id: 'app-settings', label: 'App Settings', icon: 'settings', route: '/screens/settings' },
-      { id: 'org-settings', label: 'Organization Settings', icon: 'business', route: '/screens/membership/settings' },
-    ];
-  }
-  
-  // Check if user is other Youth wing member (coordinator, facilitator, mentor, member)
-  if (memberType?.startsWith('youth_')) {
-    return [
-      { id: 'home', label: 'Youth Dashboard', icon: 'people', route: '/screens/membership/youth-president-dashboard' },
-      { id: 'members', label: 'Youth Members', icon: 'person-circle', route: '/screens/membership/members-list' },
-      { id: 'events', label: 'Events', icon: 'calendar', route: '/screens/membership/events' },
-      { id: 'programs', label: 'Programs', icon: 'school', route: '/screens/membership/programs' },
-      { id: 'id-card', label: 'My ID Card', icon: 'card', route: '/screens/membership/id-card' },
-      { id: 'account', label: 'Account', icon: 'person-circle', route: '/screens/account' },
-      { id: 'settings', label: 'Settings', icon: 'settings', route: '/screens/membership/settings' },
-    ];
-  }
-
-  // Check if user is Regional Manager
-  if (memberType === 'regional_manager' || memberType === 'provincial_manager') {
-    return [
-      { id: 'home', label: 'Regional Dashboard', icon: 'map', route: '/screens/membership/dashboard' },
-      { id: 'members', label: 'Members', icon: 'people', route: '/screens/membership/members-list' },
-      { id: 'approvals', label: 'Approvals', icon: 'checkmark-circle', route: '/screens/membership/pending-approvals' },
-      { id: 'events', label: 'Events', icon: 'calendar', route: '/screens/membership/events' },
-      { id: 'reports', label: 'Reports', icon: 'bar-chart', route: '/screens/membership/reports' },
-      { id: 'invite', label: 'Invite Members', icon: 'person-add', route: '/screens/membership/regional-invite-code' },
-      { id: 'id-card', label: 'My ID Card', icon: 'card', route: '/screens/membership/id-card' },
-      { id: 'account', label: 'Account', icon: 'person-circle', route: '/screens/account' },
-      { id: 'settings', label: 'Settings', icon: 'settings', route: '/screens/membership/settings' },
-    ];
-  }
-
-  // Check if user is Branch Manager
-  if (memberType === 'branch_manager') {
-    return [
-      { id: 'home', label: 'Branch Dashboard', icon: 'git-branch', route: '/screens/membership/dashboard' },
-      { id: 'members', label: 'Members', icon: 'people', route: '/screens/membership/members-list' },
-      { id: 'approvals', label: 'Approvals', icon: 'checkmark-circle', route: '/screens/membership/pending-approvals' },
-      { id: 'events', label: 'Events', icon: 'calendar', route: '/screens/membership/events' },
-      { id: 'invite', label: 'Invite Members', icon: 'person-add', route: '/screens/membership/branch-manager-invite-code' },
-      { id: 'id-card', label: 'My ID Card', icon: 'card', route: '/screens/membership/id-card' },
-      { id: 'account', label: 'Account', icon: 'person-circle', route: '/screens/account' },
-      { id: 'settings', label: 'Settings', icon: 'settings', route: '/screens/membership/settings' },
-    ];
-  }
-
-  // Check if user is Women's League member
-  if (memberType?.startsWith('women_')) {
-    const isLeader = ['women_president', 'women_deputy', 'women_secretary', 'women_treasurer'].includes(memberType);
-    return [
-      { id: 'home', label: "Women's League", icon: 'flower', route: '/screens/membership/womens-league-dashboard' },
-      { id: 'members', label: 'Members', icon: 'people', route: '/screens/membership/members-list' },
-      { id: 'events', label: 'Events', icon: 'calendar', route: '/screens/membership/events' },
-      { id: 'programs', label: 'Programs', icon: 'heart', route: '/screens/membership/programs' },
-      ...(isLeader ? [{ id: 'approvals', label: 'Approvals', icon: 'checkmark-circle', route: '/screens/membership/pending-approvals' }] : []),
-      ...(isLeader ? [{ id: 'invite', label: 'Invite Members', icon: 'person-add', route: '/screens/membership/womens-invite-code' }] : []),
-      { id: 'id-card', label: 'My ID Card', icon: 'card', route: '/screens/membership/id-card' },
-      { id: 'account', label: 'Account', icon: 'person-circle', route: '/screens/account' },
-      { id: 'settings', label: 'Settings', icon: 'settings', route: '/screens/membership/settings' },
-    ];
-  }
-
-  // Check if user is Veterans League member
-  if (memberType?.startsWith('veterans_')) {
-    const isLeader = ['veterans_president', 'veterans_coordinator'].includes(memberType);
-    return [
-      { id: 'home', label: 'Veterans League', icon: 'medal', route: '/screens/membership/veterans-league-dashboard' },
-      { id: 'members', label: 'Members', icon: 'people', route: '/screens/membership/members-list' },
-      { id: 'events', label: 'Events', icon: 'calendar', route: '/screens/membership/events' },
-      { id: 'heritage', label: 'Heritage', icon: 'book', route: '/screens/membership/heritage' },
-      ...(isLeader ? [{ id: 'approvals', label: 'Approvals', icon: 'checkmark-circle', route: '/screens/membership/pending-approvals' }] : []),
-      ...(isLeader ? [{ id: 'invite', label: 'Invite Members', icon: 'person-add', route: '/screens/membership/veterans-invite-code' }] : []),
-      { id: 'id-card', label: 'My ID Card', icon: 'card', route: '/screens/membership/id-card' },
-      { id: 'account', label: 'Account', icon: 'person-circle', route: '/screens/account' },
-      { id: 'settings', label: 'Settings', icon: 'settings', route: '/screens/membership/settings' },
-    ];
-  }
-  
   switch (role) {
     case 'teacher':
       return [
@@ -316,8 +199,6 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
   const [overlayInteractive, setOverlayInteractive] = useState(false);
   
   const userRole = (profile?.role as string) || 'parent';
-  // Get member_type from organization_membership for CEO detection
-  const memberType = profile?.organization_membership?.member_type;
   const explicitSchoolType = resolveExplicitSchoolTypeFromProfile(profile);
   const adminHomeRoute = userRole === 'admin'
     ? (
@@ -329,14 +210,10 @@ export function MobileNavDrawer({ isOpen, onClose, navItems }: MobileNavDrawerPr
       }) || '/screens/org-admin-dashboard'
     )
     : undefined;
-  const items = ensureGlobalSearchItem(navItems || getDefaultNavItems(userRole, memberType, { adminHomeRoute }))
+  const items = ensureGlobalSearchItem(navItems || getDefaultNavItems(userRole, { adminHomeRoute }))
     .filter((item) => (hideFeesOnDashboards ? item.id !== 'financials' : true));
   
-  // Get display role - prioritize member_type for membership organizations
-  const displayRole = memberType 
-    ? (memberType === 'ceo' || memberType === 'president' ? 'President' : 
-       memberType.split('_').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))
-    : getRoleDisplayName(userRole);
+  const displayRole = getRoleDisplayName(userRole);
   
   // Get display name with fallback chain: full_name -> first_name + last_name -> email -> 'Guest'
   const displayName = profile?.full_name 

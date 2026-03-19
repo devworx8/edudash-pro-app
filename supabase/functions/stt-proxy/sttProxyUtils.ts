@@ -6,11 +6,13 @@ export interface SttProxyNormalizedRequest {
   storageBucket: string;
   audioBase64?: string;
   audioUrl?: string;
+  audioContentType?: string;
   language: string;
   prompt?: string;
 }
 
 const DEFAULT_STORAGE_BUCKET = 'voice-notes';
+const ALLOWED_STORAGE_BUCKETS = new Set(['voice-notes']);
 const MAX_CANDIDATE_LANGUAGES = 8;
 
 function sanitizeString(value: unknown): string {
@@ -47,7 +49,9 @@ export function normalizeSttProxyRequest(body: Record<string, unknown>): SttProx
   const storagePath = sanitizeString(body.storage_path);
   const audioBase64 = sanitizeString(body.audio_base64);
   const audioUrl = sanitizeString(body.audio_url);
-  const storageBucket = sanitizeString(body.storage_bucket) || DEFAULT_STORAGE_BUCKET;
+  const rawBucket = sanitizeString(body.storage_bucket) || DEFAULT_STORAGE_BUCKET;
+  const storageBucket = ALLOWED_STORAGE_BUCKETS.has(rawBucket) ? rawBucket : DEFAULT_STORAGE_BUCKET;
+  const audioContentType = sanitizeString(body.audio_content_type) || undefined;
   const autoDetect = body.auto_detect === true;
   const candidateLanguages = normalizeCandidateLanguages(body.candidate_languages);
   const explicitLanguage = normalizeLanguageToken(sanitizeString(body.language));
@@ -63,6 +67,7 @@ export function normalizeSttProxyRequest(body: Record<string, unknown>): SttProx
       source: 'storage_path',
       storagePath,
       storageBucket,
+      audioContentType,
       language,
       prompt,
     };
@@ -73,6 +78,7 @@ export function normalizeSttProxyRequest(body: Record<string, unknown>): SttProx
       source: 'audio_base64',
       audioBase64,
       storageBucket,
+      audioContentType,
       language,
       prompt,
     };
@@ -82,6 +88,7 @@ export function normalizeSttProxyRequest(body: Record<string, unknown>): SttProx
     source: 'audio_url',
     audioUrl,
     storageBucket,
+    audioContentType,
     language,
     prompt,
   };

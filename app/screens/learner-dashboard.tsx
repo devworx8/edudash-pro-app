@@ -19,7 +19,6 @@ import { useLearnerDashboard } from '@/hooks/useLearnerDashboard';
 import { MobileNavDrawer } from '@/components/navigation/MobileNavDrawer';
 import { useOrganization } from '@/hooks/useOrganization';
 import { extractOrganizationId } from '@/lib/tenant/compat';
-import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
 import { useOrganizationBranding } from '@/contexts/OrganizationBrandingContext';
 import type { ThemeColors } from '@/contexts/ThemeContext';
 // Ads
@@ -28,10 +27,7 @@ import SubscriptionAdGate from '@/components/ui/SubscriptionAdGate';
 import AdBannerWithUpgrade from '@/components/ui/AdBannerWithUpgrade';
 import { PLACEMENT_KEYS } from '@/lib/ads/placements';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
-// EduPro organization ID
-const SOIL_OF_AFRICA_ORG_ID = '63b6139a-e21f-447c-b322-376fb0828992';
-// EduPro logo
-const SOA_LOGO = require('@/assets/branding/png/icon-512.png');
+
 export default function LearnerDashboard() {
   const { user, profile, profileLoading, loading } = useAuth();
   const { theme, isDark } = useTheme();
@@ -145,16 +141,7 @@ export default function LearnerDashboard() {
           >
             <Ionicons name="menu" size={26} color={theme.text} />
           </TouchableOpacity>
-          {/* Show EduPro logo if user belongs to that organization */}
-          {effectiveOrgId === SOIL_OF_AFRICA_ORG_ID && (
-            <View style={styles.orgLogoContainer}>
-              <Image
-                source={SOA_LOGO}
-                style={styles.orgLogo}
-                resizeMode="cover"
-              />
-            </View>
-          )}
+
         </View>
         <View style={styles.headerTitleContainer}>
           <Text style={[styles.headerTitle, { color: theme.text }]}>
@@ -175,7 +162,6 @@ export default function LearnerDashboard() {
           <Ionicons name="person-circle-outline" size={26} color={theme.text} />
         </TouchableOpacity>
       </View>
-      <DashboardWallpaperBackground>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -324,17 +310,7 @@ export default function LearnerDashboard() {
                 subtitle: t('learner.showcase_work', { defaultValue: 'Showcase your work' }),
                 onPress: () => router.push('/screens/learner/portfolio'),
               },
-              effectiveOrgId ? {
-                icon: 'business-outline',
-                title: t('learner.org_dashboard', { defaultValue: 'Org Dashboard' }),
-                subtitle: t('learner.org_matters', { defaultValue: 'Organization matters' }),
-                onPress: () => router.push('/screens/membership/landing'),
-              } : {
-                icon: 'business-outline',
-                title: t('learner.join_organization', { defaultValue: 'Join Organization' }),
-                subtitle: t('learner.enter_org_code', { defaultValue: 'Enter organization code' }),
-                onPress: () => router.push('/screens/membership/join'),
-              },
+
             ]}
           />
         </View>
@@ -371,20 +347,20 @@ export default function LearnerDashboard() {
             <Text style={styles.loadingText}>{t('dashboard.loading', { defaultValue: 'Loading...' })}</Text>
           </View>
         )}
-        {/* No Organization - Create Membership Prompt (only show if user has no enrollments) */}
+        {/* No Enrollments - Prompt to enroll (only show if user has no enrollments) */}
         {!orgId && enrollments.length === 0 && !isLoading && (
           <Card padding={32} margin={0} elevation="small" style={{ marginBottom: 24 }}>
             <View style={styles.empty}>
-              <Ionicons name="card-outline" size={64} color={theme.primary} />
-              <Text style={styles.emptyTitle}>{t('learner.create_membership', { defaultValue: 'Create Membership' })}</Text>
+              <Ionicons name="school-outline" size={64} color={theme.primary} />
+              <Text style={styles.emptyTitle}>{t('learner.get_started', { defaultValue: 'Get Started' })}</Text>
               <Text style={styles.emptyDescription}>
-                {t('learner.membership_prompt', { defaultValue: 'Join an organization to access programs, events, and receive your digital ID card' })}
+                {t('learner.enroll_prompt', { defaultValue: 'Browse available programs and start your learning journey' })}
               </Text>
               <TouchableOpacity
                 style={[styles.primaryButton, { backgroundColor: theme.primary }]}
-                onPress={() => router.push('/screens/membership/join')}
+                onPress={() => router.push('/screens/learner/browse-programs')}
               >
-                <Text style={styles.primaryButtonText}>{t('learner.join_with_code', { defaultValue: 'Join with Organization Code' })}</Text>
+                <Text style={styles.primaryButtonText}>{t('learner.browse_programs', { defaultValue: 'Browse Programs' })}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.border }]}
@@ -432,7 +408,7 @@ export default function LearnerDashboard() {
           />
         </SubscriptionAdGate>
       </ScrollView>
-      </DashboardWallpaperBackground>
+
       {/* Mobile Navigation Drawer */}
       <MobileNavDrawer
         isOpen={isDrawerOpen}

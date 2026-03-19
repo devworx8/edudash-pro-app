@@ -26,11 +26,13 @@ const ADMOB_TEST_IDS = {
     banner: 'ca-app-pub-3940256099942544/6300978111',
     interstitial: 'ca-app-pub-3940256099942544/1033173712', 
     rewarded: 'ca-app-pub-3940256099942544/5224354917',
+    appOpen: 'ca-app-pub-3940256099942544/9257395921',
   },
   ios: {
     banner: 'ca-app-pub-3940256099942544/2934735716',
     interstitial: 'ca-app-pub-3940256099942544/4411468910',
     rewarded: 'ca-app-pub-3940256099942544/1712485313',
+    appOpen: 'ca-app-pub-3940256099942544/5575463023',
   },
 };
 
@@ -48,11 +50,13 @@ const getProductionIds = () => {
       banner: extra.ADMOB_BANNER_ANDROID || process.env.ADMOB_BANNER_ANDROID || '',
       interstitial: extra.ADMOB_INTERSTITIAL_ANDROID || process.env.ADMOB_INTERSTITIAL_ANDROID || '',
       rewarded: extra.ADMOB_REWARDED_ANDROID || process.env.ADMOB_REWARDED_ANDROID || '',
+      appOpen: extra.ADMOB_APP_OPEN_ANDROID || process.env.ADMOB_APP_OPEN_ANDROID || '',
     },
     ios: {
       banner: extra.ADMOB_BANNER_IOS || process.env.ADMOB_BANNER_IOS || '',
       interstitial: extra.ADMOB_INTERSTITIAL_IOS || process.env.ADMOB_INTERSTITIAL_IOS || '',
       rewarded: extra.ADMOB_REWARDED_IOS || process.env.ADMOB_REWARDED_IOS || '',
+      appOpen: extra.ADMOB_APP_OPEN_IOS || process.env.ADMOB_APP_OPEN_IOS || '',
     },
   };
 };
@@ -241,13 +245,6 @@ async function loadInterstitialAd(): Promise<boolean> {
  * Show interstitial ad - Real implementation using react-native-google-mobile-ads
  */
 export async function showInterstitialAd(placementKey?: string): Promise<boolean> {
-  const flags = getFeatureFlagsSync();
-  
-  // Skip on enterprise tier
-  if (flags.enterprise_tier_enabled) {
-    return false;
-  }
-  
   // Skip on non-Android platforms
   if (Platform.OS === 'web') return false;
   if (Platform.OS !== 'android') return false;
@@ -325,12 +322,6 @@ export async function showInterstitialAd(placementKey?: string): Promise<boolean
  * Show app open ad - uses AppOpenAd when available, falls back to interstitial.
  */
 export async function showAppOpenAd(placementKey?: string): Promise<boolean> {
-  const flags = getFeatureFlagsSync();
-
-  if (flags.enterprise_tier_enabled) {
-    return false;
-  }
-
   if (Platform.OS === 'web') return false;
   if (Platform.OS !== 'android') return false;
   if (isHuaweiNoGmsRiskDevice()) return false;
@@ -343,7 +334,7 @@ export async function showAppOpenAd(placementKey?: string): Promise<boolean> {
       return showInterstitialAd(placementKey);
     }
 
-    const adUnitId = resolveAdUnitId('interstitial', placementKey, TestIds.APP_OPEN);
+    const adUnitId = resolveAdUnitId('appOpen', placementKey, TestIds.APP_OPEN);
     if (!adUnitId) {
       return false;
     }
@@ -421,20 +412,13 @@ export async function showRewardedAd(placementKey?: string): Promise<{
   rewarded: boolean;
   reward?: { type: string; amount: number };
 }> {
-  const flags = getFeatureFlagsSync();
-  
-  // Skip on enterprise tier
-  if (flags.enterprise_tier_enabled) {
-    return { shown: false, rewarded: false };
-  }
-  
   // Skip on non-Android platforms
   if (Platform.OS === 'web') return { shown: false, rewarded: false };
   if (Platform.OS !== 'android') return { shown: false, rewarded: false };
   if (isHuaweiNoGmsRiskDevice()) return { shown: false, rewarded: false };
   
   try {
-    const { RewardedAd, RewardedAdEventType, TestIds } = require('react-native-google-mobile-ads');
+    const { RewardedAd, RewardedAdEventType, AdEventType, TestIds } = require('react-native-google-mobile-ads');
     const adUnitId = resolveAdUnitId('rewarded', placementKey, TestIds.REWARDED);
     if (!adUnitId) {
       return { shown: false, rewarded: false };
@@ -466,7 +450,7 @@ export async function showRewardedAd(placementKey?: string): Promise<{
         });
       });
       
-      const closedListener = ad.addAdEventListener('closed', () => {
+      const closedListener = ad.addAdEventListener(AdEventType.CLOSED, () => {
         debug('AdMob: Rewarded ad closed');
         if (!resolved) {
           resolved = true;
@@ -482,7 +466,7 @@ export async function showRewardedAd(placementKey?: string): Promise<{
         }
       });
       
-      const errorListener = ad.addAdEventListener('error', (error: any) => {
+      const errorListener = ad.addAdEventListener(AdEventType.ERROR, (error: any) => {
         warn('AdMob: Rewarded ad error:', error);
         track('edudash.ads.rewarded_error', {
           platform: Platform.OS,

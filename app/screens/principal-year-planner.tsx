@@ -1,7 +1,7 @@
 // filepath: /media/king/5e026cdc-594e-4493-bf92-c35c231beea3/home/king/Desktop/dashpro/app/screens/principal-year-planner.tsx
 // Principal Year Planner Screen - Refactored for WARP.md compliance (≤500 lines)
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, useWindowDimensions } from 'react-native';
 import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { extractOrganizationId } from '@/lib/tenant/compat';
 import { useYearPlanner } from '@/hooks/principal/useYearPlanner';
 import { useTermSuggestionAI } from '@/hooks/useTermSuggestionAI';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
+import { getSubmissionCounts } from '@/lib/services/yearPlanInputService';
 import {
   TermCard,
   TermFormModal,
@@ -61,6 +62,12 @@ export default function PrincipalYearPlannerScreen() {
 
   const [viewTab, setViewTab] = useState<'terms' | 'monthly'>('terms');
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
+  const [pendingInputCount, setPendingInputCount] = useState(0);
+
+  useEffect(() => {
+    if (!orgId) return;
+    getSubmissionCounts(orgId).then((c) => setPendingInputCount(c.pending)).catch(() => {});
+  }, [orgId]);
 
   const monthlyByYearAndMonth = useMemo(() => {
     const byYearMonth: Record<number, Record<number, Record<string, YearPlanMonthlyEntryRow[]>>> = {};
@@ -158,6 +165,27 @@ export default function PrincipalYearPlannerScreen() {
             </TouchableOpacity>
           </View>
           <View style={[styles.headerActions, isCompact && styles.headerActionsCompact]}>
+            <TouchableOpacity
+              style={[styles.publishButton, isCompact && styles.headerActionBtnCompact, isUltraCompact && styles.headerActionBtnFull]}
+              onPress={() => router.push('/screens/principal-teacher-input-review' as any)}
+            >
+              <View style={{ position: 'relative' }}>
+                <Ionicons name="chatbubbles-outline" size={20} color="#10B981" />
+                {pendingInputCount > 0 && (
+                  <View style={styles.pendingBadge}>
+                    <Text style={styles.pendingBadgeText}>{pendingInputCount > 99 ? '99+' : pendingInputCount}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={[styles.publishButtonText, { color: '#10B981' }]} numberOfLines={1}>Teacher Input</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.publishButton, isCompact && styles.headerActionBtnCompact, isUltraCompact && styles.headerActionBtnFull]}
+              onPress={() => router.push('/screens/principal-input-windows' as any)}
+            >
+              <Ionicons name="folder-open-outline" size={20} color="#F59E0B" />
+              <Text style={[styles.publishButtonText, { color: '#F59E0B' }]} numberOfLines={1}>Input Windows</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={[styles.publishButton, isCompact && styles.headerActionBtnCompact, isUltraCompact && styles.headerActionBtnFull]}
               onPress={() => router.push('/screens/principal-ai-year-planner')}
@@ -393,6 +421,23 @@ const createStyles = (theme: any) =>
     publishButtonText: {
       fontSize: 14,
       fontWeight: '600',
+    },
+    pendingBadge: {
+      position: 'absolute',
+      top: -6,
+      right: -8,
+      backgroundColor: '#EF4444',
+      borderRadius: 8,
+      minWidth: 16,
+      height: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 4,
+    },
+    pendingBadgeText: {
+      color: '#fff',
+      fontSize: 9,
+      fontWeight: '800',
     },
     addButton: {
       flexDirection: 'row',

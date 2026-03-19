@@ -13,6 +13,8 @@ export type ToastInput = {
   durationMs?: number
   title?: string
   action?: { label: string; onPress: () => void }
+  /** Optional stable ID for deduplication — toasts with the same id won't stack. */
+  id?: string
 }
 
 // Toast config by type
@@ -93,7 +95,8 @@ const ToastItem: React.FC<{
   const opacity = useRef(new Animated.Value(0)).current
   const progressAnim = useRef(new Animated.Value(1)).current
   const config = TOAST_CONFIG[t.type || 'info']
-  const duration = t.durationMs || 3000
+  const duration = t.durationMs === 0 ? 0 : (t.durationMs || 3000)
+  const isPersistent = duration === 0
 
   useEffect(() => {
     // Slide in from top
@@ -111,16 +114,17 @@ const ToastItem: React.FC<{
       }),
     ]).start()
 
-    // Progress bar animation
-    Animated.timing(progressAnim, {
-      toValue: 0,
-      duration,
-      useNativeDriver: false,
-    }).start()
+    // Skip progress bar + auto-hide for persistent toasts (durationMs: 0)
+    if (!isPersistent) {
+      Animated.timing(progressAnim, {
+        toValue: 0,
+        duration,
+        useNativeDriver: false,
+      }).start()
 
-    // Auto hide
-    const timer = setTimeout(() => hideToast(), duration)
-    return () => clearTimeout(timer)
+      const timer = setTimeout(() => hideToast(), duration)
+      return () => clearTimeout(timer)
+    }
   }, [])
 
   const hideToast = useCallback(() => {
@@ -222,13 +226,18 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
   const insets = useSafeAreaInsets()
 
   const show = useCallback((input: ToastInput) => {
-    const item = { 
-      id: String(Date.now() + Math.random()), 
-      type: 'info' as ToastType, 
-      durationMs: 3000, 
-      ...input 
-    }
-    setQueue((q) => [...q.slice(-2), item]) // Keep max 3 toasts
+    const stableId = input.id || String(Date.now() + Math.random());
+    setQueue((q) => {
+      // Deduplicate: if a toast with this id is already visible, skip
+      if (input.id && q.some((t) => t.id === input.id)) return q;
+      const item = { 
+        id: stableId, 
+        type: 'info' as ToastType, 
+        durationMs: 3000, 
+        ...input 
+      };
+      return [...q.slice(-2), item]; // Keep max 3 toasts
+    });
   }, [])
 
   const hideToast = useCallback((id: string) => {

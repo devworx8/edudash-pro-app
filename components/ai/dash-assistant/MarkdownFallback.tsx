@@ -16,9 +16,11 @@ interface Props {
   theme: any;
   /** Base font size (default 15) */
   fontSize?: number;
+  /** Allow text selection (default false) */
+  selectable?: boolean;
 }
 
-export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 15 }) => {
+export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 15, selectable = false }) => {
   const lines = String(content || '').split('\n');
   const elements: React.ReactNode[] = [];
   let inCodeBlock = false;
@@ -40,7 +42,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
               <Text style={[s.codeLang, { color: theme.textTertiary || '#64748b' }]}>{codeLang}</Text>
             ) : null}
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Text style={[s.codeText, { color: '#d4d4d4', fontSize: fontSize - 1 }]}>
+              <Text selectable={selectable} style={[s.codeText, { color: '#d4d4d4', fontSize: fontSize - 1 }]}>
                 {codeLines.join('\n')}
               </Text>
             </ScrollView>
@@ -56,7 +58,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
     // ── Headings ───────────────────────────────────────────────────────
     if (line.startsWith('### ')) {
       elements.push(
-        <Text key={idx} style={[s.h3, { color: theme.text, fontSize: fontSize + 1 }]}>
+        <Text key={idx} selectable={selectable} style={[s.h3, { color: theme.text, fontSize: fontSize + 1 }]}>
           {line.slice(4).trim()}
         </Text>,
       );
@@ -64,7 +66,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
     }
     if (line.startsWith('## ')) {
       elements.push(
-        <Text key={idx} style={[s.h2, { color: theme.text, fontSize: fontSize + 3 }]}>
+        <Text key={idx} selectable={selectable} style={[s.h2, { color: theme.text, fontSize: fontSize + 3 }]}>
           {line.slice(3).trim()}
         </Text>,
       );
@@ -72,7 +74,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
     }
     if (line.startsWith('# ')) {
       elements.push(
-        <Text key={idx} style={[s.h1, { color: theme.text, fontSize: fontSize + 5 }]}>
+        <Text key={idx} selectable={selectable} style={[s.h1, { color: theme.text, fontSize: fontSize + 5 }]}>
           {line.slice(2).trim()}
         </Text>,
       );
@@ -83,7 +85,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
     if (line.startsWith('> ')) {
       elements.push(
         <View key={idx} style={[s.blockquote, { borderLeftColor: theme.primary, backgroundColor: theme.primary + '18' }]}>
-          <Text style={[s.bodyText, { color: theme.text, fontSize }]}>
+          <Text selectable={selectable} style={[s.bodyText, { color: theme.text, fontSize }]}>
             {renderInline(line.slice(2), theme, fontSize)}
           </Text>
         </View>,
@@ -98,7 +100,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
       elements.push(
         <View key={idx} style={[s.listItem, { marginLeft: indent * 12 }]}>
           <Text style={[s.bullet, { color: theme.primary, fontSize }]}>•</Text>
-          <Text style={[s.bodyText, { color: theme.text, fontSize, flex: 1 }]}>
+          <Text selectable={selectable} style={[s.bodyText, { color: theme.text, fontSize, flex: 1 }]}>
             {renderInline(bulletMatch[3], theme, fontSize)}
           </Text>
         </View>,
@@ -113,7 +115,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
       elements.push(
         <View key={idx} style={[s.listItem, { marginLeft: indent * 12 }]}>
           <Text style={[s.listNum, { color: theme.primary, fontSize }]}>{numberedMatch[2]}.</Text>
-          <Text style={[s.bodyText, { color: theme.text, fontSize, flex: 1 }]}>
+          <Text selectable={selectable} style={[s.bodyText, { color: theme.text, fontSize, flex: 1 }]}>
             {renderInline(numberedMatch[3], theme, fontSize)}
           </Text>
         </View>,
@@ -135,7 +137,7 @@ export const MarkdownFallback: React.FC<Props> = ({ content, theme, fontSize = 1
 
     // ── Regular paragraph ──────────────────────────────────────────────
     elements.push(
-      <Text key={idx} style={[s.bodyText, { color: theme.text, fontSize }]}>
+      <Text key={idx} selectable={selectable} style={[s.bodyText, { color: theme.text, fontSize }]}>
         {renderInline(line, theme, fontSize)}
       </Text>,
     );

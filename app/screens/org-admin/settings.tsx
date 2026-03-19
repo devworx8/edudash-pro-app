@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { DashboardWallpaperBackground } from '@/components/membership/dashboard';
 
 export default function OrgAdminSettingsScreen() {
   const { t } = useTranslation();
@@ -25,7 +24,7 @@ export default function OrgAdminSettingsScreen() {
           headerTintColor: theme.primary,
         }} 
       />
-      <DashboardWallpaperBackground>
+      <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Organization Settings</Text>
@@ -107,7 +106,7 @@ export default function OrgAdminSettingsScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-      </DashboardWallpaperBackground>
+      </View>
     </View>
   );
 }

@@ -31,6 +31,7 @@ import { getOrganizationType } from '@/lib/tenant/compat';
 import { canAccessModel, getDefaultModels, MODEL_WEIGHTS, type AIModelId } from '@/lib/ai/models';
 import { normalizeTierToSubscription } from '@/lib/ai/modelForTier';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
+import { useDashAIQuota } from '@/hooks/dash-ai/useDashAIQuota';
 import { DASH_TELEMETRY_EVENTS, trackDashTelemetry } from '@/lib/telemetry/events';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useRealtimeTier } from '@/hooks/useRealtimeTier';
@@ -93,6 +94,7 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
   );
 
   const { tierStatus, refresh: refreshTierStatus, incrementQuota } = useRealtimeTier();
+  const [selectedModelState, setSelectedModelState] = useState<AIModelId>('claude-3-5-sonnet' as AIModelId);
   const prevIsLoadingRef = useRef(false);
 
   useEffect(() => {
@@ -257,13 +259,17 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
             ? 'Orb Companion Mode'
             : 'Your AI assistant';
 
+  const quota = useDashAIQuota(selectedModel as AIModelId, setSelectedModelState);
+
   const handleSend = useCallback(
-    (text?: string, attachments?: any[]) => {
+    async (text?: string, attachments?: any[]) => {
+      const quotaResult = await quota.checkQuotaBeforeSend();
+      if (!quotaResult.allowed) return;
       const weight = MODEL_WEIGHTS[selectedModel as AIModelId] ?? 1;
       incrementQuota(weight);
       return sendMessage(text as any, attachments as any);
     },
-    [sendMessage, selectedModel, incrementQuota],
+    [sendMessage, selectedModel, incrementQuota, quota],
   );
 
   const handleNewChat = useCallback(async () => {

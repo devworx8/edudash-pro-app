@@ -72,24 +72,24 @@ describe('determineUserRoute', () => {
   // ── Pending membership ─────────────────────────────
 
   describe('pending membership', () => {
-    it('routes pending member (non-executive) to membership-pending', () => {
+    it('routes pending member (non-executive) to learner-dashboard', () => {
       const profile = profileWithMembership({
         member_type: 'member',
         membership_status: 'pending',
         role: 'parent',
       });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/membership-pending');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
-    it('routes pending_verification member to membership-pending', () => {
+    it('routes pending_verification member to learner-dashboard', () => {
       const profile = profileWithMembership({
         member_type: 'volunteer',
         membership_status: 'pending_verification',
         role: 'parent',
       });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/membership-pending');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
     it('does NOT block pending executive (ceo)', () => {
@@ -131,40 +131,29 @@ describe('determineUserRoute', () => {
 
   // ── SOA member-type routing ────────────────────────
 
-  describe('SOA member types', () => {
+  describe('SOA member types (extracted to PulseBoard — all route to learner-dashboard)', () => {
     it.each([
-      ['ceo', '/screens/membership/ceo-dashboard'],
-      ['president', '/screens/membership/ceo-dashboard'],
-      ['national_admin', '/screens/membership/ceo-dashboard'],
-      ['secretary_general', '/screens/membership/ceo-dashboard'],
-      ['treasurer', '/screens/membership/ceo-dashboard'],
-      ['deputy_president', '/screens/membership/ceo-dashboard'],
-      ['national_coordinator', '/screens/membership/ceo-dashboard'],
-      ['executive', '/screens/membership/ceo-dashboard'],
-      ['board_member', '/screens/membership/ceo-dashboard'],
-    ])('routes %s to %s', (memberType, expectedPath) => {
+      'ceo', 'president', 'national_admin', 'secretary_general', 'treasurer',
+      'deputy_president', 'national_coordinator', 'executive', 'board_member',
+    ])('routes %s to learner-dashboard', (memberType) => {
       const profile = profileWithMembership({ member_type: memberType, role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe(expectedPath);
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
     it.each([
-      ['youth_president', '/screens/membership/youth-president-dashboard'],
-      ['youth_deputy', '/screens/membership/youth-president-dashboard'],
-      ['youth_treasurer', '/screens/membership/youth-president-dashboard'],
-      ['youth_coordinator', '/screens/membership/youth-president-dashboard'],
-      ['youth_facilitator', '/screens/membership/youth-president-dashboard'],
-      ['youth_mentor', '/screens/membership/youth-president-dashboard'],
-    ])('routes %s to youth-president-dashboard', (memberType, expectedPath) => {
+      'youth_president', 'youth_deputy', 'youth_treasurer',
+      'youth_coordinator', 'youth_facilitator', 'youth_mentor',
+    ])('routes %s to learner-dashboard', (memberType) => {
       const profile = profileWithMembership({ member_type: memberType, role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe(expectedPath);
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
-    it('routes youth_secretary to youth-secretary-dashboard', () => {
+    it('routes youth_secretary to learner-dashboard', () => {
       const profile = profileWithMembership({ member_type: 'youth_secretary', role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/youth-secretary-dashboard');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
     it('routes youth_member to learner-dashboard', () => {
@@ -176,44 +165,43 @@ describe('determineUserRoute', () => {
     it.each([
       'women_president', 'women_deputy', 'women_secretary',
       'women_treasurer', 'women_coordinator', 'women_member',
-    ])('routes %s to women-dashboard', (memberType) => {
+    ])('routes %s to learner-dashboard', (memberType) => {
       const profile = profileWithMembership({ member_type: memberType, role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/women-dashboard');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
     it.each([
       'veterans_president', 'veterans_coordinator', 'veterans_member',
-    ])('routes %s to veterans-dashboard', (memberType) => {
+    ])('routes %s to learner-dashboard', (memberType) => {
       const profile = profileWithMembership({ member_type: memberType, role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/veterans-dashboard');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
     it.each([
       'regional_coordinator', 'provincial_coordinator',
       'regional_manager', 'provincial_manager', 'branch_manager',
-    ])('routes %s to membership/dashboard', (memberType) => {
+    ])('routes %s to learner-dashboard', (memberType) => {
       const profile = profileWithMembership({ member_type: memberType, role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/dashboard');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
   });
 
   // ── Generic member types ───────────────────────────
 
   describe('generic member types (non-school-admin)', () => {
-    it('routes staff member to ceo-dashboard', () => {
+    it('routes staff member to learner-dashboard', () => {
       const profile = profileWithMembership({ member_type: 'staff', role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/ceo-dashboard');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
-    it('routes admin member to ceo-dashboard', () => {
-      // This tests that member_type='admin' for a non-school-admin role goes to ceo-dashboard
+    it('routes admin member to learner-dashboard', () => {
       const profile = profileWithMembership({ member_type: 'admin', role: 'parent' });
       const route = determineUserRoute(profile as any);
-      expect(route.path).toBe('/screens/membership/ceo-dashboard');
+      expect(route.path).toBe('/screens/learner-dashboard');
     });
 
     it.each(['learner', 'facilitator', 'mentor', 'volunteer', 'member'])(

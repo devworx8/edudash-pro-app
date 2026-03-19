@@ -252,17 +252,7 @@ export function OrganizationSwitcher({
       setActiveOrgId(org.id);
 
       // Navigate to appropriate dashboard
-      if (org.type === 'preschool') {
-        // EduDash preschool dashboard
-        router.replace('/(tabs)');
-      } else {
-        // SOA organization dashboard
-        if (org.slug === 'soil-of-africa' || org.name?.toLowerCase()?.includes('soil')) {
-          router.replace('/screens/membership/dashboard');
-        } else {
-          router.replace('/(tabs)');
-        }
-      }
+      router.replace('/(tabs)');
 
       onOrganizationSwitched?.(org);
       onClose();

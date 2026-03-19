@@ -11,7 +11,7 @@ export const AD_PLACEMENTS: Record<string, AdPlacement> = {
   // App open interstitial for free-tier users (shown shortly after launch)
   interstitial_app_open: {
     key: 'interstitial_app_open',
-    type: 'interstitial',
+    type: 'appOpen',
     screen: 'app_open',
     position: 'navigation_break',
     adUnitEnvVar: 'EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_APP_OPEN',

@@ -44,7 +44,7 @@ export function useDashAIQuota(
 ) {
   const { user } = useAuth();
   const { tier, ready: subReady } = useSubscription();
-  const { offerRewarded, unlockFeature, isFeatureUnlocked, canShowBanner } = useAds();
+  const { offerRewarded, unlockFeature, isFeatureUnlocked, canOfferRewardedQuotaAd } = useAds();
   const { can, ready: capsReady } = useCapability();
 
   const capabilityTier = useMemo(
@@ -90,7 +90,7 @@ export function useDashAIQuota(
         const fallbackActions = getQuotaFallbackActions({
           tier: userTier,
           currentModel: selectedModel,
-          canShowRewardedAd: canShowBanner && isRewardedAdAvailable(userTier),
+          canShowRewardedAd: canOfferRewardedQuotaAd && isRewardedAdAvailable(userTier),
           hasActiveExtension: false,
         });
 
@@ -125,7 +125,7 @@ export function useDashAIQuota(
         return { allowed: true }; // Fail-open
       }
     },
-    [user?.id, capabilityTier, selectedModel, setSelectedModel, canShowBanner, offerRewarded, unlockFeature, isFeatureUnlocked],
+    [user?.id, capabilityTier, selectedModel, setSelectedModel, canOfferRewardedQuotaAd, offerRewarded, unlockFeature, isFeatureUnlocked],
   );
 
   /**

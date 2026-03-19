@@ -12,7 +12,7 @@
  * ≤200 lines per WARP.md
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { useAds } from '@/contexts/AdsContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -88,6 +88,13 @@ export function useRewardedUnlock(tag: RewardTag): UseRewardedUnlockResult {
   const resetUnlock = useCallback(() => {
     setUnlocked(false);
     if (unlockTimer.current) clearTimeout(unlockTimer.current);
+  }, []);
+
+  // Clean up timer on unmount to prevent setState on unmounted component
+  useEffect(() => {
+    return () => {
+      if (unlockTimer.current) clearTimeout(unlockTimer.current);
+    };
   }, []);
 
   return { canUnlock, unlocked, unlock, resetUnlock, loading };

@@ -1,6 +1,7 @@
 // Teacher read-only Year Plan view – terms and monthly entries (no edit/publish)
+// With contribute banner when planning input windows are open
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,7 +10,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,6 +24,7 @@ import {
   type YearPlanMonthlyEntryRow,
 } from '@/components/principal/year-planner';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
+import { listInputWindows } from '@/lib/services/yearPlanInputService';
 
 const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const BUCKET_ORDER = ['holidays_closures', 'meetings_admin', 'excursions_extras', 'donations_fundraisers'] as const;
@@ -32,6 +34,7 @@ const BUCKET_LABELS: Record<string, string> = {
   excursions_extras: 'Excursions & Extras',
   donations_fundraisers: 'Donations & Fundraisers',
 };
+const noop = () => {};
 const MONTH_COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899',
   '#14B8A6', '#F97316', '#6366F1', '#84CC16', '#E11D48', '#0EA5E9',
@@ -55,6 +58,20 @@ export default function TeacherYearPlanViewScreen() {
 
   const [viewTab, setViewTab] = useState<'terms' | 'monthly'>('terms');
   const [expandedMonth, setExpandedMonth] = useState<{ year: number; month: number } | null>(null);
+  const [openWindowCount, setOpenWindowCount] = useState(0);
+
+  useEffect(() => {
+    if (!orgId) return;
+    listInputWindows(orgId, true).then((windows) => {
+      const now = Date.now();
+      const open = windows.filter((w) => {
+        const opens = new Date(w.opens_at).getTime();
+        const closes = new Date(w.closes_at).getTime();
+        return w.is_active && now >= opens && now <= closes;
+      });
+      setOpenWindowCount(open.length);
+    }).catch((err) => { console.warn('Failed to fetch input windows:', err); });
+  }, [orgId]);
 
   const monthlyByYearAndMonth = useMemo(() => {
     const byYearMonth: Record<number, Record<number, Record<string, YearPlanMonthlyEntryRow[]>>> = {};
@@ -78,8 +95,6 @@ export default function TeacherYearPlanViewScreen() {
 
   const groupedTerms = groupTermsByYear(terms);
 
-  const noop = () => {};
-
   return (
     <DesktopLayout
       role="teacher"
@@ -92,6 +107,24 @@ export default function TeacherYearPlanViewScreen() {
         style={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
+        {openWindowCount > 0 && (
+          <TouchableOpacity
+            style={styles.contributeBanner}
+            onPress={() => router.push('/screens/teacher-year-plan-input' as any)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.contributeBannerIcon}>
+              <Ionicons name="bulb-outline" size={20} color="#F59E0B" />
+            </View>
+            <View style={styles.contributeBannerContent}>
+              <Text style={styles.contributeBannerTitle}>Planning window open!</Text>
+              <Text style={styles.contributeBannerText}>
+                Your principal wants your input. Tap to contribute ideas.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
+          </TouchableOpacity>
+        )}
         <View style={styles.header}>
           <View style={styles.tabRow}>
             <TouchableOpacity
@@ -370,5 +403,38 @@ const createStyles = (theme: any) =>
     monthTileChevron: {
       alignItems: 'center',
       paddingVertical: 4,
+    },
+    contributeBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#FEF3C7',
+      marginHorizontal: 16,
+      marginTop: 12,
+      padding: 14,
+      borderRadius: 12,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: '#FCD34D',
+    },
+    contributeBannerIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: '#FDE68A',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    contributeBannerContent: {
+      flex: 1,
+    },
+    contributeBannerTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#92400E',
+    },
+    contributeBannerText: {
+      fontSize: 12,
+      color: '#B45309',
+      marginTop: 2,
     },
   });

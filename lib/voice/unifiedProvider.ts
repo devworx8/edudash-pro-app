@@ -1,24 +1,17 @@
 /**
  * Unified Voice Provider Abstraction
- * 
- * Provides TWO voice recognition modes:
- * 
- * 1. SINGLE-USE (mic button in chat):
- *    - MOBILE: Expo Speech Recognition (managed workflow)
- *    - WEB: Deepgram + Claude (handled in web branch)
- *    - Use getSingleUseVoiceProvider()
- * 
- * 2. STREAMING (Interactive Voice Orb):
- *    - MOBILE: Expo Speech Recognition (managed workflow)
- *    - WEB: Deepgram + Claude (handled in web branch)
- *    - Use getStreamingVoiceProvider()
- * 
- * **Production Mode**:
- * - PRIMARY: expo-speech-recognition (managed workflow compatible)
- * - If both fail, returns noop provider (text input only)
- * - No server/API costs for voice transcription
- * - Offline-capable (depends on device capabilities)
- * - SA Languages: Depends on device (most Android devices support en-ZA, af-ZA)
+ *
+ * Entry point for all STT in the app. Consumers call:
+ *   getSingleUseVoiceProvider(lang)  — mic button, chat input
+ *   getStreamingVoiceProvider(lang)  — kept for API compat (delegates to single-use)
+ *
+ * Platform routing:
+ *   MOBILE → expo-speech-recognition (on-device, zero cost)
+ *   WEB    → Deepgram + Claude
+ *   FALLBACK → NoopProvider (text-input only)
+ *
+ * For hybrid (on-device partials + cloud finalization) see
+ * lib/voice/hybridSTTProvider.ts — it wraps a VoiceProvider from here.
  */
 
 import { createClaudeVoiceSession, type ClaudeVoiceSession } from '@/lib/voice/claudeProvider';
@@ -67,45 +60,70 @@ class NoopSession implements VoiceSession {
 
 /**
  * Get voice provider for SINGLE-USE input (mic button in chat)
- * 
+ *
  * MOBILE: Expo Speech Recognition
- * 
- * WEB: Unchanged (handled in web branch)
- * 
- * Use this for:
- * - Mic button in chat input
- * - Simple record → transcribe → insert text flow
- * - When user will review/edit before sending
+ * WEB: Deepgram + Claude
  */
 export async function getSingleUseVoiceProvider(language?: string): Promise<VoiceProvider> {
   if (__DEV__) {
     console.log('[UnifiedProvider] Getting SINGLE-USE provider:', { language, platform: Platform.OS });
   }
 
-  // MOBILE: Expo Speech Recognition
   if (Platform.OS !== 'web') {
-    try {
-      const expoAvailable = await expoSpeech.isAvailable();
-      if (expoAvailable) {
-        if (__DEV__) console.log('[UnifiedProvider] ✅ Using Expo Speech Recognition');
-        return expoSpeech;
-      } else {
-        if (__DEV__) console.warn('[UnifiedProvider] ⚠️ Expo Speech Recognition not available');
-      }
-    } catch (e) {
-      if (__DEV__) console.error('[UnifiedProvider] Expo Speech error:', e);
-    }
+    return getMobileProvider(language);
+  }
+  return getWebProvider(language);
+}
 
-    // No provider available
-    if (__DEV__) console.warn('[UnifiedProvider] ⚠️ No mobile voice provider available');
-    return {
-      id: 'noop',
-      async isAvailable() { return false; },
-      createSession() { return new NoopSession(); },
-    };
+/**
+ * Get voice provider for STREAMING conversational mode (Interactive Orb)
+ *
+ * Currently returns the same provider as single-use.
+ * Kept for API compatibility — callers importing this continue to work.
+ */
+export async function getStreamingVoiceProvider(language?: string): Promise<VoiceProvider> {
+  if (__DEV__) {
+    console.log('[UnifiedProvider] Getting STREAMING provider:', { language, platform: Platform.OS });
   }
 
-  // WEB: Use Deepgram + Claude (unchanged, handled in web branch)
+  if (Platform.OS !== 'web') {
+    return getMobileProvider(language);
+  }
+  return getWebProvider(language, 'You are Dash, a helpful AI assistant for EduDash Pro. Keep responses concise and friendly for voice conversations (2-3 sentences max).');
+}
+
+/**
+ * @deprecated Use getSingleUseVoiceProvider() or getStreamingVoiceProvider() instead
+ */
+export async function getDefaultVoiceProvider(language?: string): Promise<VoiceProvider> {
+  return getSingleUseVoiceProvider(language);
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers (deduplicated mobile / web paths)
+// ---------------------------------------------------------------------------
+
+const NOOP_PROVIDER: VoiceProvider = {
+  id: 'noop',
+  async isAvailable() { return false; },
+  createSession() { return new NoopSession(); },
+};
+
+async function getMobileProvider(_language?: string): Promise<VoiceProvider> {
+  try {
+    const available = await expoSpeech.isAvailable();
+    if (available) {
+      if (__DEV__) console.log('[UnifiedProvider] ✅ Using Expo Speech Recognition');
+      return expoSpeech;
+    }
+    if (__DEV__) console.warn('[UnifiedProvider] ⚠️ Expo Speech Recognition not available');
+  } catch (e) {
+    if (__DEV__) console.error('[UnifiedProvider] Expo Speech error:', e);
+  }
+  return NOOP_PROVIDER;
+}
+
+function getWebProvider(_language?: string, systemPrompt = ''): VoiceProvider {
   try {
     if (__DEV__) console.log('[UnifiedProvider] ✅ Using Deepgram (web)');
     return {
@@ -113,120 +131,25 @@ export async function getSingleUseVoiceProvider(language?: string): Promise<Voic
       async isAvailable() { return true; },
       createSession() {
         const sess: ClaudeVoiceSession = createClaudeVoiceSession();
-        
         return {
           async start(opts: VoiceStartOptions) {
             return await sess.start({
               language: opts.language,
               onPartialTranscript: opts.onPartial,
               onFinalTranscript: opts.onFinal,
-              systemPrompt: '',
+              systemPrompt,
             });
           },
           async stop() { await sess.stop(); },
           isActive() { return sess.isActive(); },
           isConnected() { return sess.isConnected(); },
           setMuted(m) { sess.setMuted(m); },
-          updateConfig(cfg) { 
-            sess.updateTranscriptionConfig({ language: cfg.language }); 
-          },
+          updateConfig(cfg) { sess.updateTranscriptionConfig({ language: cfg.language }); },
         };
       },
     };
   } catch (e) {
     if (__DEV__) console.error('[UnifiedProvider] Web provider failed:', e);
-    return {
-      id: 'noop',
-      async isAvailable() { return false; },
-      createSession() { return new NoopSession(); },
-    };
+    return NOOP_PROVIDER;
   }
-}
-
-/**
- * Get voice provider for STREAMING conversational mode (Interactive Orb)
- * 
- * MOBILE: Expo Speech Recognition
- * 
- * WEB: Uses Deepgram + Claude (unchanged, handled in web branch)
- * 
- * Use this for:
- * - Interactive Voice Mode (long-press FAB)
- * - Real-time streaming conversations
- * - When Dash needs to respond with voice
- * - Continuous listening with interruptions
- */
-export async function getStreamingVoiceProvider(language?: string): Promise<VoiceProvider> {
-  if (__DEV__) {
-    console.log('[UnifiedProvider] Getting STREAMING provider:', { language, platform: Platform.OS });
-  }
-
-  // MOBILE: Expo Speech Recognition
-  if (Platform.OS !== 'web') {
-    try {
-      const expoAvailable = await expoSpeech.isAvailable();
-      if (expoAvailable) {
-        if (__DEV__) console.log('[UnifiedProvider] ✅ Using Expo Speech Recognition (streaming)');
-        return expoSpeech;
-      } else {
-        if (__DEV__) console.warn('[UnifiedProvider] ⚠️ Expo Speech Recognition not available');
-      }
-    } catch (e) {
-      if (__DEV__) console.error('[UnifiedProvider] Expo Speech error:', e);
-    }
-
-    // No provider available
-    if (__DEV__) console.warn('[UnifiedProvider] ⚠️ No mobile streaming provider available');
-    return {
-      id: 'noop',
-      async isAvailable() { return false; },
-      createSession() { return new NoopSession(); },
-    };
-  }
-
-  // WEB: Use Deepgram + Claude (unchanged, handled in web branch)
-  try {
-    if (__DEV__) console.log('[UnifiedProvider] ✅ Using Deepgram streaming (web)');
-    return {
-      id: 'claude',
-      async isAvailable() { return true; },
-      createSession() {
-        const sess: ClaudeVoiceSession = createClaudeVoiceSession();
-        
-        return {
-          async start(opts: VoiceStartOptions) {
-            return await sess.start({
-              language: opts.language,
-              onPartialTranscript: opts.onPartial,
-              onFinalTranscript: opts.onFinal,
-              systemPrompt: 'You are Dash, a helpful AI assistant for EduDash Pro. Keep responses concise and friendly for voice conversations (2-3 sentences max).',
-            });
-          },
-          async stop() { await sess.stop(); },
-          isActive() { return sess.isActive(); },
-          isConnected() { return sess.isConnected(); },
-          setMuted(m) { sess.setMuted(m); },
-          updateConfig(cfg) { 
-            sess.updateTranscriptionConfig({ language: cfg.language }); 
-          },
-        };
-      },
-    };
-  } catch (e) {
-    if (__DEV__) console.error('[UnifiedProvider] Web streaming failed:', e);
-    return {
-      id: 'noop',
-      async isAvailable() { return false; },
-      createSession() { return new NoopSession(); },
-    };
-  }
-}
-
-/**
- * @deprecated Use getSingleUseVoiceProvider() or getStreamingVoiceProvider() instead
- * Get the default voice provider based on availability and optional override
- */
-export async function getDefaultVoiceProvider(language?: string): Promise<VoiceProvider> {
-  // Default to single-use provider for backward compatibility
-  return getSingleUseVoiceProvider(language);
 }

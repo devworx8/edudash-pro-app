@@ -87,6 +87,9 @@ serve(async (req: Request) => {
     if (normalized.prompt) {
       transcribePayload.prompt = normalized.prompt;
     }
+    if (normalized.audioContentType) {
+      transcribePayload.audio_content_type = normalized.audioContentType;
+    }
     if (normalized.source === 'audio_base64' && normalized.audioBase64) {
       transcribePayload.audio_base64 = normalized.audioBase64;
     } else if (audioUrl) {

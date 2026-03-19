@@ -48,13 +48,17 @@ import {
   DashVoiceTranscriptPanel,
   DashVoiceComposer,
   DashVoiceOrbSection,
+  DashVoiceFlowPreview,
 } from '@/components/dash-voice';
 import type { VoiceOrbRef } from '@/features/super-admin/voice-orb/types';
 import {
   useDashVoiceTTS,
   useDashVoiceSendMessage,
   useDashVoiceMediaPicker,
+  useDashVoiceFlowMode,
 } from '@/hooks/dash-voice';
+import { useDashAIQuota } from '@/hooks/dash-ai/useDashAIQuota';
+import type { AIModelId } from '@/lib/ai/models';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ORB_SIZE = Math.min(SCREEN_WIDTH * 0.78, 320);
@@ -167,6 +171,13 @@ export default function DashVoiceScreen() {
   const DASH_TRACE_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_DASH_VOICE_TRACE === 'true';
   const STREAMING_TTS_ENABLED = process.env.EXPO_PUBLIC_DASH_VOICE_STREAMING_TTS !== 'false';
 
+  // ── Flow Mode ─────────────────────────────────────────────────────
+  const flowMode = useDashVoiceFlowMode();
+
+  // ── AI Quota Pipeline ─────────────────────────────────────────────
+  const [voiceModel, setVoiceModel] = useState<AIModelId>('claude-haiku-4-5-20251001');
+  const quota = useDashAIQuota(voiceModel, setVoiceModel);
+
   const logDashTrace = useCallback(
     (event: string, payload?: Record<string, unknown>) => {
       if (!DASH_TRACE_ENABLED) return;
@@ -264,7 +275,7 @@ export default function DashVoiceScreen() {
   });
 
   // ── Send message hook ─────────────────────────────────────────────
-  const { sendMessage, persistOrbMessages } = useDashVoiceSendMessage({
+  const { sendMessage: _sendMessageRaw, persistOrbMessages } = useDashVoiceSendMessage({
     isProcessing,
     setIsProcessing,
     setLastResponse,
@@ -300,6 +311,16 @@ export default function DashVoiceScreen() {
     refreshAutoScanBudget,
     voiceOrbRef,
   });
+
+  // Quota-gated send: blocks when user exhausts AI quota
+  const sendMessage = useCallback(
+    async (...args: Parameters<typeof _sendMessageRaw>) => {
+      const check = await quota.checkQuotaBeforeSend();
+      if (!check.allowed) return;
+      return _sendMessageRaw(...args);
+    },
+    [_sendMessageRaw, quota],
+  );
 
   // ── Stop Dash activity ────────────────────────────────────────────
   const stopDashActivity = useCallback(
@@ -389,6 +410,12 @@ export default function DashVoiceScreen() {
       if (language) setPreferredLanguage(language);
       const cleaned = formatted.trim();
       if (!cleaned) return;
+
+      // Flow Mode: record auto-correction flash (does NOT block sending)
+      if (flowMode.enabled) {
+        flowMode.recordCorrection(String(transcript || ''), cleaned);
+      }
+
       const nowIso = new Date().toISOString();
       const benchmarkRunId = String(process.env.EXPO_PUBLIC_VOICE_BENCHMARK_RUN_ID || '').trim();
       const dictationProbe: DashVoiceDictationProbe = {
@@ -417,7 +444,7 @@ export default function DashVoiceScreen() {
       }
       sendMessage(cleaned, { dictationProbe });
     },
-    [isProcessing, logDashTrace, orgType, preferredLanguage, sendMessage],
+    [isProcessing, logDashTrace, orgType, preferredLanguage, sendMessage, flowMode],
   );
 
   useEffect(() => {
@@ -482,6 +509,8 @@ export default function DashVoiceScreen() {
       logDashTrace('dash_stop', { reason: 'input_focus_stop_listening' });
     }
   }, [isListening, isSpeaking, isSpeakingRef, logDashTrace]);
+
+
 
   // ── Derived ───────────────────────────────────────────────────────
   const quickActions = useMemo(() => dashPolicy.quickActions, [dashPolicy.quickActions]);
@@ -602,6 +631,13 @@ export default function DashVoiceScreen() {
               />
             ) : null}
 
+            {flowMode.enabled && flowMode.correctionFlash ? (
+              <DashVoiceFlowPreview
+                flash={flowMode.correctionFlash}
+                theme={theme}
+              />
+            ) : null}
+
             {showTranscript ? (
               <DashVoiceTranscriptPanel
                 liveUserTranscript={liveUserTranscript}
@@ -679,6 +715,24 @@ export default function DashVoiceScreen() {
               <Ionicons name="chatbubble-ellipses-outline" size={16} color={theme.primary} />
               <Text style={[s.fullChatText, { color: theme.primary }]}>
                 Continue in full Dash chat
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={s.fullChatLink}
+              onPress={() => flowMode.setEnabled(!flowMode.enabled)}
+              activeOpacity={0.7}
+              accessibilityRole="switch"
+              accessibilityLabel="Toggle Flow Mode"
+              accessibilityState={{ checked: flowMode.enabled }}
+            >
+              <Ionicons
+                name={flowMode.enabled ? 'eye' : 'eye-off-outline'}
+                size={16}
+                color={flowMode.enabled ? theme.primary : theme.textSecondary}
+              />
+              <Text style={[s.fullChatText, { color: flowMode.enabled ? theme.primary : theme.textSecondary }]}>
+                {flowMode.enabled ? 'Flow Mode on — auto-correct active' : 'Flow Mode off — auto-send'}
               </Text>
             </TouchableOpacity>
           </ScrollView>

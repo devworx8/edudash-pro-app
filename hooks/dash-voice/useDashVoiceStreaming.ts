@@ -114,13 +114,28 @@ export function useDashVoiceStreaming({
     let firstChunkAt: number | null = null;
     let lastProgressLogAt = 0;
     let firstPhraseLoggedAt: number | null = null;
+    // Track last-processed length to avoid redundant whiteboard regex on unchanged text
+    let lastProcessedLen = 0;
+    let cachedDisplayText = '';
+    let hasWhiteboardMarker = false;
     const req = createStreamingRequest(url, accessToken, body,
       (accumulated) => {
         if (firstChunkAt === null) { firstChunkAt = Date.now(); logDashTrace('stream_first_chunk', { turnId, firstTokenLatencyMs: firstChunkAt - turnStartedAt }); }
         const now = Date.now();
         if (now - lastProgressLogAt > 900) { lastProgressLogAt = now; logDashTrace('stream_progress', { turnId, chars: accumulated.length, elapsedMs: now - turnStartedAt }); }
         if (accumulated && !/^\s*data:\s*(\[DONE\])?\s*$/i.test(accumulated)) {
-          const displayText = stripWhiteboardFromDisplay(accumulated);
+          // Only re-run whiteboard strip when new data arrives AND whiteboard tags detected
+          if (accumulated.length !== lastProcessedLen) {
+            lastProcessedLen = accumulated.length;
+            // Check for whiteboard marker lazily — once detected, stay in whiteboard mode
+            if (!hasWhiteboardMarker && accumulated.includes('<DashBoard')) {
+              hasWhiteboardMarker = true;
+            }
+            cachedDisplayText = hasWhiteboardMarker
+              ? stripWhiteboardFromDisplay(accumulated)
+              : accumulated;
+          }
+          const displayText = cachedDisplayText;
           setStreamingText(displayText);
           // Phrase-streaming TTS: enqueue phrases as tokens arrive
           if (streamingTTSEnabled && displayText) {

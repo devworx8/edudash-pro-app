@@ -21,72 +21,36 @@ const debugWarn = (...args: unknown[]) => {
 };
 
 // ──────────────────────────────────────────────
-// SOA member-type list
+// SOA member-type list (membership module extracted to PulseBoard)
+// These types may still exist in the DB — route them to learner dashboard
 // ──────────────────────────────────────────────
 
 const SOA_SPECIFIC_MEMBER_TYPES = [
-  // Executive
   'ceo', 'president', 'deputy_president', 'secretary_general', 'treasurer',
   'national_admin', 'national_coordinator', 'executive', 'board_member',
-  // Youth wing
   'youth_president', 'youth_deputy', 'youth_secretary', 'youth_treasurer',
   'youth_coordinator', 'youth_facilitator', 'youth_mentor', 'youth_member',
-  // Women's wing
   'women_president', 'women_deputy', 'women_secretary', 'women_treasurer',
   'women_coordinator', 'women_facilitator', 'women_mentor', 'women_member',
-  // Veterans league
   'veterans_president', 'veterans_coordinator', 'veterans_member',
-  // Regional/Provincial
   'regional_manager', 'regional_coordinator', 'provincial_manager', 'provincial_coordinator',
   'branch_manager',
 ] as const;
 
 // ──────────────────────────────────────────────
 // Route for SOA-specific member types
+// Membership module extracted — all types route to learner dashboard
 // ──────────────────────────────────────────────
 
 function routeForSoaMemberType(
   memberType: string,
 ): { path: string; params?: Record<string, string> } | null {
-  // CEO / National Admin / President / Executive leadership
-  if (['national_admin', 'ceo', 'president', 'deputy_president', 'secretary_general', 'treasurer'].includes(memberType)) {
-    return { path: '/screens/membership/ceo-dashboard' };
-  }
-  // National coordinators and executives
-  if (['national_coordinator', 'executive', 'board_member'].includes(memberType)) {
-    return { path: '/screens/membership/ceo-dashboard' };
-  }
-  // Youth Wing executives
-  if (memberType === 'youth_president' || memberType === 'youth_deputy') {
-    return { path: '/screens/membership/youth-president-dashboard' };
-  }
-  if (memberType === 'youth_secretary') {
-    return { path: '/screens/membership/youth-secretary-dashboard' };
-  }
-  if (memberType === 'youth_treasurer') {
-    return { path: '/screens/membership/youth-president-dashboard' };
-  }
-  // Youth Wing coordinators/facilitators/mentors
-  if (['youth_coordinator', 'youth_facilitator', 'youth_mentor'].includes(memberType)) {
-    return { path: '/screens/membership/youth-president-dashboard' };
-  }
   // Regular youth members → learner
   if (memberType === 'youth_member') {
     return { path: '/screens/learner-dashboard' };
   }
-  // Women's Wing
-  if (memberType.startsWith('women_')) {
-    return { path: '/screens/membership/women-dashboard' };
-  }
-  // Veterans League
-  if (memberType.startsWith('veterans_')) {
-    return { path: '/screens/membership/veterans-dashboard' };
-  }
-  // Regional / Provincial / Branch
-  if (['regional_coordinator', 'provincial_coordinator', 'regional_manager', 'provincial_manager', 'branch_manager'].includes(memberType)) {
-    return { path: '/screens/membership/dashboard' };
-  }
-  return null;
+  // All other membership types → learner dashboard as fallback
+  return { path: '/screens/learner-dashboard' };
 }
 
 // ──────────────────────────────────────────────
@@ -151,8 +115,8 @@ export function determineUserRoute(
   const isExecutive = !!memberType && executiveTypes.includes(memberType);
 
   if (isPendingMember && !isExecutive && role !== 'super_admin') {
-    debugLog('[ROUTE DEBUG] User has pending membership - routing to membership-pending screen');
-    return { path: '/screens/membership/membership-pending' };
+    debugLog('[ROUTE DEBUG] User has pending membership - routing to learner dashboard');
+    return { path: '/screens/learner-dashboard' };
   }
 
   // ── Organisation detection ─────────────────
@@ -183,7 +147,7 @@ export function determineUserRoute(
     // Generic member types for non-school-admin users
     if (memberType && hasOrganization) {
       if (memberType === 'staff' || memberType === 'admin') {
-        return { path: '/screens/membership/ceo-dashboard' };
+        return { path: '/screens/learner-dashboard' };
       }
       if (['learner', 'facilitator', 'mentor', 'volunteer', 'member'].includes(memberType)) {
         return { path: '/screens/learner-dashboard' };

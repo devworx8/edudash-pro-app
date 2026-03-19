@@ -6,9 +6,9 @@
  * Complies with WARP.md security and UX requirements.
  */
 
-import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { track } from '@/lib/analytics';
+import { toast } from '@/components/ui/ToastProvider';
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { getQuotaStatus, extractAPIError } from './api';
 import type { AIQuotaFeature } from './limits';
@@ -142,10 +142,9 @@ export function withAIQuotaGuard<T extends (...args: any[]) => any>(
       
       // Fail-closed: on quota check error, do not execute. Show user-friendly message.
       if (!skipAlert) {
-        Alert.alert(
-          'Unable to Verify Quota',
+        toast.show(
           'We couldn\'t verify your AI usage limit. Please check your connection and try again.',
-          [{ text: 'OK', style: 'cancel' }],
+          { type: 'error', title: 'Unable to Verify Quota', id: 'quota-check-error' },
         );
       }
       return;
@@ -183,52 +182,35 @@ export function showQuotaExceededAlert(
   
   const serviceName = serviceType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
   const title = customMessages.title || `${serviceName} Limit Reached`;
-  const cancelText = customMessages.cancelText || 'Cancel';
-
-  // Build alert buttons from fallback chain
-  const buttons: Array<{ text: string; style?: 'cancel' | 'default' | 'destructive'; onPress?: () => void }> = [
-    {
-      text: cancelText,
-      style: 'cancel',
-      onPress: () => {
-        track('edudash.ai.quota.alert_dismissed', { service_type: serviceType, action: 'cancel' });
-      },
-    },
-  ];
 
   const downgradeAction = fallbackActions?.find((a): a is Extract<QuotaFallbackAction, { type: 'model_downgrade' }> => a.type === 'model_downgrade');
   const adAction = fallbackActions?.find((a): a is Extract<QuotaFallbackAction, { type: 'rewarded_ad' }> => a.type === 'rewarded_ad');
+  const upgradeAction = fallbackActions?.find((a): a is Extract<QuotaFallbackAction, { type: 'upgrade' }> => a.type === 'upgrade');
 
-  // Rewarded ad button (free tier)
+  // Pick the highest-priority CTA for the persistent toast action button.
+  // Priority: rewarded ad > model downgrade > upgrade (most helpful first).
+  let ctaLabel: string | undefined;
+  let ctaOnPress: (() => void) | undefined;
+
   if (adAction && onRewardedAd) {
-    buttons.push({
-      text: '▶ Watch Ad',
-      onPress: () => {
-        track('edudash.ai.quota.fallback_chosen', { service_type: serviceType, action: 'rewarded_ad' });
-        onRewardedAd();
-      },
-    });
-  }
-
-  // Model downgrade button (paid tiers)
-  if (downgradeAction && onModelDowngrade) {
-    buttons.push({
-      text: 'Use Dash Swift',
-      onPress: () => {
-        track('edudash.ai.quota.fallback_chosen', {
-          service_type: serviceType,
-          action: 'model_downgrade',
-          target_model: downgradeAction.targetModel,
-        });
-        onModelDowngrade(downgradeAction.targetModel);
-      },
-    });
-  }
-
-  // Upgrade button (always)
-  buttons.push({
-    text: customMessages.upgradeText || 'View Plans',
-    onPress: () => {
+    ctaLabel = '▶ Watch Ad';
+    ctaOnPress = () => {
+      track('edudash.ai.quota.fallback_chosen', { service_type: serviceType, action: 'rewarded_ad' });
+      onRewardedAd();
+    };
+  } else if (downgradeAction && onModelDowngrade) {
+    ctaLabel = 'Use Dash Swift';
+    ctaOnPress = () => {
+      track('edudash.ai.quota.fallback_chosen', {
+        service_type: serviceType,
+        action: 'model_downgrade',
+        target_model: downgradeAction.targetModel,
+      });
+      onModelDowngrade(downgradeAction.targetModel);
+    };
+  } else if (upgradeAction) {
+    ctaLabel = customMessages.upgradeText || 'View Plans';
+    ctaOnPress = () => {
       track('edudash.ai.upsell.shown', {
         trigger: 'quota_exceeded_alert',
         current_tier: 'unknown',
@@ -237,16 +219,24 @@ export function showQuotaExceededAlert(
       });
       if (onUpgradePressed) { onUpgradePressed(); }
       else { navigateToUpgrade({ source: 'quota_exceeded_alert' }); }
-    },
-  });
+    };
+  }
 
-  // Choose the primary message based on available fallbacks
+  // Build message from fallback chain
   const alertMessage = customMessages.message
     || downgradeAction?.message
     || adAction?.message
     || `You've used all your ${serviceName.toLowerCase()} quota for this month${quotaInfo?.limit ? ` (${quotaInfo.used}/${quotaInfo.limit})` : ''}.`;
   
-  Alert.alert(title, alertMessage, buttons);
+  // Persistent toast (durationMs: 0 = stays until swiped away) with CTA button.
+  // Stable id prevents stacking when user sends multiple messages while quota is exhausted.
+  toast.show(alertMessage, {
+    id: 'quota-exceeded',
+    type: 'warn',
+    durationMs: 0,
+    title,
+    ...(ctaLabel && ctaOnPress ? { action: { label: ctaLabel, onPress: ctaOnPress } } : {}),
+  });
 }
 
 /**

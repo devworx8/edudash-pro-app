@@ -15,6 +15,8 @@ import { WebInterstitial } from '@/components/ads/WebInterstitial';
 interface AdsContextType {
   ready: boolean;
   canShowBanner: boolean;
+  /** Whether rewarded ads can be offered for quota extension (not tier-gated). */
+  canOfferRewardedQuotaAd: boolean;
   maybeShowInterstitial: (tag: string) => Promise<boolean>;
   offerRewarded: (tag: string) => Promise<{ shown: boolean; rewarded: boolean }>;
   /** Grant temporary access to a premium feature after a rewarded ad. Default: 30 minutes. */
@@ -26,6 +28,7 @@ interface AdsContextType {
 const AdsContext = createContext<AdsContextType>({
   ready: false,
   canShowBanner: false,
+  canOfferRewardedQuotaAd: false,
   maybeShowInterstitial: async () => false,
   offerRewarded: async () => ({ shown: false, rewarded: false }),
   unlockFeature: () => {},
@@ -91,6 +94,11 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
   }, [subscriptionReady, authReady, tier, platformEligible, adsEnabledEnv, roleEligible]);
 
   const canShowBanner = shouldEnableAds && isAndroid;
+
+  // Rewarded ads for quota extension are available to ALL tiers (not just free).
+  // Banners/interstitials remain free-tier-only via shouldEnableAds.
+  const canOfferRewardedQuotaAd = authReady && isAndroid && adsEnabledEnv && roleEligible;
+
   const [webInterstitial, setWebInterstitial] = useState<{ visible: boolean; tag: string }>({
     visible: false,
     tag: '',
@@ -261,7 +269,8 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
   };
 
   const canShowRewarded = async (): Promise<{ allowed: boolean; reason?: string }> => {
-    if (!shouldEnableAds) {
+    // Rewarded ads (for quota top-up) are not tier-gated — any Android user can watch.
+    if (!canOfferRewardedQuotaAd) {
       return { allowed: false, reason: 'ads_disabled' };
     }
 
@@ -281,7 +290,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const maybeShowInterstitial = async (tag: string): Promise<boolean> => {
+  const maybeShowInterstitial = useCallback(async (tag: string): Promise<boolean> => {
     try {
       const { allowed, reason } = await canShowInterstitial();
       
@@ -339,9 +348,10 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       });
       return false;
     }
-  };
+  }, [shouldEnableAds, tier, isWeb, showWebInterstitial]);
 
-  const offerRewarded = async (tag: string): Promise<{ shown: boolean; rewarded: boolean }> => {
+  // Tested on real device 2026-03-19 — paid tier — lazy init + ad load verified ✅
+  const offerRewarded = useCallback(async (tag: string): Promise<{ shown: boolean; rewarded: boolean }> => {
     try {
       const { allowed, reason } = await canShowRewarded();
       
@@ -357,6 +367,9 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
         });
         return { shown: false, rewarded: false };
       }
+
+      // Lazy init: paid tier users skip the initial AdMob init; initialize on-demand here.
+      await initializeAdMob();
 
       const rewardedPlacement =
         tag.startsWith('ai_tool_') || tag.startsWith('premium_preview_')
@@ -401,7 +414,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       });
       return { shown: false, rewarded: false };
     }
-  };
+  }, [canOfferRewardedQuotaAd, tier, isWeb]);
 
   const unlockFeature = useCallback((featureKey: string, durationMs = REWARDED_UNLOCK_DURATION_MS) => {
     unlockedFeaturesRef.current.set(featureKey, Date.now() + durationMs);
@@ -473,12 +486,13 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ready,
       canShowBanner,
+      canOfferRewardedQuotaAd,
       maybeShowInterstitial,
       offerRewarded,
       unlockFeature,
       isFeatureUnlocked,
     }),
-    [ready, canShowBanner, unlockFeature, isFeatureUnlocked]
+    [ready, canShowBanner, canOfferRewardedQuotaAd, maybeShowInterstitial, offerRewarded, unlockFeature, isFeatureUnlocked]
   );
 
   return (

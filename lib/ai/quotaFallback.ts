@@ -40,10 +40,18 @@ export type QuotaFallbackAction =
 export interface QuotaFallbackContext {
   tier: SubscriptionTier;
   currentModel: AIModelId;
-  /** Whether the ad system is available (Android + ads loaded + free tier) */
+  /** Whether the ad system is available (Android + ads loaded) */
   canShowRewardedAd: boolean;
   /** Whether the user already has an active ad-based extension */
   hasActiveExtension: boolean;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** True when the user is on the highest purchasable tier (no meaningful upgrade exists). */
+function isHighestPurchasableTier(tier: SubscriptionTier): boolean {
+  const maxLevel = Math.max(...Object.values(TIER_HIERARCHY));
+  return TIER_HIERARCHY[tier] >= maxLevel;
 }
 
 // ── Core Logic ───────────────────────────────────────────────────────────────
@@ -65,21 +73,23 @@ export function getQuotaFallbackActions(ctx: QuotaFallbackContext): QuotaFallbac
     });
   }
 
-  // 2. Rewarded ad — free tier on Android, no active extension
-  if (!isPaid && ctx.canShowRewardedAd && !ctx.hasActiveExtension) {
+  // 2. Rewarded ad — any tier on Android, no active extension
+  if (ctx.canShowRewardedAd && !ctx.hasActiveExtension) {
     actions.push({
       type: 'rewarded_ad',
       message: `Watch a short video to get ${REWARDED_AD_BONUS_MESSAGES} bonus AI messages.`,
     });
   }
 
-  // 3. Upgrade CTA — always available as last resort
-  actions.push({
-    type: 'upgrade',
-    message: isPaid
-      ? 'Upgrade your plan for more AI messages and access to advanced models.'
-      : 'Upgrade for more AI messages, voice features, and smarter models.',
-  });
+  // 3. Upgrade CTA — only if a higher tier exists
+  if (!isHighestPurchasableTier(ctx.tier)) {
+    actions.push({
+      type: 'upgrade',
+      message: isPaid
+        ? 'Upgrade your plan for more AI messages and access to advanced models.'
+        : 'Upgrade for more AI messages, voice features, and smarter models.',
+    });
+  }
 
   return actions;
 }
@@ -104,7 +114,8 @@ export function getFallbackModel(): AIModelId {
 
 /**
  * Check if rewarded ads are available for quota extension on the current platform.
+ * Tier eligibility is handled by AdsContext — this only checks platform support.
  */
-export function isRewardedAdAvailable(tier: SubscriptionTier): boolean {
-  return TIER_HIERARCHY[tier] <= TIER_HIERARCHY.free && Platform.OS === 'android';
+export function isRewardedAdAvailable(_tier: SubscriptionTier): boolean {
+  return Platform.OS === 'android';
 }

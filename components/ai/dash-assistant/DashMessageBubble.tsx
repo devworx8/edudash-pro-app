@@ -39,6 +39,15 @@ if (!isWeb) {
   }
 }
 
+/** Custom rules that make markdown text selectable (for assistant messages). */
+const selectableMarkdownRules = {
+  textgroup: (node: any, children: any, _parent: any, styles: any) => (
+    <Text key={node.key} style={styles.textgroup} selectable>
+      {children}
+    </Text>
+  ),
+};
+
 interface DashMessageBubbleProps {
   message: DashMessage;
   index: number;
@@ -283,9 +292,9 @@ export const DashMessageBubble: React.FC<DashMessageBubbleProps> = ({
                   return null;
                 }
                 return Markdown ? (
-                  <Markdown key={`md-${message.id}-${segmentIndex}`} style={markdownStyles}>{segment.content}</Markdown>
+                  <Markdown key={`md-${message.id}-${segmentIndex}`} style={markdownStyles} rules={selectableMarkdownRules}>{segment.content}</Markdown>
                 ) : (
-                  <MarkdownFallback key={`md-fallback-${message.id}-${segmentIndex}`} content={segment.content} theme={theme} />
+                  <MarkdownFallback key={`md-fallback-${message.id}-${segmentIndex}`} content={segment.content} theme={theme} selectable />
                 );
               })}
             </View>

@@ -5,7 +5,7 @@
  * Supports banner, interstitial, native, and rewarded ads.
  */
 
-export type AdType = 'banner' | 'interstitial' | 'native' | 'rewarded';
+export type AdType = 'banner' | 'interstitial' | 'native' | 'rewarded' | 'appOpen';
 
 export type AdPosition = 
   | 'dashboard_bottom' 
@@ -39,8 +39,8 @@ export interface AdPlacement {
   position: AdPosition;
   /** Environment variable containing the ad unit ID */
   adUnitEnvVar: string;
-  /** Frequency control policy */
-  frequencyPolicy: FrequencyPolicy;
+  /** @deprecated Frequency control is handled by AdsContext RATE_LIMITS, not per-placement. */
+  frequencyPolicy?: FrequencyPolicy;
   /** Contextual keywords for targeting */
   keywords: string[];
   /** Content rating requirements */

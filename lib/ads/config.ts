@@ -16,6 +16,7 @@ export const TEST_AD_UNIT_IDS = {
   INTERSTITIAL: 'ca-app-pub-3940256099942544/1033173712',
   REWARDED: 'ca-app-pub-3940256099942544/5224354917',
   NATIVE: 'ca-app-pub-3940256099942544/2247696110',
+  APP_OPEN: 'ca-app-pub-3940256099942544/9257395921',
 } as const;
 
 function isValidAdUnitId(value?: string): value is string {
@@ -38,11 +39,12 @@ export function getAdUnitId(placementKey: string): string {
   // Always use test IDs if flag is set or in development
   if (useTestIds) {
     // Map placement types to test ad unit IDs
-    const testIdMap = {
+    const testIdMap: Record<string, string> = {
       banner: TEST_AD_UNIT_IDS.BANNER,
       interstitial: TEST_AD_UNIT_IDS.INTERSTITIAL,
       rewarded: TEST_AD_UNIT_IDS.REWARDED,
       native: TEST_AD_UNIT_IDS.NATIVE,
+      appOpen: TEST_AD_UNIT_IDS.APP_OPEN,
     };
     
     return testIdMap[placement.type];
@@ -53,11 +55,12 @@ export function getAdUnitId(placementKey: string): string {
   
   if (!isValidAdUnitId(productionAdUnitId)) {
     // Try legacy env var fallbacks by ad type before giving up.
-    const legacyFallbacks: Record<typeof placement.type, string[]> = {
+    const legacyFallbacks: Record<string, string[]> = {
       banner: ['EXPO_PUBLIC_ADMOB_ANDROID_BANNER_UNIT_ID'],
       interstitial: ['EXPO_PUBLIC_ADMOB_ANDROID_INTERSTITIAL_UNIT_ID', 'ADMOB_INTERSTITIAL_ANDROID'],
       rewarded: ['EXPO_PUBLIC_ADMOB_ANDROID_REWARDED_UNIT_ID', 'ADMOB_REWARDED_ANDROID'],
       native: ['EXPO_PUBLIC_ADMOB_ADUNIT_NATIVE_PARENT_FEED'],
+      appOpen: ['EXPO_PUBLIC_ADMOB_ADUNIT_APP_OPEN'],
     };
 
     for (const fallbackVar of legacyFallbacks[placement.type]) {

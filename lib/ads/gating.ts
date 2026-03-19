@@ -258,41 +258,6 @@ export async function shouldShowAds(
 }
 
 /**
- * Check if ads are allowed on a specific screen
- */
-export function isScreenAllowedForAds(screenName: string): boolean {
-  const noAdScreens = [
-    // Authentication flows
-    'sign-in',
-    'sign-up', 
-    'forgot-password',
-    'verify-email',
-    
-    // Payment flows
-    'payment',
-    'checkout',
-    'billing',
-    'subscription',
-    
-    // Critical flows
-    'emergency',
-    'error',
-    'crash',
-    
-    // Child-facing screens
-    'child-dashboard',
-    'child-games',
-    'child-activities',
-  ];
-
-  const normalizedScreen = screenName.toLowerCase().replace(/[-_]/g, '');
-  
-  return !noAdScreens.some(noAdScreen => 
-    normalizedScreen.includes(noAdScreen.replace(/[-_]/g, ''))
-  );
-}
-
-/**
  * Check if ads are allowed in the current app state
  */
 export async function isAppStateAllowedForAds(): Promise<boolean> {

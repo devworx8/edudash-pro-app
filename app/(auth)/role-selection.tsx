@@ -71,14 +71,6 @@ const ORGANIZATION_ROLES: RoleOption[] = [
     route: '/screens/org-onboarding',
     gradient: ['#fa709a', '#fee140'],
   },
-  {
-    id: 'membership',
-    title: 'Community Organization',
-    description: 'NPOs, community groups, membership organizations (like EduPro)',
-    icon: 'globe-outline',
-    route: '/screens/membership/register',
-    gradient: ['#a8edea', '#fed6e3'],
-  },
 ];
 
 export default function RoleSelectionScreen() {

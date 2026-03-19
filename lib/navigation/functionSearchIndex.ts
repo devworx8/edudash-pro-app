@@ -419,17 +419,6 @@ export const FUNCTION_SEARCH_INDEX: FunctionSearchItem[] = [
     priority: 68,
   },
   {
-    id: 'membership-documents',
-    title: 'Document Vault',
-    description: 'Membership organization document vault and governance files.',
-    route: '/screens/membership/documents',
-    icon: 'folder',
-    section: 'Documents',
-    keywords: ['documents', 'document vault', 'governance docs', 'policies', 'files'],
-    roles: ['teacher', 'principal', 'principal_admin', 'super_admin'],
-    priority: 66,
-  },
-  {
     id: 'pop-review',
     title: 'POP Review',
     description: 'Review pending proof-of-payment submissions.',
@@ -587,45 +576,6 @@ const APP_WIDE_ROUTE_CANDIDATES: string[] = [
   '/screens/learner/programs',
   '/screens/learner/submissions',
   '/screens/log-expense',
-  '/screens/membership/analytics',
-  '/screens/membership/announcements',
-  '/screens/membership/branch-manager-invite-code',
-  '/screens/membership/broadcast',
-  '/screens/membership/budget-proposals',
-  '/screens/membership/budget-requests',
-  '/screens/membership/ceo-dashboard',
-  '/screens/membership/dashboard',
-  '/screens/membership/events',
-  '/screens/membership/finance',
-  '/screens/membership/financial-authorizations',
-  '/screens/membership/governance',
-  '/screens/membership/groups',
-  '/screens/membership/heritage',
-  '/screens/membership/id-card',
-  '/screens/membership/initiatives',
-  '/screens/membership/members',
-  '/screens/membership/members-list',
-  '/screens/membership/messages',
-  '/screens/membership/pending-approvals',
-  '/screens/membership/programs',
-  '/screens/membership/regional-invite-code',
-  '/screens/membership/regional-manager-applications',
-  '/screens/membership/regional-managers',
-  '/screens/membership/reports',
-  '/screens/membership/settings',
-  '/screens/membership/strategy',
-  '/screens/membership/veterans-dashboard',
-  '/screens/membership/veterans-executive-invite',
-  '/screens/membership/veterans-invite-code',
-  '/screens/membership/veterans-league-dashboard',
-  '/screens/membership/women-dashboard',
-  '/screens/membership/women-executive-invite',
-  '/screens/membership/women-invite-code',
-  '/screens/membership/womens-invite-code',
-  '/screens/membership/womens-league-dashboard',
-  '/screens/membership/youth-executive-invite',
-  '/screens/membership/youth-invite-code',
-  '/screens/membership/youth-president-dashboard',
   '/screens/org-admin-dashboard',
   '/screens/org-admin/certifications',
   '/screens/org-admin/cohorts',
@@ -721,7 +671,6 @@ function routeToTitle(route: string): string {
 
 function routeToSection(route: string): string {
   const value = route.toLowerCase();
-  if (value.includes('/membership/')) return 'Membership';
   if (value.includes('/org-admin')) return 'Organization';
   if (value.includes('/super-admin')) return 'Platform Admin';
   if (value.includes('/dash')) return 'Dash AI';
@@ -751,7 +700,6 @@ function inferRolesFromRoute(route: string): FunctionSearchRole[] | undefined {
   if (value.includes('/parent-') || value.includes('/(k12)/parent/')) return ['parent'];
   if (value.includes('/learner/') || value.includes('/(k12)/student/')) return ['student'];
   if (value.includes('/org-admin')) return ['principal', 'principal_admin', 'super_admin'];
-  if (value.includes('/membership/')) return ['teacher', 'principal', 'principal_admin', 'super_admin'];
   return undefined;
 }
 
