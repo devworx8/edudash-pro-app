@@ -35,6 +35,7 @@ export const MAX_TOKENS_BY_SERVICE: Record<string, number> = {
   image_generation: 512,
   smart_reply: 256,
   message_translation: 512,
+  agent_remediation: 4096,
 };
 
 export const DEFAULT_MAX_TOKENS = 2048;
@@ -125,6 +126,9 @@ export function normalizeServiceType(serviceType?: string): string {
   }
   if (serviceType === 'grading_assistance') {
     return 'grading';
+  }
+  if (serviceType === 'remediation_lead' || serviceType === 'code_remediation') {
+    return 'agent_remediation';
   }
   return serviceType;
 }

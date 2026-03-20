@@ -41,6 +41,12 @@ export function createStyles(theme: any, screenWidth = 375) {
     headerTitle: { fontSize: 18, fontWeight: '800', color: '#fff', letterSpacing: -0.3 },
     headerSubtitle: { fontSize: 11, color: '#94a3b8' },
     onlineDot: { width: 8, height: 8, borderRadius: 4 },
+    signOutBtn: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: 'rgba(239,68,68,0.12)',
+      cursor: 'pointer' as any,
+    },
 
     /* ── Scroll ─────────────────────────── */
     scroll: { flex: 1 },

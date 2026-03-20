@@ -43,6 +43,8 @@ export default function PrincipalExcursionsScreen() {
     saveExcursion,
     deleteExcursion,
     updateStatus,
+    shareWithParents,
+    sharing,
     upcomingExcursions,
     pastExcursions,
   } = useExcursions({ organizationId: orgId, userId: user?.id });
@@ -132,6 +134,8 @@ export default function PrincipalExcursionsScreen() {
                 excursion={excursion}
                 onPress={openEditModal}
                 onApprove={handleApprove}
+                onShare={shareWithParents}
+                sharing={sharing}
                 onDelete={deleteExcursion}
               />
             ))}

@@ -16,6 +16,7 @@ import ThemedStatusBar from '@/components/ui/ThemedStatusBar';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { usePlatformAdminDashboard, ROLE_CONFIGS } from '@/hooks/platform-admin-dashboard';
 import { createStyles } from '@/lib/screen-styles/platform-admin-dashboard.styles';
+import { signOutAndRedirect } from '@/lib/authActions';
 import type { StatCard, QuickAction, ActivityItem } from '@/hooks/platform-admin-dashboard';
 
 export default function PlatformAdminDashboardScreen() {
@@ -103,7 +104,12 @@ export default function PlatformAdminDashboardScreen() {
             <Text style={styles.headerTitle}>Platform Operations</Text>
             <Text style={styles.headerSubtitle}>{roleConfig.department}</Text>
           </View>
-          <View style={[styles.onlineDot, { backgroundColor: '#22c55e' }]} />
+          <TouchableOpacity
+            style={styles.signOutBtn}
+            onPress={() => signOutAndRedirect({ redirectTo: '/(auth)/sign-in' })}
+          >
+            <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
 

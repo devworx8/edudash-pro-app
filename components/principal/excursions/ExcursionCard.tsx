@@ -7,6 +7,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -17,10 +18,12 @@ interface ExcursionCardProps {
   excursion: Excursion;
   onPress: (excursion: Excursion) => void;
   onApprove?: (excursion: Excursion) => void;
+  onShare?: (excursion: Excursion) => void;
+  sharing?: boolean;
   onDelete: (excursion: Excursion) => void;
 }
 
-export function ExcursionCard({ excursion, onPress, onApprove, onDelete }: ExcursionCardProps) {
+export function ExcursionCard({ excursion, onPress, onApprove, onShare, sharing, onDelete }: ExcursionCardProps) {
   const { theme } = useTheme();
   const styles = createStyles(theme);
 
@@ -121,6 +124,22 @@ export function ExcursionCard({ excursion, onPress, onApprove, onDelete }: Excur
               </Text>
             </TouchableOpacity>
           </>
+        )}
+        {excursion.status === 'approved' && onShare && (
+          <TouchableOpacity
+            style={[styles.actionButton, { backgroundColor: '#3b82f620', opacity: sharing ? 0.6 : 1 }]}
+            onPress={() => onShare(excursion)}
+            disabled={sharing}
+          >
+            {sharing ? (
+              <ActivityIndicator size="small" color="#3b82f6" />
+            ) : (
+              <Ionicons name="share-social-outline" size={18} color="#3b82f6" />
+            )}
+            <Text style={[styles.actionButtonText, { color: '#3b82f6' }]}>
+              {sharing ? 'Sharing...' : 'Share with Parents'}
+            </Text>
+          </TouchableOpacity>
         )}
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: '#ef444420' }]}

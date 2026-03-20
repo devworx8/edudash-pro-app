@@ -14,7 +14,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useExcursionAI } from '@/hooks/principal/useExcursionAI';
 import type { Excursion, ExcursionFormData, ExcursionPreflightChecks, AgeGroup } from './types';
@@ -23,7 +22,18 @@ import {
   PREFLIGHT_CHECK_ITEMS, isPreflightComplete, AGE_GROUP_OPTIONS,
 } from './types';
 
+// Only import DateTimePicker on native (crashes on web)
+let DateTimePicker: any = null;
+if (Platform.OS !== 'web') {
+  DateTimePicker = require('@react-native-community/datetimepicker').default;
+}
+
 type PickerTarget = 'date' | 'departure' | 'return' | 'consent_deadline' | null;
+
+// Web-only helper: format Date → 'YYYY-MM-DD' for <input type="date">
+const toInputDate = (d: Date) => d.toISOString().slice(0, 10);
+// Web-only helper: format Date → 'HH:MM' for <input type="time">
+const toInputTime = (d: Date | null) => d ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '';
 
 interface ExcursionFormModalProps {
   visible: boolean;
@@ -58,9 +68,10 @@ export function ExcursionFormModal({ visible, excursion, onClose, onSave }: Excu
     if (success) onClose();
   };
 
+  // Native date picker handler
   const handleDateChange = useCallback((_: any, date?: Date) => {
     const target = activePicker;
-    if (Platform.OS !== 'web') setActivePicker(null);
+    setActivePicker(null);
     if (!date) return;
     setFormData(prev => {
       if (target === 'date') return { ...prev, excursion_date: date };
@@ -70,6 +81,23 @@ export function ExcursionFormModal({ visible, excursion, onClose, onSave }: Excu
       return prev;
     });
   }, [activePicker]);
+
+  // Web date handler: receives string 'YYYY-MM-DD'
+  const handleWebDateChange = useCallback((field: 'excursion_date' | 'consent_deadline', value: string) => {
+    if (!value) return;
+    const [y, m, d] = value.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    setFormData(prev => ({ ...prev, [field]: date }));
+  }, []);
+
+  // Web time handler: receives string 'HH:MM'
+  const handleWebTimeChange = useCallback((field: 'departure_time' | 'return_time', value: string) => {
+    if (!value) return;
+    const [h, m] = value.split(':').map(Number);
+    const date = new Date();
+    date.setHours(h, m, 0, 0);
+    setFormData(prev => ({ ...prev, [field]: date }));
+  }, []);
 
   const toggleAgeGroup = (ag: AgeGroup) => {
     setFormData(prev => ({
@@ -172,31 +200,68 @@ export function ExcursionFormModal({ visible, excursion, onClose, onSave }: Excu
 
             {/* Date Picker */}
             <Text style={styles.inputLabel}>Excursion Date *</Text>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('date')}>
-              <Ionicons name="calendar" size={20} color={theme.primary} />
-              <Text style={styles.dateButtonText}>{formatDate(formData.excursion_date)}</Text>
-            </TouchableOpacity>
+            {Platform.OS === 'web' ? (
+              <View style={styles.dateButton}>
+                <Ionicons name="calendar" size={20} color={theme.primary} />
+                <input
+                  type="date"
+                  value={toInputDate(formData.excursion_date)}
+                  min={toInputDate(new Date())}
+                  onChange={(e: any) => handleWebDateChange('excursion_date', e.target.value)}
+                  style={{ background: 'transparent', border: 'none', color: theme.text, fontSize: 16, flex: 1, outline: 'none', cursor: 'pointer', colorScheme: 'dark' } as any}
+                />
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('date')}>
+                <Ionicons name="calendar" size={20} color={theme.primary} />
+                <Text style={styles.dateButtonText}>{formatDate(formData.excursion_date)}</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Time Row */}
             <View style={styles.timeRow}>
               <View style={styles.timeCol}>
                 <Text style={styles.inputLabel}>Departure Time</Text>
-                <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('departure')}>
-                  <Ionicons name="time-outline" size={18} color={theme.primary} />
-                  <Text style={styles.dateButtonText}>{formatTime(formData.departure_time)}</Text>
-                </TouchableOpacity>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.dateButton}>
+                    <Ionicons name="time-outline" size={18} color={theme.primary} />
+                    <input
+                      type="time"
+                      value={toInputTime(formData.departure_time)}
+                      onChange={(e: any) => handleWebTimeChange('departure_time', e.target.value)}
+                      style={{ background: 'transparent', border: 'none', color: theme.text, fontSize: 16, flex: 1, outline: 'none', cursor: 'pointer', colorScheme: 'dark' } as any}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('departure')}>
+                    <Ionicons name="time-outline" size={18} color={theme.primary} />
+                    <Text style={styles.dateButtonText}>{formatTime(formData.departure_time)}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
               <View style={styles.timeCol}>
                 <Text style={styles.inputLabel}>Return Time</Text>
-                <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('return')}>
-                  <Ionicons name="time-outline" size={18} color={theme.primary} />
-                  <Text style={styles.dateButtonText}>{formatTime(formData.return_time)}</Text>
-                </TouchableOpacity>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.dateButton}>
+                    <Ionicons name="time-outline" size={18} color={theme.primary} />
+                    <input
+                      type="time"
+                      value={toInputTime(formData.return_time)}
+                      onChange={(e: any) => handleWebTimeChange('return_time', e.target.value)}
+                      style={{ background: 'transparent', border: 'none', color: theme.text, fontSize: 16, flex: 1, outline: 'none', cursor: 'pointer', colorScheme: 'dark' } as any}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('return')}>
+                    <Ionicons name="time-outline" size={18} color={theme.primary} />
+                    <Text style={styles.dateButtonText}>{formatTime(formData.return_time)}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
 
-            {/* Native DateTimePicker */}
-            {activePicker && (
+            {/* Native DateTimePicker (mobile only) */}
+            {Platform.OS !== 'web' && activePicker && DateTimePicker && (
               <DateTimePicker
                 value={pickerValue}
                 mode={pickerMode}
@@ -256,12 +321,26 @@ export function ExcursionFormModal({ visible, excursion, onClose, onSave }: Excu
             {formData.consent_required && (
               <>
                 <Text style={styles.inputLabel}>Consent Deadline</Text>
-                <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('consent_deadline')}>
-                  <Ionicons name="calendar-outline" size={18} color={theme.primary} />
-                  <Text style={styles.dateButtonText}>
-                    {formData.consent_deadline ? formatDate(formData.consent_deadline) : 'Tap to set deadline'}
-                  </Text>
-                </TouchableOpacity>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.dateButton}>
+                    <Ionicons name="calendar-outline" size={18} color={theme.primary} />
+                    <input
+                      type="date"
+                      value={formData.consent_deadline ? toInputDate(formData.consent_deadline) : ''}
+                      min={toInputDate(new Date())}
+                      max={toInputDate(formData.excursion_date)}
+                      onChange={(e: any) => handleWebDateChange('consent_deadline', e.target.value)}
+                      style={{ background: 'transparent', border: 'none', color: theme.text, fontSize: 16, flex: 1, outline: 'none', cursor: 'pointer', colorScheme: 'dark' } as any}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.dateButton} onPress={() => setActivePicker('consent_deadline')}>
+                    <Ionicons name="calendar-outline" size={18} color={theme.primary} />
+                    <Text style={styles.dateButtonText}>
+                      {formData.consent_deadline ? formatDate(formData.consent_deadline) : 'Tap to set deadline'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
 

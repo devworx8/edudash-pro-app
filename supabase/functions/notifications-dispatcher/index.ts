@@ -693,7 +693,7 @@ function getNotificationTemplate(eventType: string, context: NotificationContext
     },
     school_excursion_reminder: {
       title: '🚌 Excursion Reminder',
-      body: context.event_title 
+      body: context.event_title
         ? `Reminder (${context.reminder_label || 'upcoming'}): ${context.event_title}${context.event_date ? ` is ${context.event_date}` : ' is coming up'}`
         : 'You have an upcoming school excursion',
       data: {
@@ -706,6 +706,36 @@ function getNotificationTemplate(eventType: string, context: NotificationContext
       sound: 'default',
       badge: 1,
       priority: 'high',
+      channelId: 'calendar'
+    },
+    school_excursion_approved: {
+      title: '🚌 New Excursion Approved!',
+      body: context.excursion_title
+        ? `"${context.excursion_title}" to ${context.destination || 'a field trip'} on ${context.excursion_date || 'upcoming date'}${context.estimated_cost ? ` • R${context.estimated_cost} per child` : ''}${context.consent_required ? ' • Consent required' : ''}`
+        : 'A new school excursion has been approved',
+      data: {
+        type: 'school_excursion_approved',
+        excursion_id: context.excursion_id,
+        screen: 'calendar'
+      },
+      sound: 'default',
+      badge: 1,
+      priority: 'high',
+      channelId: 'calendar'
+    },
+    school_excursion_shared: {
+      title: '🚌 Excursion Details',
+      body: context.excursion_title
+        ? `"${context.excursion_title}" to ${context.destination || 'a field trip'} on ${context.excursion_date || 'upcoming date'}${context.estimated_cost ? ` • R${context.estimated_cost} per child` : ''}${context.consent_required ? ' • Consent required' : ''}`
+        : 'Check your dashboard for excursion details',
+      data: {
+        type: 'school_excursion_shared',
+        excursion_id: context.excursion_id,
+        screen: 'calendar'
+      },
+      sound: 'default',
+      badge: 1,
+      priority: 'default',
       channelId: 'calendar'
     },
     school_event_updated: {
@@ -1839,6 +1869,8 @@ async function getUsersToNotify(request: NotificationRequest): Promise<string[]>
     case 'school_event_reminder':
     case 'school_meeting_reminder':
     case 'school_excursion_reminder':
+    case 'school_excursion_approved':
+    case 'school_excursion_shared':
       if (request.preschool_id) {
         // Get the event to determine target audience
         let targetAudience = request.target_audience || ['all'];
@@ -2444,6 +2476,18 @@ async function getNotificationContext(request: NotificationRequest): Promise<Not
       case 'school_event_cancelled':
       case 'school_event_reminder':
       case 'school_meeting_reminder':
+      case 'school_excursion_approved':
+      case 'school_excursion_shared':
+        // These pass context directly from the client
+        if (request.context?.excursion_title) context.excursion_title = request.context.excursion_title;
+        if (request.context?.excursion_date) context.excursion_date = request.context.excursion_date;
+        if (request.context?.destination) context.destination = request.context.destination;
+        if (request.context?.estimated_cost) context.estimated_cost = request.context.estimated_cost;
+        if (request.context?.consent_required) context.consent_required = request.context.consent_required;
+        if (request.context?.consent_deadline) context.consent_deadline = request.context.consent_deadline;
+        if (request.excursion_id) context.excursion_id = request.excursion_id;
+        break;
+
       case 'school_excursion_reminder':
         if (request.context?.reminder_offset_days) {
           context.reminder_offset_days = Number(request.context.reminder_offset_days) || undefined;
