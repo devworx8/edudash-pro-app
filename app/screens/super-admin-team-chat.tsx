@@ -25,8 +25,14 @@ import ChannelSidebar from '@/components/team-chat/ChannelSidebar';
 // ── Utilities ────────────────────────────────────────────────────────────────
 
 const AVATAR_COLORS = [
-  '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b',
-  '#ec4899', '#ef4444', '#6366f1', '#14b8a6',
+  '#8b5cf6',
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#ef4444',
+  '#6366f1',
+  '#14b8a6',
 ];
 
 function hashColor(name: string): string {
@@ -36,7 +42,15 @@ function hashColor(name: string): string {
 }
 
 function initials(name: string): string {
-  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+  return (
+    name
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || '?'
+  );
 }
 
 function formatTime(dateStr: string): string {
@@ -56,12 +70,16 @@ function getDateLabel(dateStr: string): string {
 function shouldShowHeader(msgs: TeamMessage[], i: number): boolean {
   if (i === 0) return true;
   if (msgs[i - 1].sender_id !== msgs[i].sender_id) return true;
-  return new Date(msgs[i].created_at).getTime() - new Date(msgs[i - 1].created_at).getTime() > 300_000;
+  return (
+    new Date(msgs[i].created_at).getTime() - new Date(msgs[i - 1].created_at).getTime() > 300_000
+  );
 }
 
 function shouldShowDate(msgs: TeamMessage[], i: number): boolean {
   if (i === 0) return true;
-  return new Date(msgs[i - 1].created_at).toDateString() !== new Date(msgs[i].created_at).toDateString();
+  return (
+    new Date(msgs[i - 1].created_at).toDateString() !== new Date(msgs[i].created_at).toDateString()
+  );
 }
 
 // ── Main Screen ──────────────────────────────────────────────────────────────
@@ -76,8 +94,16 @@ export default function SuperAdminTeamChatScreen() {
   const isWide = width >= 768;
 
   const {
-    profile, channels, activeChannel, messages, members,
-    loading, sendingMessage, selectChannel, handleSendMessage, goBackToChannels,
+    profile,
+    channels,
+    activeChannel,
+    messages,
+    members,
+    loading,
+    sendingMessage,
+    selectChannel,
+    handleSendMessage,
+    goBackToChannels,
   } = useSuperAdminTeamChat(showAlert);
 
   if (!profile || !isPlatformStaff(profile.role)) {
@@ -204,8 +230,18 @@ export default function SuperAdminTeamChatScreen() {
 // ── Chat Pane ────────────────────────────────────────────────────────────────
 
 function ChatPane({
-  channel, messages, members, myId, messageText, setMessageText,
-  sendingMessage, onSend, onKeyPress, scrollRef, styles, onBack,
+  channel,
+  messages,
+  members,
+  myId,
+  messageText,
+  setMessageText,
+  sendingMessage,
+  onSend,
+  onKeyPress,
+  scrollRef,
+  styles,
+  onBack,
 }: {
   channel: { id: string; name: string; description: string | null };
   messages: TeamMessage[];
@@ -243,9 +279,13 @@ function ChatPane({
         </View>
         <TouchableOpacity
           style={[styles.headerIconBtn, showMembers && styles.headerIconBtnActive]}
-          onPress={() => setShowMembers(prev => !prev)}
+          onPress={() => setShowMembers((prev) => !prev)}
         >
-          <Ionicons name={showMembers ? 'people' : 'people-outline'} size={20} color={showMembers ? '#3b82f6' : '#94a3b8'} />
+          <Ionicons
+            name={showMembers ? 'people' : 'people-outline'}
+            size={20}
+            color={showMembers ? '#3b82f6' : '#94a3b8'}
+          />
         </TouchableOpacity>
       </View>
 
@@ -288,9 +328,7 @@ function ChatPane({
       </ScrollView>
 
       {/* ── Members Panel (Slack-style) ── */}
-      {showMembers && (
-        <MembersPanel members={members} myId={myId} styles={styles} />
-      )}
+      {showMembers && <MembersPanel members={members} myId={myId} styles={styles} />}
 
       {/* ── Input ── */}
       <View style={styles.inputBar}>
@@ -320,7 +358,10 @@ function ChatPane({
 // ── Message Bubble (Slack-style) ─────────────────────────────────────────────
 
 function MessageBubble({
-  message, isOwn, showSender, styles,
+  message,
+  isOwn,
+  showSender,
+  styles,
 }: {
   message: TeamMessage;
   isOwn: boolean;
@@ -374,7 +415,9 @@ function MessageBubble({
 // ── Members Panel (Slack-style) ──────────────────────────────────────────────
 
 function MembersPanel({
-  members, myId, styles,
+  members,
+  myId,
+  styles,
 }: {
   members: TeamChannelMember[];
   myId: string;
@@ -392,12 +435,10 @@ function MembersPanel({
     <View style={styles.membersPanel}>
       <View style={styles.membersPanelHeader}>
         <Ionicons name="people" size={16} color="#94a3b8" />
-        <Text style={styles.membersPanelTitle}>
-          Members — {members.length}
-        </Text>
+        <Text style={styles.membersPanelTitle}>Members — {members.length}</Text>
       </View>
       <ScrollView showsVerticalScrollIndicator={false}>
-        {sorted.map(m => {
+        {sorted.map((m) => {
           const name = m.profile?.full_name || 'Unknown';
           const role = m.profile?.role || 'member';
           const isMe = m.user_id === myId;
@@ -413,7 +454,8 @@ function MembersPanel({
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <Text style={styles.memberName} numberOfLines={1}>
-                    {name}{isMe ? ' (you)' : ''}
+                    {name}
+                    {isMe ? ' (you)' : ''}
                   </Text>
                   {m.role === 'owner' && (
                     <View style={styles.memberOwnerBadge}>
@@ -426,9 +468,7 @@ function MembersPanel({
                     </View>
                   )}
                 </View>
-                <Text style={styles.memberRole}>
-                  {role.replace(/_/g, ' ')}
-                </Text>
+                <Text style={styles.memberRole}>{role.replace(/_/g, ' ')}</Text>
               </View>
             </View>
           );
@@ -440,7 +480,13 @@ function MembersPanel({
 
 // ── Date Separator ───────────────────────────────────────────────────────────
 
-function DateSeparator({ label, styles }: { label: string; styles: ReturnType<typeof createStyles> }) {
+function DateSeparator({
+  label,
+  styles,
+}: {
+  label: string;
+  styles: ReturnType<typeof createStyles>;
+}) {
   return (
     <View style={styles.dateSep}>
       <View style={styles.dateSepLine} />

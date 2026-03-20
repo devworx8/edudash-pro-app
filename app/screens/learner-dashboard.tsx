@@ -1,5 +1,13 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Image } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  Image,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -65,10 +73,14 @@ export default function LearnerDashboard() {
     // Decision 1: No user -> sign in
     if (!user) {
       navigationAttempted.current = true;
-      try { 
-        router.replace('/(auth)/sign-in'); 
+      try {
+        router.replace('/(auth)/sign-in');
       } catch (e) {
-        try { router.replace('/sign-in'); } catch { /* Intentional: non-fatal */ }
+        try {
+          router.replace('/sign-in');
+        } catch {
+          /* Intentional: non-fatal */
+        }
       }
       return;
     }
@@ -97,10 +109,14 @@ export default function LearnerDashboard() {
   if (isStillLoading) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: t('learner.dashboard_title', { defaultValue: 'Learner Dashboard' }) }} />
+        <Stack.Screen
+          options={{ title: t('learner.dashboard_title', { defaultValue: 'Learner Dashboard' }) }}
+        />
         <View style={styles.empty}>
           <EduDashSpinner size="large" color={theme.primary} />
-          <Text style={styles.loadingText}>{t('dashboard.loading_profile', { defaultValue: 'Loading your profile...' })}</Text>
+          <Text style={styles.loadingText}>
+            {t('dashboard.loading_profile', { defaultValue: 'Loading your profile...' })}
+          </Text>
         </View>
       </View>
     );
@@ -109,10 +125,14 @@ export default function LearnerDashboard() {
   if (!user) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: t('learner.dashboard_title', { defaultValue: 'Learner Dashboard' }) }} />
+        <Stack.Screen
+          options={{ title: t('learner.dashboard_title', { defaultValue: 'Learner Dashboard' }) }}
+        />
         <View style={styles.empty}>
           <EduDashSpinner size="large" color={theme.primary} />
-          <Text style={styles.loadingText}>{t('dashboard.loading_profile', { defaultValue: 'Loading your profile...' })}</Text>
+          <Text style={styles.loadingText}>
+            {t('dashboard.loading_profile', { defaultValue: 'Loading your profile...' })}
+          </Text>
         </View>
       </View>
     );
@@ -121,27 +141,34 @@ export default function LearnerDashboard() {
   const draftCount = learnerDashboard.data?.draftCount ?? 0;
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <Stack.Screen 
-        options={{ 
+      <Stack.Screen
+        options={{
           headerShown: false, // Use custom header instead
-        }} 
+        }}
       />
       {/* Custom Header with Hamburger Menu - ALWAYS VISIBLE */}
-      <View style={[styles.customHeader, { 
-        backgroundColor: theme.background,
-        paddingTop: 4,
-        borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)',
-        borderBottomWidth: isDark ? 2 : 1.5,
-      }]}>
+      <View
+        style={[
+          styles.customHeader,
+          {
+            backgroundColor: theme.background,
+            paddingTop: 4,
+            borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)',
+            borderBottomWidth: isDark ? 2 : 1.5,
+          },
+        ]}
+      >
         <View style={styles.headerLeftSection}>
           <TouchableOpacity
             onPress={() => setIsDrawerOpen(true)}
-            style={[styles.headerButton, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }]}
+            style={[
+              styles.headerButton,
+              { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' },
+            ]}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Ionicons name="menu" size={26} color={theme.text} />
           </TouchableOpacity>
-
         </View>
         <View style={styles.headerTitleContainer}>
           <Text style={[styles.headerTitle, { color: theme.text }]}>
@@ -156,7 +183,10 @@ export default function LearnerDashboard() {
         </View>
         <TouchableOpacity
           onPress={() => router.push('/screens/account')}
-          style={[styles.headerButton, { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' }]}
+          style={[
+            styles.headerButton,
+            { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)' },
+          ]}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="person-circle-outline" size={26} color={theme.text} />
@@ -177,20 +207,29 @@ export default function LearnerDashboard() {
           <View style={styles.welcomeHeader}>
             <View style={styles.welcomeTextContainer}>
               <Text style={styles.greeting}>
-                {t('learner.welcome_back', { 
+                {t('learner.welcome_back', {
                   defaultValue: 'Welcome back',
-                  name: profile?.first_name || 'Learner'
+                  name: profile?.first_name || 'Learner',
                 })}
               </Text>
               <Text style={styles.subheading}>
-                {t('learner.continue_learning', { defaultValue: 'Continue your skills development journey' })}
+                {t('learner.continue_learning', {
+                  defaultValue: 'Continue your skills development journey',
+                })}
               </Text>
             </View>
             {tier ? (
               <TierBadge tier={tier} size="sm" />
             ) : subscriptionReady ? (
-              <View style={[styles.tierPlaceholder, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-                <Text style={[styles.tierPlaceholderText, { color: theme.textSecondary }]}>Free</Text>
+              <View
+                style={[
+                  styles.tierPlaceholder,
+                  { backgroundColor: theme.surface, borderColor: theme.border },
+                ]}
+              >
+                <Text style={[styles.tierPlaceholderText, { color: theme.textSecondary }]}>
+                  Free
+                </Text>
               </View>
             ) : null}
           </View>
@@ -204,56 +243,72 @@ export default function LearnerDashboard() {
         {/* AI Quota Display - Assignment Help */}
         {user && (
           <View style={{ marginBottom: 16 }}>
-            <AIQuotaDisplay 
-              serviceType="homework_help"
-              compact={true}
-              showUpgradePrompt={true}
-            />
+            <AIQuotaDisplay serviceType="homework_help" compact={true} showUpgradePrompt={true} />
           </View>
         )}
         {/* Progress Overview */}
         {progress && (
           <Card padding={20} margin={0} elevation="medium" style={styles.progressCard}>
             <View style={styles.progressHeader}>
-              <Text style={styles.progressTitle}>{t('learner.progress_overview', { defaultValue: 'Progress Overview' })}</Text>
+              <Text style={styles.progressTitle}>
+                {t('learner.progress_overview', { defaultValue: 'Progress Overview' })}
+              </Text>
               <Ionicons name="trending-up-outline" size={24} color={theme.primary} />
             </View>
             <View style={styles.progressGrid}>
               <View style={styles.progressItem}>
                 <Text style={styles.progressValue}>{progress.totalPrograms}</Text>
-                <Text style={styles.progressLabel}>{t('learner.programs', { defaultValue: 'Programs' })}</Text>
+                <Text style={styles.progressLabel}>
+                  {t('learner.programs', { defaultValue: 'Programs' })}
+                </Text>
               </View>
               <View style={styles.progressItem}>
                 <Text style={styles.progressValue}>{progress.completedPrograms}</Text>
-                <Text style={styles.progressLabel}>{t('learner.completed', { defaultValue: 'Completed' })}</Text>
+                <Text style={styles.progressLabel}>
+                  {t('learner.completed', { defaultValue: 'Completed' })}
+                </Text>
               </View>
               <View style={styles.progressItem}>
                 <Text style={styles.progressValue}>{progress.inProgressPrograms}</Text>
-                <Text style={styles.progressLabel}>{t('learner.in_progress', { defaultValue: 'In Progress' })}</Text>
+                <Text style={styles.progressLabel}>
+                  {t('learner.in_progress', { defaultValue: 'In Progress' })}
+                </Text>
               </View>
               <View style={styles.progressItem}>
                 <Text style={styles.progressValue}>{progress.avgProgress}%</Text>
-                <Text style={styles.progressLabel}>{t('learner.avg_progress', { defaultValue: 'Avg Progress' })}</Text>
+                <Text style={styles.progressLabel}>
+                  {t('learner.avg_progress', { defaultValue: 'Avg Progress' })}
+                </Text>
               </View>
             </View>
           </Card>
         )}
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('learner.quick_actions', { defaultValue: 'Quick Actions' })}</Text>
+          <Text style={styles.sectionTitle}>
+            {t('learner.quick_actions', { defaultValue: 'Quick Actions' })}
+          </Text>
           <QuickActions
             actions={[
               {
                 icon: 'sparkles',
                 title: t('dash_ai.ask', { defaultValue: 'Ask Dash AI' }),
-                subtitle: t('dash_ai.ask_subtitle', { defaultValue: 'Chat with your AI assistant' }),
+                subtitle: t('dash_ai.ask_subtitle', {
+                  defaultValue: 'Chat with your AI assistant',
+                }),
                 onPress: () => router.push('/screens/dash-assistant'),
               },
               {
                 icon: 'bulb-outline',
                 title: t('dash_ai.explain', { defaultValue: 'Explain a Concept' }),
-                subtitle: t('dash_ai.explain_subtitle', { defaultValue: 'Get a simple explanation' }),
-                onPress: () => router.push({ pathname: '/screens/dash-assistant', params: { initialMessage: 'Explain a concept to me in simple terms.' } }),
+                subtitle: t('dash_ai.explain_subtitle', {
+                  defaultValue: 'Get a simple explanation',
+                }),
+                onPress: () =>
+                  router.push({
+                    pathname: '/screens/dash-assistant',
+                    params: { initialMessage: 'Explain a concept to me in simple terms.' },
+                  }),
               },
               {
                 icon: 'help-circle-outline',
@@ -264,7 +319,9 @@ export default function LearnerDashboard() {
               {
                 icon: 'calculator-outline',
                 title: t('learner.calculator', { defaultValue: 'Calculator' }),
-                subtitle: t('learner.calculator_subtitle', { defaultValue: 'Scientific calculator for maths' }),
+                subtitle: t('learner.calculator_subtitle', {
+                  defaultValue: 'Scientific calculator for maths',
+                }),
                 onPress: () => router.push('/(k12)/student/calculator'),
               },
               {
@@ -301,7 +358,9 @@ export default function LearnerDashboard() {
               {
                 icon: 'documents-outline',
                 title: t('learner.documents', { defaultValue: 'Documents' }),
-                subtitle: t('learner.documents_description', { defaultValue: 'CV, Certificates, Tax No. etc' }),
+                subtitle: t('learner.documents_description', {
+                  defaultValue: 'CV, Certificates, Tax No. etc',
+                }),
                 onPress: () => router.push('/screens/learner/documents'),
               },
               {
@@ -310,13 +369,15 @@ export default function LearnerDashboard() {
                 subtitle: t('learner.showcase_work', { defaultValue: 'Showcase your work' }),
                 onPress: () => router.push('/screens/learner/portfolio'),
               },
-
             ]}
           />
         </View>
         {/* Upcoming assignments (derived from submissions until full assignments feed is implemented) */}
         <View style={styles.section}>
-          <AssignmentWidget submissions={submissions} onPressSeeAll={() => router.push('/screens/learner/assignments')} />
+          <AssignmentWidget
+            submissions={submissions}
+            onPressSeeAll={() => router.push('/screens/learner/assignments')}
+          />
         </View>
         {/* Recent activity */}
         <View style={styles.section}>
@@ -326,16 +387,22 @@ export default function LearnerDashboard() {
         {enrollments.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t('learner.recent_programs', { defaultValue: 'Recent Programs' })}</Text>
+              <Text style={styles.sectionTitle}>
+                {t('learner.recent_programs', { defaultValue: 'Recent Programs' })}
+              </Text>
               <TouchableOpacity onPress={() => router.push('/screens/learner/programs')}>
-                <Text style={styles.seeAll}>{t('common.see_all', { defaultValue: 'See All' })}</Text>
+                <Text style={styles.seeAll}>
+                  {t('common.see_all', { defaultValue: 'See All' })}
+                </Text>
               </TouchableOpacity>
             </View>
             {enrollments.slice(0, 3).map((enrollment) => (
               <ProgramProgressCard
                 key={enrollment.id}
                 enrollment={enrollment}
-                onPress={() => router.push(`/screens/learner/program-detail?id=${enrollment.program_id}`)}
+                onPress={() =>
+                  router.push(`/screens/learner/program-detail?id=${enrollment.program_id}`)
+                }
               />
             ))}
           </View>
@@ -344,7 +411,9 @@ export default function LearnerDashboard() {
         {isLoading && enrollments.length === 0 && (
           <View style={styles.empty}>
             <EduDashSpinner size="large" color={theme.primary} />
-            <Text style={styles.loadingText}>{t('dashboard.loading', { defaultValue: 'Loading...' })}</Text>
+            <Text style={styles.loadingText}>
+              {t('dashboard.loading', { defaultValue: 'Loading...' })}
+            </Text>
           </View>
         )}
         {/* No Enrollments - Prompt to enroll (only show if user has no enrollments) */}
@@ -352,15 +421,21 @@ export default function LearnerDashboard() {
           <Card padding={32} margin={0} elevation="small" style={{ marginBottom: 24 }}>
             <View style={styles.empty}>
               <Ionicons name="school-outline" size={64} color={theme.primary} />
-              <Text style={styles.emptyTitle}>{t('learner.get_started', { defaultValue: 'Get Started' })}</Text>
+              <Text style={styles.emptyTitle}>
+                {t('learner.get_started', { defaultValue: 'Get Started' })}
+              </Text>
               <Text style={styles.emptyDescription}>
-                {t('learner.enroll_prompt', { defaultValue: 'Browse available programs and start your learning journey' })}
+                {t('learner.enroll_prompt', {
+                  defaultValue: 'Browse available programs and start your learning journey',
+                })}
               </Text>
               <TouchableOpacity
                 style={[styles.primaryButton, { backgroundColor: theme.primary }]}
                 onPress={() => router.push('/screens/learner/browse-programs')}
               >
-                <Text style={styles.primaryButtonText}>{t('learner.browse_programs', { defaultValue: 'Browse Programs' })}</Text>
+                <Text style={styles.primaryButtonText}>
+                  {t('learner.browse_programs', { defaultValue: 'Browse Programs' })}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.border }]}
@@ -378,15 +453,21 @@ export default function LearnerDashboard() {
           <Card padding={32} margin={0} elevation="small">
             <View style={styles.empty}>
               <Ionicons name="school-outline" size={64} color={theme.textSecondary} />
-              <Text style={styles.emptyTitle}>{t('learner.no_enrollments', { defaultValue: 'No Enrollments Yet' })}</Text>
+              <Text style={styles.emptyTitle}>
+                {t('learner.no_enrollments', { defaultValue: 'No Enrollments Yet' })}
+              </Text>
               <Text style={styles.emptyDescription}>
-                {t('learner.enroll_prompt', { defaultValue: 'Browse available programs and start your learning journey' })}
+                {t('learner.enroll_prompt', {
+                  defaultValue: 'Browse available programs and start your learning journey',
+                })}
               </Text>
               <TouchableOpacity
                 style={[styles.primaryButton, { backgroundColor: theme.primary }]}
                 onPress={() => router.push('/screens/learner/browse-programs')}
               >
-                <Text style={styles.primaryButtonText}>{t('learner.browse_programs', { defaultValue: 'Browse Programs' })}</Text>
+                <Text style={styles.primaryButtonText}>
+                  {t('learner.browse_programs', { defaultValue: 'Browse Programs' })}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.secondaryButton, { borderColor: theme.border }]}
@@ -401,11 +482,7 @@ export default function LearnerDashboard() {
         )}
         {/* Banner Ad - Free tier users only */}
         <SubscriptionAdGate>
-          <AdBannerWithUpgrade 
-            screen="learner_dashboard" 
-            showUpgradeCTA={true} 
-            margin={16}
-          />
+          <AdBannerWithUpgrade screen="learner_dashboard" showUpgradeCTA={true} margin={16} />
         </SubscriptionAdGate>
       </ScrollView>
 
@@ -414,326 +491,372 @@ export default function LearnerDashboard() {
         isOpen={isDrawerOpen}
         onClose={() => setIsDrawerOpen(false)}
         navItems={[
-          { id: 'home', label: t('learner.dashboard_title', { defaultValue: 'Dashboard' }), icon: 'home', route: '/screens/learner-dashboard' },
-          { id: 'programs', label: t('learner.my_programs', { defaultValue: 'My Programs' }), icon: 'school', route: '/screens/learner/programs' },
-          { id: 'browse', label: t('learner.browse_programs', { defaultValue: 'Browse Programs' }), icon: 'search', route: '/screens/learner/browse-programs' },
-          { id: 'assignments', label: t('learner.submissions', { defaultValue: 'Assignments' }), icon: 'document-text', route: '/screens/learner/submissions' },
-          { id: 'ai-help', label: t('learner.assignment_help', { defaultValue: 'Assignment Help' }), icon: 'help-circle', route: '/screens/ai-homework-helper' },
-          { id: 'calculator', label: t('learner.calculator', { defaultValue: 'Calculator' }), icon: 'calculator', route: '/(k12)/student/calculator' },
-          { id: 'portfolio', label: t('learner.portfolio', { defaultValue: 'Portfolio' }), icon: 'folder', route: '/screens/learner/portfolio' },
-          { id: 'account', label: t('common.account', { defaultValue: 'Account' }), icon: 'person-circle', route: '/screens/account' },
-          { id: 'settings', label: t('common.settings', { defaultValue: 'Settings' }), icon: 'settings', route: '/screens/settings' },
+          {
+            id: 'home',
+            label: t('learner.dashboard_title', { defaultValue: 'Dashboard' }),
+            icon: 'home',
+            route: '/screens/learner-dashboard',
+          },
+          {
+            id: 'programs',
+            label: t('learner.my_programs', { defaultValue: 'My Programs' }),
+            icon: 'school',
+            route: '/screens/learner/programs',
+          },
+          {
+            id: 'browse',
+            label: t('learner.browse_programs', { defaultValue: 'Browse Programs' }),
+            icon: 'search',
+            route: '/screens/learner/browse-programs',
+          },
+          {
+            id: 'assignments',
+            label: t('learner.submissions', { defaultValue: 'Assignments' }),
+            icon: 'document-text',
+            route: '/screens/learner/submissions',
+          },
+          {
+            id: 'ai-help',
+            label: t('learner.assignment_help', { defaultValue: 'Assignment Help' }),
+            icon: 'help-circle',
+            route: '/screens/ai-homework-helper',
+          },
+          {
+            id: 'calculator',
+            label: t('learner.calculator', { defaultValue: 'Calculator' }),
+            icon: 'calculator',
+            route: '/(k12)/student/calculator',
+          },
+          {
+            id: 'portfolio',
+            label: t('learner.portfolio', { defaultValue: 'Portfolio' }),
+            icon: 'folder',
+            route: '/screens/learner/portfolio',
+          },
+          {
+            id: 'account',
+            label: t('common.account', { defaultValue: 'Account' }),
+            icon: 'person-circle',
+            route: '/screens/account',
+          },
+          {
+            id: 'settings',
+            label: t('common.settings', { defaultValue: 'Settings' }),
+            icon: 'settings',
+            route: '/screens/settings',
+          },
         ]}
       />
     </SafeAreaView>
   );
 }
-const createStyles = (theme: ThemeColors, isDark: boolean) => StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: theme?.background || '#0b1220' 
-  },
-  content: { 
-    padding: 20,
-    paddingBottom: 40,
-  },
-  empty: { 
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    paddingVertical: 48,
-  },
-  loadingText: { 
-    color: theme?.textSecondary || '#9CA3AF', 
-    fontSize: 16,
-    marginTop: 12,
-  },
-  customHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    minHeight: 60,
-    zIndex: 1000,
-    elevation: 6, // Android shadow
-    shadowColor: '#000', // iOS shadow
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-  },
-  headerButton: {
-    padding: 10,
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 8,
-  },
-  headerLeftSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  orgLogoContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  orgLogo: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-  },
-  headerTitleContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 16,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  orgName: {
-    fontSize: 11,
-    fontWeight: '500',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  tierPlaceholder: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  tierPlaceholderText: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  welcomeSection: {
-    marginBottom: 20,
-    paddingTop: 8,
-  },
-  welcomeHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
-  },
-  welcomeTextContainer: {
-    flex: 1,
-    marginRight: 16,
-  },
-  greeting: {
-    color: theme?.text || '#fff',
-    fontSize: 32,
-    fontWeight: '800',
-    marginBottom: 8,
-    letterSpacing: -0.5,
-  },
-  subheading: {
-    color: theme?.textSecondary || '#9CA3AF',
-    fontSize: 15,
-    lineHeight: 22,
-    marginTop: 4,
-  },
-  progressCard: {
-    marginBottom: 20,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  progressTitle: {
-    color: theme?.text || '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  progressGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-  },
-  progressItem: {
-    flex: 1,
-    minWidth: '45%',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
-  },
-  progressValue: {
-    color: theme?.text || '#fff',
-    fontSize: 32,
-    fontWeight: '800',
-    marginBottom: 6,
-    letterSpacing: -0.5,
-  },
-  progressLabel: {
-    color: theme?.textSecondary || '#9CA3AF',
-    fontSize: 13,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  section: {
-    marginBottom: 28,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    color: theme?.text || '#fff',
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    marginBottom: 4,
-  },
-  seeAll: {
-    color: theme?.primary,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  quickActionCard: {
-    width: '47%',
-    alignItems: 'center',
-    minHeight: 120,
-  },
-  quickActionIcon: {
-    marginBottom: 12,
-    position: 'relative',
-  },
-  badge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  quickActionTitle: {
-    color: theme?.text || '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  quickActionSubtitle: {
-    color: theme?.textSecondary || '#9CA3AF',
-    fontSize: 12,
-    textAlign: 'center',
-  },
-  enrollmentCard: {
-    marginBottom: 12,
-  },
-  enrollmentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  enrollmentInfo: {
-    flex: 1,
-  },
-  enrollmentTitle: {
-    color: theme?.text || '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  enrollmentCode: {
-    color: theme?.textSecondary || '#9CA3AF',
-    fontSize: 13,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: theme?.border || '#374151',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  progressText: {
-    color: theme?.textSecondary || '#9CA3AF',
-    fontSize: 12,
-  },
-  emptyTitle: {
-    color: theme?.text || '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyDescription: {
-    color: theme?.textSecondary || '#9CA3AF',
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-    paddingHorizontal: 16,
-  },
-  primaryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    marginTop: 12,
-  },
-  secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+const createStyles = (theme: ThemeColors, isDark: boolean) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme?.background || '#0b1220',
+    },
+    content: {
+      padding: 20,
+      paddingBottom: 40,
+    },
+    empty: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 48,
+    },
+    loadingText: {
+      color: theme?.textSecondary || '#9CA3AF',
+      fontSize: 16,
+      marginTop: 12,
+    },
+    customHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+      minHeight: 60,
+      zIndex: 1000,
+      elevation: 6, // Android shadow
+      shadowColor: '#000', // iOS shadow
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.15,
+      shadowRadius: 6,
+    },
+    headerButton: {
+      padding: 10,
+      minWidth: 44,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 8,
+    },
+    headerLeftSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    orgLogoContainer: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: '#FFFFFF',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    orgLogo: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+    },
+    headerTitleContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginHorizontal: 16,
+    },
+    headerTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    orgName: {
+      fontSize: 11,
+      fontWeight: '500',
+      textAlign: 'center',
+      marginTop: 2,
+    },
+    tierPlaceholder: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+      borderWidth: 1,
+    },
+    tierPlaceholderText: {
+      fontSize: 11,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+    },
+    welcomeSection: {
+      marginBottom: 20,
+      paddingTop: 8,
+    },
+    welcomeHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 4,
+    },
+    welcomeTextContainer: {
+      flex: 1,
+      marginRight: 16,
+    },
+    greeting: {
+      color: theme?.text || '#fff',
+      fontSize: 32,
+      fontWeight: '800',
+      marginBottom: 8,
+      letterSpacing: -0.5,
+    },
+    subheading: {
+      color: theme?.textSecondary || '#9CA3AF',
+      fontSize: 15,
+      lineHeight: 22,
+      marginTop: 4,
+    },
+    progressCard: {
+      marginBottom: 20,
+      borderRadius: 16,
+      overflow: 'hidden',
+    },
+    progressHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    progressTitle: {
+      color: theme?.text || '#fff',
+      fontSize: 20,
+      fontWeight: '700',
+      letterSpacing: -0.3,
+    },
+    progressGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 16,
+    },
+    progressItem: {
+      flex: 1,
+      minWidth: '45%',
+      alignItems: 'center',
+      padding: 20,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+    },
+    progressValue: {
+      color: theme?.text || '#fff',
+      fontSize: 32,
+      fontWeight: '800',
+      marginBottom: 6,
+      letterSpacing: -0.5,
+    },
+    progressLabel: {
+      color: theme?.textSecondary || '#9CA3AF',
+      fontSize: 13,
+      fontWeight: '500',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    section: {
+      marginBottom: 28,
+    },
+    sectionHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    sectionTitle: {
+      color: theme?.text || '#fff',
+      fontSize: 22,
+      fontWeight: '700',
+      letterSpacing: -0.3,
+      marginBottom: 4,
+    },
+    seeAll: {
+      color: theme?.primary,
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    quickActionsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+    },
+    quickActionCard: {
+      width: '47%',
+      alignItems: 'center',
+      minHeight: 120,
+    },
+    quickActionIcon: {
+      marginBottom: 12,
+      position: 'relative',
+    },
+    badge: {
+      position: 'absolute',
+      top: -8,
+      right: -8,
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 6,
+    },
+    badgeText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    quickActionTitle: {
+      color: theme?.text || '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 4,
+      textAlign: 'center',
+    },
+    quickActionSubtitle: {
+      color: theme?.textSecondary || '#9CA3AF',
+      fontSize: 12,
+      textAlign: 'center',
+    },
+    enrollmentCard: {
+      marginBottom: 12,
+    },
+    enrollmentHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 12,
+    },
+    enrollmentInfo: {
+      flex: 1,
+    },
+    enrollmentTitle: {
+      color: theme?.text || '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: 4,
+    },
+    enrollmentCode: {
+      color: theme?.textSecondary || '#9CA3AF',
+      fontSize: 13,
+    },
+    statusBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    statusText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: '600',
+      textTransform: 'capitalize',
+    },
+    progressBar: {
+      height: 8,
+      backgroundColor: theme?.border || '#374151',
+      borderRadius: 4,
+      overflow: 'hidden',
+      marginBottom: 8,
+    },
+    progressBarFill: {
+      height: '100%',
+      borderRadius: 4,
+    },
+    progressText: {
+      color: theme?.textSecondary || '#9CA3AF',
+      fontSize: 12,
+    },
+    emptyTitle: {
+      color: theme?.text || '#fff',
+      fontSize: 20,
+      fontWeight: '700',
+      marginTop: 16,
+      marginBottom: 8,
+    },
+    emptyDescription: {
+      color: theme?.textSecondary || '#9CA3AF',
+      fontSize: 14,
+      textAlign: 'center',
+      marginBottom: 24,
+      paddingHorizontal: 16,
+    },
+    primaryButton: {
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    primaryButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    secondaryButton: {
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      marginTop: 12,
+    },
+    secondaryButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+  });

@@ -57,10 +57,14 @@ export default function SuperAdminSystemMonitoringScreen() {
     storage_limit_gb: 0,
     bandwidth_used_gb: 0,
   });
-  
+
   const fetchSystemHealth = useCallback(async () => {
     if (!isPlatformStaff(profile?.role)) {
-      showAlert({ title: 'Access Denied', message: 'Super admin privileges required', buttons: [{ text: 'OK' }] });
+      showAlert({
+        title: 'Access Denied',
+        message: 'Super admin privileges required',
+        buttons: [{ text: 'OK' }],
+      });
       return;
     }
 
@@ -68,8 +72,9 @@ export default function SuperAdminSystemMonitoringScreen() {
       setLoading(true);
 
       // Fetch real system health metrics from database
-      const { data: healthData, error: healthError } = await assertSupabase()
-        .rpc('get_system_health_metrics');
+      const { data: healthData, error: healthError } = await assertSupabase().rpc(
+        'get_system_health_metrics',
+      );
 
       if (healthError) {
         logger.error('Health metrics error:', healthError);
@@ -77,24 +82,27 @@ export default function SuperAdminSystemMonitoringScreen() {
       }
 
       // Fetch real performance metrics from database
-      const { data: performanceData, error: performanceError } = await assertSupabase()
-        .rpc('get_system_performance_metrics');
+      const { data: performanceData, error: performanceError } = await assertSupabase().rpc(
+        'get_system_performance_metrics',
+      );
 
       if (performanceError) {
         logger.error('Performance metrics error:', performanceError);
       }
 
       // Fetch real migration status from database
-      const { data: migrationData, error: migrationError } = await assertSupabase()
-        .rpc('get_migration_status');
+      const { data: migrationData, error: migrationError } =
+        await assertSupabase().rpc('get_migration_status');
 
       if (migrationError) {
         logger.error('Migration status error:', migrationError);
       }
 
       // Fetch real error logs from database
-      const { data: logsData, error: logsError } = await assertSupabase()
-        .rpc('get_recent_error_logs', { hours_back: 24 });
+      const { data: logsData, error: logsError } = await assertSupabase().rpc(
+        'get_recent_error_logs',
+        { hours_back: 24 },
+      );
 
       if (logsError) {
         logger.error('Error logs fetch error:', logsError);
@@ -109,23 +117,33 @@ export default function SuperAdminSystemMonitoringScreen() {
         latest_migration: migrationData?.data?.latest_migration || 'Unknown',
         failed_migrations: migrationData?.data?.failed_migrations || [],
         rls_enabled: healthData?.data?.rls_enabled || true,
-        system_load: Math.min(95, (healthData?.data?.database_connections / healthData?.data?.database_max_connections) * 100) || 15,
-        memory_usage: performanceData?.data?.cache_hit_ratio ? (100 - performanceData.data.cache_hit_ratio) : 25,
+        system_load:
+          Math.min(
+            95,
+            (healthData?.data?.database_connections / healthData?.data?.database_max_connections) *
+              100,
+          ) || 15,
+        memory_usage: performanceData?.data?.cache_hit_ratio
+          ? 100 - performanceData.data.cache_hit_ratio
+          : 25,
         disk_usage: Math.min(95, (healthData?.data?.storage_used_gb || 1) / 10) || 20,
-        uptime: healthData?.data?.uptime_seconds ? formatUptime(healthData.data.uptime_seconds) : 'Unknown',
+        uptime: healthData?.data?.uptime_seconds
+          ? formatUptime(healthData.data.uptime_seconds)
+          : 'Unknown',
         last_check: healthData?.data?.last_check || new Date().toISOString(),
       };
 
       // Process real error logs
-      const realErrorLogs: ErrorLog[] = logsData?.data?.logs?.map((log: any) => ({
-        id: log.id,
-        timestamp: log.timestamp,
-        level: log.level,
-        message: log.message,
-        source: log.source,
-        user_id: log.user_id,
-        details: log.details
-      })) || [];
+      const realErrorLogs: ErrorLog[] =
+        logsData?.data?.logs?.map((log: any) => ({
+          id: log.id,
+          timestamp: log.timestamp,
+          level: log.level,
+          message: log.message,
+          source: log.source,
+          user_id: log.user_id,
+          details: log.details,
+        })) || [];
 
       // Process real system metrics
       const realSystemMetrics: SystemMetrics = {
@@ -136,16 +154,21 @@ export default function SuperAdminSystemMonitoringScreen() {
         peak_concurrent_users: healthData?.data?.total_users || 0,
         storage_used_gb: healthData?.data?.storage_used_gb || 0,
         storage_limit_gb: 500, // This would need to be configurable
-        bandwidth_used_gb: performanceData?.data?.database_size_mb ? (performanceData.data.database_size_mb / 1024) : 0,
+        bandwidth_used_gb: performanceData?.data?.database_size_mb
+          ? performanceData.data.database_size_mb / 1024
+          : 0,
       };
 
       setSystemHealth(realSystemHealth);
       setErrorLogs(realErrorLogs);
       setSystemMetrics(realSystemMetrics);
-
     } catch (error) {
       logger.error('Failed to fetch system health:', error);
-      showAlert({ title: 'Error', message: 'Failed to load system monitoring data', buttons: [{ text: 'OK' }] });
+      showAlert({
+        title: 'Error',
+        message: 'Failed to load system monitoring data',
+        buttons: [{ text: 'OK' }],
+      });
     } finally {
       setLoading(false);
     }
@@ -202,12 +225,12 @@ export default function SuperAdminSystemMonitoringScreen() {
     if (typeof uptimeInput === 'string') {
       return uptimeInput; // Already formatted
     }
-    
+
     const seconds = Math.floor(uptimeInput);
     const days = Math.floor(seconds / (24 * 3600));
     const hours = Math.floor((seconds % (24 * 3600)) / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    
+
     if (days > 0) {
       return `${days} days ${hours} hours`;
     } else if (hours > 0) {
@@ -233,12 +256,14 @@ export default function SuperAdminSystemMonitoringScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ title: 'System Monitoring', headerShown: false }} />
       <ThemedStatusBar />
-      
+
       {/* Header */}
       <SafeAreaView style={styles.header}>
         <View style={styles.headerContent}>
-          <TouchableOpacity 
-            onPress={() => router.canGoBack() ? router.back() : router.push('/screens/super-admin-dashboard')} 
+          <TouchableOpacity
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.push('/screens/super-admin-dashboard')
+            }
             style={styles.backButton}
           >
             <Ionicons name="arrow-back" size={24} color="#00f5ff" />
@@ -248,7 +273,7 @@ export default function SuperAdminSystemMonitoringScreen() {
             <Ionicons name="refresh" size={24} color="#00f5ff" />
           </TouchableOpacity>
         </View>
-        
+
         {/* Last Check */}
         <View style={styles.lastCheckContainer}>
           <Text style={styles.lastCheckText}>
@@ -259,7 +284,9 @@ export default function SuperAdminSystemMonitoringScreen() {
 
       <ScrollView
         style={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
+        }
       >
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -271,27 +298,56 @@ export default function SuperAdminSystemMonitoringScreen() {
             {/* System Health Overview */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>System Health</Text>
-              
+
               <View style={styles.healthGrid}>
                 <View style={styles.healthCard}>
-                  <View style={[styles.healthStatus, { backgroundColor: getStatusColor(systemHealth.database_status) + '20' }]}>
-                    <Ionicons name="server" size={24} color={getStatusColor(systemHealth.database_status)} />
+                  <View
+                    style={[
+                      styles.healthStatus,
+                      { backgroundColor: getStatusColor(systemHealth.database_status) + '20' },
+                    ]}
+                  >
+                    <Ionicons
+                      name="server"
+                      size={24}
+                      color={getStatusColor(systemHealth.database_status)}
+                    />
                   </View>
                   <Text style={styles.healthLabel}>Database</Text>
-                  <Text style={[styles.healthValue, { color: getStatusColor(systemHealth.database_status) }]}>
+                  <Text
+                    style={[
+                      styles.healthValue,
+                      { color: getStatusColor(systemHealth.database_status) },
+                    ]}
+                  >
                     {systemHealth.database_status.toUpperCase()}
                   </Text>
                   <Text style={styles.healthDetail}>
-                    {systemHealth.database_connections}/{systemHealth.database_max_connections} connections
+                    {systemHealth.database_connections}/{systemHealth.database_max_connections}{' '}
+                    connections
                   </Text>
                 </View>
 
                 <View style={styles.healthCard}>
-                  <View style={[styles.healthStatus, { backgroundColor: getStatusColor(systemHealth.migration_status) + '20' }]}>
-                    <Ionicons name="git-branch" size={24} color={getStatusColor(systemHealth.migration_status)} />
+                  <View
+                    style={[
+                      styles.healthStatus,
+                      { backgroundColor: getStatusColor(systemHealth.migration_status) + '20' },
+                    ]}
+                  >
+                    <Ionicons
+                      name="git-branch"
+                      size={24}
+                      color={getStatusColor(systemHealth.migration_status)}
+                    />
                   </View>
                   <Text style={styles.healthLabel}>Migrations</Text>
-                  <Text style={[styles.healthValue, { color: getStatusColor(systemHealth.migration_status) }]}>
+                  <Text
+                    style={[
+                      styles.healthValue,
+                      { color: getStatusColor(systemHealth.migration_status) },
+                    ]}
+                  >
                     {systemHealth.migration_status.replace('_', ' ').toUpperCase()}
                   </Text>
                   {systemHealth.latest_migration && (
@@ -302,16 +358,30 @@ export default function SuperAdminSystemMonitoringScreen() {
                 </View>
 
                 <View style={styles.healthCard}>
-                  <View style={[styles.healthStatus, { backgroundColor: (systemHealth.rls_enabled ? '#10b981' : '#ef4444') + '20' }]}>
-                    <Ionicons name="shield-checkmark" size={24} color={systemHealth.rls_enabled ? '#10b981' : '#ef4444'} />
+                  <View
+                    style={[
+                      styles.healthStatus,
+                      {
+                        backgroundColor: (systemHealth.rls_enabled ? '#10b981' : '#ef4444') + '20',
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="shield-checkmark"
+                      size={24}
+                      color={systemHealth.rls_enabled ? '#10b981' : '#ef4444'}
+                    />
                   </View>
                   <Text style={styles.healthLabel}>RLS</Text>
-                  <Text style={[styles.healthValue, { color: systemHealth.rls_enabled ? '#10b981' : '#ef4444' }]}>
+                  <Text
+                    style={[
+                      styles.healthValue,
+                      { color: systemHealth.rls_enabled ? '#10b981' : '#ef4444' },
+                    ]}
+                  >
                     {systemHealth.rls_enabled ? 'ENABLED' : 'DISABLED'}
                   </Text>
-                  <Text style={styles.healthDetail}>
-                    Row Level Security
-                  </Text>
+                  <Text style={styles.healthDetail}>Row Level Security</Text>
                 </View>
 
                 <View style={styles.healthCard}>
@@ -319,12 +389,8 @@ export default function SuperAdminSystemMonitoringScreen() {
                     <Ionicons name="time" size={24} color="#00f5ff" />
                   </View>
                   <Text style={styles.healthLabel}>Uptime</Text>
-                  <Text style={styles.healthValue}>
-                    {formatUptime(systemHealth.uptime)}
-                  </Text>
-                  <Text style={styles.healthDetail}>
-                    System uptime
-                  </Text>
+                  <Text style={styles.healthValue}>{formatUptime(systemHealth.uptime)}</Text>
+                  <Text style={styles.healthDetail}>System uptime</Text>
                 </View>
               </View>
             </View>
@@ -332,10 +398,12 @@ export default function SuperAdminSystemMonitoringScreen() {
             {/* System Metrics */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Performance Metrics</Text>
-              
+
               <View style={styles.metricsGrid}>
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{systemMetrics.total_requests_24h.toLocaleString()}</Text>
+                  <Text style={styles.metricValue}>
+                    {systemMetrics.total_requests_24h.toLocaleString()}
+                  </Text>
                   <Text style={styles.metricLabel}>Total Requests (24h)</Text>
                   <Text style={styles.metricSubtext}>
                     {systemMetrics.failed_requests_24h} failed
@@ -345,9 +413,7 @@ export default function SuperAdminSystemMonitoringScreen() {
                 <View style={styles.metricCard}>
                   <Text style={styles.metricValue}>{systemMetrics.average_response_time}ms</Text>
                   <Text style={styles.metricLabel}>Avg Response Time</Text>
-                  <Text style={styles.metricSubtext}>
-                    API performance
-                  </Text>
+                  <Text style={styles.metricSubtext}>API performance</Text>
                 </View>
 
                 <View style={styles.metricCard}>
@@ -359,7 +425,9 @@ export default function SuperAdminSystemMonitoringScreen() {
                 </View>
 
                 <View style={styles.metricCard}>
-                  <Text style={styles.metricValue}>{formatBytes(systemMetrics.storage_used_gb)}</Text>
+                  <Text style={styles.metricValue}>
+                    {formatBytes(systemMetrics.storage_used_gb)}
+                  </Text>
                   <Text style={styles.metricLabel}>Storage Used</Text>
                   <Text style={styles.metricSubtext}>
                     of {formatBytes(systemMetrics.storage_limit_gb)}
@@ -371,11 +439,16 @@ export default function SuperAdminSystemMonitoringScreen() {
             {/* Resource Usage */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Resource Usage</Text>
-              
+
               <View style={styles.resourceItem}>
                 <Text style={styles.resourceLabel}>System Load</Text>
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { width: percentWidth(systemHealth.system_load), backgroundColor: '#00f5ff' }]} />
+                  <View
+                    style={[
+                      styles.progressFill,
+                      { width: percentWidth(systemHealth.system_load), backgroundColor: '#00f5ff' },
+                    ]}
+                  />
                 </View>
                 <Text style={styles.resourceValue}>{systemHealth.system_load.toFixed(1)}%</Text>
               </View>
@@ -383,10 +456,20 @@ export default function SuperAdminSystemMonitoringScreen() {
               <View style={styles.resourceItem}>
                 <Text style={styles.resourceLabel}>Memory Usage</Text>
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { 
-                    width: percentWidth(systemHealth.memory_usage), 
-                    backgroundColor: systemHealth.memory_usage > 80 ? '#ef4444' : systemHealth.memory_usage > 60 ? '#f59e0b' : '#10b981' 
-                  }]} />
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: percentWidth(systemHealth.memory_usage),
+                        backgroundColor:
+                          systemHealth.memory_usage > 80
+                            ? '#ef4444'
+                            : systemHealth.memory_usage > 60
+                              ? '#f59e0b'
+                              : '#10b981',
+                      },
+                    ]}
+                  />
                 </View>
                 <Text style={styles.resourceValue}>{systemHealth.memory_usage.toFixed(1)}%</Text>
               </View>
@@ -394,10 +477,20 @@ export default function SuperAdminSystemMonitoringScreen() {
               <View style={styles.resourceItem}>
                 <Text style={styles.resourceLabel}>Disk Usage</Text>
                 <View style={styles.progressBar}>
-                  <View style={[styles.progressFill, { 
-                    width: percentWidth(systemHealth.disk_usage), 
-                    backgroundColor: systemHealth.disk_usage > 80 ? '#ef4444' : systemHealth.disk_usage > 60 ? '#f59e0b' : '#10b981' 
-                  }]} />
+                  <View
+                    style={[
+                      styles.progressFill,
+                      {
+                        width: percentWidth(systemHealth.disk_usage),
+                        backgroundColor:
+                          systemHealth.disk_usage > 80
+                            ? '#ef4444'
+                            : systemHealth.disk_usage > 60
+                              ? '#f59e0b'
+                              : '#10b981',
+                      },
+                    ]}
+                  />
                 </View>
                 <Text style={styles.resourceValue}>{systemHealth.disk_usage.toFixed(1)}%</Text>
               </View>
@@ -415,14 +508,17 @@ export default function SuperAdminSystemMonitoringScreen() {
               {errorLogs.map((log) => (
                 <View key={log.id} style={styles.logItem}>
                   <View style={styles.logHeader}>
-                    <View style={[styles.logLevel, { backgroundColor: getLevelColor(log.level) + '20' }]}>
+                    <View
+                      style={[
+                        styles.logLevel,
+                        { backgroundColor: getLevelColor(log.level) + '20' },
+                      ]}
+                    >
                       <Text style={[styles.logLevelText, { color: getLevelColor(log.level) }]}>
                         {log.level.toUpperCase()}
                       </Text>
                     </View>
-                    <Text style={styles.logTimestamp}>
-                      {formatTimestamp(log.timestamp)}
-                    </Text>
+                    <Text style={styles.logTimestamp}>{formatTimestamp(log.timestamp)}</Text>
                   </View>
                   <Text style={styles.logMessage}>{log.message}</Text>
                   <Text style={styles.logSource}>Source: {log.source}</Text>

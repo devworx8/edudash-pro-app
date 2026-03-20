@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -75,9 +83,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
   const isAndroid = Platform.OS === 'android';
   const freeTierAdsEnabled = process.env.EXPO_PUBLIC_ENABLE_FREE_TIER_ADS !== 'false';
   const webAdsEnabled = process.env.EXPO_PUBLIC_ENABLE_WEB_ADS !== 'false';
-  const adsEnabledEnv =
-    process.env.EXPO_PUBLIC_ENABLE_ADS !== '0' &&
-    freeTierAdsEnabled;
+  const adsEnabledEnv = process.env.EXPO_PUBLIC_ENABLE_ADS !== '0' && freeTierAdsEnabled;
   const roleEligible = isAdsEligibleUser(profile);
   const platformEligible = isAndroid || (isWeb && webAdsEnabled);
 
@@ -108,11 +114,14 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
     setWebInterstitial({ visible: false, tag: '' });
   }, []);
 
-  const showWebInterstitial = useCallback(async (tag: string): Promise<boolean> => {
-    if (!isWeb) return false;
-    setWebInterstitial({ visible: true, tag });
-    return true;
-  }, [isWeb]);
+  const showWebInterstitial = useCallback(
+    async (tag: string): Promise<boolean> => {
+      if (!isWeb) return false;
+      setWebInterstitial({ visible: true, tag });
+      return true;
+    },
+    [isWeb],
+  );
 
   // Reset app-open attempt state when the user changes or ads become disabled.
   useEffect(() => {
@@ -136,7 +145,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
             platformEligible,
           });
           const initialized = await initializeAdMob();
-          
+
           track('ads.context_initialized', {
             success: initialized,
             tier,
@@ -152,7 +161,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
               shouldEnableAds,
               subscriptionReady,
               tier,
-              platform: Platform.OS
+              platform: Platform.OS,
             });
           }
 
@@ -209,7 +218,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       if (lastInterstitialStr) {
         const lastInterstitialTime = parseInt(lastInterstitialStr, 10);
         const timeSinceLastInterstitial = Date.now() - lastInterstitialTime;
-        
+
         if (timeSinceLastInterstitial < RATE_LIMITS.interstitialMinInterval) {
           return { allowed: false, reason: 'rate_limit' };
         }
@@ -219,7 +228,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       const today = getTodayString();
       const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.interstitialCount(today));
       const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
-      
+
       if (dailyCount >= RATE_LIMITS.interstitialMaxPerDay) {
         return { allowed: false, reason: 'daily_limit' };
       }
@@ -255,7 +264,9 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       }
 
       const today = getTodayString();
-      const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.appOpenInterstitialCount(today));
+      const dailyCountStr = await AsyncStorage.getItem(
+        STORAGE_KEYS.appOpenInterstitialCount(today),
+      );
       const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
       if (dailyCount >= RATE_LIMITS.appOpenMaxPerDay) {
         return { allowed: false, reason: 'daily_limit' };
@@ -278,7 +289,7 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       const today = getTodayString();
       const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.rewardedOffersCount(today));
       const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
-      
+
       if (dailyCount >= RATE_LIMITS.rewardedMaxPerDay) {
         return { allowed: false, reason: 'daily_limit' };
       }
@@ -290,149 +301,165 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const maybeShowInterstitial = useCallback(async (tag: string): Promise<boolean> => {
-    try {
-      const { allowed, reason } = await canShowInterstitial();
-      
-      // Track attempt regardless of outcome
-      track('ads.interstitial_attempt', {
-        tag,
-        allowed,
-        reason_blocked: reason,
-        tier,
-        platform: Platform.OS,
-      });
+  const maybeShowInterstitial = useCallback(
+    async (tag: string): Promise<boolean> => {
+      try {
+        const { allowed, reason } = await canShowInterstitial();
 
-      if (!allowed) {
-        if (!isWeb || __DEV__ || reason !== 'ads_disabled') {
-          debug(`[AdsProvider] Interstitial blocked: ${reason}`, { tag });
-        }
-        return false;
-      }
-
-      // Attempt to show interstitial
-      const shown = isWeb
-        ? await showWebInterstitial(tag)
-        : await showInterstitialAd(tag);
-      
-      if (shown) {
-        // Update rate limiting storage
-        const now = Date.now();
-        const today = getTodayString();
-        
-        await AsyncStorage.setItem(STORAGE_KEYS.lastInterstitialAt, now.toString());
-        
-        const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.interstitialCount(today));
-        const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
-        await AsyncStorage.setItem(STORAGE_KEYS.interstitialCount(today), (dailyCount + 1).toString());
-
-        track('ads.interstitial_shown', {
+        // Track attempt regardless of outcome
+        track('ads.interstitial_attempt', {
           tag,
+          allowed,
+          reason_blocked: reason,
           tier,
           platform: Platform.OS,
         });
 
-        debug(`[AdsProvider] Interstitial shown successfully`, { tag });
-      } else {
-        debug(`[AdsProvider] Interstitial failed to show`, { tag });
-      }
+        if (!allowed) {
+          if (!isWeb || __DEV__ || reason !== 'ads_disabled') {
+            debug(`[AdsProvider] Interstitial blocked: ${reason}`, { tag });
+          }
+          return false;
+        }
 
-      return shown;
-    } catch (error) {
-      warn('[AdsProvider] Error showing interstitial:', error);
-      track('ads.interstitial_error', {
-        tag,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        tier,
-        platform: Platform.OS,
-      });
-      return false;
-    }
-  }, [shouldEnableAds, tier, isWeb, showWebInterstitial]);
+        // Attempt to show interstitial
+        const shown = isWeb ? await showWebInterstitial(tag) : await showInterstitialAd(tag);
+
+        if (shown) {
+          // Update rate limiting storage
+          const now = Date.now();
+          const today = getTodayString();
+
+          await AsyncStorage.setItem(STORAGE_KEYS.lastInterstitialAt, now.toString());
+
+          const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.interstitialCount(today));
+          const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
+          await AsyncStorage.setItem(
+            STORAGE_KEYS.interstitialCount(today),
+            (dailyCount + 1).toString(),
+          );
+
+          track('ads.interstitial_shown', {
+            tag,
+            tier,
+            platform: Platform.OS,
+          });
+
+          debug(`[AdsProvider] Interstitial shown successfully`, { tag });
+        } else {
+          debug(`[AdsProvider] Interstitial failed to show`, { tag });
+        }
+
+        return shown;
+      } catch (error) {
+        warn('[AdsProvider] Error showing interstitial:', error);
+        track('ads.interstitial_error', {
+          tag,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          tier,
+          platform: Platform.OS,
+        });
+        return false;
+      }
+    },
+    [shouldEnableAds, tier, isWeb, showWebInterstitial],
+  );
 
   // Tested on real device 2026-03-19 — paid tier — lazy init + ad load verified ✅
-  const offerRewarded = useCallback(async (tag: string): Promise<{ shown: boolean; rewarded: boolean }> => {
-    try {
-      const { allowed, reason } = await canShowRewarded();
-      
-      if (!allowed) {
-        if (!isWeb || __DEV__ || reason !== 'ads_disabled') {
-          debug(`[AdsProvider] Rewarded ad blocked: ${reason}`, { tag });
+  const offerRewarded = useCallback(
+    async (tag: string): Promise<{ shown: boolean; rewarded: boolean }> => {
+      try {
+        const { allowed, reason } = await canShowRewarded();
+
+        if (!allowed) {
+          if (!isWeb || __DEV__ || reason !== 'ads_disabled') {
+            debug(`[AdsProvider] Rewarded ad blocked: ${reason}`, { tag });
+          }
+          track('ads.rewarded_blocked', {
+            tag,
+            reason_blocked: reason,
+            tier,
+            platform: Platform.OS,
+          });
+          return { shown: false, rewarded: false };
         }
-        track('ads.rewarded_blocked', {
+
+        // Lazy init: paid tier users skip the initial AdMob init; initialize on-demand here.
+        await initializeAdMob();
+
+        const rewardedPlacement =
+          tag.startsWith('ai_tool_') || tag.startsWith('premium_preview_')
+            ? PLACEMENT_KEYS.REWARDED_AI_PREVIEW
+            : PLACEMENT_KEYS.REWARDED_PARENT_PERKS;
+
+        // Attempt to show rewarded ad
+        const result = await showRewardedAd(rewardedPlacement);
+
+        if (result.shown) {
+          // Update daily count
+          const today = getTodayString();
+          const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.rewardedOffersCount(today));
+          const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
+          await AsyncStorage.setItem(
+            STORAGE_KEYS.rewardedOffersCount(today),
+            (dailyCount + 1).toString(),
+          );
+
+          track('ads.rewarded_offer_shown', {
+            tag,
+            tier,
+            platform: Platform.OS,
+          });
+
+          if (result.rewarded) {
+            track('ads.rewarded_completed', {
+              tag,
+              reward: result.reward,
+              tier,
+              platform: Platform.OS,
+            });
+            debug(`[AdsProvider] Rewarded ad completed`, { tag, reward: result.reward });
+          }
+        }
+
+        return result;
+      } catch (error) {
+        warn('[AdsProvider] Error with rewarded ad:', error);
+        track('ads.rewarded_error', {
           tag,
-          reason_blocked: reason,
+          error: error instanceof Error ? error.message : 'Unknown error',
           tier,
           platform: Platform.OS,
         });
         return { shown: false, rewarded: false };
       }
+    },
+    [canOfferRewardedQuotaAd, tier, isWeb],
+  );
 
-      // Lazy init: paid tier users skip the initial AdMob init; initialize on-demand here.
-      await initializeAdMob();
+  const unlockFeature = useCallback(
+    (featureKey: string, durationMs = REWARDED_UNLOCK_DURATION_MS) => {
+      unlockedFeaturesRef.current.set(featureKey, Date.now() + durationMs);
+      setUnlockVersion((v) => v + 1);
+      track('ads.feature_unlocked', { featureKey, durationMs, tier, platform: Platform.OS });
+      debug('[AdsProvider] Feature unlocked via rewarded ad', { featureKey, durationMs });
+    },
+    [tier],
+  );
 
-      const rewardedPlacement =
-        tag.startsWith('ai_tool_') || tag.startsWith('premium_preview_')
-          ? PLACEMENT_KEYS.REWARDED_AI_PREVIEW
-          : PLACEMENT_KEYS.REWARDED_PARENT_PERKS;
-
-      // Attempt to show rewarded ad
-      const result = await showRewardedAd(rewardedPlacement);
-      
-      if (result.shown) {
-        // Update daily count
-        const today = getTodayString();
-        const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.rewardedOffersCount(today));
-        const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
-        await AsyncStorage.setItem(STORAGE_KEYS.rewardedOffersCount(today), (dailyCount + 1).toString());
-
-        track('ads.rewarded_offer_shown', {
-          tag,
-          tier,
-          platform: Platform.OS,
-        });
-
-        if (result.rewarded) {
-          track('ads.rewarded_completed', {
-            tag,
-            reward: result.reward,
-            tier,
-            platform: Platform.OS,
-          });
-          debug(`[AdsProvider] Rewarded ad completed`, { tag, reward: result.reward });
-        }
+  const isFeatureUnlocked = useCallback(
+    (featureKey: string): boolean => {
+      const expiresAt = unlockedFeaturesRef.current.get(featureKey);
+      if (!expiresAt) return false;
+      if (Date.now() > expiresAt) {
+        unlockedFeaturesRef.current.delete(featureKey);
+        return false;
       }
-
-      return result;
-    } catch (error) {
-      warn('[AdsProvider] Error with rewarded ad:', error);
-      track('ads.rewarded_error', {
-        tag,
-        error: error instanceof Error ? error.message : 'Unknown error',
-        tier,
-        platform: Platform.OS,
-      });
-      return { shown: false, rewarded: false };
-    }
-  }, [canOfferRewardedQuotaAd, tier, isWeb]);
-
-  const unlockFeature = useCallback((featureKey: string, durationMs = REWARDED_UNLOCK_DURATION_MS) => {
-    unlockedFeaturesRef.current.set(featureKey, Date.now() + durationMs);
-    setUnlockVersion((v) => v + 1);
-    track('ads.feature_unlocked', { featureKey, durationMs, tier, platform: Platform.OS });
-    debug('[AdsProvider] Feature unlocked via rewarded ad', { featureKey, durationMs });
-  }, [tier]);
-
-  const isFeatureUnlocked = useCallback((featureKey: string): boolean => {
-    const expiresAt = unlockedFeaturesRef.current.get(featureKey);
-    if (!expiresAt) return false;
-    if (Date.now() > expiresAt) {
-      unlockedFeaturesRef.current.delete(featureKey);
-      return false;
-    }
-    return true;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unlockVersion]);
+      return true;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    },
+    [unlockVersion],
+  );
 
   // Show an interstitial shortly after app open for eligible free-tier users.
   useEffect(() => {
@@ -468,9 +495,14 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       const now = Date.now();
       const today = getTodayString();
       await AsyncStorage.setItem(STORAGE_KEYS.lastAppOpenInterstitialAt, now.toString());
-      const dailyCountStr = await AsyncStorage.getItem(STORAGE_KEYS.appOpenInterstitialCount(today));
+      const dailyCountStr = await AsyncStorage.getItem(
+        STORAGE_KEYS.appOpenInterstitialCount(today),
+      );
       const dailyCount = dailyCountStr ? parseInt(dailyCountStr, 10) : 0;
-      await AsyncStorage.setItem(STORAGE_KEYS.appOpenInterstitialCount(today), (dailyCount + 1).toString());
+      await AsyncStorage.setItem(
+        STORAGE_KEYS.appOpenInterstitialCount(today),
+        (dailyCount + 1).toString(),
+      );
 
       track('ads.app_open_interstitial_shown', {
         tier,
@@ -492,7 +524,15 @@ export function AdsProvider({ children }: { children: React.ReactNode }) {
       unlockFeature,
       isFeatureUnlocked,
     }),
-    [ready, canShowBanner, canOfferRewardedQuotaAd, maybeShowInterstitial, offerRewarded, unlockFeature, isFeatureUnlocked]
+    [
+      ready,
+      canShowBanner,
+      canOfferRewardedQuotaAd,
+      maybeShowInterstitial,
+      offerRewarded,
+      unlockFeature,
+      isFeatureUnlocked,
+    ],
   );
 
   return (

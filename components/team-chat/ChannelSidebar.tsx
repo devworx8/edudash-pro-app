@@ -6,8 +6,14 @@ import { CHANNEL_TYPE_CONFIG } from '@/hooks/super-admin-team-chat/types';
 import type { TeamChannel, TeamChannelMember } from '@/hooks/super-admin-team-chat/types';
 
 const AVATAR_COLORS = [
-  '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b',
-  '#ec4899', '#ef4444', '#6366f1', '#14b8a6',
+  '#8b5cf6',
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#ec4899',
+  '#ef4444',
+  '#6366f1',
+  '#14b8a6',
 ];
 
 function hashColor(name: string): string {
@@ -17,7 +23,15 @@ function hashColor(name: string): string {
 }
 
 function initials(name: string): string {
-  return name.split(' ').filter(Boolean).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?';
+  return (
+    name
+      .split(' ')
+      .filter(Boolean)
+      .map((w) => w[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || '?'
+  );
 }
 
 function formatPreviewTime(dateStr: string): string {
@@ -43,11 +57,17 @@ interface Props {
 }
 
 export default function ChannelSidebar({
-  channels, activeChannelId, onSelect, members, loading, isWide, onBack,
+  channels,
+  activeChannelId,
+  onSelect,
+  members,
+  loading,
+  isWide,
+  onBack,
 }: Props) {
   const uniqueMembers = useMemo(() => {
     const seen = new Set<string>();
-    return members.filter(m => {
+    return members.filter((m) => {
       if (seen.has(m.user_id)) return false;
       seen.add(m.user_id);
       return true;
@@ -88,7 +108,7 @@ export default function ChannelSidebar({
             <Text style={[s.emptyText, { marginTop: 8 }]}>No channels yet</Text>
           </View>
         ) : (
-          channels.map(ch => (
+          channels.map((ch) => (
             <ChannelRow
               key={ch.id}
               ch={ch}
@@ -103,7 +123,7 @@ export default function ChannelSidebar({
           <>
             <View style={s.divider} />
             <Text style={s.sectionLabel}>Team — {uniqueMembers.length}</Text>
-            {uniqueMembers.slice(0, 10).map(m => (
+            {uniqueMembers.slice(0, 10).map((m) => (
               <MemberRow key={m.user_id} name={m.profile?.full_name || 'Team Member'} />
             ))}
           </>
@@ -117,7 +137,15 @@ export default function ChannelSidebar({
 
 // ── Channel Row ──
 
-function ChannelRow({ ch, active, onPress }: { ch: TeamChannel; active: boolean; onPress: () => void }) {
+function ChannelRow({
+  ch,
+  active,
+  onPress,
+}: {
+  ch: TeamChannel;
+  active: boolean;
+  onPress: () => void;
+}) {
   const cfg = CHANNEL_TYPE_CONFIG[ch.channel_type] || CHANNEL_TYPE_CONFIG.custom;
   const unread = (ch.unread_count || 0) > 0;
   return (
@@ -133,10 +161,7 @@ function ChannelRow({ ch, active, onPress }: { ch: TeamChannel; active: boolean;
         <Ionicons name={cfg.icon as any} size={16} color={cfg.color} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text
-          style={[s.chName, (active || unread) && s.chNameHighlight]}
-          numberOfLines={1}
-        >
+        <Text style={[s.chName, (active || unread) && s.chNameHighlight]} numberOfLines={1}>
           {ch.name}
         </Text>
         {ch.last_message && (
@@ -167,7 +192,9 @@ function MemberRow({ name }: { name: string }) {
       <View style={[s.avatar, { backgroundColor: hashColor(name) }]}>
         <Text style={s.avatarText}>{initials(name)}</Text>
       </View>
-      <Text style={s.memberName} numberOfLines={1}>{name}</Text>
+      <Text style={s.memberName} numberOfLines={1}>
+        {name}
+      </Text>
       <View style={s.onlineDot} />
     </View>
   );
@@ -180,26 +207,41 @@ const s = StyleSheet.create({
   rootWide: { width: 300, borderRightWidth: 1, borderRightColor: '#1e293b' },
   rootFull: { flex: 1 },
   header: {
-    flexDirection: 'row', alignItems: 'center',
-    padding: 16, paddingBottom: 12, gap: 12,
-    borderBottomWidth: 1, borderBottomColor: '#1e293b',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    paddingBottom: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
   },
   headerTitle: { fontSize: 20, fontWeight: '800', color: '#f1f5f9', letterSpacing: -0.3 },
   headerSub: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
   sectionLabel: {
-    fontSize: 11, fontWeight: '700', color: '#94a3b8',
-    letterSpacing: 0.8, textTransform: 'uppercase',
-    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 6,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
   },
   emptyWrap: { padding: 32, alignItems: 'center' },
   emptyText: { color: '#64748b', fontSize: 13, textAlign: 'center' },
   chRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 10, paddingHorizontal: 14, gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 10,
   },
   chIcon: {
-    width: 30, height: 30, borderRadius: 8,
-    justifyContent: 'center', alignItems: 'center',
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   chName: { fontSize: 14, fontWeight: '600', color: '#cbd5e1' },
   chNameHighlight: { color: '#ffffff', fontWeight: '700' },
@@ -207,21 +249,33 @@ const s = StyleSheet.create({
   chMeta: { alignItems: 'flex-end', gap: 4 },
   chTime: { fontSize: 10, color: '#64748b' },
   badge: {
-    minWidth: 18, height: 18, borderRadius: 9,
-    justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
   },
   badgeText: { fontSize: 10, fontWeight: '800', color: '#fff' },
   divider: {
-    height: 1, backgroundColor: '#1e293b',
-    marginVertical: 8, marginHorizontal: 16,
+    height: 1,
+    backgroundColor: '#1e293b',
+    marginVertical: 8,
+    marginHorizontal: 16,
   },
   memberRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 16, paddingVertical: 5, gap: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 5,
+    gap: 10,
   },
   avatar: {
-    width: 28, height: 28, borderRadius: 14,
-    justifyContent: 'center', alignItems: 'center',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarText: { fontSize: 11, fontWeight: '700', color: '#fff' },
   memberName: { fontSize: 13, color: '#cbd5e1', flex: 1 },

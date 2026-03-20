@@ -2,9 +2,9 @@ name: Android CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, development ]
+    branches: [main, development]
   pull_request:
-    branches: [ main, development ]
+    branches: [main, development]
 
 env:
   NODE_VERSION: '20'

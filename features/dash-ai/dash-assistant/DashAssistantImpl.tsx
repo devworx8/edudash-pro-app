@@ -94,7 +94,9 @@ export const DashAssistant: React.FC<DashAssistantProps> = ({
   );
 
   const { tierStatus, refresh: refreshTierStatus, incrementQuota } = useRealtimeTier();
-  const [selectedModelState, setSelectedModelState] = useState<AIModelId>('claude-3-5-sonnet' as AIModelId);
+  const [selectedModelState, setSelectedModelState] = useState<AIModelId>(
+    'claude-3-5-sonnet' as AIModelId,
+  );
   const prevIsLoadingRef = useRef(false);
 
   useEffect(() => {

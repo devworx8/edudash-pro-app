@@ -1,6 +1,6 @@
 /**
  * OrganizationSwitcher - Multi-organization switcher component
- * 
+ *
  * Allows users to switch between organizations they belong to
  * (including preschools from EduDash and organizations from SOA).
  * Updates the user's active organization and navigates to the appropriate dashboard.
@@ -57,23 +57,26 @@ export function OrganizationSwitcher({
   const [switching, setSwitching] = useState<string | null>(null);
   const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
 
-  const showOrgAlert = useCallback((title: string, message: string) => {
-    if (showAlert) {
-      showAlert({ title, message, type: 'error' });
-      return;
-    }
-    toast.error(message, title);
-  }, [showAlert]);
+  const showOrgAlert = useCallback(
+    (title: string, message: string) => {
+      if (showAlert) {
+        showAlert({ title, message, type: 'error' });
+        return;
+      }
+      toast.error(message, title);
+    },
+    [showAlert],
+  );
 
   // Load user's organizations
   const loadOrganizations = useCallback(async () => {
     if (!user?.id) return;
-    
+
     try {
       setLoading(true);
       const supabase = assertSupabase();
       const orgs: UserOrganization[] = [];
-      
+
       // Get active organization from storage
       const storedActiveOrg = await AsyncStorage.getItem(ACTIVE_ORG_KEY);
       const activeOrg = storedActiveOrg
@@ -92,7 +95,7 @@ export function OrganizationSwitcher({
           .select('id, name, logo_url')
           .eq('id', profile.preschool_id)
           .single();
-        
+
         if (preschool) {
           orgs.push({
             id: preschool.id,
@@ -107,7 +110,8 @@ export function OrganizationSwitcher({
       // 2. Get organizations from organization_members (SOA/multi-tenant system)
       const { data: memberships } = await supabase
         .from('organization_members')
-        .select(`
+        .select(
+          `
           id,
           role,
           member_type,
@@ -119,7 +123,8 @@ export function OrganizationSwitcher({
             slug,
             logo_url
           )
-        `)
+        `,
+        )
         .eq('user_id', user.id)
         .in('membership_status', ['active', 'pending_verification']);
 
@@ -129,7 +134,7 @@ export function OrganizationSwitcher({
           const org = membership.organizations as any;
           if (org?.id) {
             // Don't add duplicate if preschool_id matches organization_id
-            if (!orgs.some(o => o.id === org.id)) {
+            if (!orgs.some((o) => o.id === org.id)) {
               orgs.push({
                 id: org.id,
                 name: org.name,
@@ -142,7 +147,7 @@ export function OrganizationSwitcher({
             }
           } else if ((membership as any).organization_id) {
             const orgId = (membership as any).organization_id as string;
-            if (!orgs.some(o => o.id === orgId)) {
+            if (!orgs.some((o) => o.id === orgId)) {
               missingOrgIds.add(orgId);
             }
           }
@@ -155,7 +160,7 @@ export function OrganizationSwitcher({
             .in('id', Array.from(missingOrgIds));
 
           (preschools || []).forEach((school) => {
-            if (!orgs.some(o => o.id === school.id)) {
+            if (!orgs.some((o) => o.id === school.id)) {
               const membership = memberships.find((m: any) => m.organization_id === school.id);
               orgs.push({
                 id: school.id,
@@ -171,7 +176,7 @@ export function OrganizationSwitcher({
       }
 
       // Mark active organization
-      const finalOrgs = orgs.map(org => ({
+      const finalOrgs = orgs.map((org) => ({
         ...org,
         isActive: org.id === (activeOrg?.id || profile?.organization_id || profile?.preschool_id),
       }));
@@ -199,75 +204,83 @@ export function OrganizationSwitcher({
   }, [visible, loadOrganizations]);
 
   // Switch to a different organization
-  const handleSwitchOrganization = useCallback(async (org: UserOrganization) => {
-    if (org.isActive) {
-      onClose();
-      return;
-    }
-
-    try {
-      setSwitching(org.id);
-      const supabase = assertSupabase();
-
-      // Update profile with new organization
-      const nextRole = org.role || profile?.role;
-
-      if (org.type === 'preschool') {
-        await supabase
-          .from('profiles')
-          .update({ 
-            preschool_id: org.id,
-            // Keep canonical organization_id aligned with preschool_id.
-            organization_id: org.id,
-            ...(nextRole ? { role: nextRole } : {}),
-          })
-          .eq('id', user!.id);
-      } else {
-        await supabase
-          .from('profiles')
-          .update({ 
-            organization_id: org.id,
-            // Keep preschool_id for users who have both
-            ...(nextRole ? { role: nextRole } : {}),
-          })
-          .eq('id', user!.id);
+  const handleSwitchOrganization = useCallback(
+    async (org: UserOrganization) => {
+      if (org.isActive) {
+        onClose();
+        return;
       }
 
-      // Store active organization in AsyncStorage
-      await AsyncStorage.setItem(ACTIVE_ORG_KEY, JSON.stringify({
-        id: org.id,
-        name: org.name,
-        type: org.type,
-        userId: user!.id,
-      }));
+      try {
+        setSwitching(org.id);
+        const supabase = assertSupabase();
 
-      // Refresh profile to pick up changes
-      await refreshProfile?.();
+        // Update profile with new organization
+        const nextRole = org.role || profile?.role;
 
-      // Update local state
-      setOrganizations(prev => prev.map(o => ({
-        ...o,
-        isActive: o.id === org.id,
-      })));
-      setActiveOrgId(org.id);
+        if (org.type === 'preschool') {
+          await supabase
+            .from('profiles')
+            .update({
+              preschool_id: org.id,
+              // Keep canonical organization_id aligned with preschool_id.
+              organization_id: org.id,
+              ...(nextRole ? { role: nextRole } : {}),
+            })
+            .eq('id', user!.id);
+        } else {
+          await supabase
+            .from('profiles')
+            .update({
+              organization_id: org.id,
+              // Keep preschool_id for users who have both
+              ...(nextRole ? { role: nextRole } : {}),
+            })
+            .eq('id', user!.id);
+        }
 
-      // Navigate to appropriate dashboard
-      router.replace('/(tabs)');
+        // Store active organization in AsyncStorage
+        await AsyncStorage.setItem(
+          ACTIVE_ORG_KEY,
+          JSON.stringify({
+            id: org.id,
+            name: org.name,
+            type: org.type,
+            userId: user!.id,
+          }),
+        );
 
-      onOrganizationSwitched?.(org);
-      onClose();
-    } catch (error) {
-      console.error('[OrganizationSwitcher] Failed to switch organization:', error);
-      showOrgAlert('Error', 'Failed to switch organization. Please try again.');
-    } finally {
-      setSwitching(null);
-    }
-  }, [user?.id, refreshProfile, onOrganizationSwitched, onClose, showOrgAlert]);
+        // Refresh profile to pick up changes
+        await refreshProfile?.();
+
+        // Update local state
+        setOrganizations((prev) =>
+          prev.map((o) => ({
+            ...o,
+            isActive: o.id === org.id,
+          })),
+        );
+        setActiveOrgId(org.id);
+
+        // Navigate to appropriate dashboard
+        router.replace('/(tabs)');
+
+        onOrganizationSwitched?.(org);
+        onClose();
+      } catch (error) {
+        console.error('[OrganizationSwitcher] Failed to switch organization:', error);
+        showOrgAlert('Error', 'Failed to switch organization. Please try again.');
+      } finally {
+        setSwitching(null);
+      }
+    },
+    [user?.id, refreshProfile, onOrganizationSwitched, onClose, showOrgAlert],
+  );
 
   // Render organization item
   const renderOrganization = ({ item }: { item: UserOrganization }) => {
     const isSwitching = switching === item.id;
-    
+
     return (
       <TouchableOpacity
         style={[
@@ -281,17 +294,13 @@ export function OrganizationSwitcher({
       >
         <View style={styles.orgIconContainer}>
           {item.logo_url ? (
-            <Image 
-              source={{ uri: item.logo_url }} 
-              style={styles.orgLogo}
-              resizeMode="cover"
-            />
+            <Image source={{ uri: item.logo_url }} style={styles.orgLogo} resizeMode="cover" />
           ) : (
             <View style={[styles.orgIconPlaceholder, { backgroundColor: theme.primary + '20' }]}>
-              <Ionicons 
-                name={item.type === 'preschool' ? 'school' : 'business'} 
-                size={24} 
-                color={theme.primary} 
+              <Ionicons
+                name={item.type === 'preschool' ? 'school' : 'business'}
+                size={24}
+                color={theme.primary}
               />
             </View>
           )}
@@ -302,8 +311,20 @@ export function OrganizationSwitcher({
             {item.name}
           </Text>
           <View style={styles.orgMeta}>
-            <View style={[styles.typeBadge, { backgroundColor: item.type === 'preschool' ? '#10B981' + '20' : '#6366F1' + '20' }]}>
-              <Text style={[styles.typeText, { color: item.type === 'preschool' ? '#10B981' : '#6366F1' }]}>
+            <View
+              style={[
+                styles.typeBadge,
+                {
+                  backgroundColor: item.type === 'preschool' ? '#10B981' + '20' : '#6366F1' + '20',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.typeText,
+                  { color: item.type === 'preschool' ? '#10B981' : '#6366F1' },
+                ]}
+              >
                 {item.type === 'preschool' ? 'Preschool' : 'Organization'}
               </Text>
             </View>
@@ -334,9 +355,7 @@ export function OrganizationSwitcher({
   const renderEmpty = () => (
     <View style={styles.emptyContainer}>
       <Ionicons name="business-outline" size={48} color={theme.textSecondary} />
-      <Text style={[styles.emptyTitle, { color: theme.text }]}>
-        No Organizations
-      </Text>
+      <Text style={[styles.emptyTitle, { color: theme.text }]}>No Organizations</Text>
       <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
         You're not a member of any organizations yet.
       </Text>
@@ -344,27 +363,20 @@ export function OrganizationSwitcher({
   );
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
       <View style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}>
-        <View 
+        <View
           style={[
-            styles.container, 
-            { 
+            styles.container,
+            {
               backgroundColor: theme.background,
               paddingBottom: insets.bottom + 16,
-            }
+            },
           ]}
         >
           {/* Header */}
           <View style={[styles.header, { borderBottomColor: theme.border }]}>
-            <Text style={[styles.title, { color: theme.text }]}>
-              Switch Organization
-            </Text>
+            <Text style={[styles.title, { color: theme.text }]}>Switch Organization</Text>
             <TouchableOpacity
               style={[styles.closeButton, { backgroundColor: theme.surface }]}
               onPress={onClose}
@@ -388,7 +400,7 @@ export function OrganizationSwitcher({
             >
               {organizations.length === 0
                 ? renderEmpty()
-                : organizations.map(item => (
+                : organizations.map((item) => (
                     <React.Fragment key={item.id}>
                       {renderOrganization({ item } as any)}
                     </React.Fragment>
@@ -427,12 +439,15 @@ export async function getActiveOrganization(userId?: string): Promise<UserOrgani
 
 // Helper function to set active organization
 export async function setActiveOrganization(org: UserOrganization, userId?: string): Promise<void> {
-  await AsyncStorage.setItem(ACTIVE_ORG_KEY, JSON.stringify({
-    id: org.id,
-    name: org.name,
-    type: org.type,
-    userId,
-  }));
+  await AsyncStorage.setItem(
+    ACTIVE_ORG_KEY,
+    JSON.stringify({
+      id: org.id,
+      name: org.name,
+      type: org.type,
+      userId,
+    }),
+  );
 }
 
 export default OrganizationSwitcher;

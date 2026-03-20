@@ -1,10 +1,13 @@
 # Vercel Ignore - Only upload source code needed for build
+
 # Build artifacts and large directories that aren't needed
 
 # Dependencies (Vercel installs from package.json)
+
 node_modules/
 
 # Build artifacts and caches
+
 builds/
 dist/
 android/
@@ -14,10 +17,12 @@ web-build/
 .next/
 
 # AI / tooling caches
+
 .claude/
 repo_bundle.txt
 
 # Development and debugging
+
 debug/
 temp/
 archive/
@@ -27,64 +32,75 @@ backups/
 legacy/
 
 # Keep runtime Dash AI tools (the pattern above only excludes top-level /tools)
+
 !services/dash-ai/tools/
-!services/dash-ai/tools/**
+!services/dash-ai/tools/\*\*
 
 # Documentation (not needed for build)
+
 docs/
 
 # Tests (not needed for production build)
+
 tests/
-*.test.ts
-*.test.tsx
-*.spec.ts
-*.spec.tsx
+_.test.ts
+_.test.tsx
+_.spec.ts
+_.spec.tsx
 
 # Large assets
+
 splash-icon.png
-*.apk
-*.aab
-*.ipa
+_.apk
+_.aab
+\*.ipa
 
 # Git
+
 .git/
 .github/
 
 # Logs
-*.log
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+
+_.log
+npm-debug._
+yarn-debug._
+yarn-error._
 
 # Environment files
+
 .env
 .env.local
-.env.*.local
+.env.\*.local
 
 # Editor
+
 .vscode/
 .idea/
-*.swp
-*.swo
+_.swp
+_.swo
 
 # Vercel cache
+
 .vercel/
 
 # SQL and scripts artifacts
+
 sql/temp/
 sql/debug/
 scripts/logs/
 scripts/temp/
 
 # Not needed for web build
+
 supabase/
 migrations/
 /reports/
 sql/
 server-examples/
 patches/
-__mocks__/
-__tests__/
-*.config.components.js
-jest.*.js
-jest.*.ts
+**mocks**/
+**tests**/
+_.config.components.js
+jest._.js
+jest.\*.ts

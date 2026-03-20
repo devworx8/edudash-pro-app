@@ -78,7 +78,10 @@ export default function PlatformAdminDashboardScreen() {
         end={{ x: 1, y: 1 }}
         style={styles.bgLayer}
       />
-      <View pointerEvents="none" style={[styles.bgBlobA, { backgroundColor: `${accentColor}22` }]} />
+      <View
+        pointerEvents="none"
+        style={[styles.bgBlobA, { backgroundColor: `${accentColor}22` }]}
+      />
       <View pointerEvents="none" style={[styles.bgBlobB, { backgroundColor: '#22c55e14' }]} />
 
       {/* Role Header */}
@@ -87,7 +90,12 @@ export default function PlatformAdminDashboardScreen() {
           <TouchableOpacity style={styles.headerBack} onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
-          <View style={[styles.roleBadge, { backgroundColor: `${accentColor}20`, borderColor: `${accentColor}60` }]}>
+          <View
+            style={[
+              styles.roleBadge,
+              { backgroundColor: `${accentColor}20`, borderColor: `${accentColor}60` },
+            ]}
+          >
             <Ionicons name={roleConfig.icon as any} size={16} color={accentColor} />
             <Text style={[styles.roleBadgeText, { color: accentColor }]}>{roleConfig.label}</Text>
           </View>
@@ -129,7 +137,12 @@ export default function PlatformAdminDashboardScreen() {
             </View>
             <View style={styles.actionsGrid}>
               {data?.quickActions.map((action) => (
-                <ActionCard key={action.id} action={action} onPress={handleQuickAction} styles={styles} />
+                <ActionCard
+                  key={action.id}
+                  action={action}
+                  onPress={handleQuickAction}
+                  styles={styles}
+                />
               ))}
             </View>
 
@@ -139,7 +152,12 @@ export default function PlatformAdminDashboardScreen() {
             </View>
             <View style={styles.actionsGrid}>
               {data?.sharedActions.map((action) => (
-                <ActionCard key={action.id} action={action} onPress={handleQuickAction} styles={styles} />
+                <ActionCard
+                  key={action.id}
+                  action={action}
+                  onPress={handleQuickAction}
+                  styles={styles}
+                />
               ))}
             </View>
 
@@ -173,13 +191,23 @@ function StatCardWidget({ stat, styles }: { stat: StatCard; styles: any }) {
           <Ionicons name={stat.icon as any} size={18} color={stat.color} />
         </View>
         {stat.change && (
-          <View style={[styles.statChange, { backgroundColor: stat.change.direction === 'up' ? '#22c55e18' : '#ef444418' }]}>
+          <View
+            style={[
+              styles.statChange,
+              { backgroundColor: stat.change.direction === 'up' ? '#22c55e18' : '#ef444418' },
+            ]}
+          >
             <Ionicons
               name={stat.change.direction === 'up' ? 'trending-up' : 'trending-down'}
               size={10}
               color={stat.change.direction === 'up' ? '#22c55e' : '#ef4444'}
             />
-            <Text style={[styles.statChangeText, { color: stat.change.direction === 'up' ? '#22c55e' : '#ef4444' }]}>
+            <Text
+              style={[
+                styles.statChangeText,
+                { color: stat.change.direction === 'up' ? '#22c55e' : '#ef4444' },
+              ]}
+            >
               {stat.change.value}%
             </Text>
           </View>
@@ -191,7 +219,15 @@ function StatCardWidget({ stat, styles }: { stat: StatCard; styles: any }) {
   );
 }
 
-function ActionCard({ action, onPress, styles }: { action: QuickAction; onPress: (a: QuickAction) => void; styles: any }) {
+function ActionCard({
+  action,
+  onPress,
+  styles,
+}: {
+  action: QuickAction;
+  onPress: (a: QuickAction) => void;
+  styles: any;
+}) {
   return (
     <TouchableOpacity style={styles.actionCard} onPress={() => onPress(action)} activeOpacity={0.7}>
       <View style={styles.actionContent}>
@@ -199,8 +235,12 @@ function ActionCard({ action, onPress, styles }: { action: QuickAction; onPress:
           <Ionicons name={action.icon as any} size={20} color={action.color} />
         </View>
         <View style={styles.actionText}>
-          <Text style={styles.actionTitle} numberOfLines={1}>{action.title}</Text>
-          <Text style={styles.actionDesc} numberOfLines={1}>{action.description}</Text>
+          <Text style={styles.actionTitle} numberOfLines={1}>
+            {action.title}
+          </Text>
+          <Text style={styles.actionDesc} numberOfLines={1}>
+            {action.description}
+          </Text>
         </View>
       </View>
       {(action.badge ?? 0) > 0 && (
@@ -215,10 +255,13 @@ function ActionCard({ action, onPress, styles }: { action: QuickAction; onPress:
 function ActivityRow({ item, styles }: { item: ActivityItem; styles: any }) {
   const diffMin = Math.floor((Date.now() - new Date(item.timestamp).getTime()) / 60_000);
   const timeStr =
-    diffMin < 1 ? 'Just now' :
-    diffMin < 60 ? `${diffMin}m ago` :
-    diffMin < 1440 ? `${Math.floor(diffMin / 60)}h ago` :
-    `${Math.floor(diffMin / 1440)}d ago`;
+    diffMin < 1
+      ? 'Just now'
+      : diffMin < 60
+        ? `${diffMin}m ago`
+        : diffMin < 1440
+          ? `${Math.floor(diffMin / 60)}h ago`
+          : `${Math.floor(diffMin / 1440)}d ago`;
 
   return (
     <View style={styles.activityRow}>
@@ -227,7 +270,9 @@ function ActivityRow({ item, styles }: { item: ActivityItem; styles: any }) {
         <Text style={styles.activityAction} numberOfLines={1}>
           {item.action.replace(/_/g, ' ')}
         </Text>
-        <Text style={styles.activityMeta}>{item.actor_name} · {timeStr}</Text>
+        <Text style={styles.activityMeta}>
+          {item.actor_name} · {timeStr}
+        </Text>
       </View>
     </View>
   );

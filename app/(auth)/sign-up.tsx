@@ -4,8 +4,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 export default function SignUpAlias() {
-  const params = useLocalSearchParams<{ 
-    planTier?: string; 
+  const params = useLocalSearchParams<{
+    planTier?: string;
     billing?: 'monthly' | 'annual';
     inviteCode?: string;
   }>();
@@ -22,7 +22,14 @@ export default function SignUpAlias() {
   }, [params?.planTier, params?.billing, params?.inviteCode]);
 
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#0a0a0f' }}>
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#0a0a0f',
+      }}
+    >
       <EduDashSpinner color="#00f5ff" />
     </View>
   );

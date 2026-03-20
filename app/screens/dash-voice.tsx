@@ -510,8 +510,6 @@ export default function DashVoiceScreen() {
     }
   }, [isListening, isSpeaking, isSpeakingRef, logDashTrace]);
 
-
-
   // ── Derived ───────────────────────────────────────────────────────
   const quickActions = useMemo(() => dashPolicy.quickActions, [dashPolicy.quickActions]);
   const rawDisplayed = streamingText || lastResponse;
@@ -632,10 +630,7 @@ export default function DashVoiceScreen() {
             ) : null}
 
             {flowMode.enabled && flowMode.correctionFlash ? (
-              <DashVoiceFlowPreview
-                flash={flowMode.correctionFlash}
-                theme={theme}
-              />
+              <DashVoiceFlowPreview flash={flowMode.correctionFlash} theme={theme} />
             ) : null}
 
             {showTranscript ? (
@@ -731,8 +726,15 @@ export default function DashVoiceScreen() {
                 size={16}
                 color={flowMode.enabled ? theme.primary : theme.textSecondary}
               />
-              <Text style={[s.fullChatText, { color: flowMode.enabled ? theme.primary : theme.textSecondary }]}>
-                {flowMode.enabled ? 'Flow Mode on — auto-correct active' : 'Flow Mode off — auto-send'}
+              <Text
+                style={[
+                  s.fullChatText,
+                  { color: flowMode.enabled ? theme.primary : theme.textSecondary },
+                ]}
+              >
+                {flowMode.enabled
+                  ? 'Flow Mode on — auto-correct active'
+                  : 'Flow Mode off — auto-send'}
               </Text>
             </TouchableOpacity>
           </ScrollView>

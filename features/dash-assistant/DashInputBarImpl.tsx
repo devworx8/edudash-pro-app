@@ -221,8 +221,17 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
           },
         ]}
       >
-        {Platform.OS !== 'web' && selectedAttachments.some(a => a.kind === 'image') && (
-          <Text style={{ color: theme.textTertiary, fontSize: 10, fontWeight: '500', paddingHorizontal: 4, paddingBottom: 6, letterSpacing: 0.2 }}>
+        {Platform.OS !== 'web' && selectedAttachments.some((a) => a.kind === 'image') && (
+          <Text
+            style={{
+              color: theme.textTertiary,
+              fontSize: 10,
+              fontWeight: '500',
+              paddingHorizontal: 4,
+              paddingBottom: 6,
+              letterSpacing: 0.2,
+            }}
+          >
             {'Tip: use the ↶ ↷ buttons to rotate if the image is sideways'}
           </Text>
         )}
@@ -298,14 +307,17 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
                     {status !== 'uploading' && onUpdateAttachmentUri && Platform.OS !== 'web' && (
                       <>
                         <TouchableOpacity
-                          style={[styles.attachmentImageRotateLeft, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+                          style={[
+                            styles.attachmentImageRotateLeft,
+                            { backgroundColor: 'rgba(0,0,0,0.55)' },
+                          ]}
                           onPress={async () => {
                             try {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               const result = await ImageManipulator.manipulateAsync(
                                 imageUri,
                                 [{ rotate: -90 }],
-                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
                               );
                               onUpdateAttachmentUri(attachment.id, result.uri);
                             } catch {
@@ -317,14 +329,17 @@ export const DashInputBar: React.FC<DashInputBarProps> = ({
                           <Ionicons name="arrow-undo" size={15} color="#FFFFFF" />
                         </TouchableOpacity>
                         <TouchableOpacity
-                          style={[styles.attachmentImageRotateRight, { backgroundColor: 'rgba(0,0,0,0.55)' }]}
+                          style={[
+                            styles.attachmentImageRotateRight,
+                            { backgroundColor: 'rgba(0,0,0,0.55)' },
+                          ]}
                           onPress={async () => {
                             try {
                               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                               const result = await ImageManipulator.manipulateAsync(
                                 imageUri,
                                 [{ rotate: 90 }],
-                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+                                { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
                               );
                               onUpdateAttachmentUri(attachment.id, result.uri);
                             } catch {

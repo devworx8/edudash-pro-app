@@ -13,7 +13,7 @@ import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { logger } from '@/lib/logger';
-import { EducationalPDFService } from '@/lib/services/EducationalPDFService'
+import { EducationalPDFService } from '@/lib/services/EducationalPDFService';
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 
 const TAG = 'AIProgressAnalysis';
@@ -21,7 +21,7 @@ const TAG = 'AIProgressAnalysis';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 interface StudentProgress {
   id: string;
-name: string;
+  name: string;
   recentGrades: number[];
   averageGrade: number;
   improvement: number;
@@ -44,7 +44,7 @@ export default function AIProgressAnalysisScreen() {
   const { theme } = useTheme();
   const { tier } = useSubscription();
   const { showAlert, alertProps } = useAlertModal();
-  const hasPremiumOrHigher = ['premium','pro','enterprise'].includes(String(tier || ''));
+  const hasPremiumOrHigher = ['premium', 'pro', 'enterprise'].includes(String(tier || ''));
   const [loading, setLoading] = useState(true);
   const [analysisData, setAnalysisData] = useState<{
     studentProgress: StudentProgress[];
@@ -53,9 +53,11 @@ export default function AIProgressAnalysisScreen() {
   } | null>(null);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   const flags = getFeatureFlagsSync();
-  const AI_ENABLED = (process.env.EXPO_PUBLIC_AI_ENABLED === 'true') || (process.env.EXPO_PUBLIC_ENABLE_AI_FEATURES === 'true');
+  const AI_ENABLED =
+    process.env.EXPO_PUBLIC_AI_ENABLED === 'true' ||
+    process.env.EXPO_PUBLIC_ENABLE_AI_FEATURES === 'true';
   const aiAnalysisEnabled = AI_ENABLED && flags.ai_progress_analysis !== false;
 
   const fetchProgressData = useCallback(async () => {
@@ -76,7 +78,11 @@ export default function AIProgressAnalysisScreen() {
           type: 'warning',
           buttons: [
             { text: 'Cancel', style: 'cancel' },
-            { text: 'See plans', onPress: () => navigateToUpgrade({ source: 'ai_progress_quota', reason: 'limit_reached' }) },
+            {
+              text: 'See plans',
+              onPress: () =>
+                navigateToUpgrade({ source: 'ai_progress_quota', reason: 'limit_reached' }),
+            },
           ],
         });
         return;
@@ -85,7 +91,7 @@ export default function AIProgressAnalysisScreen() {
       // First try to determine what data structure we have
       logger.debug(TAG, 'Checking available data for teacher:', user.id);
       logger.debug(TAG, 'User object:', user);
-      
+
       // Try to get classes first — includes assistant teacher assignments
       const classIds = await fetchTeacherClassIds(user.id);
 
@@ -93,7 +99,9 @@ export default function AIProgressAnalysisScreen() {
         setAnalysisData({
           studentProgress: [],
           classAnalytics: [],
-          insights: ['No classes found. Create some classes and assignments to see progress analysis.']
+          insights: [
+            'No classes found. Create some classes and assignments to see progress analysis.',
+          ],
         });
         return;
       }
@@ -103,7 +111,7 @@ export default function AIProgressAnalysisScreen() {
         .select(`*`)
         .in('id', classIds)
         .eq('active', true);
-        
+
       if (classesError) {
         logger.error(TAG, 'Error fetching classes:', classesError);
         throw new Error(`Failed to fetch classes: ${classesError.message}`);
@@ -113,14 +121,16 @@ export default function AIProgressAnalysisScreen() {
         setAnalysisData({
           studentProgress: [],
           classAnalytics: [],
-          insights: ['No classes found. Create some classes and assignments to see progress analysis.']
+          insights: [
+            'No classes found. Create some classes and assignments to see progress analysis.',
+          ],
         });
         return;
       }
-      
+
       logger.debug(TAG, 'Found classes:', classes.length, classes);
-      
-      const activeClassIds = classes.map(c => c.id);
+
+      const activeClassIds = classes.map((c) => c.id);
 
       // Fetch real student data from homework_submissions joined with students and assignments
       const [studentsRes, submissionsRes] = await Promise.all([
@@ -131,22 +141,38 @@ export default function AIProgressAnalysisScreen() {
           .eq('is_active', true),
         assertSupabase()
           .from('homework_submissions')
-          .select('id, student_id, grade, submitted_at, assignment:homework_assignments!homework_submissions_assignment_id_fkey(title, subject, class_id)')
+          .select(
+            'id, student_id, grade, submitted_at, assignment:homework_assignments!homework_submissions_assignment_id_fkey(title, subject, class_id)',
+          )
           .not('grade', 'is', null)
           .order('submitted_at', { ascending: false })
           .limit(500),
       ]);
 
       // Build student-to-class mapping
-      type EnrollRow = { student_id: string; class_id: string; students: { id: string; first_name: string; last_name: string } | null };
+      type EnrollRow = {
+        student_id: string;
+        class_id: string;
+        students: { id: string; first_name: string; last_name: string } | null;
+      };
       const enrollments = (studentsRes.data ?? []) as unknown as EnrollRow[];
-      const enrolledStudentIds = new Set(enrollments.map(e => e.student_id));
+      const enrolledStudentIds = new Set(enrollments.map((e) => e.student_id));
 
       // Filter submissions to enrolled students in teacher's classes
-      const submissions = ((submissionsRes.data ?? []) as any[]).filter(s => enrolledStudentIds.has(s.student_id));
+      const submissions = ((submissionsRes.data ?? []) as any[]).filter((s) =>
+        enrolledStudentIds.has(s.student_id),
+      );
 
       // Group submissions by student
-      const studentMap = new Map<string, { name: string; grades: number[]; subjects: Record<string, number[]>; lastAssignment: string }>();
+      const studentMap = new Map<
+        string,
+        {
+          name: string;
+          grades: number[];
+          subjects: Record<string, number[]>;
+          lastAssignment: string;
+        }
+      >();
       for (const e of enrollments) {
         if (!e.students) continue;
         const sid = e.student_id;
@@ -195,15 +221,20 @@ export default function AIProgressAnalysisScreen() {
       });
 
       // Build class analytics
-      const classAnalytics: ClassAnalytics[] = classes.map(cls => {
-        const classStudentIds = enrollments.filter(e => e.class_id === cls.id).map(e => e.student_id);
-        const classStudents = studentProgress.filter(s => classStudentIds.includes(s.id));
+      const classAnalytics: ClassAnalytics[] = classes.map((cls) => {
+        const classStudentIds = enrollments
+          .filter((e) => e.class_id === cls.id)
+          .map((e) => e.student_id);
+        const classStudents = studentProgress.filter((s) => classStudentIds.includes(s.id));
         const totalStudents = classStudents.length;
-        const avgPerf = totalStudents > 0
-          ? Math.round(classStudents.reduce((a, s) => a + s.averageGrade, 0) / totalStudents * 10) / 10
-          : 0;
-        const improving = classStudents.filter(s => s.improvement > 0).length;
-        const struggling = classStudents.filter(s => s.averageGrade < 50).length;
+        const avgPerf =
+          totalStudents > 0
+            ? Math.round(
+                (classStudents.reduce((a, s) => a + s.averageGrade, 0) / totalStudents) * 10,
+              ) / 10
+            : 0;
+        const improving = classStudents.filter((s) => s.improvement > 0).length;
+        const struggling = classStudents.filter((s) => s.averageGrade < 50).length;
         return {
           classId: cls.id,
           className: cls.name,
@@ -214,7 +245,9 @@ export default function AIProgressAnalysisScreen() {
           recentTrends: [
             `Class average: ${avgPerf}%`,
             `${improving} student${improving !== 1 ? 's' : ''} improving`,
-            struggling > 0 ? `${struggling} student${struggling !== 1 ? 's' : ''} need${struggling === 1 ? 's' : ''} support` : 'All students above 50%',
+            struggling > 0
+              ? `${struggling} student${struggling !== 1 ? 's' : ''} need${struggling === 1 ? 's' : ''} support`
+              : 'All students above 50%',
           ],
         };
       });
@@ -222,25 +255,33 @@ export default function AIProgressAnalysisScreen() {
       const insights: string[] = [
         `Found ${classes.length} class${classes.length !== 1 ? 'es' : ''} with ${studentProgress.length} student${studentProgress.length !== 1 ? 's' : ''}`,
       ];
-      const overallAvg = studentProgress.length > 0
-        ? Math.round(studentProgress.reduce((a, s) => a + s.averageGrade, 0) / studentProgress.length)
-        : 0;
+      const overallAvg =
+        studentProgress.length > 0
+          ? Math.round(
+              studentProgress.reduce((a, s) => a + s.averageGrade, 0) / studentProgress.length,
+            )
+          : 0;
       if (studentProgress.length > 0) {
         insights.push(`Overall average across all students: ${overallAvg}%`);
       }
       const totalStruggling = classAnalytics.reduce((a, c) => a + c.strugglingStudents, 0);
       if (totalStruggling > 0) {
-        insights.push(`${totalStruggling} student${totalStruggling !== 1 ? 's' : ''} below 50% — consider targeted intervention`);
+        insights.push(
+          `${totalStruggling} student${totalStruggling !== 1 ? 's' : ''} below 50% — consider targeted intervention`,
+        );
       }
       if (studentProgress.length === 0) {
         insights.push('Add assignments and grade submissions to see detailed analytics');
       }
 
       setAnalysisData({ studentProgress, classAnalytics, insights });
-
     } catch (error) {
       logger.error(TAG, 'Failed to fetch progress data:', error);
-      showAlert({ title: 'Error', message: 'Failed to load progress analysis. Please try again.', type: 'error' });
+      showAlert({
+        title: 'Error',
+        message: 'Failed to load progress analysis. Please try again.',
+        type: 'error',
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -260,238 +301,267 @@ export default function AIProgressAnalysisScreen() {
 
   const onExportPDF = async () => {
     try {
-      const title = 'AI Progress Analysis'
-      const insightsText = (analysisData?.insights || []).map(i => `• ${i}`).join('\n')
-      const classesText = (analysisData?.classAnalytics || []).map(c => `${c.className}: avg ${c.averagePerformance}%`).join('\n')
-      const body = [insightsText, classesText].filter(Boolean).join('\n\n') || 'No analysis available.'
-      await EducationalPDFService.generateTextPDF(title, body)
-      showAlert({ title: 'Export PDF', message: 'PDF generated successfully', type: 'success' })
+      const title = 'AI Progress Analysis';
+      const insightsText = (analysisData?.insights || []).map((i) => `• ${i}`).join('\n');
+      const classesText = (analysisData?.classAnalytics || [])
+        .map((c) => `${c.className}: avg ${c.averagePerformance}%`)
+        .join('\n');
+      const body =
+        [insightsText, classesText].filter(Boolean).join('\n\n') || 'No analysis available.';
+      await EducationalPDFService.generateTextPDF(title, body);
+      showAlert({ title: 'Export PDF', message: 'PDF generated successfully', type: 'success' });
     } catch {
-      showAlert({ title: 'Export PDF', message: 'Failed to generate PDF', type: 'error' })
+      showAlert({ title: 'Export PDF', message: 'Failed to generate PDF', type: 'error' });
     }
-  }
+  };
 
   // Create theme-aware styles
-  const styles = useMemo(() => StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: theme.background,
-    },
-    scrollView: {
-      flex: 1,
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    loadingText: {
-      marginTop: 16,
-      fontSize: 16,
-      color: theme.textSecondary,
-    },
-    disabledContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 32,
-    },
-    disabledTitle: {
-      fontSize: 20,
-      fontWeight: '600',
-      color: theme.text,
-      marginTop: 16,
-      marginBottom: 8,
-    },
-    disabledText: {
-      fontSize: 16,
-      color: theme.textSecondary,
-      textAlign: 'center',
-      lineHeight: 24,
-    },
-    section: {
-      padding: 16,
-    },
-    sectionTitle: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: theme.text,
-      marginBottom: 16,
-    },
-    insightCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: theme.cardBackground,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 8,
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 3,
-      elevation: 2,
-    },
-    insightText: {
-      flex: 1,
-      marginLeft: 12,
-      fontSize: 14,
-      color: theme.text,
-      lineHeight: 20,
-    },
-    classCard: {
-      backgroundColor: theme.cardBackground,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 3,
-      elevation: 2,
-      borderWidth: 2,
-      borderColor: 'transparent',
-    },
-    selectedClassCard: {
-      borderColor: theme.primary,
-    },
-    className: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: theme.text,
-      marginBottom: 4,
-    },
-    classStats: {
-      fontSize: 14,
-      color: theme.textSecondary,
-      marginBottom: 12,
-    },
-    trendsContainer: {
-      flexDirection: 'row',
-      gap: 16,
-    },
-    trendItem: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-    },
-    trendText: {
-      fontSize: 12,
-      color: theme.textSecondary,
-    },
-    studentCard: {
-      backgroundColor: theme.cardBackground,
-      padding: 16,
-      borderRadius: 12,
-      marginBottom: 12,
-      shadowColor: theme.shadow,
-      shadowOffset: { width: 0, height: 1 },
-      shadowOpacity: 0.05,
-      shadowRadius: 3,
-      elevation: 2,
-    },
-    studentHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    studentName: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: theme.text,
-    },
-    improvementBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 12,
-      gap: 4,
-    },
-    improvementText: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: 'white',
-    },
-    averageGrade: {
-      fontSize: 14,
-      color: theme.text,
-      marginBottom: 4,
-    },
-    lastAssignment: {
-      fontSize: 12,
-      color: theme.textSecondary,
-      marginBottom: 8,
-    },
-    subjectsContainer: {
-      flexDirection: 'row',
-      gap: 8,
-      flexWrap: 'wrap',
-    },
-    subjectPill: {
-      backgroundColor: theme.primary + '20',
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 8,
-    },
-    subjectText: {
-      fontSize: 10,
-      fontWeight: '600',
-      color: theme.primary,
-    },
-    emptyText: {
-      textAlign: 'center',
-      color: theme.textSecondary,
-      fontStyle: 'italic',
-      padding: 32,
-    },
-  }), [theme]);
+  const styles = useMemo(
+    () =>
+      StyleSheet.create({
+        container: {
+          flex: 1,
+          backgroundColor: theme.background,
+        },
+        scrollView: {
+          flex: 1,
+        },
+        loadingContainer: {
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+        },
+        loadingText: {
+          marginTop: 16,
+          fontSize: 16,
+          color: theme.textSecondary,
+        },
+        disabledContainer: {
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 32,
+        },
+        disabledTitle: {
+          fontSize: 20,
+          fontWeight: '600',
+          color: theme.text,
+          marginTop: 16,
+          marginBottom: 8,
+        },
+        disabledText: {
+          fontSize: 16,
+          color: theme.textSecondary,
+          textAlign: 'center',
+          lineHeight: 24,
+        },
+        section: {
+          padding: 16,
+        },
+        sectionTitle: {
+          fontSize: 20,
+          fontWeight: '700',
+          color: theme.text,
+          marginBottom: 16,
+        },
+        insightCard: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          backgroundColor: theme.cardBackground,
+          padding: 16,
+          borderRadius: 12,
+          marginBottom: 8,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 3,
+          elevation: 2,
+        },
+        insightText: {
+          flex: 1,
+          marginLeft: 12,
+          fontSize: 14,
+          color: theme.text,
+          lineHeight: 20,
+        },
+        classCard: {
+          backgroundColor: theme.cardBackground,
+          padding: 16,
+          borderRadius: 12,
+          marginBottom: 12,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 3,
+          elevation: 2,
+          borderWidth: 2,
+          borderColor: 'transparent',
+        },
+        selectedClassCard: {
+          borderColor: theme.primary,
+        },
+        className: {
+          fontSize: 18,
+          fontWeight: '600',
+          color: theme.text,
+          marginBottom: 4,
+        },
+        classStats: {
+          fontSize: 14,
+          color: theme.textSecondary,
+          marginBottom: 12,
+        },
+        trendsContainer: {
+          flexDirection: 'row',
+          gap: 16,
+        },
+        trendItem: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+        },
+        trendText: {
+          fontSize: 12,
+          color: theme.textSecondary,
+        },
+        studentCard: {
+          backgroundColor: theme.cardBackground,
+          padding: 16,
+          borderRadius: 12,
+          marginBottom: 12,
+          shadowColor: theme.shadow,
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.05,
+          shadowRadius: 3,
+          elevation: 2,
+        },
+        studentHeader: {
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 8,
+        },
+        studentName: {
+          fontSize: 16,
+          fontWeight: '600',
+          color: theme.text,
+        },
+        improvementBadge: {
+          flexDirection: 'row',
+          alignItems: 'center',
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          borderRadius: 12,
+          gap: 4,
+        },
+        improvementText: {
+          fontSize: 12,
+          fontWeight: '600',
+          color: 'white',
+        },
+        averageGrade: {
+          fontSize: 14,
+          color: theme.text,
+          marginBottom: 4,
+        },
+        lastAssignment: {
+          fontSize: 12,
+          color: theme.textSecondary,
+          marginBottom: 8,
+        },
+        subjectsContainer: {
+          flexDirection: 'row',
+          gap: 8,
+          flexWrap: 'wrap',
+        },
+        subjectPill: {
+          backgroundColor: theme.primary + '20',
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          borderRadius: 8,
+        },
+        subjectText: {
+          fontSize: 10,
+          fontWeight: '600',
+          color: theme.primary,
+        },
+        emptyText: {
+          textAlign: 'center',
+          color: theme.textSecondary,
+          fontStyle: 'italic',
+          padding: 32,
+        },
+      }),
+    [theme],
+  );
 
   const renderStudentCard = (student: StudentProgress) => (
     <View key={student.id} style={styles.studentCard}>
       <View style={styles.studentHeader}>
         <Text style={styles.studentName}>{student.name}</Text>
-        <View style={[
-          styles.improvementBadge,
-          { backgroundColor: student.improvement > 0 ? '#10B981' : student.improvement < -5 ? '#EF4444' : '#6B7280' }
-        ]}>
-          <Ionicons 
-            name={student.improvement > 0 ? 'trending-up' : student.improvement < -5 ? 'trending-down' : 'remove'} 
-            size={12} 
-            color="white" 
+        <View
+          style={[
+            styles.improvementBadge,
+            {
+              backgroundColor:
+                student.improvement > 0
+                  ? '#10B981'
+                  : student.improvement < -5
+                    ? '#EF4444'
+                    : '#6B7280',
+            },
+          ]}
+        >
+          <Ionicons
+            name={
+              student.improvement > 0
+                ? 'trending-up'
+                : student.improvement < -5
+                  ? 'trending-down'
+                  : 'remove'
+            }
+            size={12}
+            color="white"
           />
           <Text style={styles.improvementText}>
-            {student.improvement > 0 ? '+' : ''}{student.improvement.toFixed(1)}%
+            {student.improvement > 0 ? '+' : ''}
+            {student.improvement.toFixed(1)}%
           </Text>
         </View>
       </View>
-      
+
       <Text style={styles.averageGrade}>Average: {student.averageGrade.toFixed(1)}%</Text>
       <Text style={styles.lastAssignment}>Last: {student.lastAssignment}</Text>
-      
+
       {Object.keys(student.subjects).length > 0 && (
         <View style={styles.subjectsContainer}>
-          {Object.entries(student.subjects).slice(0, 3).map(([subject, grade]) => (
-            <View key={subject} style={styles.subjectPill}>
-              <Text style={styles.subjectText}>{subject}: {grade.toFixed(0)}%</Text>
-            </View>
-          ))}
+          {Object.entries(student.subjects)
+            .slice(0, 3)
+            .map(([subject, grade]) => (
+              <View key={subject} style={styles.subjectPill}>
+                <Text style={styles.subjectText}>
+                  {subject}: {grade.toFixed(0)}%
+                </Text>
+              </View>
+            ))}
         </View>
       )}
     </View>
   );
 
   const renderClassCard = (classData: ClassAnalytics) => (
-    <TouchableOpacity 
-      key={classData.classId} 
+    <TouchableOpacity
+      key={classData.classId}
       style={[styles.classCard, selectedClass === classData.classId && styles.selectedClassCard]}
-      onPress={() => setSelectedClass(selectedClass === classData.classId ? null : classData.classId)}
+      onPress={() =>
+        setSelectedClass(selectedClass === classData.classId ? null : classData.classId)
+      }
     >
       <Text style={styles.className}>{classData.className}</Text>
       <Text style={styles.classStats}>
         {classData.totalStudents} students • {classData.averagePerformance.toFixed(1)}% avg
       </Text>
-      
+
       <View style={styles.trendsContainer}>
         <View style={styles.trendItem}>
           <Ionicons name="trending-up" size={16} color="#10B981" />
@@ -528,8 +598,16 @@ export default function AIProgressAnalysisScreen() {
             Progress Analysis is available on Premium and higher plans.
           </Text>
           <TouchableOpacity
-            style={{ marginTop: 12, backgroundColor: '#7C3AED', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 }}
-            onPress={() => navigateToUpgrade({ source: 'ai_progress_analysis', reason: 'feature_needed' })}
+            style={{
+              marginTop: 12,
+              backgroundColor: '#7C3AED',
+              paddingHorizontal: 16,
+              paddingVertical: 10,
+              borderRadius: 12,
+            }}
+            onPress={() =>
+              navigateToUpgrade({ source: 'ai_progress_analysis', reason: 'feature_needed' })
+            }
           >
             <Text style={{ color: '#fff', fontWeight: '700' }}>Upgrade</Text>
           </TouchableOpacity>
@@ -541,9 +619,20 @@ export default function AIProgressAnalysisScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScreenHeader title="AI Progress Analysis" subtitle="AI-powered student insights" />
-      
+
       <View style={{ padding: 12, flexDirection: 'row', justifyContent: 'flex-end' }}>
-        <TouchableOpacity onPress={onExportPDF} style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border }}>
+        <TouchableOpacity
+          onPress={onExportPDF}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 8,
+            borderWidth: StyleSheet.hairlineWidth,
+            borderColor: theme.border,
+          }}
+        >
           <Ionicons name="document-outline" size={16} color={theme.text} />
           <Text style={{ marginLeft: 6, color: theme.text }}>Export PDF</Text>
         </TouchableOpacity>
@@ -551,11 +640,7 @@ export default function AIProgressAnalysisScreen() {
       <ScrollView
         style={styles.scrollView}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.primary}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />
         }
       >
         {/* Insights Section */}
@@ -586,8 +671,11 @@ export default function AIProgressAnalysisScreen() {
             <Text style={styles.emptyText}>No student progress data available</Text>
           ) : (
             analysisData?.studentProgress
-              .filter(() => !selectedClass || 
-                analysisData.classAnalytics.find(c => c.classId === selectedClass))
+              .filter(
+                () =>
+                  !selectedClass ||
+                  analysisData.classAnalytics.find((c) => c.classId === selectedClass),
+              )
               .slice(0, 10) // Show top 10 students
               .map(renderStudentCard)
           )}

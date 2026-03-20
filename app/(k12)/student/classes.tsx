@@ -16,7 +16,9 @@ export default function K12StudentClassesScreen() {
       heroIcon="school-outline"
       heroTone="green"
       onHeroPress={() =>
-        router.push('/screens/dash-assistant?mode=tutor&source=k12_student&tutorMode=diagnostic' as any)
+        router.push(
+          '/screens/dash-assistant?mode=tutor&source=k12_student&tutorMode=diagnostic' as any,
+        )
       }
       items={items}
       loading={loading}

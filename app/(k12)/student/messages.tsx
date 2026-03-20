@@ -16,7 +16,9 @@ export default function K12StudentMessagesScreen() {
       heroIcon="chatbubbles-outline"
       heroTone="purple"
       onHeroPress={() =>
-        router.push('/screens/dash-assistant?source=k12_student&mode=tutor&tutorMode=explain' as any)
+        router.push(
+          '/screens/dash-assistant?source=k12_student&mode=tutor&tutorMode=explain' as any,
+        )
       }
       items={items}
       loading={loading}
