@@ -71,6 +71,7 @@ export function useExcursions({ organizationId, userId }: UseExcursionsOptions):
 
     try {
       const supabase = assertSupabase();
+      const formatTime = (d: Date | null) => d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : null;
       const excursionData: Record<string, unknown> = {
         preschool_id: organizationId,
         created_by: userId,
@@ -78,10 +79,14 @@ export function useExcursions({ organizationId, userId }: UseExcursionsOptions):
         description: formData.description.trim(),
         destination: formData.destination.trim(),
         excursion_date: formData.excursion_date.toISOString().split('T')[0],
+        departure_time: formatTime(formData.departure_time),
+        return_time: formatTime(formData.return_time),
         estimated_cost_per_child: parseFloat(formData.estimated_cost_per_child) || 0,
         learning_objectives: formData.learning_objectives.split(',').map(s => s.trim()).filter(Boolean),
         items_to_bring: formData.items_to_bring.split(',').map(s => s.trim()).filter(Boolean),
         consent_required: formData.consent_required,
+        consent_deadline: formData.consent_deadline ? formData.consent_deadline.toISOString().split('T')[0] : null,
+        age_groups: formData.age_groups.length > 0 ? formData.age_groups : null,
         status: 'draft' as const,
       };
       if (formData.preflight_checks) {

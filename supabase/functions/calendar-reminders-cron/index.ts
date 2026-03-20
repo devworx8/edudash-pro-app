@@ -20,6 +20,16 @@ const REMINDER_THRESHOLDS = [
   { offsetDays: 1 as const, label: '1 day' },
 ]
 
+// Excursions get weekly reminders so parents stay informed
+const EXCURSION_REMINDER_THRESHOLDS = [
+  { offsetDays: 28, label: '4 weeks' },
+  { offsetDays: 21, label: '3 weeks' },
+  { offsetDays: 14, label: '2 weeks' },
+  { offsetDays: 7, label: '1 week' },
+  { offsetDays: 3, label: '3 days' },
+  { offsetDays: 1, label: 'Tomorrow' },
+]
+
 interface SchoolMeeting {
   id: string;
   title: string;
@@ -100,9 +110,17 @@ serve(async (req: Request): Promise<Response> => {
 
     const today = formatDateInTimezone(new Date(), DEFAULT_TIMEZONE)
     const maxWindowDate = addDays(today, 8)
+    const excursionMaxWindowDate = addDays(today, 29) // 28 days + buffer for excursion weekly reminders
 
     const results = {
-      thresholds: { sevenDay: { sent: 0, skipped: 0, failed: 0 }, threeDay: { sent: 0, skipped: 0, failed: 0 }, oneDay: { sent: 0, skipped: 0, failed: 0 } },
+      thresholds: {
+        fourWeek: { sent: 0, skipped: 0, failed: 0 },
+        threeWeek: { sent: 0, skipped: 0, failed: 0 },
+        twoWeek: { sent: 0, skipped: 0, failed: 0 },
+        sevenDay: { sent: 0, skipped: 0, failed: 0 },
+        threeDay: { sent: 0, skipped: 0, failed: 0 },
+        oneDay: { sent: 0, skipped: 0, failed: 0 },
+      },
       meetingsProcessed: 0,
       excursionsProcessed: 0,
       remindersSent: 0,
@@ -127,11 +145,21 @@ serve(async (req: Request): Promise<Response> => {
       .select('id, title, excursion_date, preschool_id')
       .in('status', ['approved', 'pending_approval'])
       .gte('excursion_date', today)
-      .lte('excursion_date', maxWindowDate)
+      .lte('excursion_date', excursionMaxWindowDate)
 
     if (excursionsError) {
       console.error('[calendar-reminders-cron] Error fetching excursions:', excursionsError)
       return new Response(JSON.stringify({ error: excursionsError.message }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } })
+    }
+
+    const thresholdKey = (days: number): string | null => {
+      if (days === 28) return 'fourWeek'
+      if (days === 21) return 'threeWeek'
+      if (days === 14) return 'twoWeek'
+      if (days === 7) return 'sevenDay'
+      if (days === 3) return 'threeDay'
+      if (days === 1) return 'oneDay'
+      return null
     }
 
     const processItem = async (
@@ -143,16 +171,18 @@ serve(async (req: Request): Promise<Response> => {
       targetAudience: string[],
       logTable: string,
       idColumn: string,
+      thresholds = REMINDER_THRESHOLDS,
     ) => {
       const itemDate = normalizeDateOnly(dateStr)
       if (!itemDate) return
       const daysUntil = diffDays(today, itemDate)
-      const threshold = REMINDER_THRESHOLDS.find((t) => t.offsetDays === daysUntil)
+      const threshold = thresholds.find((t) => t.offsetDays === daysUntil)
       if (!threshold || targetAudience.length === 0) return
 
       const { data: existing } = await supabase.from(logTable).select('id').eq(idColumn, id).eq('reminder_offset_days', threshold.offsetDays).eq('target_role', 'all').maybeSingle()
       if (existing?.id) {
-        (results.thresholds as any)[threshold.offsetDays === 7 ? 'sevenDay' : threshold.offsetDays === 3 ? 'threeDay' : 'oneDay'].skipped += 1
+        const key = thresholdKey(threshold.offsetDays)
+        if (key && (results.thresholds as any)[key]) (results.thresholds as any)[key].skipped += 1
         results.remindersSkipped += 1
         return
       }
@@ -168,7 +198,8 @@ serve(async (req: Request): Promise<Response> => {
       })
 
       if (notifyErr) {
-        (results.thresholds as any)[threshold.offsetDays === 7 ? 'sevenDay' : threshold.offsetDays === 3 ? 'threeDay' : 'oneDay'].failed += 1
+        const key = thresholdKey(threshold.offsetDays)
+        if (key && (results.thresholds as any)[key]) (results.thresholds as any)[key].failed += 1
         results.remindersFailed += 1
         return
       }
@@ -182,7 +213,8 @@ serve(async (req: Request): Promise<Response> => {
         metadata: { event_title: title, event_date: itemDate },
       })
 
-      ;(results.thresholds as any)[threshold.offsetDays === 7 ? 'sevenDay' : threshold.offsetDays === 3 ? 'threeDay' : 'oneDay'].sent += 1
+      const sentKey = thresholdKey(threshold.offsetDays)
+      if (sentKey && (results.thresholds as any)[sentKey]) (results.thresholds as any)[sentKey].sent += 1
       results.remindersSent += 1
       await new Promise((r) => setTimeout(r, 120))
     }
@@ -195,7 +227,8 @@ serve(async (req: Request): Promise<Response> => {
     for (const x of (excursions || []) as SchoolExcursion[]) {
       results.excursionsProcessed += 1
       await processItem(x.id, x.title, x.excursion_date, x.preschool_id, 'school_excursion_reminder',
-        excursionTargetAudience(), 'school_excursion_reminder_logs', 'excursion_id')
+        excursionTargetAudience(), 'school_excursion_reminder_logs', 'excursion_id',
+        EXCURSION_REMINDER_THRESHOLDS)
     }
 
     return new Response(

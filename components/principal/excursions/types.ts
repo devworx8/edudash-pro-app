@@ -49,6 +49,7 @@ export interface Excursion {
   items_to_bring: string[];
   consent_required: boolean;
   consent_deadline?: string;
+  age_groups?: AgeGroup[];
   status: ExcursionStatus;
   created_at: string;
   preflight_checks?: ExcursionPreflightChecks | null;
@@ -56,15 +57,22 @@ export interface Excursion {
 
 export type ExcursionStatus = 'draft' | 'pending_approval' | 'approved' | 'cancelled' | 'completed';
 
+export const AGE_GROUP_OPTIONS = ['0-1', '1-2', '2-3', '3-4', '4-5', 'Grade R'] as const;
+export type AgeGroup = typeof AGE_GROUP_OPTIONS[number];
+
 export interface ExcursionFormData {
   title: string;
   description: string;
   destination: string;
   excursion_date: Date;
+  departure_time: Date | null;
+  return_time: Date | null;
   estimated_cost_per_child: string;
   learning_objectives: string;
   items_to_bring: string;
   consent_required: boolean;
+  consent_deadline: Date | null;
+  age_groups: AgeGroup[];
   preflight_checks?: ExcursionPreflightChecks;
 }
 
@@ -89,10 +97,14 @@ export const getInitialExcursionFormData = (): ExcursionFormData => ({
   description: '',
   destination: '',
   excursion_date: new Date(),
+  departure_time: null,
+  return_time: null,
   estimated_cost_per_child: '0',
   learning_objectives: '',
   items_to_bring: '',
   consent_required: true,
+  consent_deadline: null,
+  age_groups: [],
   preflight_checks: { ...DEFAULT_PREFLIGHT_CHECKS },
 });
 
@@ -104,15 +116,25 @@ export const excursionToFormData = (excursion: Excursion): ExcursionFormData => 
       preflight[item.id] = Boolean(checks[item.id]);
     });
   }
+  const parseTime = (t?: string) => {
+    if (!t) return null;
+    const [h, m] = t.split(':').map(Number);
+    const d = new Date(); d.setHours(h || 0, m || 0, 0, 0);
+    return d;
+  };
   return {
     title: excursion.title,
     description: excursion.description || '',
     destination: excursion.destination,
     excursion_date: new Date(excursion.excursion_date),
+    departure_time: parseTime(excursion.departure_time),
+    return_time: parseTime(excursion.return_time),
     estimated_cost_per_child: String(excursion.estimated_cost_per_child || 0),
     learning_objectives: excursion.learning_objectives?.join(', ') || '',
     items_to_bring: excursion.items_to_bring?.join(', ') || '',
     consent_required: excursion.consent_required,
+    consent_deadline: excursion.consent_deadline ? new Date(excursion.consent_deadline) : null,
+    age_groups: excursion.age_groups || [],
     preflight_checks: preflight,
   };
 };

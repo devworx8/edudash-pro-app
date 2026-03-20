@@ -236,28 +236,66 @@ async function fetchEvents(supabase: any, schoolId: string | null) {
     }));
   }
 
+  // Fetch upcoming excursions and merge them into the timeline
+  const { data: excursionRows } = await supabase
+    .from('school_excursions')
+    .select('id, title, destination, excursion_date, departure_time, estimated_cost_per_child, status, consent_required, consent_deadline, items_to_bring')
+    .eq('preschool_id', schoolId)
+    .in('status', ['approved', 'pending_approval'])
+    .gte('excursion_date', today)
+    .order('excursion_date', { ascending: true })
+    .limit(10);
+
+  const excursionEvents = (excursionRows || []).map((ex: any) => ({
+    id: `excursion_${ex.id}`,
+    excursion_id: ex.id,
+    title: `🚌 ${ex.title}`,
+    event_date: ex.excursion_date,
+    event_type: 'excursion',
+    description: ex.destination ? `Destination: ${ex.destination}` : '',
+    source: 'school_excursions',
+    destination: ex.destination,
+    departure_time: ex.departure_time,
+    estimated_cost: ex.estimated_cost_per_child,
+    consent_required: ex.consent_required,
+    consent_deadline: ex.consent_deadline,
+    items_to_bring: ex.items_to_bring,
+  }));
+
+  rows = [...rows, ...excursionEvents].sort((a: any, b: any) => {
+    const dateA = new Date(a.event_date || '').getTime();
+    const dateB = new Date(b.event_date || '').getTime();
+    return dateA - dateB;
+  });
+
+  // Fetch reminder logs for school events
   const schoolEventIds = rows
     .filter((event: any) => event.source === 'school_events')
     .map((event: any) => event.id);
 
-  if (schoolEventIds.length === 0) {
-    return rows;
-  }
+  // Fetch reminder logs for excursions
+  const excursionIds = (excursionRows || []).map((ex: any) => ex.id);
 
-  const { data: reminderLogs } = await supabase
-    .from('school_event_reminder_logs')
-    .select('event_id, reminder_offset_days, target_role')
-    .in('event_id', schoolEventIds)
-    .eq('target_role', 'parent');
+  const [eventReminderResult, excursionReminderResult] = await Promise.all([
+    schoolEventIds.length > 0
+      ? supabase.from('school_event_reminder_logs').select('event_id, reminder_offset_days, target_role').in('event_id', schoolEventIds).eq('target_role', 'parent')
+      : { data: [] },
+    excursionIds.length > 0
+      ? supabase.from('school_excursion_reminder_logs').select('excursion_id, reminder_offset_days, target_role').in('excursion_id', excursionIds).in('target_role', ['parent', 'all'])
+      : { data: [] },
+  ]);
 
   const sentThresholdsByEvent = new Map<string, Set<number>>();
-  (reminderLogs || []).forEach((log: any) => {
+  (eventReminderResult.data || []).forEach((log: any) => {
     const eventId = String(log.event_id || '');
     if (!eventId) return;
-    if (!sentThresholdsByEvent.has(eventId)) {
-      sentThresholdsByEvent.set(eventId, new Set<number>());
-    }
+    if (!sentThresholdsByEvent.has(eventId)) sentThresholdsByEvent.set(eventId, new Set<number>());
     sentThresholdsByEvent.get(eventId)?.add(Number(log.reminder_offset_days) || 0);
+  });
+  (excursionReminderResult.data || []).forEach((log: any) => {
+    const key = `excursion_${log.excursion_id}`;
+    if (!sentThresholdsByEvent.has(key)) sentThresholdsByEvent.set(key, new Set<number>());
+    sentThresholdsByEvent.get(key)?.add(Number(log.reminder_offset_days) || 0);
   });
 
   return rows.map((row: any) => ({
@@ -306,43 +344,49 @@ function buildRecentHomework(assignments: any[], childIds: string[], children: a
 }
 
 function buildUpcomingEvents(events: any[]) {
-  const thresholdSteps: Array<7 | 3 | 1> = [7, 3, 1];
+  const defaultThresholds = [7, 3, 1];
+  const excursionThresholds = [28, 21, 14, 7, 3, 1];
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  return events.map((e: any) => ({
-    id: e.id,
-    title: e.title,
-    time: formatEventTime(new Date(e.event_date)),
-    type: (String(e.event_type || '').includes('meeting') ? 'meeting' : 'activity') as 'meeting' | 'activity' | 'assessment',
-    eventDate: e.event_date || null,
-    daysUntil: (() => {
-      const date = new Date(String(e.event_date || '').slice(0, 10));
-      if (Number.isNaN(date.getTime())) return null;
-      date.setHours(0, 0, 0, 0);
-      return Math.max(0, Math.ceil((date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)));
-    })(),
-    reminderOffsetDays: (() => {
-      const sentSet = new Set<number>(
-        Array.isArray(e.sent_thresholds) ? e.sent_thresholds.map((item: any) => Number(item) || 0) : []
-      );
-      const date = new Date(String(e.event_date || '').slice(0, 10));
-      if (Number.isNaN(date.getTime())) return null;
-      date.setHours(0, 0, 0, 0);
-      const daysUntil = Math.max(0, Math.ceil((date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)));
-      const nextThreshold = thresholdSteps.find((threshold) => threshold <= daysUntil && !sentSet.has(threshold));
-      return nextThreshold || null;
-    })(),
-    reminderLabel: (() => {
-      const sentSet = new Set<number>(
-        Array.isArray(e.sent_thresholds) ? e.sent_thresholds.map((item: any) => Number(item) || 0) : []
-      );
-      const date = new Date(String(e.event_date || '').slice(0, 10));
-      if (Number.isNaN(date.getTime())) return null;
-      date.setHours(0, 0, 0, 0);
-      const daysUntil = Math.max(0, Math.ceil((date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)));
-      const nextThreshold = thresholdSteps.find((threshold) => threshold <= daysUntil && !sentSet.has(threshold));
-      return nextThreshold ? `${nextThreshold} day${nextThreshold === 1 ? '' : 's'}` : null;
-    })(),
-  }));
+  return events.map((e: any) => {
+    const isExcursion = e.source === 'school_excursions' || e.event_type === 'excursion';
+    const steps = isExcursion ? excursionThresholds : defaultThresholds;
+
+    const date = new Date(String(e.event_date || '').slice(0, 10));
+    const validDate = !Number.isNaN(date.getTime());
+    if (validDate) date.setHours(0, 0, 0, 0);
+    const daysUntil = validDate ? Math.max(0, Math.ceil((date.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))) : null;
+
+    const sentSet = new Set<number>(
+      Array.isArray(e.sent_thresholds) ? e.sent_thresholds.map((item: any) => Number(item) || 0) : []
+    );
+    const nextThreshold = daysUntil !== null ? steps.find((t) => t <= daysUntil && !sentSet.has(t)) ?? null : null;
+
+    const formatThreshold = (t: number | null) => {
+      if (!t) return null;
+      if (t >= 7) return `${Math.round(t / 7)} week${t >= 14 ? 's' : ''}`;
+      return `${t} day${t === 1 ? '' : 's'}`;
+    };
+
+    return {
+      id: e.id,
+      title: e.title,
+      time: formatEventTime(new Date(e.event_date)),
+      type: (isExcursion ? 'excursion' : String(e.event_type || '').includes('meeting') ? 'meeting' : 'activity') as 'meeting' | 'activity' | 'assessment' | 'excursion',
+      eventDate: e.event_date || null,
+      daysUntil,
+      reminderOffsetDays: nextThreshold,
+      reminderLabel: formatThreshold(nextThreshold),
+      // Excursion-specific metadata passed through
+      ...(isExcursion ? {
+        destination: e.destination,
+        departure_time: e.departure_time,
+        estimated_cost: e.estimated_cost,
+        consent_required: e.consent_required,
+        consent_deadline: e.consent_deadline,
+        items_to_bring: e.items_to_bring,
+      } : {}),
+    };
+  });
 }

@@ -53,11 +53,29 @@ export function ExcursionCard({ excursion, onPress, onApprove, onDelete }: Excur
             })}
           </Text>
         </View>
+        {(excursion.departure_time || excursion.return_time) && (
+          <View style={styles.cardMeta}>
+            <Ionicons name="time-outline" size={16} color={theme.textSecondary} />
+            <Text style={styles.cardMetaText}>
+              {excursion.departure_time ? `Depart ${excursion.departure_time}` : ''}
+              {excursion.departure_time && excursion.return_time ? ' — ' : ''}
+              {excursion.return_time ? `Return ${excursion.return_time}` : ''}
+            </Text>
+          </View>
+        )}
         {excursion.estimated_cost_per_child > 0 && (
           <View style={styles.cardMeta}>
             <Ionicons name="cash-outline" size={16} color={theme.textSecondary} />
             <Text style={styles.cardMetaText}>
               R{excursion.estimated_cost_per_child.toFixed(2)} per child
+            </Text>
+          </View>
+        )}
+        {Array.isArray(excursion.age_groups) && excursion.age_groups.length > 0 && (
+          <View style={styles.cardMeta}>
+            <Ionicons name="people-outline" size={16} color={theme.textSecondary} />
+            <Text style={styles.cardMetaText}>
+              Ages: {excursion.age_groups.join(', ')}
             </Text>
           </View>
         )}

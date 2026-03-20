@@ -216,21 +216,48 @@ export const ParentDashboardContentSections: React.FC<ParentDashboardContentSect
       >
         {Array.isArray(dashboardData?.upcomingEvents) && dashboardData.upcomingEvents.length > 0 ? (
           <View style={{ gap: 10 }}>
-            {dashboardData.upcomingEvents.slice(0, 5).map((event: any) => (
-              <View key={event.id} style={{ borderWidth: 1, borderColor: 'rgba(148,163,184,0.25)', borderRadius: 12, padding: 12 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                  <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 }}>{event.title}</Text>
-                  <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: 'rgba(139,92,246,0.2)' }}>
-                    <Text style={{ color: '#c4b5fd', fontSize: 12, fontWeight: '700' }}>
-                      {typeof event.daysUntil === 'number' ? `${event.daysUntil}d` : 'Soon'}
-                    </Text>
+            {dashboardData.upcomingEvents.slice(0, 8).map((event: any) => {
+              const isExcursion = event.type === 'excursion' || String(event.title || '').startsWith('🚌');
+              const badgeBg = isExcursion ? 'rgba(245,158,11,0.2)' : 'rgba(139,92,246,0.2)';
+              const badgeColor = isExcursion ? '#fbbf24' : '#c4b5fd';
+              return (
+                <View key={event.id} style={{ borderWidth: 1, borderColor: isExcursion ? 'rgba(245,158,11,0.3)' : 'rgba(148,163,184,0.25)', borderRadius: 12, padding: 12, backgroundColor: isExcursion ? 'rgba(245,158,11,0.05)' : 'transparent' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', flex: 1 }}>{event.title}</Text>
+                    <View style={{ paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, backgroundColor: badgeBg }}>
+                      <Text style={{ color: badgeColor, fontSize: 12, fontWeight: '700' }}>
+                        {typeof event.daysUntil === 'number' ? `${event.daysUntil}d` : 'Soon'}
+                      </Text>
+                    </View>
                   </View>
+                  <Text style={{ color: 'rgba(203,213,225,0.85)', fontSize: 12, marginTop: 6 }}>
+                    {event.time || 'Upcoming event'} • Next reminder: {event.reminderLabel || 'complete'}
+                  </Text>
+                  {isExcursion && event.destination && (
+                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(245,158,11,0.15)' }}>
+                      <Text style={{ color: '#fbbf24', fontSize: 12, fontWeight: '600' }}>
+                        📍 {event.destination}
+                      </Text>
+                      {event.estimated_cost > 0 && (
+                        <Text style={{ color: 'rgba(203,213,225,0.7)', fontSize: 11, marginTop: 3 }}>
+                          Cost: R{Number(event.estimated_cost).toFixed(2)} per child
+                        </Text>
+                      )}
+                      {event.consent_required && (
+                        <Text style={{ color: '#f87171', fontSize: 11, marginTop: 3, fontWeight: '600' }}>
+                          Consent required{event.consent_deadline ? ` by ${new Date(event.consent_deadline).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })}` : ''}
+                        </Text>
+                      )}
+                      {Array.isArray(event.items_to_bring) && event.items_to_bring.length > 0 && (
+                        <Text style={{ color: 'rgba(203,213,225,0.7)', fontSize: 11, marginTop: 3 }}>
+                          Bring: {event.items_to_bring.slice(0, 4).join(', ')}{event.items_to_bring.length > 4 ? '...' : ''}
+                        </Text>
+                      )}
+                    </View>
+                  )}
                 </View>
-                <Text style={{ color: 'rgba(203,213,225,0.85)', fontSize: 12, marginTop: 6 }}>
-                  {event.time || 'Upcoming event'} • Next reminder: {event.reminderLabel || 'complete'}
-                </Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ) : (
           <EmptyState

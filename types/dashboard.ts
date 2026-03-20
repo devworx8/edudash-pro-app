@@ -51,8 +51,15 @@ export interface UpcomingEvent {
   type?: string;
   eventDate?: string | null;
   daysUntil?: number | null;
-  reminderOffsetDays?: 7 | 3 | 1 | null;
+  reminderOffsetDays?: number | null;
   reminderLabel?: string | null;
+  // Excursion-specific metadata (present when type === 'excursion')
+  destination?: string;
+  departure_time?: string | null;
+  estimated_cost?: number;
+  consent_required?: boolean;
+  consent_deadline?: string | null;
+  items_to_bring?: string[];
 }
 
 export interface ChildData {

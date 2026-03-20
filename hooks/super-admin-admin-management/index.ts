@@ -103,8 +103,8 @@ export function useSuperAdminAdminManagement(showAlert: (config: ShowAlertConfig
       }
 
       showAlert({
-        title: 'Invitation Sent! 🎉',
-        message: `An invitation email has been sent to ${formData.email}. They will receive a link to set up their account.`,
+        title: 'Account Created! 🎉',
+        message: `${formData.email} has been set up. They will receive an email with their login credentials.`,
         buttons: [{ text: 'OK' }],
         type: 'success',
       });
