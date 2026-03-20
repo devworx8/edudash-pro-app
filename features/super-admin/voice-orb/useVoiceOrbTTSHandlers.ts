@@ -150,8 +150,16 @@ export function useVoiceOrbTTSHandlers({
     }
   }, []);
 
+  // Track the combined speaking state so onTTSStart/onTTSEnd only fire on
+  // actual transitions (false→true / true→false), not on every dep change.
+  const prevSpeakingRef = useRef(ttsIsSpeaking || isSpeaking);
   useEffect(() => {
-    if (ttsIsSpeaking || isSpeaking) {
+    const nowSpeaking = ttsIsSpeaking || isSpeaking;
+    const wasSpeaking = prevSpeakingRef.current;
+    prevSpeakingRef.current = nowSpeaking;
+
+    if (nowSpeaking && !wasSpeaking) {
+      // Transition: idle → speaking
       if (isMuted) {
         if (recorderState.isRecording) {
           console.log('[VoiceOrb] 🔇 Stopping recording - TTS starting while muted');
@@ -168,7 +176,8 @@ export function useVoiceOrbTTSHandlers({
       }
       setStatusText('Speaking...');
       onTTSStart?.();
-    } else {
+    } else if (!nowSpeaking && wasSpeaking) {
+      // Transition: speaking → idle
       onTTSEnd?.();
     }
   }, [ttsIsSpeaking, isSpeaking, recorderState.isRecording, recorderActions, onStopListening, onTTSStart, onTTSEnd, cancelLiveListening, clearLiveTimers, isMuted, setStatusText, setUsingLiveSTT, usingLiveSTTRef]);

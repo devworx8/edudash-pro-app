@@ -455,7 +455,8 @@ export default function DashVoiceScreen() {
     if (pendingTurn.language && pendingTurn.language !== preferredLanguage) {
       setPreferredLanguage(pendingTurn.language);
     }
-    if (isSpeakingRef.current || isSpeaking) {
+    // Use ref to avoid re-triggering this effect on every isSpeaking toggle
+    if (isSpeakingRef.current) {
       cancelSpeech();
       isSpeakingRef.current = false;
       setIsSpeaking(false);
@@ -469,16 +470,14 @@ export default function DashVoiceScreen() {
       pendingTurn.text,
       pendingTurn.dictationProbe ? { dictationProbe: pendingTurn.dictationProbe } : undefined,
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     isProcessing,
-    isSpeaking,
-    isSpeakingRef,
     logDashTrace,
     preferredLanguage,
-    resetStreamingSpeech,
     sendMessage,
+    cancelSpeech,
     setIsSpeaking,
-    speechQueueRef,
   ]);
 
   const handleComposerTextChange = useCallback((text: string) => {
