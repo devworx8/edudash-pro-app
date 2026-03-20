@@ -11,6 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { assertSupabase } from '@/lib/supabase';
 import { logger } from '@/lib/logger';
 import * as Sentry from '@sentry/react-native';
+import { resolveAudioPayload } from './voiceTranscriptionUtils';
 
 const CACHE_PREFIX = 'voice_transcript:';
 
@@ -65,6 +66,8 @@ export function useVoiceTranscription(): UseVoiceTranscriptionReturn {
       const promise = (async () => {
         setTranscribing((prev) => new Set(prev).add(cacheKey));
 
+        const bodyPayload = await resolveAudioPayload(audioUrl);
+
         while (attempt <= MAX_RETRIES) {
           try {
             const client = assertSupabase();
@@ -81,11 +84,7 @@ export function useVoiceTranscription(): UseVoiceTranscriptionReturn {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session.access_token}`,
               },
-              body: JSON.stringify({
-                audio_url: audioUrl,
-                language: 'auto',
-                auto_detect: true,
-              }),
+              body: JSON.stringify(bodyPayload),
             });
 
             if (!response.ok) {
@@ -128,6 +127,9 @@ export function useVoiceTranscription(): UseVoiceTranscriptionReturn {
             lastError = err;
             logger.error('useVoiceTranscription', 'Transcription error:', err);
             const status = Number(err?.status || 0);
+            if ([401, 403].includes(status) && attempt < MAX_RETRIES) {
+              try { await assertSupabase().auth.refreshSession(); } catch {}
+            }
             if ([401, 403, 429, 500, 502, 503, 504].includes(status) && attempt < MAX_RETRIES) {
               attempt++;
               await new Promise((res) => setTimeout(res, 600 * attempt));
@@ -140,7 +142,13 @@ export function useVoiceTranscription(): UseVoiceTranscriptionReturn {
         // Capture in Sentry with context
         Sentry.captureException(lastError, {
           tags: { feature: 'voice-transcription' },
-          extra: { audioUrl, messageId, attempt, error: lastError?.message || lastError },
+          extra: {
+            audioUrl: audioUrl?.substring(0, 80),
+            messageId,
+            attempt,
+            payloadSource: bodyPayload.storage_path ? 'storage_path' : bodyPayload.audio_base64 ? 'base64' : 'audio_url',
+            error: lastError?.message || lastError,
+          },
         });
 
         const fallback = 'Transcription unavailable. Please try again later.';

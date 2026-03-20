@@ -20,6 +20,12 @@ export type DashVoiceDictationProbe = {
 
 export type ConversationEntry = { role: 'user' | 'assistant'; content: string };
 
+export type PendingVoiceTurn = {
+  text: string;
+  language?: SupportedLanguage;
+  dictationProbe?: DashVoiceDictationProbe;
+};
+
 export type AttachedImage = { uri: string; base64: string; source: 'scanner' | 'library' } | null;
 
 export interface UseDashVoiceSendMessageParams {

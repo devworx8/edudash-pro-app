@@ -123,6 +123,33 @@ serve(async (req: Request) => {
       );
     }
 
+    // Defensive URL handling — resolve blob://, relative paths, etc.
+    let resolvedAudioUrl = audio_url;
+    if (resolvedAudioUrl && !audio_base64) {
+      if (resolvedAudioUrl.startsWith('blob:')) {
+        return new Response(
+          JSON.stringify({
+            error: 'Blob URLs cannot be processed server-side. Send audio_base64 instead.',
+            code: 'BLOB_URL_NOT_SUPPORTED',
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        );
+      }
+      if (!resolvedAudioUrl.startsWith('http')) {
+        const { data: signedUrlData } = await supabase.storage
+          .from('voice-notes')
+          .createSignedUrl(resolvedAudioUrl, 10 * 60);
+        if (signedUrlData?.signedUrl) {
+          resolvedAudioUrl = signedUrlData.signedUrl;
+        } else {
+          return new Response(
+            JSON.stringify({ error: 'Invalid audio_url — could not resolve as storage path' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+          );
+        }
+      }
+    }
+
     // Resolve MIME type and file extension from client hint or sensible defaults.
     // Whisper-1 auto-detects format, but correct metadata avoids future breakage.
     const MIME_TO_EXT: Record<string, string> = {
@@ -155,7 +182,7 @@ serve(async (req: Request) => {
       const supabaseHost = new URL(SUPABASE_URL).host;
       let audioUrlObj: URL;
       try {
-        audioUrlObj = new URL(audio_url);
+        audioUrlObj = new URL(resolvedAudioUrl);
       } catch {
         return new Response(
           JSON.stringify({ error: 'Invalid audio_url' }),
@@ -169,7 +196,7 @@ serve(async (req: Request) => {
         );
       }
 
-      const audioResp = await fetch(audio_url);
+      const audioResp = await fetch(resolvedAudioUrl);
       if (!audioResp.ok) {
         throw new Error('Failed to download audio');
       }

@@ -13,78 +13,43 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  Platform,
-  Dimensions,
-  KeyboardAvoidingView,
-  ScrollView,
-  Image,
+  View, Text, TextInput, TouchableOpacity, Platform,
+  Dimensions, KeyboardAvoidingView, ScrollView, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { getOrganizationType } from '@/lib/tenant/compat';
 import type { SupportedLanguage } from '@/components/super-admin/voice-orb/useVoiceSTT';
 import { resolveDashPolicy } from '@/lib/dash-ai/DashPolicyResolver';
 import { resolveAIProxyScopeFromRole } from '@/lib/ai/aiProxyScope';
-import { shouldGreetToday, buildDynamicGreeting } from '@/lib/ai/greetingManager';
 import { resolveEffectiveTier } from '@/lib/tiers/resolveEffectiveTier';
 import { useRealtimeTier } from '@/hooks/useRealtimeTier';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import HomeworkScanner from '@/components/ai/HomeworkScanner';
 import { LanguageDropdown, getLanguageLabel } from '@/components/dash-orb/LanguageDropdown';
-import { formatTranscript } from '@/lib/voice/formatTranscript';
 import { DashTutorWhiteboard, type WhiteboardContent } from '@/components/ai/DashTutorWhiteboard';
 import { loadAutoScanBudget } from '@/lib/dash-ai/imageBudget';
 import { s } from './dash-voice.styles';
 import {
-  DashVoiceHeader,
-  DashVoiceErrorBanner,
-  DashVoiceTranscriptPanel,
-  DashVoiceComposer,
-  DashVoiceOrbSection,
-  DashVoiceFlowPreview,
+  DashVoiceHeader, DashVoiceErrorBanner, DashVoiceTranscriptPanel,
+  DashVoiceComposer, DashVoiceOrbSection, DashVoiceFlowPreview,
+  DashVoiceBottomActions,
 } from '@/components/dash-voice';
 import type { VoiceOrbRef } from '@/features/super-admin/voice-orb/types';
+import type { OrbPdfArtifact, DashVoiceDictationProbe, PendingVoiceTurn, ConversationEntry } from '@/hooks/dash-voice/types';
 import {
-  useDashVoiceTTS,
-  useDashVoiceSendMessage,
-  useDashVoiceMediaPicker,
-  useDashVoiceFlowMode,
+  useDashVoiceTTS, useDashVoiceSendMessage, useDashVoiceMediaPicker,
+  useDashVoiceFlowMode, useDashVoiceHandlers,
 } from '@/hooks/dash-voice';
+import { VOICE_COMPOSER_GROW_THRESHOLD, VOICE_COMPOSER_COMPACT_HEIGHT, VOICE_COMPOSER_MAX_HEIGHT } from '@/hooks/dash-voice/composerUtils';
 import { useDashAIQuota } from '@/hooks/dash-ai/useDashAIQuota';
 import type { AIModelId } from '@/lib/ai/models';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const ORB_SIZE = Math.min(SCREEN_WIDTH * 0.78, 320);
-const VOICE_COMPOSER_COMPACT_HEIGHT = 44;
-const VOICE_COMPOSER_GROW_THRESHOLD = 60;
-const VOICE_COMPOSER_MAX_HEIGHT = 124;
-const VOICE_COMPOSER_LINE_HEIGHT = 20;
-const VOICE_COMPOSER_WEB_CHARS_PER_LINE = Math.max(22, Math.floor((SCREEN_WIDTH - 152) / 8));
-
-const estimateWrappedLineCount = (text: string, charsPerLine: number): number =>
-  String(text || '')
-    .replace(/\r/g, '')
-    .split('\n')
-    .reduce(
-      (total, line) => total + Math.max(1, Math.ceil(Math.max(line.length, 1) / charsPerLine)),
-      0,
-    );
-
-const getWebComposerHeight = (text: string): number => {
-  const lineCount = estimateWrappedLineCount(text, VOICE_COMPOSER_WEB_CHARS_PER_LINE);
-  if (lineCount <= 1) return VOICE_COMPOSER_COMPACT_HEIGHT;
-  return Math.min(
-    VOICE_COMPOSER_COMPACT_HEIGHT + (lineCount - 1) * VOICE_COMPOSER_LINE_HEIGHT,
-    VOICE_COMPOSER_MAX_HEIGHT,
-  );
-};
 
 const isWeb = Platform.OS === 'web';
 let VoiceOrb: React.ForwardRefExoticComponent<any> | null = null;
@@ -92,17 +57,6 @@ if (!isWeb) {
   const mod = require('@/components/super-admin/voice-orb');
   VoiceOrb = mod.VoiceOrb;
 }
-
-type OrbPdfArtifact = { url: string; title: string; filename?: string | null };
-type DashVoiceDictationProbe = {
-  run_id?: string;
-  platform: 'mobile' | 'web';
-  source: string;
-  stt_start_at?: string;
-  first_partial_at?: string;
-  final_transcript_at?: string;
-  commit_at?: string;
-};
 
 export default function DashVoiceScreen() {
   const { theme } = useTheme();
@@ -151,22 +105,16 @@ export default function DashVoiceScreen() {
   const [lastUserTranscript, setLastUserTranscript] = useState('');
   const [latestPdfArtifact, setLatestPdfArtifact] = useState<OrbPdfArtifact | null>(null);
   const [whiteboardContent, setWhiteboardContent] = useState<WhiteboardContent | null>(null);
-  const [conversationHistory, setConversationHistory] = useState<
-    Array<{ role: 'user' | 'assistant'; content: string }>
-  >([]);
+  const [conversationHistory, setConversationHistory] = useState<ConversationEntry[]>([]);
 
-  const conversationHistoryRef = useRef<Array<{ role: 'user' | 'assistant'; content: string }>>([]);
+  const conversationHistoryRef = useRef<ConversationEntry[]>([]);
   const conversationIdRef = useRef(`orb_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
   const voiceOrbRef = useRef<VoiceOrbRef>(null);
   const inputRef = useRef<TextInput>(null);
   const ccScrollRef = useRef<ScrollView>(null);
   const voiceDictationProbeRef = useRef<DashVoiceDictationProbe | null>(null);
   const activeRequestRef = useRef<{ abort: () => void } | null>(null);
-  const pendingVoiceTurnRef = useRef<{
-    text: string;
-    language?: SupportedLanguage;
-    dictationProbe?: DashVoiceDictationProbe;
-  } | null>(null);
+  const pendingVoiceTurnRef = useRef<PendingVoiceTurn | null>(null);
 
   const DASH_TRACE_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_DASH_VOICE_TRACE === 'true';
   const STREAMING_TTS_ENABLED = process.env.EXPO_PUBLIC_DASH_VOICE_STREAMING_TTS !== 'false';
@@ -241,31 +189,7 @@ export default function DashVoiceScreen() {
     isSpeakingRef.current = isSpeaking;
   }, [isSpeaking, isSpeakingRef]);
 
-  // ── Greeting ──────────────────────────────────────────────────────
-  const hasGreetedRef = useRef(false);
-  useEffect(() => {
-    if (hasGreetedRef.current || conversationHistoryRef.current.length > 0) return;
-    hasGreetedRef.current = true;
-    const name = profile?.first_name || profile?.full_name?.split(' ')[0] || '';
-    (async () => {
-      const shouldGreet = await shouldGreetToday(user?.id);
-      const opener = shouldGreet
-        ? buildDynamicGreeting({
-            userName: name || null,
-            role,
-            orgType,
-            language: preferredLanguage,
-          })
-        : name
-          ? `Hey ${name}, what can I help with?`
-          : 'What can I help with?';
-      const hist = [{ role: 'assistant' as const, content: opener }];
-      conversationHistoryRef.current = hist;
-      setConversationHistory(hist);
-      setLastResponse(opener);
-      setIsGreetingLoading(false);
-    })();
-  }, [orgType, preferredLanguage, profile?.first_name, profile?.full_name, role, user?.id]);
+  // ── Greeting managed by useDashVoiceHandlers ──────────────────────
 
   // ── Media picker hook ─────────────────────────────────────────────
   const { pickMedia, takePhoto, handleScannerScanned } = useDashVoiceMediaPicker({
@@ -322,192 +246,21 @@ export default function DashVoiceScreen() {
     [_sendMessageRaw, quota],
   );
 
-  // ── Stop Dash activity ────────────────────────────────────────────
-  const stopDashActivity = useCallback(
-    (reason = 'manual_stop', blockRestart = false) => {
-      logDashTrace('dash_stop', { reason, blockRestart });
-      if (blockRestart) setRestartBlocked(true);
-      activeRequestRef.current?.abort();
-      activeRequestRef.current = null;
-      cancelSpeech();
-      resetStreamingSpeech();
-      setIsListening(false);
-      setIsProcessing(false);
-      setStreamingText('');
-    },
-    [logDashTrace, cancelSpeech, resetStreamingSpeech],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      setRestartBlocked(false);
-      return () => {
-        stopDashActivity('navigation_blur', true);
-      };
-    }, [stopDashActivity]),
-  );
-
-  useEffect(
-    () => () => {
-      activeRequestRef.current?.abort();
-      stopDashActivity('unmount', true);
-    },
-    [stopDashActivity],
-  );
-
-  // ── Handlers ──────────────────────────────────────────────────────
-  const handleVoiceError = useCallback((message: string) => {
-    const n = String(message || '').toLowerCase();
-    if (!n) return;
-    if (n.includes('network_retrying'))
-      return setVoiceErrorBanner('I lost connection for a moment. Retrying listening now...');
-    if (n.includes('phonics') && n.includes('cloud tts'))
-      return setVoiceErrorBanner(
-        'Phonics voice needs Azure cloud TTS. It is currently unavailable, so letter sounds may fail.',
-      );
-    if (n.includes('service_unconfigured') || n.includes('502'))
-      return setVoiceErrorBanner(
-        'Azure voice is unavailable right now. Check tts-proxy Azure secrets/config.',
-      );
-    if (n.includes('voice service unavailable') || n.includes('500') || n.includes('503'))
-      return setVoiceErrorBanner('Voice service is temporarily unavailable. Please try again.');
-    if (n.includes('not authenticated') || n.includes('401') || n.includes('403'))
-      return setVoiceErrorBanner('Session expired. Please sign in again.');
-    if (n.includes('not available') || n.includes('permission denied'))
-      return setVoiceErrorBanner('Microphone or voice recognition not available on this device.');
-    // Only classify as network issue for actual connectivity failures
-    if (
-      n.includes('network request failed') ||
-      n.includes('err_internet') ||
-      n.includes('no internet')
-    )
-      return setVoiceErrorBanner(
-        'Voice recognition needs a stable connection. Check internet and try again.',
-      );
-    if (n.includes('timeout'))
-      return setVoiceErrorBanner(
-        'Voice request timed out. This usually resolves itself — please try again.',
-      );
-    setVoiceErrorBanner('Voice encountered an error. Please try again.');
-  }, []);
-
-  const handleVoiceInput = useCallback(
-    (transcript: string, language?: SupportedLanguage) => {
-      const nextLanguage = language || preferredLanguage;
-      const formatted = formatTranscript(transcript, language, {
-        whisperFlow: true,
-        summarize: false,
-        preschoolMode: orgType === 'preschool',
-        maxSummaryWords: orgType === 'preschool' ? 16 : 20,
-      });
-      logDashTrace('voice_input_received', {
-        language: nextLanguage,
-        rawChars: String(transcript || '').length,
-        cleanChars: formatted.trim().length,
-        rawPreview: String(transcript || '').slice(0, 120),
-        cleanPreview: formatted.trim().slice(0, 120),
-      });
-      if (language) setPreferredLanguage(language);
-      const cleaned = formatted.trim();
-      if (!cleaned) return;
-
-      // Flow Mode: record auto-correction flash (does NOT block sending)
-      if (flowMode.enabled) {
-        flowMode.recordCorrection(String(transcript || ''), cleaned);
-      }
-
-      const nowIso = new Date().toISOString();
-      const benchmarkRunId = String(process.env.EXPO_PUBLIC_VOICE_BENCHMARK_RUN_ID || '').trim();
-      const dictationProbe: DashVoiceDictationProbe = {
-        ...(voiceDictationProbeRef.current || { platform: 'mobile', source: 'dash_voice_orb' }),
-        platform: 'mobile',
-        source: 'dash_voice_orb',
-        final_transcript_at: voiceDictationProbeRef.current?.final_transcript_at || nowIso,
-        commit_at: nowIso,
-        ...(benchmarkRunId ? { run_id: benchmarkRunId } : {}),
-      };
-      voiceDictationProbeRef.current = null;
-      setLiveUserTranscript('');
-      setLastUserTranscript(cleaned);
-      if (isProcessing) {
-        pendingVoiceTurnRef.current = {
-          text: cleaned,
-          language: nextLanguage,
-          dictationProbe,
-        };
-        logDashTrace('voice_input_queued', {
-          reason: 'processing',
-          language: nextLanguage,
-          preview: cleaned.slice(0, 120),
-        });
-        return;
-      }
-      sendMessage(cleaned, { dictationProbe });
-    },
-    [isProcessing, logDashTrace, orgType, preferredLanguage, sendMessage, flowMode],
-  );
-
-  useEffect(() => {
-    if (isProcessing) return;
-    const pendingTurn = pendingVoiceTurnRef.current;
-    if (!pendingTurn) return;
-    pendingVoiceTurnRef.current = null;
-    if (pendingTurn.language && pendingTurn.language !== preferredLanguage) {
-      setPreferredLanguage(pendingTurn.language);
-    }
-    // Use ref to avoid re-triggering this effect on every isSpeaking toggle
-    if (isSpeakingRef.current) {
-      cancelSpeech();
-      isSpeakingRef.current = false;
-      setIsSpeaking(false);
-      logDashTrace('dash_stop', { reason: 'flush_pending_voice_turn' });
-    }
-    logDashTrace('voice_input_flushed', {
-      language: pendingTurn.language || preferredLanguage,
-      preview: pendingTurn.text.slice(0, 120),
-    });
-    sendMessage(
-      pendingTurn.text,
-      pendingTurn.dictationProbe ? { dictationProbe: pendingTurn.dictationProbe } : undefined,
-    );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    isProcessing,
-    logDashTrace,
-    preferredLanguage,
-    sendMessage,
-    cancelSpeech,
-    setIsSpeaking,
-  ]);
-
-  const handleComposerTextChange = useCallback((text: string) => {
-    setInputText(text);
-    if (!text.trim()) {
-      setInputHeight(VOICE_COMPOSER_COMPACT_HEIGHT);
-      return;
-    }
-    if (Platform.OS === 'web') setInputHeight(getWebComposerHeight(text));
-  }, []);
-
-  const handleSubmit = useCallback(() => {
-    if (inputText.trim()) {
-      sendMessage(inputText);
-      setInputText('');
-      setInputHeight(VOICE_COMPOSER_COMPACT_HEIGHT);
-    }
-  }, [inputText, sendMessage]);
-
-  const handleInputFocus = useCallback(() => {
-    if (isSpeakingRef.current || isSpeaking) {
-      voiceOrbRef.current?.stopSpeaking?.().catch(() => {});
-      logDashTrace('dash_stop', { reason: 'input_focus_stop_speaking' });
-    }
-    if (isListening) {
-      voiceOrbRef.current?.stopListening?.().catch(() => {});
-      setIsListening(false);
-      logDashTrace('dash_stop', { reason: 'input_focus_stop_listening' });
-    }
-  }, [isListening, isSpeaking, isSpeakingRef, logDashTrace]);
+  // ── Handlers (delegated to useDashVoiceHandlers) ──────────────────
+  const {
+    stopDashActivity, handleVoiceError, handleVoiceInput,
+    handleComposerTextChange, handleSubmit, handleInputFocus,
+  } = useDashVoiceHandlers({
+    profile, user, role, orgType, preferredLanguage, setPreferredLanguage,
+    isProcessing, isSpeaking, isListening, inputText,
+    setIsListening, setIsProcessing, setStreamingText, setRestartBlocked,
+    setIsSpeaking, setVoiceErrorBanner, setInputText, setInputHeight,
+    setLiveUserTranscript, setLastUserTranscript, setLastResponse,
+    setConversationHistory, setIsGreetingLoading,
+    voiceOrbRef, isSpeakingRef, activeRequestRef,
+    conversationHistoryRef, pendingVoiceTurnRef, voiceDictationProbeRef,
+    sendMessage, cancelSpeech, resetStreamingSpeech, logDashTrace, flowMode,
+  });
 
   // ── Derived ───────────────────────────────────────────────────────
   const quickActions = useMemo(() => dashPolicy.quickActions, [dashPolicy.quickActions]);
@@ -647,95 +400,21 @@ export default function DashVoiceScreen() {
               />
             ) : null}
 
-            {!displayedText &&
-              !isProcessing &&
-              !isGreetingLoading &&
-              conversationHistory.length <= 1 &&
-              !conversationHistory.some((m) => m.role === 'user') && (
-                <View style={s.quickActions}>
-                  {quickActions.map((action) => (
-                    <TouchableOpacity
-                      key={action.id}
-                      style={[
-                        s.quickChip,
-                        { borderColor: theme.border, backgroundColor: theme.surface },
-                      ]}
-                      onPress={() => sendMessage(action.prompt)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name={action.icon as any} size={18} color={theme.primary} />
-                      <Text style={[s.quickChipText, { color: theme.text }]}>{action.label}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-
-            {latestPdfArtifact?.url && (
-              <TouchableOpacity
-                style={[
-                  s.fullChatLink,
-                  {
-                    borderColor: theme.primary + '44',
-                    borderWidth: 1,
-                    backgroundColor: theme.primary + '12',
-                  },
-                ]}
-                onPress={() =>
-                  router.push({
-                    pathname: '/screens/pdf-viewer',
-                    params: {
-                      title: latestPdfArtifact!.title || 'Generated PDF',
-                      url: latestPdfArtifact!.url,
-                    },
-                  } as any)
-                }
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Open latest generated PDF"
-              >
-                <Ionicons name="document-text-outline" size={16} color={theme.primary} />
-                <Text style={[s.fullChatText, { color: theme.primary }]}>Open latest PDF</Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={s.fullChatLink}
-              onPress={async () => {
+            <DashVoiceBottomActions
+              theme={theme}
+              quickActions={quickActions}
+              showQuickActions={!displayedText && !isProcessing && !isGreetingLoading && conversationHistory.length <= 1 && !conversationHistory.some((m) => m.role === 'user')}
+              latestPdfArtifact={latestPdfArtifact}
+              flowEnabled={flowMode.enabled}
+              onQuickAction={(prompt) => sendMessage(prompt)}
+              onOpenPdf={() => router.push({ pathname: '/screens/pdf-viewer', params: { title: latestPdfArtifact?.title || 'Generated PDF', url: latestPdfArtifact?.url || '' } } as any)}
+              onContinueFullChat={async () => {
                 await persistOrbMessages(conversationHistoryRef.current);
                 stopDashActivity('continue_full_chat', true);
                 router.push({ pathname: '/screens/dash-assistant', params: { source: 'orb' } });
               }}
-            >
-              <Ionicons name="chatbubble-ellipses-outline" size={16} color={theme.primary} />
-              <Text style={[s.fullChatText, { color: theme.primary }]}>
-                Continue in full Dash chat
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={s.fullChatLink}
-              onPress={() => flowMode.setEnabled(!flowMode.enabled)}
-              activeOpacity={0.7}
-              accessibilityRole="switch"
-              accessibilityLabel="Toggle Flow Mode"
-              accessibilityState={{ checked: flowMode.enabled }}
-            >
-              <Ionicons
-                name={flowMode.enabled ? 'eye' : 'eye-off-outline'}
-                size={16}
-                color={flowMode.enabled ? theme.primary : theme.textSecondary}
-              />
-              <Text
-                style={[
-                  s.fullChatText,
-                  { color: flowMode.enabled ? theme.primary : theme.textSecondary },
-                ]}
-              >
-                {flowMode.enabled
-                  ? 'Flow Mode on — auto-correct active'
-                  : 'Flow Mode off — auto-send'}
-              </Text>
-            </TouchableOpacity>
+              onToggleFlowMode={() => flowMode.setEnabled(!flowMode.enabled)}
+            />
           </ScrollView>
 
           {attachedImage && (

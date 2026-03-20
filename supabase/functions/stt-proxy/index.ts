@@ -115,11 +115,23 @@ serve(async (req: Request) => {
     }
 
     if (!transcribeResp.ok) {
+      const errorMsg = String(transcribeData.error || 'Transcription failed');
+      if (transcribeResp.status === 400) {
+        console.warn(
+          '[stt-proxy] transcribe-audio 400:',
+          errorMsg,
+          '| source:', normalized.source,
+          '| hasAudioUrl:', Boolean(audioUrl),
+        );
+      }
       return jsonResponse(
         {
-          error: String(transcribeData.error || 'Transcription failed'),
+          error: errorMsg,
           message: String(transcribeData.message || ''),
           details: transcribeData.details || null,
+          hint: transcribeResp.status === 400
+            ? 'Prefer sending audio_base64 or storage_path instead of audio_url'
+            : undefined,
         },
         transcribeResp.status,
         corsHeaders,

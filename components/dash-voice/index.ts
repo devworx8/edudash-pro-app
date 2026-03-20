@@ -4,3 +4,4 @@ export { DashVoiceTranscriptPanel } from './DashVoiceTranscriptPanel';
 export { DashVoiceComposer } from './DashVoiceComposer';
 export { DashVoiceOrbSection } from './DashVoiceOrbSection';
 export { DashVoiceFlowPreview } from './DashVoiceFlowPreview';
+export { DashVoiceBottomActions } from './DashVoiceBottomActions';

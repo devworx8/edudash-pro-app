@@ -4,3 +4,5 @@ export { useDashVoiceMediaPicker } from './useDashVoiceMediaPicker';
 export { useDashVoiceStreaming } from './useDashVoiceStreaming';
 export { useDashVoiceOCR } from './useDashVoiceOCR';
 export { useDashVoiceFlowMode } from './useDashVoiceFlowMode';
+export { useDashVoiceHandlers } from './useDashVoiceHandlers';
+export { mapVoiceError } from './voiceErrorMapper';
