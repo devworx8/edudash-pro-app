@@ -285,6 +285,11 @@ Respond in JSON format:
 }`;
 
     try {
+      // §3.1: Quota pre-check before AI call
+      const { assertQuotaForService: checkVetQuota } = await import('@/lib/ai/guards');
+      const vetQuota = await checkVetQuota('chat_message');
+      if (!vetQuota.allowed) throw new Error('AI quota exceeded — please upgrade or try again later.');
+
       const { data, error } = await supabase.functions.invoke('ai-proxy', {
         body: {
           action: 'candidate_screening',

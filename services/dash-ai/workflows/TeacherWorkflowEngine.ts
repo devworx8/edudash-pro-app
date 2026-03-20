@@ -15,6 +15,7 @@
 
 import { assertSupabase } from '@/lib/supabase'
 import { isAIEnabled } from '@/lib/ai/aiConfig'
+import { assertQuotaForService } from '@/lib/ai/guards'
 import { track } from '@/lib/analytics'
 import type { DashTask, DashTaskStep } from '@/services/dash-ai/types'
 import type {
@@ -359,6 +360,11 @@ export class TeacherWorkflowEngine {
       )
 
       // Call AI via Edge Function
+      const quota = await assertQuotaForService(
+        (stepTemplate.serviceType ?? 'lesson_generation') as any, 1, context.userId,
+      )
+      if (!quota.allowed) throw new Error('AI quota exceeded')
+
       const supabase = assertSupabase()
       const { data, error } = await supabase.functions.invoke('ai-proxy', {
         body: {

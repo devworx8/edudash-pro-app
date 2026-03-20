@@ -17,6 +17,7 @@ export type AIModelInfo = {
 }
 
 // Central place to tune model weights for UI hints and rough cost estimates
+// Must stay in sync with supabase/functions/ai-proxy/config.ts MODEL_QUOTA_WEIGHTS
 export const MODEL_WEIGHTS: Record<AIModelId, number> = {
   'claude-haiku-4-5-20251001': 2,
   'claude-3-7-sonnet-20250219': 6,

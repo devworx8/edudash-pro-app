@@ -121,8 +121,8 @@ export function useDashAIQuota(
 
         return { allowed: false };
       } catch (quotaError) {
-        console.warn('[useDashAIQuota] Quota check failed:', quotaError);
-        return { allowed: true }; // Fail-open
+        console.warn('[useDashAIQuota] Quota check failed — blocking (fail-closed):', quotaError);
+        return { allowed: false }; // Fail-closed per Engineering Super Prompt §3.1
       }
     },
     [user?.id, capabilityTier, selectedModel, setSelectedModel, canOfferRewardedQuotaAd, offerRewarded, unlockFeature, isFeatureUnlocked],
@@ -147,7 +147,7 @@ export function useDashAIQuota(
         }
         return true;
       } catch {
-        return true;
+        return false; // Fail-closed per Engineering Super Prompt §3.1
       }
     },
     [user?.id],

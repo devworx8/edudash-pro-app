@@ -15,6 +15,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { AI_SERVICE_TYPES } from '@/lib/ai/aiConfig';
+import { assertQuotaForService } from '@/lib/ai/guards';
 import type {
   QuizConfig,
   QuizQuestion,
@@ -109,6 +110,10 @@ export class DashQuizService {
 
     // Build the prompt
     const prompt = DashQuizService.buildGenerationPrompt(effectiveConfig);
+
+    // §3.1: Quota pre-check before AI call
+    const quota = await assertQuotaForService('chat_message', 1, userId);
+    if (!quota.allowed) throw new Error('AI quota exceeded — please upgrade or try again later.');
 
     // Call AI to generate questions
     const { data, error: fnError } = await supabase.functions.invoke('ai-proxy', {

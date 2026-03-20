@@ -1,4 +1,5 @@
 import { assertSupabase } from '@/lib/supabase';
+import { assertQuotaForService } from '@/lib/ai/guards';
 
 export interface DashGeneratedImage {
   id: string;
@@ -85,6 +86,10 @@ export async function generateDashImage(
   if (!prompt) {
     throw new DashImageGenerationError('invalid_prompt', 'Please enter an image prompt.');
   }
+
+  // §3.1: Quota pre-check before AI call
+  const imgQuota = await assertQuotaForService('chat_message');
+  if (!imgQuota.allowed) throw new DashImageGenerationError('quota_exceeded', 'AI quota exceeded — please upgrade or try again later.');
 
   const supabase = assertSupabase();
   const { data, error } = await supabase.functions.invoke('ai-proxy', {

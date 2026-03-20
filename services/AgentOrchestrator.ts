@@ -6,6 +6,7 @@ import { ToolRegistry } from './AgentTools';
 import { MemoryService } from './MemoryService';
 import { EventBus, Events } from './EventBus';
 import { getDefaultModelIdForTier } from '@/lib/ai/modelForTier';
+import { hasCapability } from '@/lib/ai/capabilities';
 import { assertSupabase } from '@/lib/supabase';
 import { getCurrentProfile } from '@/lib/sessionManager';
 import { getAssistant } from './core/getAssistant';
@@ -151,6 +152,15 @@ export class AgentOrchestratorClass implements IAgentOrchestrator {
       console.log(`[Agent] Starting run ${runId} for objective:`, goal.objective);
 
       const perception = await this.perceive(goal);
+
+      // §3.7: Block free-tier users from agentic tools
+      if (!hasCapability(perception.userTier || 'free', 'agent.tools')) {
+        return {
+          success: false,
+          message: 'Agentic tools require a Starter tier or above. Please upgrade to use Dash as an agent.',
+          toolsUsed: [],
+        };
+      }
       const messages: any[] = [
         {
           role: 'system',

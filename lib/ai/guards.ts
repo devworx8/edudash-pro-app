@@ -376,3 +376,35 @@ export async function checkMultipleQuotas(
   
   return results as Record<AIQuotaFeature, QuotaCheckResult>;
 }
+
+/**
+ * Service-level quota pre-check for non-hook code (services, utilities).
+ * Resolves userId from the current Supabase session automatically.
+ * Use this in service methods that call ai-proxy but lack a React hook context.
+ *
+ * @returns QuotaCheckResult — caller should abort if `allowed === false`.
+ * @example
+ *   const quota = await assertQuotaForService('lesson_generation');
+ *   if (!quota.allowed) throw new Error('AI quota exceeded');
+ */
+export async function assertQuotaForService(
+  serviceType: AIQuotaFeature,
+  requestedUnits = 1,
+  userId?: string,
+): Promise<QuotaCheckResult> {
+  let resolvedUserId = userId;
+  if (!resolvedUserId) {
+    try {
+      const { assertSupabase } = await import('@/lib/supabase');
+      const sb = assertSupabase();
+      const { data: { session } } = await sb.auth.getSession();
+      resolvedUserId = session?.user?.id;
+    } catch {
+      // Can't resolve session — fail-closed
+    }
+  }
+  if (!resolvedUserId) {
+    return { allowed: false, reason: 'error' };
+  }
+  return checkAIQuota(serviceType, resolvedUserId, requestedUnits);
+}

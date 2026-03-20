@@ -104,6 +104,9 @@ export const MODEL_QUOTA_WEIGHTS: Record<string, number> = {
   'claude-3-7-sonnet-20250219': 6,
   'claude-sonnet-4-20250514': 8,
   'claude-sonnet-4-5-20250514': 10,
+  'claude-opus-4-20250514': 12,
+  'claude-3-opus-20240229': 10,
+  'claude-3-sonnet-20240229': 5,
   'gpt-4o': 5,
   'gpt-4o-mini': 1,
 };

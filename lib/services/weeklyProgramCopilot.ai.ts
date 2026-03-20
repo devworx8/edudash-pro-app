@@ -172,6 +172,11 @@ export const repairWeeklyProgramJson = async (
   ].join('\n');
 
   try {
+    // §3.1: Quota pre-check before AI call
+    const { assertQuotaForService } = await import('@/lib/ai/guards');
+    const repairQuota = await assertQuotaForService('lesson_generation');
+    if (!repairQuota.allowed) return null;
+
     const { data, error } = await supabase.functions.invoke('ai-proxy', {
       body: {
         service_type: 'lesson_generation',

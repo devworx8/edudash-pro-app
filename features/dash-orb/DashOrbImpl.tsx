@@ -51,6 +51,7 @@ import { formatTranscript } from '@/lib/voice/formatTranscript';
 import { useOnDeviceVoice } from '@/hooks/useOnDeviceVoice';
 import { useWakeWord } from '@/hooks/useWakeWord';
 import { useDashChatModelPreference } from '@/hooks/useDashChatModelPreference';
+import { useDashAIQuota } from '@/hooks/dash-ai/useDashAIQuota';
 import { CosmicOrb } from '@/components/dash-orb/CosmicOrb';
 import { useOrbStreaming } from '@/hooks/dash-orb/useOrbStreaming';
 import { sanitizeInput, validateCommand, RateLimiter } from '@/lib/security/validators';
@@ -243,6 +244,7 @@ export default function DashOrb({
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<'en-ZA' | 'af-ZA' | 'zu-ZA'>('en-ZA');
   const { selectedModel, setSelectedModel, allModels: modelPickerModels, canSelectModel: canSelectOrbModel } = useDashChatModelPreference();
+  const { checkQuotaBeforeSend } = useDashAIQuota(selectedModel, setSelectedModel);
   const [memorySnapshot, setMemorySnapshot] = useState('');
   const [quickActionAge, setQuickActionAge] = useState('auto');
   const [quickActionPrompt, setQuickActionPrompt] = useState('');
@@ -1293,6 +1295,10 @@ export default function DashOrb({
       return;
     }
     
+    // §3.1/§3.2: Quota pre-check before AI call
+    const quotaResult = await checkQuotaBeforeSend();
+    if (!quotaResult.allowed) return;
+
     // Check rate limit
     if (!rateLimiter.isAllowed('dashOrb')) {
       const remaining = rateLimiter.getRemaining('dashOrb');

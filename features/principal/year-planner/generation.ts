@@ -2,6 +2,7 @@
 // Extracted from useAIYearPlannerImpl.ts for modularity
 
 import { assertSupabase } from '@/lib/supabase';
+import { assertQuotaForService } from '@/lib/ai/guards';
 import { YEAR_PLAN_SYSTEM_PROMPT, buildYearPlanUserPrompt } from '@/lib/utils/ai-year-plan-prompts';
 import type { YearPlanConfig } from '@/components/principal/ai-planner/types';
 
@@ -190,6 +191,10 @@ export async function generateYearPlanViaAI(params: {
     `- Keep responses COMPACT to avoid truncation: max 3 activities per weekly theme (single short phrases only), max 2 excursions per term, max 2 meetings per term. Prefer brevity over detail in every string value.`,
     `- Do NOT include markdown, prose, or any text outside the JSON object.`,
   ].join('\n');
+
+  // §3.1: Quota pre-check before AI call
+  const quota = await assertQuotaForService('lesson_generation');
+  if (!quota.allowed) throw new Error('AI quota exceeded — please upgrade or try again later.');
 
   const { data, error } = await supabase.functions.invoke('ai-proxy', {
     headers: {

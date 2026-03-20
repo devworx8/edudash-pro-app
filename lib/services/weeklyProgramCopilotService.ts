@@ -1,4 +1,5 @@
 import { assertSupabase } from '@/lib/supabase';
+import { assertQuotaForService } from '@/lib/ai/guards';
 import { stabilizeDailyRoutineBlocks } from '@/lib/routines/dailyRoutineNormalization';
 import type {
   DailyProgramBlock,
@@ -1415,6 +1416,10 @@ export class WeeklyProgramCopilotService {
         : 'Recent completion insights unavailable; maintain balanced reinforcement across Home Language, Mathematics, and Life Skills.';
     const prompt = `${buildPrompt(input, parseToiletRoutinePolicy(input))}\n${completionInsightText}`;
 
+    // §3.1: Quota pre-check before AI call
+    const wpQuota = await assertQuotaForService('lesson_generation', 1, input.createdBy);
+    if (!wpQuota.allowed) throw new Error('AI quota exceeded — please upgrade or try again later.');
+
     const { data, error } = await supabase.functions.invoke('ai-proxy', {
       body: {
         service_type: 'lesson_generation',
@@ -1426,6 +1431,7 @@ export class WeeklyProgramCopilotService {
         prefer_openai: false,
         stream: false,
         enable_tools: false,
+        user_id: input.createdBy,
         metadata: {
           source: 'weekly_program_copilot',
         },
