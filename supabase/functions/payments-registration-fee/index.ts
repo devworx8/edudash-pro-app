@@ -200,14 +200,7 @@ serve(async (req: Request) => {
         registration_id,
       },
     }).then(({ error }) => {
-      if (error) console.warn('[payments-registration-fee] Failed to store transaction:', error);
-    });
-
-    console.log('[payments-registration-fee] Checkout created:', {
-      transactionId,
-      finalAmount,
-      promoApplied,
-      registration_id,
+      if (error) console.warn('[payments-registration-fee] Failed to store transaction:', error?.code || 'UNKNOWN');
     });
 
     return new Response(JSON.stringify({

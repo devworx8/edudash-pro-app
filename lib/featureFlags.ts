@@ -206,7 +206,7 @@ const DEFAULT_FLAGS: FeatureFlags = {
   
   // Parent Dashboard Features (NEW) - Strategic Roadmap Implementation
   parent_hub_enabled: process.env.EXPO_PUBLIC_PARENT_HUB_ENABLED !== 'false', // enabled by default
-  whatsapp_integration: false, // EMERGENCY KILL SWITCH - client credentials exposed
+  whatsapp_integration: process.env.EXPO_PUBLIC_WHATSAPP_INTEGRATION === 'true', // Secure: server-side Edge Function path (whatsapp-send) — set to 'true' when ready
   offline_homework: process.env.EXPO_PUBLIC_OFFLINE_HOMEWORK !== 'false', // beta feature
   voice_notes: true, // core feature enabled
   progress_tracking: true, // core feature enabled
@@ -218,10 +218,10 @@ const DEFAULT_FLAGS: FeatureFlags = {
   multilingual_auto_translate: SA_TENANT_DEFAULT, // for SA multi-language support
   parent_engagement_metrics: true, // basic engagement tracking
   
-  // WhatsApp Specific Features - SECURITY: DISABLED DUE TO CLIENT-SIDE SECRET EXPOSURE
-  whatsapp_opt_in: false, // EMERGENCY KILL SWITCH - client credentials exposed
-  whatsapp_webhook: false, // EMERGENCY KILL SWITCH - client credentials exposed
-  whatsapp_send_receive: false, // EMERGENCY KILL SWITCH - client credentials exposed
+  // WhatsApp Specific Features — server-side Edge Function path (whatsapp-send) ready
+  whatsapp_opt_in: process.env.EXPO_PUBLIC_WHATSAPP_OPT_IN === 'true', // Secure: set to 'true' when WhatsApp API secrets are configured
+  whatsapp_webhook: process.env.EXPO_PUBLIC_WHATSAPP_WEBHOOK === 'true', // Secure: set to 'true' when webhook is verified
+  whatsapp_send_receive: process.env.EXPO_PUBLIC_WHATSAPP_SEND_RECEIVE === 'true', // Secure: set to 'true' when ready
   
   // Offline Features - Strategic "Offline-First" Architecture
   offline_sync_engine: process.env.EXPO_PUBLIC_OFFLINE_SYNC !== 'false', // core offline feature

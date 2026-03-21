@@ -347,7 +347,7 @@ Deno.serve(async (req) => {
     
     // PayFast is sensitive to parameter ordering for signatures; use
     // a deterministic alphabetical order for both the signature and URL.
-    const debugParamString = buildParamString(
+    const paramString = buildParamString(
       paymentData as unknown as Record<string, string | number | undefined>,
       PAYFAST_SIGNATURE_ORDER
     );
@@ -358,21 +358,10 @@ Deno.serve(async (req) => {
       PAYFAST_SIGNATURE_ORDER
     );
 
-    // TEMP DEBUG: log signature inputs (no passphrase)
-    console.log('[payments-create-checkout] Signature debug:', {
-      paymentId,
-      merchant_id: merchantId,
-      hasPassphrase: !!passphrase,
-      paramString: debugParamString,
-      signature,
-    });
-    
     // Build payment URL
     const baseUrl = isProduction 
       ? 'https://www.payfast.co.za/eng/process'
       : 'https://sandbox.payfast.co.za/eng/process';
-    
-    const paramString = debugParamString;
     const redirectUrl = `${baseUrl}?${paramString}&signature=${signature}`;
     
     // Create pending payment record
@@ -398,18 +387,9 @@ Deno.serve(async (req) => {
       });
     
     if (txError) {
-      console.warn('[payments-create-checkout] Failed to create payment record:', txError);
+      console.warn('[payments-create-checkout] Failed to create payment record:', txError?.code || 'UNKNOWN');
       // Don't fail - payment can still proceed
     }
-    
-    console.log('[payments-create-checkout] Created checkout:', {
-      paymentId,
-      mode: payfastMode,
-      planTier: plan.tier,
-      price,
-      isAnnual,
-      promoApplied: isPromoActive && !isAnnual,
-    });
     
     return new Response(
       JSON.stringify({ 
@@ -421,7 +401,7 @@ Deno.serve(async (req) => {
     );
     
   } catch (error) {
-    console.error('[payments-create-checkout] Error:', error);
+    console.error('[payments-create-checkout] Error:', error instanceof Error ? error.message : 'Unknown error');
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       { headers: jsonHeaders, status: 500 }

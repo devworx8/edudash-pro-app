@@ -172,15 +172,6 @@ serve(async (req: Request) => {
       .join('&');
     const paymentUrl = `${BASE_URL}?${queryParams}`;
 
-    // Log the payment creation
-    console.log('[payfast-create-payment] Payment created:', {
-      paymentId,
-      tier,
-      amount,
-      userId: user_id,
-      mode: PAYFAST_SANDBOX ? 'sandbox' : 'production',
-    });
-
     // Store pending payment in DB for tracking
     try {
       await supabase.from('subscriptions').upsert({
@@ -193,7 +184,7 @@ serve(async (req: Request) => {
       }, { onConflict: 'user_id' });
     } catch (dbErr) {
       // Non-critical — log but don't fail the payment creation
-      console.warn('[payfast-create-payment] Could not store pending subscription:', dbErr);
+      console.warn('[payfast-create-payment] Could not store pending subscription:', dbErr?.code || 'UNKNOWN');
     }
 
     return new Response(
