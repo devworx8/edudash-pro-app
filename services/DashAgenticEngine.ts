@@ -758,21 +758,3 @@ export class DashAgenticEngine implements IDashAgenticEngine {
   }
 }
 
-// Backward compatibility: Export singleton instance
-// TODO: Remove once all call sites migrated to DI
-import { container, TOKENS } from '../lib/di/providers/default';
-export const DashAgenticEngineInstance = (() => {
-  try {
-    return container.resolve(TOKENS.dashAgenticEngine);
-  } catch {
-    // Fallback during initialization
-    return new DashAgenticEngine();
-  }
-})();
-
-// Add static getInstance method to class
-DashAgenticEngine.getInstance = function() {
-  return DashAgenticEngineInstance;
-};
-
-export default DashAgenticEngineInstance;

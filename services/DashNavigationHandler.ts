@@ -519,16 +519,3 @@ export class DashNavigationHandler implements IDashNavigationHandler {
   }
 }
 
-// Backward compatibility: Export singleton instance
-// TODO: Remove once all call sites migrated to DI
-import { container, TOKENS } from '../lib/di/providers/default';
-export const DashNavigationHandlerInstance = (() => {
-  try {
-    return container.resolve(TOKENS.dashNavigation);
-  } catch {
-    // Fallback during initialization
-    return new DashNavigationHandler();
-  }
-})();
-
-export default DashNavigationHandlerInstance;

@@ -924,19 +924,3 @@ Safety:
   }
 }
 
-// Backward compatibility: Export singleton instance
-// TODO: Remove once all call sites migrated to DI
-import { container, TOKENS } from '../lib/di/providers/default';
-export const AgentOrchestratorInstance = (() => {
-  try {
-    return container.resolve(TOKENS.agentOrchestrator);
-  } catch {
-    // Fallback during initialization
-    return new AgentOrchestratorClass();
-  }
-})();
-
-// Back-compat export for legacy call sites
-export const AgentOrchestrator = AgentOrchestratorInstance;
-
-export default AgentOrchestratorInstance;

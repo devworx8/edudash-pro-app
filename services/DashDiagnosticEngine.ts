@@ -748,19 +748,3 @@ export class DashDiagnosticEngine implements IDashDiagnosticEngine {
   }
 }
 
-// Backward compatibility: Export singleton instance
-// TODO: Remove once all call sites migrated to DI
-import { container, TOKENS } from '../lib/di/providers/default';
-export const DashDiagnosticEngineInstance = (() => {
-  try {
-    return container.resolve(TOKENS.dashDiagnostic);
-  } catch {
-    // Fallback during initialization
-    return new DashDiagnosticEngine();
-  }
-})();
-
-// Back-compat named export expected by legacy imports
-export const dashDiagnostics = DashDiagnosticEngineInstance;
-
-export default DashDiagnosticEngineInstance;

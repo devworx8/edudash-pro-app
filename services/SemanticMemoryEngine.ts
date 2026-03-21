@@ -542,21 +542,3 @@ export class SemanticMemoryEngine implements ISemanticMemoryEngine {
   }
 }
 
-// Backward compatibility: Export singleton instance
-// TODO: Remove once all call sites migrated to DI
-import { container, TOKENS } from '../lib/di/providers/default';
-export const SemanticMemoryEngineInstance: SemanticMemoryEngine = (() => {
-  try {
-    return container.resolve(TOKENS.semanticMemory) as SemanticMemoryEngine;
-  } catch {
-    // Fallback during initialization
-    return new SemanticMemoryEngine();
-  }
-})();
-
-// Add static getInstance method to class
-SemanticMemoryEngine.getInstance = function() {
-  return SemanticMemoryEngineInstance;
-};
-
-export default SemanticMemoryEngineInstance;

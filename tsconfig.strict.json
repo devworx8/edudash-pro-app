@@ -23,8 +23,6 @@
     "lib/smart-memo.ts",
     "lib/monitoring.ts",
     "lib/rbac/**/*",
-    "lib/voice/openaiWhisperProvider.ts",
-    "lib/voice/openaiWhisperStreamingProvider.ts",
     "hooks/**/*"
   ],
   "exclude": [
