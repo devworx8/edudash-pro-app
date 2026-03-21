@@ -11,7 +11,7 @@ import { isAIEnabled } from '@/lib/ai/aiConfig';
 import { track } from '@/lib/analytics';
 import { getCombinedUsage, incrementUsage, logUsageEvent } from '@/lib/ai/usage';
 import { canUseFeature, getQuotaStatus } from '@/lib/ai/limits';
-import { formatAIGatewayErrorMessage, invokeAIGatewayWithRetry } from '@/lib/ai-gateway/invokeWithRetry';
+import { assertSupabase } from '@/lib/supabase';
 import { toast } from '@/components/ui/ToastProvider';
 
 interface GeneratedLesson {
@@ -204,72 +204,43 @@ export function useAILessonGeneration(): UseAILessonGenerationReturn {
       track('edudash.ai.lesson.generate_started', {});
 
       const objectiveList = (objectives || '').split(';').map(s => s.trim()).filter(Boolean);
-      const normalizedDuration = Number(duration) || 45;
-      const outputContract = [
-        'Return ONLY valid JSON. Do not return markdown, prose, or code fences.',
-        'Schema:',
-        '{',
-        '  "lessonPlan": {',
-        '    "title": "string",',
-        '    "summary": "string",',
-        '    "objectives": ["string"],',
-        '    "materials": ["string"],',
-        '    "steps": [',
-        '      {',
-        '        "title": "string",',
-        '        "minutes": 10,',
-        '        "objective": "string",',
-        '        "instructions": ["string"],',
-        '        "teacherPrompt": "string",',
-        '        "example": "string"',
-        '      }',
-        '    ],',
-        '    "assessment": ["string"],',
-        '    "differentiation": { "support": "string", "extension": "string" },',
-        '    "closure": "string",',
-        '    "durationMinutes": 45',
-        '  }',
-        '}',
-      ].join('\n');
-      const lessonPrompt = [
-        `Generate a ${normalizedDuration}-minute CAPS-aligned lesson plan.`,
-        `Subject: ${subject || 'General Studies'}.`,
-        `Topic: ${topic || 'Lesson Topic'}.`,
-        `Grade level: ${Number(gradeLevel) || 3}.`,
-        `Learning objectives: ${objectiveList.length ? objectiveList.join('; ') : 'Derive clear objectives from the topic.'}.`,
-        'Include warm-up, guided activity, independent practice, assessment, differentiation, closure, and worked examples.',
-        outputContract,
-        planningContext ? `Planning Alignment Context:\\n${planningContext}` : '',
-      ]
-        .filter(Boolean)
-        .join('\\n');
+      const normalizedDuration = ([30, 45, 60, 90].includes(Number(duration)) ? Number(duration) : 45) as 30 | 45 | 60 | 90;
+
+      // Map language codes to full names expected by the generate-lesson EF
+      const LANG_MAP: Record<string, string> = {
+        en: 'English', af: 'Afrikaans', zu: 'isiZulu', xh: 'isiXhosa',
+        st: 'Sesotho', tn: 'Setswana', nso: 'Sepedi', ts: 'Xitsonga',
+        ss: 'Siswati', ve: 'Tshivenda', nr: 'isiNdebele',
+      };
+      const fullLanguage = LANG_MAP[language] || language || 'English';
+
+      // Determine current SA school term (1-4) from calendar quarter
+      const currentTerm = Math.min(4, Math.ceil((new Date().getMonth() + 1) / 3)) as 1 | 2 | 3 | 4;
 
       const payload = payloadOverride || {
-        action: 'lesson_generation',
-        prompt: lessonPrompt,
         topic: topic || 'Lesson Topic',
         subject: subject || 'General Studies',
-        gradeLevel: Number(gradeLevel) || 3,
+        grade: Number(gradeLevel) || 3,
+        term: currentTerm,
         duration: normalizedDuration,
         objectives: objectiveList,
-        language: language || 'en',
-        model: selectedModel || process.env.EXPO_PUBLIC_ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001',
+        language: fullLanguage,
+        model: selectedModel || undefined,
         context: planningContext || undefined,
       };
       setLastPayload(payload);
 
       setProgress(30);
-      setProgressMessage('Connecting to AI...');
+      setProgressMessage('Generating CAPS-aligned lesson...');
 
       startProgressTicker(4, 8, 500);
 
       if (controller.signal.aborted) throw new Error('Generation cancelled');
 
-      const invokePromise = invokeAIGatewayWithRetry(payload, {
-        retries: 1,
-        retryDelayMs: 1200,
-      });
-      const { data, error } = await invokeWithTimeout(invokePromise, 30000);
+      const { data, error } = await invokeWithTimeout(
+        assertSupabase().functions.invoke('generate-lesson', { body: payload }),
+        60000, // 60s — EF does quality repair which can take longer
+      );
 
       clearProgressTicker();
       setProgress(95);
@@ -277,31 +248,35 @@ export function useAILessonGeneration(): UseAILessonGenerationReturn {
       setProgressMessage('Processing results...');
 
       if (error) {
-        throw new Error(formatAIGatewayErrorMessage(error, 'Failed to generate lesson.'));
+        const errMsg = typeof error === 'object' && error?.message ? error.message : String(error);
+        throw new Error(errMsg || 'Failed to generate lesson.');
       }
 
-      const lessonText = data?.content || '';
+      const lessonPlan = data?.lessonPlan;
+      const lessonText = lessonPlan
+        ? JSON.stringify(lessonPlan, null, 2)
+        : '';
+      const meta = data?.meta || {};
+
       setProgress(100);
       setProgressPhase('complete');
       setProgressMessage('Complete!');
 
-      // Store the AI-generated content in the 'content' field for proper display
-      // The 'description' field is used for a short summary
       setGenerated({
         title: `${subject}: ${topic}`,
-        description: lessonText?.substring(0, 200) + (lessonText?.length > 200 ? '...' : '') || 'AI-generated lesson plan',
-        content: lessonText, // Store the full lesson text as content
-        activities: [],
+        description: lessonPlan?.summary || lessonText?.substring(0, 200) || 'AI-generated lesson plan',
+        content: lessonPlan || lessonText,
+        activities: lessonPlan?.steps || [],
       });
 
       try {
         await incrementUsage('lesson_generation', 1);
         await logUsageEvent({
           feature: 'lesson_generation',
-          model: String(payload.model),
-          tokensIn: data?.usage?.input_tokens || 0,
-          tokensOut: data?.usage?.output_tokens || 0,
-          estCostCents: data?.cost || 0,
+          model: meta.model || selectedModel || 'claude-3-7-sonnet-20250219',
+          tokensIn: meta.inputTokens || 0,
+          tokensOut: meta.outputTokens || 0,
+          estCostCents: 0,
           timestamp: new Date().toISOString(),
         });
       } catch (usageError) {
@@ -310,7 +285,7 @@ export function useAILessonGeneration(): UseAILessonGenerationReturn {
 
       await refreshUsage();
 
-      lessonText ? toast.success('Lesson generated!') : toast.warn('No content returned.');
+      lessonPlan ? toast.success('Lesson generated!') : toast.warn('No content returned.');
       track('edudash.ai.lesson.generate_completed', {});
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Please try again';

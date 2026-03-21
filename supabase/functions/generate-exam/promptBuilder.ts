@@ -38,16 +38,9 @@ export function getSubjectSectionStructure(subject: string, grade: string, examT
 - Total ~50 marks, 60 minutes. Provide correctAnswer and explanation for each question.`;
   }
 
-  // isiZulu, isiXhosa, Sepedi (Home Language & First Additional)
-  if (s.includes('isizulu') || s.includes('isixhosa') || s.includes('sepedi')) {
-    const langName = s.includes('isizulu') ? 'isiZulu' : s.includes('isixhosa') ? 'isiXhosa' : 'Sepedi';
-    return `SUBJECT-SPECIFIC STRUCTURE (${langName} - CAPS/DBE):
-- Section A: Ukufunda nokuqonda / Ukuqonda okufundiweyo / Tlhaloso ya go bala (Reading Comprehension) – include a short passage/story in section instructions. Target ~15 marks.
-- Section B: Izakhiwo zolimi / Iindlela zolimi / Dikopano tša polelo (Language Structures and Conventions) – grammar, punctuation. Target ~15 marks.
-- Section C: Amagama / Amazwi / Mantšu (Vocabulary) – word meaning, context. Target ~10 marks.
-- Section D: Ukubhala / Ukubhala / Go ngwala (Writing) – short written task. Target ~10 marks.
-- Total ~50 marks, 60 minutes. Questions and passage in ${langName} where appropriate. Provide correctAnswer and explanation for each question.`;
-  }
+  // All 9 African official languages (Home Language & First Additional)
+  const africanLangResult = getAfricanLanguageStructure(s);
+  if (africanLangResult) return africanLangResult;
 
   // Mathematics & Mathematical Literacy
   if (s.includes('mathematic') && !s.includes('literacy')) {
@@ -165,6 +158,113 @@ export function getSubjectSectionStructure(subject: string, grade: string, examT
   }
 
   return null;
+}
+
+// ─── African language helpers (covers all 9 official African languages) ────────
+
+function getAfricanLanguageStructure(s: string): string | null {
+  const languages: Array<[string, string]> = [
+    ['isizulu',    'isiZulu'],
+    ['isixhosa',   'isiXhosa'],
+    ['sepedi',     'Sepedi'],
+    ['sesotho',    'Sesotho'],
+    ['setswana',   'Setswana'],
+    ['xitsonga',   'Xitsonga'],
+    ['siswati',    'Siswati'],
+    ['tshivenda',  'Tshivenda'],
+    ['isindebele', 'isiNdebele'],
+  ];
+
+  for (const [fragment, langName] of languages) {
+    if (s.includes(fragment)) {
+      const labels = getAfricanLangSectionLabels(fragment);
+      return `SUBJECT-SPECIFIC STRUCTURE (${langName} - CAPS/DBE):
+- Section A: ${labels.comprehension} (Reading Comprehension) – include a short passage or story in section instructions, then comprehension questions. Target ~15 marks.
+- Section B: ${labels.language} (Language Structures and Conventions) – grammar, punctuation, sentence structure. Target ~15 marks.
+- Section C: ${labels.vocabulary} (Vocabulary) – word meaning, synonyms, context, idioms. Target ~10 marks.
+- Section D: ${labels.writing} (Writing) – short written task (paragraph, letter, or descriptive piece). Target ~10 marks.
+- Total ~50 marks, 60 minutes. Write ALL questions and the passage in ${langName}. Do not include English translation labels. Provide correctAnswer and explanation in ${langName} for each question.`;
+    }
+  }
+
+  return null;
+}
+
+function getAfricanLangSectionLabels(
+  fragment: string,
+): { comprehension: string; language: string; vocabulary: string; writing: string } {
+  switch (fragment) {
+    case 'isizulu':
+      return {
+        comprehension: 'Ukufunda nokuqonda',
+        language:      'Izakhiwo zolimi nezimiso',
+        vocabulary:    'Amagama',
+        writing:       'Ukubhala',
+      };
+    case 'isixhosa':
+      return {
+        comprehension: 'Ukuqonda okufundiweyo',
+        language:      'Iindlela zolimi nezithethe',
+        vocabulary:    'Amazwi',
+        writing:       'Ukubhala',
+      };
+    case 'sepedi':
+      return {
+        comprehension: 'Tlhaloso ya go bala',
+        language:      'Dikopano tša polelo',
+        vocabulary:    'Mantšu',
+        writing:       'Go ngwala',
+      };
+    case 'sesotho':
+      return {
+        comprehension: 'Ho bala le ho utlwisisa',
+        language:      'Tlhaho le melaolana ya puo',
+        vocabulary:    'Mantswe',
+        writing:       'Ho ngola',
+      };
+    case 'setswana':
+      return {
+        comprehension: 'Go bala le go tlhaloganya',
+        language:      'Popego le melao ya puo',
+        vocabulary:    'Mafoko',
+        writing:       'Go kwala',
+      };
+    case 'xitsonga':
+      return {
+        comprehension: 'Ku hlaya no ku twisisa',
+        language:      'Nhluvuko wa ririmi',
+        vocabulary:    'Marito',
+        writing:       'Ku tsala',
+      };
+    case 'siswati':
+      return {
+        comprehension: 'Kufundza nekuvisisa',
+        language:      'Sakhiwo selulimi',
+        vocabulary:    'Emagama',
+        writing:       'Kubhala',
+      };
+    case 'tshivenda':
+      return {
+        comprehension: 'U vhala na u pfesesa',
+        language:      'Maṱhanzidzele a luambo',
+        vocabulary:    'Maipfi',
+        writing:       'U ṅwala',
+      };
+    case 'isindebele':
+      return {
+        comprehension: 'Ukufunda nokuqonda',
+        language:      'Isakhiwo solimi',
+        vocabulary:    'Amagama',
+        writing:       'Ukubhala',
+      };
+    default:
+      return {
+        comprehension: 'Reading Comprehension',
+        language:      'Language Structures and Conventions',
+        vocabulary:    'Vocabulary',
+        writing:       'Writing',
+      };
+  }
 }
 
 export function buildUserPrompt(payload: {

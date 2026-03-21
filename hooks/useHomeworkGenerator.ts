@@ -13,7 +13,7 @@ import { assertSupabase } from '@/lib/supabase';
 import { incrementUsage, logUsageEvent } from '@/lib/ai/usage';
 import { ParentToolRegistry } from '@/services/dash-ai/ParentToolRegistry';
 import { logger } from '@/lib/logger';
-import { buildSystemPrompt, parseHomeworkResponse } from './utils/homeworkHelpers';
+import { parseHomeworkResponse } from './utils/homeworkHelpers';
 import type { HomeworkPipelineMode } from '@/lib/homework/pipelineResolver';
 
 export type HomeworkGenOptions = {
@@ -70,115 +70,63 @@ export function useHomeworkGenerator() {
         }
       }
 
-      // Step 2: Build enhanced system prompt with context
-      const systemPrompt = buildSystemPrompt(opts, childContext);
-
-      // Step 3: Call AI - use simple mode first, fallback to tools if supported
-      const messages = [{
-        role: 'user',
-        content: `${opts.question}\n\nSubject: ${opts.subject}\nGrade: ${opts.gradeLevel}\nDifficulty: ${opts.difficulty || 'medium'}`
-      }];
-
-      // Try simple request first (without tools for reliability)
+      // Step 2: Call dedicated homework-helper Edge Function
       let data: any = null;
-      let usedFallback = false;
 
-      try {
-        const response = await client.functions.invoke('ai-gateway', {
-          body: {
-            action: 'homework_help',
-            messages,
-            system: systemPrompt,
-            model: opts.model || 'claude-haiku-4-5-20251001' // Use haiku by default for speed
-          }
-        });
-
-        if (response.error) {
-          throw response.error;
+      const response = await client.functions.invoke('homework-helper', {
+        body: {
+          question: opts.question,
+          subject: opts.subject || 'Mathematics',
+          grade: opts.gradeLevel,
+          helpMode: 'explain',
+          language: 'en',
+          model: opts.model || undefined,
+          // Pass child context as conversation history hint if available
+          conversationHistory: childContext ? [{
+            role: 'user',
+            content: `Learner context: ${JSON.stringify(childContext)}`
+          }] : undefined,
         }
-        data = response.data;
-      } catch (gatewayError) {
-        logger.warn('[useHomeworkGenerator] AI gateway failed, trying ai-proxy fallback:', gatewayError);
-        
-        // Fallback to ai-proxy edge function with normalized payload contract.
-        try {
-          const fallbackResponse = await client.functions.invoke('ai-proxy', {
-            body: {
-              scope: 'parent',
-              service_type: 'homework_help',
-              payload: {
-                model: opts.model || 'claude-haiku-4-5-20251001',
-                messages: [
-                  { role: 'system', content: systemPrompt },
-                  ...messages,
-                ],
-                prompt: opts.question,
-              },
-              metadata: {
-                subject: opts.subject,
-                grade_level: opts.gradeLevel,
-                student_id: opts.studentId || null,
-                pipeline_mode: opts.pipelineMode || 'k12_exam_prep',
-              },
-            }
-          });
+      });
 
-          if (fallbackResponse.error) {
-            throw fallbackResponse.error;
-          }
-
-          data = {
-            content:
-              fallbackResponse.data?.content?.[0]?.text ||
-              fallbackResponse.data?.content ||
-              fallbackResponse.data?.message?.content ||
-              fallbackResponse.data?.text ||
-              'No response received',
-            usage: fallbackResponse.data?.usage,
-            model: fallbackResponse.data?.model,
-          };
-          usedFallback = true;
-        } catch (fallbackError) {
-          logger.error('[useHomeworkGenerator] Both AI gateways failed:', fallbackError);
-          throw new Error('AI service unavailable. Please try again later.');
-        }
+      if (response.error) {
+        throw response.error;
       }
+      data = response.data;
 
       // Step 4: Extract text from response
+      // EF returns { success, helpMode, helperResponse: { response, followUpPrompt, encouragement, didSolve }, meta }
       let responseText = '';
-      if (typeof data.content === 'string') {
+      if (data?.helperResponse) {
+        const hr = data.helperResponse;
+        responseText = String(hr.response || '');
+        if (hr.followUpPrompt) {
+          responseText += '\n\n' + String(hr.followUpPrompt);
+        }
+        if (hr.encouragement) {
+          responseText += '\n\n' + String(hr.encouragement);
+        }
+      } else if (typeof data?.content === 'string') {
         responseText = data.content;
-      } else if (Array.isArray(data.content)) {
-        responseText = data.content
-          .filter((block: any) => block.type === 'text')
-          .map((block: any) => block.text)
-          .join('\n');
-      } else if (data.text) {
+      } else if (data?.text) {
         responseText = data.text;
-      } else if (data.message?.content) {
-        responseText = data.message.content;
       }
 
       // Step 5: Extract structured data from response
       const parsedResult = parseHomeworkResponse(responseText, toolsUsed);
-      
-      if (usedFallback) {
-        parsedResult.__fallbackUsed = true;
-      }
 
       // Track usage (don't block on this)
       incrementUsage('homework_help', 1).catch(() => {});
       logUsageEvent({
         feature: 'homework_help_agentic',
-        model: data.model || opts.model || 'claude-haiku-4-5-20251001',
-        tokensIn: data.usage?.input_tokens || 0,
-        tokensOut: data.usage?.output_tokens || 0,
-        estCostCents: data.cost || 0,
+        model: data?.meta?.model || opts.model || 'claude-haiku-4-5-20251001',
+        tokensIn: data?.meta?.inputTokens || 0,
+        tokensOut: data?.meta?.outputTokens || 0,
+        estCostCents: 0,
         timestamp: new Date().toISOString(),
         metadata: {
           tools_used: toolsUsed.length,
           student_id: opts.studentId || null,
-          fallback_used: usedFallback
         }
       }).catch(() => {});
 
