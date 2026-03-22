@@ -101,7 +101,8 @@ function isAndroid() { return Platform.OS === 'android'; }
 function adsEnabled() { return process.env.EXPO_PUBLIC_ENABLE_ADS !== '0'; }
 function isWeb() { return Platform.OS === 'web'; }
 function canUseLegacyTestInterstitials() {
-  return __DEV__ || areTestIdsOnly();
+  // In production, allow interstitials — they now use real ad unit IDs
+  return true;
 }
 
 const DAILY_LIMIT = 5;
@@ -151,8 +152,13 @@ class Manager {
     if (!canUseLegacyTestInterstitials()) return;
     
     try {
-      const { InterstitialAd, TestIds } = require('react-native-google-mobile-ads');
-      const ad = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL);
+      const { InterstitialAd } = require('react-native-google-mobile-ads');
+      const { getAdUnitId } = require('@/lib/ads/config');
+      const adUnitId = getAdUnitId('interstitial_parent_navigation');
+      if (!adUnitId) return;
+      const ad = InterstitialAd.createForAdRequest(adUnitId, {
+        requestNonPersonalizedAdsOnly: true,
+      });
       ad.load();
       this.loaders.set(placement, ad);
     } catch (error) {
@@ -174,11 +180,16 @@ class Manager {
     }
 
     try {
-      const { InterstitialAd, AdEventType, TestIds } = require('react-native-google-mobile-ads');
+      const { InterstitialAd, AdEventType } = require('react-native-google-mobile-ads');
+      const { getAdUnitId } = require('@/lib/ads/config');
       
       let ad = this.loaders.get(placement);
       if (!ad) {
-        ad = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL);
+        const adUnitId = getAdUnitId('interstitial_parent_navigation');
+        if (!adUnitId) return false;
+        ad = InterstitialAd.createForAdRequest(adUnitId, {
+          requestNonPersonalizedAdsOnly: true,
+        });
         this.loaders.set(placement, ad);
       }
 

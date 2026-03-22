@@ -84,7 +84,11 @@
         "android.permission.READ_PHONE_STATE",
         "android.permission.USE_FULL_SCREEN_INTENT",
         "android.permission.DISABLE_KEYGUARD",
-        "android.permission.TURN_SCREEN_ON"
+        "android.permission.TURN_SCREEN_ON",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "blockedPermissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED"
@@ -185,6 +189,14 @@
         }
       ],
       "expo-localization",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "EduDash Pro needs access to your photo library to save camera photos.",
+          "savePhotosPermission": "EduDash Pro needs permission to save photos to your device.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ],
       "expo-secure-store",
       [
         "expo-notifications",
@@ -211,7 +223,10 @@
       "./plugins/withFirebaseMessaging.js",
       "./plugins/withCallSounds.js",
       "./plugins/withAndroid15BootFix.js",
-      "./plugins/withAndroidPlayCompatibility.js"
+      "./plugins/withAndroidPlayCompatibility.js",
+      "./plugins/withPictureInPicture.js",
+      "./plugins/withGoogleServices.js",
+      "expo-camera"
     ],
     "experiments": {
       "typedRoutes": false

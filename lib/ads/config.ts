@@ -19,6 +19,44 @@ export const TEST_AD_UNIT_IDS = {
   APP_OPEN: 'ca-app-pub-3940256099942544/9257395921',
 } as const;
 
+/**
+ * Production ad unit IDs from AdMob dashboard.
+ * Used as fallback when EAS secrets / env vars are not populated.
+ * App ID: ca-app-pub-2808416461095370~5255516826
+ */
+export const PRODUCTION_AD_UNIT_IDS: Record<string, string> = {
+  // Banner ads
+  banner: 'ca-app-pub-2808416461095370/4783059322',       // Banner_Ad
+  banner_2: 'ca-app-pub-2808416461095370/9817578366',     // Banner_Ad-2
+  // Interstitial ads
+  interstitial: 'ca-app-pub-2808416461095370/5737917881', // Interstitial
+  interstitial_1: 'ca-app-pub-2808416461095370/6125745363', // Interstial-1
+  // Rewarded ads
+  rewarded: 'ca-app-pub-2808416461095370/8953107650',     // REWARDED_Main
+  // App open ads
+  appOpen: 'ca-app-pub-2808416461095370/3886594836',      // App open
+  // Native ads
+  native: 'ca-app-pub-2808416461095370/7191415021',       // Native advanced
+  native_rewarded: 'ca-app-pub-2808416461095370/7590071512', // Native Rewarded
+} as const;
+
+/**
+ * Map placement env var keys to production ad unit IDs.
+ * When an env var is empty (e.g. EAS secrets not set), these are used.
+ */
+const PLACEMENT_PRODUCTION_FALLBACKS: Record<string, string> = {
+  EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_APP_OPEN: PRODUCTION_AD_UNIT_IDS.appOpen,
+  EXPO_PUBLIC_ADMOB_ADUNIT_BANNER_PARENT_DASHBOARD: PRODUCTION_AD_UNIT_IDS.banner,
+  EXPO_PUBLIC_ADMOB_ADUNIT_BANNER_MEMBERSHIP_DASHBOARD: PRODUCTION_AD_UNIT_IDS.banner_2,
+  EXPO_PUBLIC_ADMOB_ADUNIT_BANNER_LEARNER_DASHBOARD: PRODUCTION_AD_UNIT_IDS.banner,
+  EXPO_PUBLIC_ADMOB_ADUNIT_NATIVE_PARENT_FEED: PRODUCTION_AD_UNIT_IDS.native,
+  EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_PARENT_NAV: PRODUCTION_AD_UNIT_IDS.interstitial,
+  EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_MEMBERSHIP_DASHBOARD: PRODUCTION_AD_UNIT_IDS.interstitial_1,
+  EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_LEARNER_DASHBOARD: PRODUCTION_AD_UNIT_IDS.interstitial_1,
+  EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_PARENT_PERK: PRODUCTION_AD_UNIT_IDS.rewarded,
+  EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_AI_PREVIEW: PRODUCTION_AD_UNIT_IDS.rewarded,
+};
+
 function isValidAdUnitId(value?: string): value is string {
   return typeof value === 'string' && value.startsWith('ca-app-pub-');
 }
@@ -53,32 +91,27 @@ export function getAdUnitId(placementKey: string): string {
   // Production: get from environment variable
   const productionAdUnitId = process.env[placement.adUnitEnvVar];
   
-  if (!isValidAdUnitId(productionAdUnitId)) {
-    // Try legacy env var fallbacks by ad type before giving up.
-    const legacyFallbacks: Record<string, string[]> = {
-      banner: ['EXPO_PUBLIC_ADMOB_ANDROID_BANNER_UNIT_ID'],
-      interstitial: ['EXPO_PUBLIC_ADMOB_ANDROID_INTERSTITIAL_UNIT_ID', 'ADMOB_INTERSTITIAL_ANDROID'],
-      rewarded: ['EXPO_PUBLIC_ADMOB_ANDROID_REWARDED_UNIT_ID', 'ADMOB_REWARDED_ANDROID'],
-      native: ['EXPO_PUBLIC_ADMOB_ADUNIT_NATIVE_PARENT_FEED'],
-      appOpen: ['EXPO_PUBLIC_ADMOB_ADUNIT_APP_OPEN'],
-    };
-
-    for (const fallbackVar of legacyFallbacks[placement.type]) {
-      const fallbackValue = process.env[fallbackVar];
-      if (isValidAdUnitId(fallbackValue)) {
-        console.log(`[AdConfig] Using legacy ad unit ID from ${fallbackVar} for ${placementKey}`);
-        return fallbackValue;
-      }
-    }
-
-    console.warn(
-      `[AdConfig] Missing production ad unit ID for ${placementKey}. ` +
-      'Ad will be disabled for this placement in production.'
-    );
-    return '';
+  if (isValidAdUnitId(productionAdUnitId)) {
+    return productionAdUnitId;
   }
 
-  return productionAdUnitId;
+  // Fallback: hardcoded production IDs keyed by the placement env var
+  const hardcodedFallback = PLACEMENT_PRODUCTION_FALLBACKS[placement.adUnitEnvVar];
+  if (isValidAdUnitId(hardcodedFallback)) {
+    return hardcodedFallback;
+  }
+
+  // Last resort: type-based production fallback
+  const typeFallback = PRODUCTION_AD_UNIT_IDS[placement.type];
+  if (isValidAdUnitId(typeFallback)) {
+    return typeFallback;
+  }
+
+  console.warn(
+    `[AdConfig] Missing production ad unit ID for ${placementKey}. ` +
+    'Ad will be disabled for this placement in production.'
+  );
+  return '';
 }
 
 /**

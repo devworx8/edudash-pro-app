@@ -8,7 +8,7 @@
 
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-// import * as MediaLibrary from 'expo-media-library'; // TODO v48+: save camera photos to device library (requires native rebuild)
+import * as MediaLibrary from 'expo-media-library';
 import * as LegacyFileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 import { Platform, Alert } from 'react-native';
@@ -289,13 +289,13 @@ export async function takePhoto(): Promise<DashAttachment[]> {
 
     for (const asset of result.assets) {
       try {
-        // TODO v48+: Save to device camera roll — needs native rebuild with expo-media-library
-        // if (Platform.OS !== 'web' && asset.uri) {
-        //   const { status } = await MediaLibrary.requestPermissionsAsync();
-        //   if (status === 'granted') {
-        //     await MediaLibrary.saveToLibraryAsync(asset.uri).catch(() => {});
-        //   }
-        // }
+        // Save camera photo to device camera roll
+        if (Platform.OS !== 'web' && asset.uri) {
+          const { status } = await MediaLibrary.requestPermissionsAsync();
+          if (status === 'granted') {
+            await MediaLibrary.saveToLibraryAsync(asset.uri).catch(() => {});
+          }
+        }
         const attachment = await createOptimizedImageAttachment(asset, `photo_${Date.now()}.jpg`);
         attachments.push(attachment);
       } catch (error) {

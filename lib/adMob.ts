@@ -37,20 +37,26 @@ const ADMOB_TEST_IDS = {
 };
 
 /**
- * Production AdMob IDs - loaded from environment variables
- * Set these in EAS secrets or .env:
- * - ADMOB_BANNER_ANDROID / ADMOB_BANNER_IOS
- * - ADMOB_INTERSTITIAL_ANDROID / ADMOB_INTERSTITIAL_IOS
- * - ADMOB_REWARDED_ANDROID / ADMOB_REWARDED_IOS
+ * Production AdMob IDs - loaded from environment variables,
+ * falling back to hardcoded production IDs from AdMob dashboard.
  */
 const getProductionIds = () => {
   const extra = Constants.expoConfig?.extra || {};
+  const { PRODUCTION_AD_UNIT_IDS } = require('@/lib/ads/config');
   return {
     android: {
-      banner: extra.ADMOB_BANNER_ANDROID || process.env.ADMOB_BANNER_ANDROID || '',
-      interstitial: extra.ADMOB_INTERSTITIAL_ANDROID || process.env.ADMOB_INTERSTITIAL_ANDROID || '',
-      rewarded: extra.ADMOB_REWARDED_ANDROID || process.env.ADMOB_REWARDED_ANDROID || '',
-      appOpen: extra.ADMOB_APP_OPEN_ANDROID || process.env.ADMOB_APP_OPEN_ANDROID || '',
+      banner: extra.ADMOB_BANNER_ANDROID || process.env.ADMOB_BANNER_ANDROID
+        || process.env.EXPO_PUBLIC_ADMOB_ADUNIT_BANNER_PARENT_DASHBOARD
+        || PRODUCTION_AD_UNIT_IDS.banner,
+      interstitial: extra.ADMOB_INTERSTITIAL_ANDROID || process.env.ADMOB_INTERSTITIAL_ANDROID
+        || process.env.EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_PARENT_NAV
+        || PRODUCTION_AD_UNIT_IDS.interstitial,
+      rewarded: extra.ADMOB_REWARDED_ANDROID || process.env.ADMOB_REWARDED_ANDROID
+        || process.env.EXPO_PUBLIC_ADMOB_ADUNIT_REWARDED_PARENT_PERK
+        || PRODUCTION_AD_UNIT_IDS.rewarded,
+      appOpen: extra.ADMOB_APP_OPEN_ANDROID || process.env.ADMOB_APP_OPEN_ANDROID
+        || process.env.EXPO_PUBLIC_ADMOB_ADUNIT_INTERSTITIAL_APP_OPEN
+        || PRODUCTION_AD_UNIT_IDS.appOpen,
     },
     ios: {
       banner: extra.ADMOB_BANNER_IOS || process.env.ADMOB_BANNER_IOS || '',

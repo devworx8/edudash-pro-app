@@ -31,29 +31,29 @@
 
 ### P0 — SECURITY (must ship before v48 build)
 
-| #   | Item                                    | File                                                                  | Action                                                                                                                            |
-| --- | --------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Payment debug logging in production** | `supabase/functions/payments-create-checkout/index.ts:361`            | ✅ FIXED — Removed TEMP DEBUG signature dump + 3 other payment logs across 3 EFs; redacted error objects to log only error.code |
+| #   | Item                                    | File                                                                  | Action                                                                                                                                        |
+| --- | --------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Payment debug logging in production** | `supabase/functions/payments-create-checkout/index.ts:361`            | ✅ FIXED — Removed TEMP DEBUG signature dump + 3 other payment logs across 3 EFs; redacted error objects to log only error.code               |
 | 2   | **WhatsApp security stubs**             | `lib/services/WhatsAppSecurityAlert.ts`, `WhatsAppBusinessService.ts` | ✅ FIXED — Deleted dead stubs (zero imports); feature flags now env-configurable (default off); server-side `whatsapp-send` EF already exists |
 
 ### P1 — CRITICAL BUGS & DATA INTEGRITY (v48 blockers)
 
-| #   | Item                                                    | File                                                     | Action                                                                                                                                   |
-| --- | ------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 3   | **CEO Dashboard shows Math.random() data**              | Extracted to PulseBoard                                  | ✅ RESOLVED — entire membership module moved to `/home/edp/Desktop/PulseBoard/`                                                          |
+| #   | Item                                                    | File                                                     | Action                                                                                                                                                                                  |
+| --- | ------------------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 3   | **CEO Dashboard shows Math.random() data**              | Extracted to PulseBoard                                  | ✅ RESOLVED — entire membership module moved to `/home/edp/Desktop/PulseBoard/`                                                                                                         |
 | 4   | **OrgAdmin metrics hardcoded to 0**                     | `hooks/useOrgAdminMetrics.ts:98,122-126`                 | ✅ FIXED — Now queries real data (enrollments, student_progress, subscriptions+plans). 4 metrics (certPipeline, cohorts, certifications, placements) remain 0 pending DB table creation |
-| 5   | **`.vercelignore` blocks `components/reports/`**        | `.vercelignore:82`                                       | ✅ FIXED — changed `reports/` to `/reports/`                                                                                             |
-| 6   | **DesktopLayout shows "My School" for platform admins** | `components/layout/DesktopLayout.tsx:168`                | ✅ FIXED — now shows "EduDash Pro" for platform staff                                                                                    |
-| 7   | **K12 student screens are empty shells**                | `app/(k12)/student/messages,schedule,classes,grades.tsx` | ✅ FIXED — 4 new hooks (`useStudentClasses`, `useStudentGrades`, `useStudentSchedule`, `useStudentMessages`) wired to real Supabase data |
+| 5   | **`.vercelignore` blocks `components/reports/`**        | `.vercelignore:82`                                       | ✅ FIXED — changed `reports/` to `/reports/`                                                                                                                                            |
+| 6   | **DesktopLayout shows "My School" for platform admins** | `components/layout/DesktopLayout.tsx:168`                | ✅ FIXED — now shows "EduDash Pro" for platform staff                                                                                                                                   |
+| 7   | **K12 student screens are empty shells**                | `app/(k12)/student/messages,schedule,classes,grades.tsx` | ✅ FIXED — 4 new hooks (`useStudentClasses`, `useStudentGrades`, `useStudentSchedule`, `useStudentMessages`) wired to real Supabase data                                                |
 
 ### P2 — TECH DEBT REDUCTION (ship with v48)
 
-| #   | Item                               | Count           | Action                                                                                                                        |
-| --- | ---------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| #   | Item                               | Count           | Action                                                                                                                                                                      |
+| --- | ---------------------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 8   | **DI migration leftovers**         | 13 services     | ✅ PARTIAL — 8/13 singleton blocks removed (zero imports). 5 remaining need caller migration (LessonsService, EventBus, DashWhatsApp, MemoryService, DashRealTimeAwareness) |
-| 9   | **Deprecated voice providers**     | 3 files         | ✅ PARTIAL — 2/3 deleted (openaiWhisperProvider, openaiWhisperStreamingProvider). claudeProvider kept (3 active web importers) |
-| 10  | **Empty shared component barrels** | 8 files         | ✅ FIXED — 5/8 deleted (ui, media, forms, feedback, audio). 2 kept (celebrations, messaging have real exports). Root barrel updated |
-| 11  | **Static runtimeVersion 1.0.23**   | `app.config.js` | ✅ FIXED — Switched to `{ "policy": "fingerprint" }` (Expo SDK 54 best practice). Next native build required for OTA targeting |
+| 9   | **Deprecated voice providers**     | 3 files         | ✅ PARTIAL — 2/3 deleted (openaiWhisperProvider, openaiWhisperStreamingProvider). claudeProvider kept (3 active web importers)                                              |
+| 10  | **Empty shared component barrels** | 8 files         | ✅ FIXED — 5/8 deleted (ui, media, forms, feedback, audio). 2 kept (celebrations, messaging have real exports). Root barrel updated                                         |
+| 11  | **Static runtimeVersion 1.0.23**   | `app.config.js` | ✅ FIXED — Switched to `{ "policy": "fingerprint" }` (Expo SDK 54 best practice). Next native build required for OTA targeting                                              |
 
 ### P3 — FEATURE COMPLETENESS (ship with v48 if time allows)
 

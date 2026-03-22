@@ -13,8 +13,15 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, Platform,
-  Dimensions, KeyboardAvoidingView, ScrollView, Image,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  Platform,
+  Dimensions,
+  KeyboardAvoidingView,
+  ScrollView,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,17 +41,33 @@ import { DashTutorWhiteboard, type WhiteboardContent } from '@/components/ai/Das
 import { loadAutoScanBudget } from '@/lib/dash-ai/imageBudget';
 import { s } from './dash-voice.styles';
 import {
-  DashVoiceHeader, DashVoiceErrorBanner, DashVoiceTranscriptPanel,
-  DashVoiceComposer, DashVoiceOrbSection, DashVoiceFlowPreview,
+  DashVoiceHeader,
+  DashVoiceErrorBanner,
+  DashVoiceTranscriptPanel,
+  DashVoiceComposer,
+  DashVoiceOrbSection,
+  DashVoiceFlowPreview,
   DashVoiceBottomActions,
 } from '@/components/dash-voice';
 import type { VoiceOrbRef } from '@/features/super-admin/voice-orb/types';
-import type { OrbPdfArtifact, DashVoiceDictationProbe, PendingVoiceTurn, ConversationEntry } from '@/hooks/dash-voice/types';
+import type {
+  OrbPdfArtifact,
+  DashVoiceDictationProbe,
+  PendingVoiceTurn,
+  ConversationEntry,
+} from '@/hooks/dash-voice/types';
 import {
-  useDashVoiceTTS, useDashVoiceSendMessage, useDashVoiceMediaPicker,
-  useDashVoiceFlowMode, useDashVoiceHandlers,
+  useDashVoiceTTS,
+  useDashVoiceSendMessage,
+  useDashVoiceMediaPicker,
+  useDashVoiceFlowMode,
+  useDashVoiceHandlers,
 } from '@/hooks/dash-voice';
-import { VOICE_COMPOSER_GROW_THRESHOLD, VOICE_COMPOSER_COMPACT_HEIGHT, VOICE_COMPOSER_MAX_HEIGHT } from '@/hooks/dash-voice/composerUtils';
+import {
+  VOICE_COMPOSER_GROW_THRESHOLD,
+  VOICE_COMPOSER_COMPACT_HEIGHT,
+  VOICE_COMPOSER_MAX_HEIGHT,
+} from '@/hooks/dash-voice/composerUtils';
 import { useDashAIQuota } from '@/hooks/dash-ai/useDashAIQuota';
 import type { AIModelId } from '@/lib/ai/models';
 
@@ -248,18 +271,47 @@ export default function DashVoiceScreen() {
 
   // ── Handlers (delegated to useDashVoiceHandlers) ──────────────────
   const {
-    stopDashActivity, handleVoiceError, handleVoiceInput,
-    handleComposerTextChange, handleSubmit, handleInputFocus,
+    stopDashActivity,
+    handleVoiceError,
+    handleVoiceInput,
+    handleComposerTextChange,
+    handleSubmit,
+    handleInputFocus,
   } = useDashVoiceHandlers({
-    profile, user, role, orgType, preferredLanguage, setPreferredLanguage,
-    isProcessing, isSpeaking, isListening, inputText,
-    setIsListening, setIsProcessing, setStreamingText, setRestartBlocked,
-    setIsSpeaking, setVoiceErrorBanner, setInputText, setInputHeight,
-    setLiveUserTranscript, setLastUserTranscript, setLastResponse,
-    setConversationHistory, setIsGreetingLoading,
-    voiceOrbRef, isSpeakingRef, activeRequestRef,
-    conversationHistoryRef, pendingVoiceTurnRef, voiceDictationProbeRef,
-    sendMessage, cancelSpeech, resetStreamingSpeech, logDashTrace, flowMode,
+    profile,
+    user,
+    role,
+    orgType,
+    preferredLanguage,
+    setPreferredLanguage,
+    isProcessing,
+    isSpeaking,
+    isListening,
+    inputText,
+    setIsListening,
+    setIsProcessing,
+    setStreamingText,
+    setRestartBlocked,
+    setIsSpeaking,
+    setVoiceErrorBanner,
+    setInputText,
+    setInputHeight,
+    setLiveUserTranscript,
+    setLastUserTranscript,
+    setLastResponse,
+    setConversationHistory,
+    setIsGreetingLoading,
+    voiceOrbRef,
+    isSpeakingRef,
+    activeRequestRef,
+    conversationHistoryRef,
+    pendingVoiceTurnRef,
+    voiceDictationProbeRef,
+    sendMessage,
+    cancelSpeech,
+    resetStreamingSpeech,
+    logDashTrace,
+    flowMode,
   });
 
   // ── Derived ───────────────────────────────────────────────────────
@@ -403,11 +455,25 @@ export default function DashVoiceScreen() {
             <DashVoiceBottomActions
               theme={theme}
               quickActions={quickActions}
-              showQuickActions={!displayedText && !isProcessing && !isGreetingLoading && conversationHistory.length <= 1 && !conversationHistory.some((m) => m.role === 'user')}
+              showQuickActions={
+                !displayedText &&
+                !isProcessing &&
+                !isGreetingLoading &&
+                conversationHistory.length <= 1 &&
+                !conversationHistory.some((m) => m.role === 'user')
+              }
               latestPdfArtifact={latestPdfArtifact}
               flowEnabled={flowMode.enabled}
               onQuickAction={(prompt) => sendMessage(prompt)}
-              onOpenPdf={() => router.push({ pathname: '/screens/pdf-viewer', params: { title: latestPdfArtifact?.title || 'Generated PDF', url: latestPdfArtifact?.url || '' } } as any)}
+              onOpenPdf={() =>
+                router.push({
+                  pathname: '/screens/pdf-viewer',
+                  params: {
+                    title: latestPdfArtifact?.title || 'Generated PDF',
+                    url: latestPdfArtifact?.url || '',
+                  },
+                } as any)
+              }
               onContinueFullChat={async () => {
                 await persistOrbMessages(conversationHistoryRef.current);
                 stopDashActivity('continue_full_chat', true);

@@ -212,7 +212,16 @@ describe('fetchTeacherDashboardData', () => {
         { data: { subscription_tier: 'free' }, error: null },
       ],
       subscriptions: [{ data: null, error: null }],
+      class_teachers: [
+        {
+          data: [{ class_id: 'class-1' }, { class_id: 'class-2' }],
+          error: null,
+        },
+      ],
       classes: [
+        // First call: legacy teacher_id lookup (returns IDs only)
+        { data: [], error: null },
+        // Second call: full class details with students
         {
           data: [
             {

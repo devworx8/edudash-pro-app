@@ -141,6 +141,32 @@ jest.mock('posthog-react-native', () => {
   };
 });
 
+// Mock @expo/vector-icons (ESM module that Jest can't transform)
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const handler = { get: (_, name) => name === '__esModule' ? true : (props) => React.createElement('span', props) };
+  return new Proxy({}, handler);
+});
+jest.mock('@expo/vector-icons/Ionicons', () => {
+  const React = require('react');
+  return { __esModule: true, default: (props) => React.createElement('span', props) };
+});
+
+// Mock ToastProvider (imports @expo/vector-icons transitively)
+jest.mock('@/components/ui/ToastProvider', () => ({
+  __esModule: true,
+  toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() },
+  ToastProvider: ({ children }) => children,
+}));
+
+// Mock AI guards — assertQuotaForService always allows in tests
+jest.mock('@/lib/ai/guards', () => ({
+  __esModule: true,
+  assertQuotaForService: jest.fn().mockResolvedValue({ allowed: true, remaining: 999, limit: 1000 }),
+  checkAIQuota: jest.fn().mockResolvedValue({ allowed: true, remaining: 999, limit: 1000 }),
+  toast: { success: jest.fn(), error: jest.fn(), info: jest.fn(), warning: jest.fn() },
+}));
+
 // Suppress console errors/warnings in tests unless needed
 global.console = {
   ...console,

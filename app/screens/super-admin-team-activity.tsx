@@ -24,6 +24,7 @@ import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AlertModal, useAlertModal } from '@/components/ui/AlertModal';
 import { createStyles } from '@/lib/screen-styles/super-admin-team-activity.styles';
+import { ratioToPercent } from '@/lib/progress/clampPercent';
 import {
   useSuperAdminTeamActivity,
   ACTIVITY_FILTERS,
@@ -144,7 +145,7 @@ function InsightsRow({ stats, styles }: { stats: ActivityStats; styles: any }) {
                 <View
                   style={[
                     styles.categoryBarFill,
-                    { width: `${(count / maxCat) * 100}%`, backgroundColor: cat.color },
+                    { width: `${ratioToPercent(count, maxCat)}%`, backgroundColor: cat.color },
                   ]}
                 />
               </View>

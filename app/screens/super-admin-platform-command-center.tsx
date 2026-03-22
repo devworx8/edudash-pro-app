@@ -23,6 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isPlatformStaff } from '@/lib/roleUtils';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { createStyles } from '@/lib/screen-styles/super-admin-command-center.styles';
+import { ratioToPercent } from '@/lib/progress/clampPercent';
 import {
   useCommandCenter,
   SEVERITY_COLORS,
@@ -356,7 +357,7 @@ export default function PlatformCommandCenterScreen() {
                   style={[
                     styles.aiProgressFill,
                     {
-                      width: `${Math.min((ai.value / ai.limit) * 100, 100)}%`,
+                      width: `${ratioToPercent(ai.value, ai.limit)}%`,
                       backgroundColor: ai.color,
                     },
                   ]}

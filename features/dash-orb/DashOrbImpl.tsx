@@ -19,7 +19,7 @@
  * - Send announcements
  * - Generate reports
  * - Manage feature flags
- * 
+ *
  * Connects to superadmin-ai Edge Function for secure API access.
  */
 
@@ -59,10 +59,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { isSuperAdmin } from '@/lib/roleUtils';
 import { getOrganizationType } from '@/lib/tenant/compat';
-import {
-  shouldGreetToday,
-  buildDynamicGreeting,
-} from '@/lib/ai/greetingManager';
+import { shouldGreetToday, buildDynamicGreeting } from '@/lib/ai/greetingManager';
 import { calculateAge } from '@/lib/date-utils';
 import * as Clipboard from 'expo-clipboard';
 import { toast } from '@/components/ui/ToastProvider';
@@ -84,7 +81,10 @@ import { buildImagePayloadsFromAttachments } from '@/lib/dash-ai/imagePayloadBui
 import { resolveDashPolicy } from '@/lib/dash-ai/DashPolicyResolver';
 import { resolveAgeBand } from '@/lib/dash-ai/learnerContext';
 import { classifyResponseMode } from '@/lib/dash-ai/responseMode';
-import { detectLanguageOverrideFromText, resolveResponseLocale } from '@/lib/dash-ai/languageRouting';
+import {
+  detectLanguageOverrideFromText,
+  resolveResponseLocale,
+} from '@/lib/dash-ai/languageRouting';
 import {
   consumeAutoScanBudget,
   FREE_IMAGE_BUDGET_PER_DAY,
@@ -200,7 +200,7 @@ export default function DashOrb({
   const orgType = getOrganizationType(profile);
   const ageBand = useMemo(
     () => resolveAgeBand(learnerContext?.ageYears, learnerContext?.grade) || 'adult',
-    [learnerContext?.ageYears, learnerContext?.grade]
+    [learnerContext?.ageYears, learnerContext?.grade],
   );
 
   const dashPolicy = useMemo(
@@ -214,25 +214,30 @@ export default function DashOrb({
           grade: learnerContext?.grade || null,
         },
       }),
-    [ageBand, learnerContext?.grade, normalizedRole, orgType, profile]
+    [ageBand, learnerContext?.grade, normalizedRole, orgType, profile],
   );
-  const learnerAgeYears = typeof learnerContext?.ageYears === 'number' ? learnerContext.ageYears : null;
+  const learnerAgeYears =
+    typeof learnerContext?.ageYears === 'number' ? learnerContext.ageYears : null;
   const learnerGrade = learnerContext?.grade || null;
   const learnerName = learnerContext?.name || null;
   const tierLabel = String(
     (profile as any)?.subscription_tier ||
-    (profile as any)?.tier ||
-    (profile as any)?.current_tier ||
-    ''
+      (profile as any)?.tier ||
+      (profile as any)?.current_tier ||
+      '',
   ).toLowerCase();
-  const isFreeImageBudgetTier = tierLabel === 'free' || tierLabel === 'trialing' || tierLabel === 'trial';
+  const isFreeImageBudgetTier =
+    tierLabel === 'free' || tierLabel === 'trialing' || tierLabel === 'trial';
   const [isExpanded, setIsExpanded] = useState(!!autoOpen);
   const [inputText, setInputText] = useState('');
   const [, setLiveTranscript] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showQuickActions, setShowQuickActions] = useState(!learnerContext);
-  const [pendingTutorIntent, setPendingTutorIntent] = useState<{ prompt: string; label?: string } | null>(null);
+  const [pendingTutorIntent, setPendingTutorIntent] = useState<{
+    prompt: string;
+    label?: string;
+  } | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<DashAttachment[]>([]);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [remainingAutoScans, setRemainingAutoScans] = useState<number | null>(null);
@@ -243,7 +248,12 @@ export default function DashOrb({
   const [isListeningForCommand, setIsListeningForCommand] = useState(false);
   const [wakeWordEnabled, setWakeWordEnabled] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState<'en-ZA' | 'af-ZA' | 'zu-ZA'>('en-ZA');
-  const { selectedModel, setSelectedModel, allModels: modelPickerModels, canSelectModel: canSelectOrbModel } = useDashChatModelPreference();
+  const {
+    selectedModel,
+    setSelectedModel,
+    allModels: modelPickerModels,
+    canSelectModel: canSelectOrbModel,
+  } = useDashChatModelPreference();
   const { checkQuotaBeforeSend } = useDashAIQuota(selectedModel, setSelectedModel);
   const [memorySnapshot, setMemorySnapshot] = useState('');
   const [quickActionAge, setQuickActionAge] = useState('auto');
@@ -269,7 +279,9 @@ export default function DashOrb({
   const getRemainingOrbImageSlots = useCallback(async () => {
     if (!isFreeImageBudgetTier) return Number.POSITIVE_INFINITY;
     const budget = await loadImageBudget();
-    const selectedCount = pendingAttachments.filter((attachment) => attachment.kind === 'image').length;
+    const selectedCount = pendingAttachments.filter(
+      (attachment) => attachment.kind === 'image',
+    ).length;
     return Math.max(0, budget.remainingCount - selectedCount);
   }, [isFreeImageBudgetTier, pendingAttachments]);
 
@@ -302,12 +314,13 @@ export default function DashOrb({
 
   const autoToolShortcuts = useMemo(() => {
     // Include all tool categories that should be auto-invoked when relevant
-    return toolShortcuts.filter((tool) =>
-      tool.category === 'caps' ||
-      tool.category === 'data' ||
-      tool.category === 'navigation' ||
-      tool.category === 'communication' ||
-      tool.category === 'support'
+    return toolShortcuts.filter(
+      (tool) =>
+        tool.category === 'caps' ||
+        tool.category === 'data' ||
+        tool.category === 'navigation' ||
+        tool.category === 'communication' ||
+        tool.category === 'support',
     );
   }, [toolShortcuts]);
 
@@ -323,9 +336,9 @@ export default function DashOrb({
       })
       .filter((tool) => !!tool.name);
   }, [autoToolShortcuts]);
-  
+
   const rateLimiter = useRef(new RateLimiter(10, 60000)).current;
-  
+
   // SSE streaming + sentence-level TTS pipelining
   const { streamResponse, cancelStream } = useOrbStreaming();
   const ttsSentenceQueueRef = useRef<string[]>([]);
@@ -335,13 +348,15 @@ export default function DashOrb({
   const voiceTTS = useVoiceTTS();
   const { speak, stop: stopSpeaking, isSpeaking } = voiceTTS;
   const lastTTSErrorRef = useRef<string>('');
-  
+
   // Voice input integration - useVoiceRecorder returns [state, actions, audioLevel] tuple
   const voiceRecorderHookResult = useVoiceRecorder();
   const voiceRecorderResult = voiceRecorderHookResult;
   const voiceRecorderState = voiceRecorderResult ? voiceRecorderResult[0] : null;
   const voiceRecorderActions = voiceRecorderResult ? voiceRecorderResult[1] : null;
-  const voiceSTTHookResult = useVoiceSTT({ preschoolId: profile?.organization_id || profile?.preschool_id || null });
+  const voiceSTTHookResult = useVoiceSTT({
+    preschoolId: profile?.organization_id || profile?.preschool_id || null,
+  });
   const voiceSTT = voiceSTTHookResult;
   const orbState = useMemo<'idle' | 'listening' | 'thinking' | 'speaking'>(() => {
     if (isSpeaking) return 'speaking';
@@ -390,7 +405,7 @@ export default function DashOrb({
       }
       setLiveTranscript('');
       setInputText('');
-      setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
+      setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
       setIsListeningForCommand(false);
       const language = selectedLanguage;
       const formatted = formatTranscript(text, language, {
@@ -411,7 +426,7 @@ export default function DashOrb({
       setLiveTranscript('');
       if (isListeningForCommandRef.current) {
         setIsListeningForCommand(false);
-        setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
+        setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
         toast.info('Voice input unavailable. Tap mic to try again.');
       }
     },
@@ -426,7 +441,7 @@ export default function DashOrb({
     toast.info(err, 'Dash Voice');
     console.warn('[DashOrb] TTS warning:', err);
   }, [voiceEnabled, voiceTTS.error]);
-  
+
   // Wake word detection
   const wakeWord = useWakeWord({
     onWakeWord: () => {
@@ -445,18 +460,18 @@ export default function DashOrb({
     setWakeWordEnabled(true);
     wakeWord.startListening();
   }, [voiceEnabled, wakeWordAvailable, wakeWord]);
-  
+
   // Animations & Gestures
   const pan = useRef(new Animated.ValueXY()).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const expandAnim = useRef(new Animated.Value(0)).current;
-  
+
   // Store animation instances to stop/start them
   const pulseLoopRef = useRef<Animated.CompositeAnimation | null>(null);
   const glowLoopRef = useRef<Animated.CompositeAnimation | null>(null);
-  
+
   // Initialize position
   useEffect(() => {
     let initialX = SCREEN_WIDTH - size - 20;
@@ -476,7 +491,7 @@ export default function DashOrb({
         initialY = 100;
         break;
     }
-    
+
     pan.setValue({ x: initialX, y: initialY });
   }, [position, size, pan]);
 
@@ -517,7 +532,9 @@ export default function DashOrb({
         if (storedMemory && isMounted) {
           try {
             const parsedMemory = JSON.parse(storedMemory) as { summary?: string };
-            setMemorySnapshot(typeof parsedMemory?.summary === 'string' ? parsedMemory.summary : '');
+            setMemorySnapshot(
+              typeof parsedMemory?.summary === 'string' ? parsedMemory.summary : '',
+            );
           } catch {
             setMemorySnapshot('');
           }
@@ -526,7 +543,9 @@ export default function DashOrb({
         if (!storedChat) {
           return;
         }
-        const parsed = JSON.parse(storedChat) as Array<Omit<ChatMessage, 'timestamp'> & { timestamp: string }>;
+        const parsed = JSON.parse(storedChat) as Array<
+          Omit<ChatMessage, 'timestamp'> & { timestamp: string }
+        >;
         if (!Array.isArray(parsed)) return;
         const hydrated = parsed.map((msg) => ({
           ...msg,
@@ -563,7 +582,10 @@ export default function DashOrb({
             isLoading: false,
             isStreaming: false,
             toolCalls: undefined,
-            timestamp: msg.timestamp instanceof Date ? msg.timestamp.toISOString() : new Date().toISOString(),
+            timestamp:
+              msg.timestamp instanceof Date
+                ? msg.timestamp.toISOString()
+                : new Date().toISOString(),
           }));
         await AsyncStorage.setItem(chatStorageKey, JSON.stringify(serializable));
       } catch (err) {
@@ -578,14 +600,22 @@ export default function DashOrb({
     };
   }, [messages, chatStorageKey]);
 
-  const getMemorySpeakerLabel = useCallback((messageRole: ChatMessage['role']) => {
-    if (messageRole !== 'user') return 'Dash';
-    if (isUserSuperAdmin) return 'Operator';
-    if (normalizedRole === 'parent') return 'Parent';
-    if (normalizedRole === 'student' || normalizedRole === 'learner') return 'Learner';
-    if (normalizedRole === 'teacher' || normalizedRole === 'principal' || normalizedRole === 'admin') return 'Staff';
-    return 'User';
-  }, [isUserSuperAdmin, normalizedRole]);
+  const getMemorySpeakerLabel = useCallback(
+    (messageRole: ChatMessage['role']) => {
+      if (messageRole !== 'user') return 'Dash';
+      if (isUserSuperAdmin) return 'Operator';
+      if (normalizedRole === 'parent') return 'Parent';
+      if (normalizedRole === 'student' || normalizedRole === 'learner') return 'Learner';
+      if (
+        normalizedRole === 'teacher' ||
+        normalizedRole === 'principal' ||
+        normalizedRole === 'admin'
+      )
+        return 'Staff';
+      return 'User';
+    },
+    [isUserSuperAdmin, normalizedRole],
+  );
 
   useEffect(() => {
     const summary = messages
@@ -600,10 +630,13 @@ export default function DashOrb({
     if (!AsyncStorage) return;
     const timer = setTimeout(async () => {
       try {
-        await AsyncStorage.setItem(memoryStorageKey, JSON.stringify({
-          summary,
-          updatedAt: new Date().toISOString(),
-        }));
+        await AsyncStorage.setItem(
+          memoryStorageKey,
+          JSON.stringify({
+            summary,
+            updatedAt: new Date().toISOString(),
+          }),
+        );
       } catch (err) {
         console.warn('[DashOrb] Failed to save conversation memory:', err);
       }
@@ -632,10 +665,12 @@ export default function DashOrb({
     }
 
     if (!fullText) {
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === messageId ? { ...msg, content: '', isLoading: false, isStreaming: false } : msg
-        )
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, content: '', isLoading: false, isStreaming: false }
+            : msg,
+        ),
       );
       return;
     }
@@ -651,8 +686,8 @@ export default function DashOrb({
       const tick = () => {
         index = Math.min(total, index + step);
         const isComplete = index >= total;
-        setMessages(prev =>
-          prev.map(msg =>
+        setMessages((prev) =>
+          prev.map((msg) =>
             msg.id === messageId
               ? {
                   ...msg,
@@ -660,8 +695,8 @@ export default function DashOrb({
                   isLoading: false,
                   isStreaming: !isComplete,
                 }
-              : msg
-          )
+              : msg,
+          ),
         );
         if (isComplete) {
           streamingTimerRef.current = null;
@@ -693,17 +728,17 @@ export default function DashOrb({
           upgradeAnim.stopAnimation();
           upgradeAnim.setValue(1);
         }
-        
+
         dragStartRef.current = {
           x: (pan.x as any)._value,
           y: (pan.y as any)._value,
         };
         pan.setOffset({ ...dragStartRef.current });
         pan.setValue({ x: 0, y: 0 });
-        
+
         // Haptic feedback on grab
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        
+
         // Scale down slightly when dragging
         Animated.spring(pulseAnim, {
           toValue: 0.9,
@@ -715,7 +750,9 @@ export default function DashOrb({
         const topLimit = 80;
         const bottomLimit = 120;
         const horizontalLimit = SCREEN_WIDTH * 0.42;
-        const minX = position.includes('left') ? edgePadding : Math.max(edgePadding, horizontalLimit);
+        const minX = position.includes('left')
+          ? edgePadding
+          : Math.max(edgePadding, horizontalLimit);
         const maxX = position.includes('left')
           ? Math.min(SCREEN_WIDTH * 0.58 - size, SCREEN_WIDTH - size - edgePadding)
           : SCREEN_WIDTH - size - edgePadding;
@@ -748,9 +785,9 @@ export default function DashOrb({
             }).start(() => setShowUpgradeBubble(false));
           }, 2600);
         }
-        
+
         // Snap to nearest edge logic could go here
-        
+
         // Restore scale and restart pulse loop
         Animated.spring(pulseAnim, {
           toValue: 1,
@@ -761,9 +798,9 @@ export default function DashOrb({
           glowLoopRef.current?.start();
         });
       },
-    })
+    }),
   ).current;
-  
+
   // Pulsing animation for the orb (only when not dragging)
   useEffect(() => {
     if (isDragging) {
@@ -771,7 +808,7 @@ export default function DashOrb({
       glowLoopRef.current?.stop();
       return;
     }
-    
+
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -786,9 +823,9 @@ export default function DashOrb({
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: false, // Must match PanResponder setting
         }),
-      ])
+      ]),
     );
-    
+
     const glow = Animated.loop(
       Animated.sequence([
         Animated.timing(glowAnim, {
@@ -803,12 +840,12 @@ export default function DashOrb({
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: false, // Must match PanResponder setting
         }),
-      ])
+      ]),
     );
 
     pulseLoopRef.current = pulse;
     glowLoopRef.current = glow;
-    
+
     pulse.start();
     glow.start();
 
@@ -827,7 +864,7 @@ export default function DashOrb({
           duration: 3000,
           easing: Easing.linear,
           useNativeDriver: false, // Consistent with all other animations
-        })
+        }),
       );
       rotation.start();
       return () => rotation.stop();
@@ -868,9 +905,10 @@ export default function DashOrb({
       }, 3600);
       return;
     }
-    
+
     // If speaking or TTS pipeline is active, interrupt and restart listening
-    const ttsPipelineActive = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+    const ttsPipelineActive =
+      isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
     if (ttsPipelineActive) {
       console.log('[DashOrb] User interrupted TTS - restarting voice input');
       ttsSentenceQueueRef.current = [];
@@ -884,7 +922,7 @@ export default function DashOrb({
       }, 260);
       return;
     }
-    
+
     setIsExpanded(true);
     if (messages.length === 0) {
       if (!showQuickActions) {
@@ -900,12 +938,14 @@ export default function DashOrb({
             : profile?.first_name
               ? `Hey ${profile.first_name}, what can I help with?`
               : 'What can I help with?';
-          setMessages([{
-            id: 'welcome',
-            role: 'assistant',
-            content: greeting,
-            timestamp: new Date(),
-          }]);
+          setMessages([
+            {
+              id: 'welcome',
+              role: 'assistant',
+              content: greeting,
+              timestamp: new Date(),
+            },
+          ]);
         })();
       }
     }
@@ -942,7 +982,8 @@ export default function DashOrb({
 
     // ✅ BARGE-IN: if Dash is speaking (or TTS pipeline active or streaming), stop immediately and listen
     try {
-      const bargeInNeeded = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+      const bargeInNeeded =
+        isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
       if (bargeInNeeded) {
         console.log('[DashOrb] Barge-in: stopping TTS pipeline');
         ttsSentenceQueueRef.current = [];
@@ -953,7 +994,9 @@ export default function DashOrb({
         console.log('[DashOrb] Barge-in: cancelling stream');
         cancelStream?.();
       }
-    } catch { /* barge-in best-effort */ }
+    } catch {
+      /* barge-in best-effort */
+    }
 
     setIsExpanded(true);
 
@@ -963,14 +1006,17 @@ export default function DashOrb({
     }
 
     setIsListeningForCommand(true);
-    
+
     // Add listening indicator message
-    setMessages(prev => [...prev, {
-      id: `listening-${Date.now()}`,
-      role: 'system',
-      content: '🎤 Listening...',
-      timestamp: new Date(),
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `listening-${Date.now()}`,
+        role: 'system',
+        content: '🎤 Listening...',
+        timestamp: new Date(),
+      },
+    ]);
 
     const canUseOnDevice = onDeviceVoice.isAvailable;
     if (canUseOnDevice) {
@@ -989,7 +1035,7 @@ export default function DashOrb({
           setLiveTranscript('');
           setInputText('');
           setIsListeningForCommand(false);
-          setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
+          setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
         }, 10000);
         return;
       } catch (err) {
@@ -1004,28 +1050,28 @@ export default function DashOrb({
         if (!started) {
           console.error('[DashOrb] Failed to start recording');
           setIsListeningForCommand(false);
-          setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
+          setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
           return;
         }
-        
+
         // Wait for speech to complete (voiceRecorder will auto-stop on silence)
         // Poll for recording status
         const checkRecording = setInterval(async () => {
           if (voiceRecorderState && !voiceRecorderState.isRecording) {
             clearInterval(checkRecording);
-            
+
             // Get the audio URI by stopping recording
             const audioUri = await voiceRecorderActions.stopRecording();
             if (audioUri) {
               // Transcribe the audio (default to South African English)
               const transcriptResult = await voiceSTT.transcribe(audioUri, 'auto');
-              
+
               if (transcriptResult && transcriptResult.text && transcriptResult.text.trim()) {
                 const normalized = normalizeSupportedLanguage(transcriptResult.language);
                 if (normalized) setSelectedLanguage(normalized);
                 // Remove listening message
-                setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
-                
+                setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
+
                 // Process the voice command
                 const formatted = formatTranscript(
                   transcriptResult.text,
@@ -1035,7 +1081,7 @@ export default function DashOrb({
                     summarize: true,
                     preschoolMode: orgType === 'preschool',
                     maxSummaryWords: orgType === 'preschool' ? 16 : 20,
-                  }
+                  },
                 );
                 shouldRestartListeningRef.current = whisperModeEnabledRef.current;
                 await handleSendRef.current(formatted);
@@ -1044,7 +1090,7 @@ export default function DashOrb({
             setIsListeningForCommand(false);
           }
         }, 500);
-        
+
         // Timeout after 10 seconds
         setTimeout(() => {
           clearInterval(checkRecording);
@@ -1052,13 +1098,13 @@ export default function DashOrb({
             voiceRecorderActions.stopRecording();
           }
           setIsListeningForCommand(false);
-          setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
+          setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
         }, 10000);
       }
     } catch (err) {
       console.error('[DashOrb] Voice input error:', err);
       setIsListeningForCommand(false);
-      setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
+      setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
     }
   }, [
     cancelStream,
@@ -1090,9 +1136,10 @@ export default function DashOrb({
   }, [handleWakeWordDetected]);
 
   const handleMicPress = async () => {
-    const ttsPipelineActive = isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
+    const ttsPipelineActive =
+      isSpeaking || isSpeakingSentenceRef.current || ttsSentenceQueueRef.current.length > 0;
     if (ttsPipelineActive) {
-      setIsMicMuted(prev => !prev);
+      setIsMicMuted((prev) => !prev);
       return;
     }
 
@@ -1110,7 +1157,7 @@ export default function DashOrb({
       }
       setLiveTranscript('');
       setInputText('');
-      setMessages(prev => prev.filter(m => !m.id.startsWith('listening-')));
+      setMessages((prev) => prev.filter((m) => !m.id.startsWith('listening-')));
       setIsListeningForCommand(false);
     } else {
       await handleWakeWordDetected();
@@ -1129,20 +1176,28 @@ export default function DashOrb({
 
     try {
       cancelStream?.();
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
     try {
       if (onDeviceVoice.isListening) {
         await onDeviceVoice.stopListening();
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
     try {
       if (voiceRecorderState?.isRecording) {
         await voiceRecorderActions?.stopRecording();
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
     try {
       await Promise.resolve(stopSpeaking());
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
 
     setIsListeningForCommand(false);
     setIsProcessing(false);
@@ -1157,14 +1212,18 @@ export default function DashOrb({
                 isLoading: false,
                 isStreaming: false,
                 toolCalls: undefined,
-                content: message.content
-                  ? `${message.content}\n\n(Stopped)`
-                  : '(Stopped)',
+                content: message.content ? `${message.content}\n\n(Stopped)` : '(Stopped)',
               }
-            : message
-        )
+            : message,
+        ),
     );
-  }, [cancelStream, onDeviceVoice, stopSpeaking, voiceRecorderActions, voiceRecorderState?.isRecording]);
+  }, [
+    cancelStream,
+    onDeviceVoice,
+    stopSpeaking,
+    voiceRecorderActions,
+    voiceRecorderState?.isRecording,
+  ]);
 
   useEffect(() => {
     if (!whisperModeEnabled) return;
@@ -1223,39 +1282,42 @@ export default function DashOrb({
     setScannerVisible(true);
   }, [isProcessing]);
 
-  const handleScannerScanned = useCallback(async (result: HomeworkScanResult) => {
-    if (!result?.base64) return;
-    const remainingSlots = await getRemainingOrbImageSlots();
-    if (remainingSlots <= 0) {
+  const handleScannerScanned = useCallback(
+    async (result: HomeworkScanResult) => {
+      if (!result?.base64) return;
+      const remainingSlots = await getRemainingOrbImageSlots();
+      if (remainingSlots <= 0) {
+        setScannerVisible(false);
+        toast.info(`Daily image limit reached (${FREE_IMAGE_BUDGET_PER_DAY}). Upgrade for more.`);
+        return;
+      }
+      const attachment: DashAttachment = {
+        id: `attach_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        name: `homework_scan_${Date.now()}.jpg`,
+        mimeType: 'image/jpeg',
+        size: Math.max(0, Math.floor(result.base64.length * 0.75)),
+        bucket: 'attachments',
+        storagePath: '',
+        kind: 'image',
+        status: 'pending',
+        previewUri: result.uri,
+        uploadProgress: 0,
+        meta: {
+          base64: result.base64,
+          image_base64: result.base64,
+          image_media_type: 'image/jpeg',
+          width: result.width,
+          height: result.height,
+          source: 'homework_scanner',
+        },
+      };
+      setPendingAttachments((prev) => [...prev, attachment].slice(0, 5));
+      void refreshAutoScanBudget();
       setScannerVisible(false);
-      toast.info(`Daily image limit reached (${FREE_IMAGE_BUDGET_PER_DAY}). Upgrade for more.`);
-      return;
-    }
-    const attachment: DashAttachment = {
-      id: `attach_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      name: `homework_scan_${Date.now()}.jpg`,
-      mimeType: 'image/jpeg',
-      size: Math.max(0, Math.floor(result.base64.length * 0.75)),
-      bucket: 'attachments',
-      storagePath: '',
-      kind: 'image',
-      status: 'pending',
-      previewUri: result.uri,
-      uploadProgress: 0,
-      meta: {
-        base64: result.base64,
-        image_base64: result.base64,
-        image_media_type: 'image/jpeg',
-        width: result.width,
-        height: result.height,
-        source: 'homework_scanner',
-      },
-    };
-    setPendingAttachments((prev) => [...prev, attachment].slice(0, 5));
-    void refreshAutoScanBudget();
-    setScannerVisible(false);
-    toast.success('Homework scan attached');
-  }, [getRemainingOrbImageSlots, refreshAutoScanBudget]);
+      toast.success('Homework scan attached');
+    },
+    [getRemainingOrbImageSlots, refreshAutoScanBudget],
+  );
 
   // eslint-disable-next-line react-hooks/exhaustive-deps -- processCommand is used in memoized callbacks but remains non-memoized to avoid a deep dependency graph.
   const processCommand = async (
@@ -1266,7 +1328,7 @@ export default function DashOrb({
       historyOverride?: Array<{ role: string; content: string }>;
       skipUserMessage?: boolean;
       attachments?: DashAttachment[];
-    }
+    },
   ) => {
     // Sanitize input
     const sanitized = sanitizeInput(command, 2000);
@@ -1280,8 +1342,9 @@ export default function DashOrb({
       responseText: sanitized,
       fallbackPreference: selectedLanguage,
     });
-    const languageSource = requestLanguage.source || (explicitLanguage ? 'explicit_override' : 'preference');
-    
+    const languageSource =
+      requestLanguage.source || (explicitLanguage ? 'explicit_override' : 'preference');
+
     // Validate command
     const validation = validateCommand(sanitized);
     if (!validation.valid) {
@@ -1291,10 +1354,10 @@ export default function DashOrb({
         content: `⚠️ Invalid command: ${validation.error}`,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
       return;
     }
-    
+
     // §3.1/§3.2: Quota pre-check before AI call
     const quotaResult = await checkQuotaBeforeSend();
     if (!quotaResult.allowed) return;
@@ -1308,18 +1371,17 @@ export default function DashOrb({
         content: `⏱️ Rate limit exceeded. Please wait a moment before trying again. (${remaining} requests remaining)`,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorMessage]);
+      setMessages((prev) => [...prev, errorMessage]);
       return;
     }
-    
+
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
       content: displayOverride ? sanitizeInput(displayOverride, 2000) : sanitized,
       timestamp: new Date(),
-      attachments: options?.attachments && options.attachments.length > 0
-        ? options.attachments
-        : undefined,
+      attachments:
+        options?.attachments && options.attachments.length > 0 ? options.attachments : undefined,
     };
     setInputText('');
     setIsProcessing(true);
@@ -1358,9 +1420,11 @@ export default function DashOrb({
     ]);
 
     try {
-      const baseHistory = options?.historyOverride ?? (options?.baseMessages ?? messages)
-        .filter(m => m.role === 'user' || m.role === 'assistant')
-        .map(m => ({ role: m.role, content: m.content }));
+      const baseHistory =
+        options?.historyOverride ??
+        (options?.baseMessages ?? messages)
+          .filter((m) => m.role === 'user' || m.role === 'assistant')
+          .map((m) => ({ role: m.role, content: m.content }));
       const history = toolContextEntry ? [...baseHistory, toolContextEntry] : baseHistory;
 
       const attachmentsForTurn = options?.attachments || [];
@@ -1369,10 +1433,8 @@ export default function DashOrb({
       if (forceNonStreaming) {
         const result = await executeCommand(command, history, attachmentsForTurn);
         await streamResponseToMessage(thinkingId, result.text);
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === thinkingId ? { ...msg, toolCalls: undefined } : msg
-          )
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === thinkingId ? { ...msg, toolCalls: undefined } : msg)),
         );
 
         const scannedAttachmentCount = countScannerAttachments(attachmentsForTurn);
@@ -1380,7 +1442,7 @@ export default function DashOrb({
           const consumeResult = await consumeAutoScanBudget(
             tierLabel || 'free',
             scannedAttachmentCount,
-            autoScanUserId
+            autoScanUserId,
           );
           if (!consumeResult.allowed) {
             logger.info('DashOrb.autoScanBudgetRaceDetected', {
@@ -1418,15 +1480,21 @@ export default function DashOrb({
         onCommandExecuted?.(command, result.text);
       } else {
         const supabase = assertSupabase();
-        const { data: { session } } = await supabase.auth.getSession();
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
         if (!session?.access_token) throw new Error('Not authenticated.');
 
         const endpoint = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/ai-proxy`;
 
         const isLearnerRole = ['student', 'learner'].includes(normalizedRole);
         const ageYears = isLearnerRole
-          ? (profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null)
-          : (normalizedRole === 'parent' ? learnerAgeYears : null);
+          ? profile?.date_of_birth
+            ? calculateAge(profile.date_of_birth)
+            : null
+          : normalizedRole === 'parent'
+            ? learnerAgeYears
+            : null;
         const streamPhonicsMode = shouldUsePhonicsMode(command, {
           ageYears: learnerAgeYears,
           gradeLevel: learnerGrade || null,
@@ -1448,15 +1516,22 @@ export default function DashOrb({
           payload: {
             prompt: command,
             model: selectedModel,
-            context: [
-              history.length > 0 ? history.map(h => `${h.role}: ${h.content}`).join('\n') : null,
-              memorySnapshot ? `Conversation memory snapshot: ${memorySnapshot}` : null,
-              learnerName ? `Learner name: ${learnerName}.` : null,
-              learnerGrade ? `Learner grade: ${learnerGrade}.` : null,
-              ageYears ? `Learner age: ${ageYears}. Provide age-appropriate, child-safe guidance.` : null,
-              normalizedRole ? `Role: ${normalizedRole}.` : null,
-              dashPolicy.systemPromptAddendum,
-            ].filter(Boolean).join('\n\n') || undefined,
+            context:
+              [
+                history.length > 0
+                  ? history.map((h) => `${h.role}: ${h.content}`).join('\n')
+                  : null,
+                memorySnapshot ? `Conversation memory snapshot: ${memorySnapshot}` : null,
+                learnerName ? `Learner name: ${learnerName}.` : null,
+                learnerGrade ? `Learner grade: ${learnerGrade}.` : null,
+                ageYears
+                  ? `Learner age: ${ageYears}. Provide age-appropriate, child-safe guidance.`
+                  : null,
+                normalizedRole ? `Role: ${normalizedRole}.` : null,
+                dashPolicy.systemPromptAddendum,
+              ]
+                .filter(Boolean)
+                .join('\n\n') || undefined,
           },
           stream: true,
           enable_tools: enableToolsForStreamTurn,
@@ -1528,12 +1603,12 @@ export default function DashOrb({
             {
               onTextChunk: (_chunk, accumulated) => {
                 // Update message content in real-time as chunks arrive
-                setMessages(prev =>
-                  prev.map(msg =>
+                setMessages((prev) =>
+                  prev.map((msg) =>
                     msg.id === thinkingId
                       ? { ...msg, content: accumulated, isLoading: false, isStreaming: true }
-                      : msg
-                  )
+                      : msg,
+                  ),
                 );
               },
               onSentenceReady: (sentence) => {
@@ -1557,12 +1632,12 @@ export default function DashOrb({
                 setSimulatedVisemeId(evt.visemeId);
               },
               onComplete: (fullText) => {
-                setMessages(prev =>
-                  prev.map(msg =>
+                setMessages((prev) =>
+                  prev.map((msg) =>
                     msg.id === thinkingId
                       ? { ...msg, content: fullText, isStreaming: false, toolCalls: undefined }
-                      : msg
-                  )
+                      : msg,
+                  ),
                 );
                 onCommandExecuted?.(command, fullText);
                 resolve();
@@ -1576,7 +1651,9 @@ export default function DashOrb({
       }
 
       if (isFreeImageBudgetTier && (options?.attachments?.length || 0) > 0) {
-        const usedImages = (options?.attachments || []).filter((attachment) => attachment.kind === 'image').length;
+        const usedImages = (options?.attachments || []).filter(
+          (attachment) => attachment.kind === 'image',
+        ).length;
         if (usedImages > 0) {
           await trackImageUsage(usedImages).catch((error) => {
             console.warn('[DashOrb] Failed to track free image usage:', error);
@@ -1584,11 +1661,17 @@ export default function DashOrb({
         }
       }
     } catch (error) {
-      setMessages(prev => prev.map(msg => 
-        msg.id === thinkingId 
-          ? { ...msg, content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`, isLoading: false }
-          : msg
-      ));
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === thinkingId
+            ? {
+                ...msg,
+                content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                isLoading: false,
+              }
+            : msg,
+        ),
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -1597,7 +1680,7 @@ export default function DashOrb({
   const detectToolsNeeded = (command: string): ChatMessage['toolCalls'] => {
     const tools: ChatMessage['toolCalls'] = [];
     const lowerCommand = command.toLowerCase();
-    
+
     // DevOps tools
     if (lowerCommand.includes('build') || lowerCommand.includes('eas')) {
       tools.push({ name: 'eas_trigger_build', status: 'pending' });
@@ -1608,9 +1691,13 @@ export default function DashOrb({
     if (lowerCommand.includes('pull request') || lowerCommand.includes('pr')) {
       tools.push({ name: 'github_list_prs', status: 'pending' });
     }
-    
+
     // Platform analytics
-    if (lowerCommand.includes('stat') || lowerCommand.includes('metric') || lowerCommand.includes('analytics')) {
+    if (
+      lowerCommand.includes('stat') ||
+      lowerCommand.includes('metric') ||
+      lowerCommand.includes('analytics')
+    ) {
       tools.push({ name: 'get_platform_stats', status: 'pending' });
     }
     if (lowerCommand.includes('ai usage') || lowerCommand.includes('token')) {
@@ -1619,25 +1706,33 @@ export default function DashOrb({
     if (lowerCommand.includes('report') || lowerCommand.includes('revenue')) {
       tools.push({ name: 'generate_report', status: 'pending' });
     }
-    
+
     // User/School management
     if (lowerCommand.includes('school') || lowerCommand.includes('preschool')) {
       tools.push({ name: 'list_schools', status: 'pending' });
     }
-    if (lowerCommand.includes('user') || lowerCommand.includes('principal') || lowerCommand.includes('teacher')) {
+    if (
+      lowerCommand.includes('user') ||
+      lowerCommand.includes('principal') ||
+      lowerCommand.includes('teacher')
+    ) {
       tools.push({ name: 'list_users', status: 'pending' });
     }
-    
+
     // Database queries
-    if (lowerCommand.includes('query') || lowerCommand.includes('select') || lowerCommand.includes('count')) {
+    if (
+      lowerCommand.includes('query') ||
+      lowerCommand.includes('select') ||
+      lowerCommand.includes('count')
+    ) {
       tools.push({ name: 'query_database', status: 'pending' });
     }
-    
+
     // Feature flags
     if (lowerCommand.includes('feature') || lowerCommand.includes('flag')) {
       tools.push({ name: 'manage_feature_flag', status: 'pending' });
     }
-    
+
     // Announcements
     if (lowerCommand.includes('announce') || lowerCommand.includes('broadcast')) {
       tools.push({ name: 'send_announcement', status: 'pending' });
@@ -1648,7 +1743,7 @@ export default function DashOrb({
       tools.push({ name: 'generate_image', status: 'pending' });
     }
     // PDF-generating tools are intentionally disabled.
-    
+
     return tools.length > 0 ? tools : [{ name: 'ai_analysis', status: 'pending' }];
   };
 
@@ -1661,7 +1756,12 @@ export default function DashOrb({
       logger.warn('DashOrb.handleRunTool', { toolName, error: 'not_registered' });
       setMessages((prev) => [
         ...prev,
-        { id: `tool_err_${Date.now()}`, role: 'assistant', content: errorMsg, timestamp: new Date() },
+        {
+          id: `tool_err_${Date.now()}`,
+          role: 'assistant',
+          content: errorMsg,
+          timestamp: new Date(),
+        },
       ]);
       return;
     }
@@ -1674,7 +1774,12 @@ export default function DashOrb({
       logger.info('DashOrb.toolBlocked', { toolName, ageBand, toolRisk });
       setMessages((prev) => [
         ...prev,
-        { id: `tool_blocked_${Date.now()}`, role: 'assistant', content: blockedMsg, timestamp: new Date() },
+        {
+          id: `tool_blocked_${Date.now()}`,
+          role: 'assistant',
+          content: blockedMsg,
+          timestamp: new Date(),
+        },
       ]);
       return;
     }
@@ -1682,7 +1787,9 @@ export default function DashOrb({
     let supabaseClient: any = null;
     try {
       supabaseClient = assertSupabase();
-    } catch { /* fallback to null */ }
+    } catch {
+      /* fallback to null */
+    }
 
     const traceId = `dash_orb_manual_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const context = {
@@ -1821,32 +1928,44 @@ export default function DashOrb({
   const executeCommand = async (
     command: string,
     history: Array<{ role: string; content: string }> = [],
-    attachments: DashAttachment[] = []
+    attachments: DashAttachment[] = [],
   ): Promise<ExecuteCommandResult> => {
     let attemptedOCRMode = false;
     try {
       const supabase = assertSupabase();
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session?.access_token) {
         throw new Error('Not authenticated. Please log in again.');
       }
 
       const isLearnerRole = ['student', 'learner'].includes(normalizedRole);
       const ageYears = isLearnerRole
-        ? (profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null)
-        : (normalizedRole === 'parent' ? learnerAgeYears : null);
+        ? profile?.date_of_birth
+          ? calculateAge(profile.date_of_birth)
+          : null
+        : normalizedRole === 'parent'
+          ? learnerAgeYears
+          : null;
 
       const ageContext = ageYears
         ? `Learner age: ${ageYears}. Provide age-appropriate, child-safe guidance.`
-        : (isLearnerRole ? 'Provide age-appropriate, child-safe guidance.' : undefined);
+        : isLearnerRole
+          ? 'Provide age-appropriate, child-safe guidance.'
+          : undefined;
       const gradeContext = learnerGrade ? `Learner grade: ${learnerGrade}.` : undefined;
       const nameContext = learnerName ? `Learner name: ${learnerName}.` : undefined;
-      const schoolTypeContext = learnerContext?.schoolType ? `School type: ${learnerContext.schoolType}.` : undefined;
+      const schoolTypeContext = learnerContext?.schoolType
+        ? `School type: ${learnerContext.schoolType}.`
+        : undefined;
 
       const roleContext = isTutorRole
         ? 'Role: Parent/Student tutor. Use diagnose → teach → practice. Start with one diagnostic question and WAIT. Ask one question at a time. Avoid teacher/admin-only sections.'
-        : (normalizedRole ? `Role: ${normalizedRole}. Provide role-appropriate guidance.` : undefined);
+        : normalizedRole
+          ? `Role: ${normalizedRole}. Provide role-appropriate guidance.`
+          : undefined;
 
       const lessonContext = isTutorRole
         ? 'If asked for a lesson plan, output a learner-ready mini-lesson with examples, practice, and a quick check question. Add 1-2 tips for parents to help at home.'
@@ -1863,29 +1982,32 @@ export default function DashOrb({
         responseText: command,
         fallbackPreference: selectedLanguage,
       });
-      const languageSource = languageResolution.source || (explicitLanguage ? 'explicit_override' : 'preference');
+      const languageSource =
+        languageResolution.source || (explicitLanguage ? 'explicit_override' : 'preference');
       const superAdminEndpoint = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/superadmin-ai`;
       const aiProxyEndpoint = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/ai-proxy`;
       const images = await buildImagePayloads(attachments);
       const detectedOCRTask = images.length > 0 ? detectOCRTask(command) : null;
-      const ocrMode = images.length > 0 && (
-        isOCRIntent(command) ||
-        detectedOCRTask !== null ||
-        isShortOrAttachmentOnlyPrompt(command)
-      );
+      const ocrMode =
+        images.length > 0 &&
+        (isOCRIntent(command) ||
+          detectedOCRTask !== null ||
+          isShortOrAttachmentOnlyPrompt(command));
       attemptedOCRMode = ocrMode;
       const ocrTask = detectedOCRTask || 'document';
-      const attachmentContext = attachments.length > 0
-        ? [
-            'ATTACHMENTS:',
-            ...attachments.map((attachment) => {
-              const sizeLabel = typeof attachment.size === 'number' && attachment.size > 0
-                ? ` (${Math.round(attachment.size / 1024)} KB)`
-                : '';
-              return `- ${attachment.name || 'Attachment'} [${attachment.kind || 'file'}]${sizeLabel}`;
-            }),
-          ].join('\n')
-        : null;
+      const attachmentContext =
+        attachments.length > 0
+          ? [
+              'ATTACHMENTS:',
+              ...attachments.map((attachment) => {
+                const sizeLabel =
+                  typeof attachment.size === 'number' && attachment.size > 0
+                    ? ` (${Math.round(attachment.size / 1024)} KB)`
+                    : '';
+                return `- ${attachment.name || 'Attachment'} [${attachment.kind || 'file'}]${sizeLabel}`;
+              }),
+            ].join('\n')
+          : null;
       const criteriaContext = getCriteriaResponsePrompt(command);
       const ocrContext = ocrMode ? getOCRPromptForTask(ocrTask) : null;
       const aiScope = resolveAIProxyScopeFromRole(normalizedRole);
@@ -1905,20 +2027,23 @@ export default function DashOrb({
           ocr_mode: ocrMode || undefined,
           ocr_task: ocrMode ? ocrTask : undefined,
           ocr_response_format: ocrMode ? 'json' : undefined,
-          context: [
-            history.length > 0 ? history.map((h) => `${h.role}: ${h.content}`).join('\n') : null,
-            memorySnapshot ? `Conversation memory snapshot: ${memorySnapshot}` : null,
-            attachmentContext,
-            criteriaContext,
-            ocrContext,
-            nameContext,
-            gradeContext,
-            schoolTypeContext,
-            ageContext,
-            roleContext,
-            lessonContext,
-            dashPolicy.systemPromptAddendum,
-          ].filter(Boolean).join('\n\n') || undefined,
+          context:
+            [
+              history.length > 0 ? history.map((h) => `${h.role}: ${h.content}`).join('\n') : null,
+              memorySnapshot ? `Conversation memory snapshot: ${memorySnapshot}` : null,
+              attachmentContext,
+              criteriaContext,
+              ocrContext,
+              nameContext,
+              gradeContext,
+              schoolTypeContext,
+              ageContext,
+              roleContext,
+              lessonContext,
+              dashPolicy.systemPromptAddendum,
+            ]
+              .filter(Boolean)
+              .join('\n\n') || undefined,
         },
         stream: false,
         enable_tools: enableToolsForTurn,
@@ -1963,18 +2088,24 @@ export default function DashOrb({
           };
           if (!parsed || typeof parsed !== 'object') return null;
           const analysis = typeof parsed.analysis === 'string' ? parsed.analysis.trim() : '';
-          const extracted = typeof parsed.extracted_text === 'string' ? parsed.extracted_text.trim() : '';
+          const extracted =
+            typeof parsed.extracted_text === 'string' ? parsed.extracted_text.trim() : '';
           if (!analysis && !extracted) return null;
-          const confidencePct = typeof parsed.confidence === 'number'
-            ? `\n\nConfidence: ${Math.round(parsed.confidence * 100)}%`
-            : '';
-          const documentType = typeof parsed.document_type === 'string'
-            ? `Document type: ${parsed.document_type}`
-            : '';
-          const extractedBlock = extracted
-            ? `\n\nExtracted text:\n${extracted}`
-            : '';
-          return [analysis || documentType, documentType && analysis ? '' : null, extractedBlock, confidencePct]
+          const confidencePct =
+            typeof parsed.confidence === 'number'
+              ? `\n\nConfidence: ${Math.round(parsed.confidence * 100)}%`
+              : '';
+          const documentType =
+            typeof parsed.document_type === 'string'
+              ? `Document type: ${parsed.document_type}`
+              : '';
+          const extractedBlock = extracted ? `\n\nExtracted text:\n${extracted}` : '';
+          return [
+            analysis || documentType,
+            documentType && analysis ? '' : null,
+            extractedBlock,
+            confidencePct,
+          ]
             .filter(Boolean)
             .join('');
         } catch {
@@ -1991,7 +2122,8 @@ export default function DashOrb({
         if (typeof data?.message?.content === 'string') return data.message.content;
         if (typeof data?.text === 'string') return data.text;
         if (typeof data?.response === 'string') return data.response;
-        if (data?.success && data?.content) return typeof data.content === 'string' ? data.content : JSON.stringify(data.content);
+        if (data?.success && data?.content)
+          return typeof data.content === 'string' ? data.content : JSON.stringify(data.content);
         console.warn('[DashOrb] Unknown ai-proxy response format:', Object.keys(data || {}));
         return 'I received your message but could not parse the response.';
       };
@@ -2010,7 +2142,7 @@ export default function DashOrb({
 
       const invoke = async (
         endpoint: string,
-        body: Record<string, unknown>
+        body: Record<string, unknown>,
       ): Promise<{ ok: boolean; status: number; data: any }> => {
         const response = await fetch(endpoint, {
           method: 'POST',
@@ -2026,14 +2158,17 @@ export default function DashOrb({
       };
 
       const forceAiProxy = ocrMode || images.length > 0;
-      let mode: 'superadmin' | 'ai_proxy' = isUserSuperAdmin && !forceAiProxy ? 'superadmin' : 'ai_proxy';
+      let mode: 'superadmin' | 'ai_proxy' =
+        isUserSuperAdmin && !forceAiProxy ? 'superadmin' : 'ai_proxy';
       let response = await invoke(
         mode === 'superadmin' ? superAdminEndpoint : aiProxyEndpoint,
-        mode === 'superadmin' ? superAdminBody : aiProxyBody
+        mode === 'superadmin' ? superAdminBody : aiProxyBody,
       );
 
       if (!response.ok && mode === 'superadmin') {
-        const message = String(response.data?.error || response.data?.message || `Request failed: ${response.status}`);
+        const message = String(
+          response.data?.error || response.data?.message || `Request failed: ${response.status}`,
+        );
         if (isFallbackWorthy(response.status, message)) {
           console.warn('[DashOrb] superadmin-ai unavailable, falling back to ai-proxy', {
             status: response.status,
@@ -2045,7 +2180,8 @@ export default function DashOrb({
       }
 
       if (!response.ok) {
-        const rawError = response.data?.error || response.data?.message || `Request failed: ${response.status}`;
+        const rawError =
+          response.data?.error || response.data?.message || `Request failed: ${response.status}`;
         console.warn('[DashOrb] AI error payload:', response.data);
         if (typeof rawError === 'string' && rawError.toLowerCase().includes('ai_proxy_error')) {
           throw new Error('AI service is temporarily unavailable. Please try again shortly.');
@@ -2053,15 +2189,24 @@ export default function DashOrb({
         throw new Error(rawError);
       }
 
-      console.log('[DashOrb] AI Response data:', JSON.stringify(response.data, null, 2).substring(0, 500));
+      console.log(
+        '[DashOrb] AI Response data:',
+        JSON.stringify(response.data, null, 2).substring(0, 500),
+      );
 
       if (mode === 'superadmin') {
         if (!response.data?.success) {
-          const fallbackError = String(response.data?.error || response.data?.message || 'Unknown error occurred');
+          const fallbackError = String(
+            response.data?.error || response.data?.message || 'Unknown error occurred',
+          );
           if (isFallbackWorthy(200, fallbackError)) {
             const fallback = await invoke(aiProxyEndpoint, aiProxyBody);
             if (!fallback.ok) {
-              throw new Error(fallback.data?.error || fallback.data?.message || 'Fallback ai-proxy request failed');
+              throw new Error(
+                fallback.data?.error ||
+                  fallback.data?.message ||
+                  'Fallback ai-proxy request failed',
+              );
             }
             return {
               text: parseAiProxyResponse(fallback.data),
@@ -2087,12 +2232,11 @@ export default function DashOrb({
         ok: true,
         ocrMode,
       };
-      
     } catch (error) {
       console.error('[DashOrb] Command execution error:', error);
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      
+
       if (errorMessage.includes('Not authenticated')) {
         return {
           text: '⚠️ **Authentication Required**\n\nPlease log out and log back in to refresh your session.',
@@ -2100,7 +2244,7 @@ export default function DashOrb({
           ocrMode: attemptedOCRMode,
         };
       }
-      
+
       if (errorMessage.includes('Super admin')) {
         return {
           text: '🔒 **Access Denied**\n\nThis feature requires Super Admin privileges.',
@@ -2108,15 +2252,15 @@ export default function DashOrb({
           ocrMode: attemptedOCRMode,
         };
       }
-      
+
       if (errorMessage.includes('quota') || errorMessage.includes('limit')) {
         return {
-          text: '📊 **AI Quota Exceeded**\n\nYou\'ve reached your AI usage limit. Please try again later or upgrade your subscription.',
+          text: "📊 **AI Quota Exceeded**\n\nYou've reached your AI usage limit. Please try again later or upgrade your subscription.",
           ok: false,
           ocrMode: attemptedOCRMode,
         };
       }
-      
+
       if (errorMessage.includes('ANTHROPIC_API_KEY')) {
         return {
           text: '⚙️ **Configuration Required**\n\nThe AI service is not configured. Please contact support.',
@@ -2124,7 +2268,7 @@ export default function DashOrb({
           ocrMode: attemptedOCRMode,
         };
       }
-      
+
       return {
         text: `❌ **Error**\n\n${errorMessage}\n\nPlease try again or contact support if the issue persists.`,
         ok: false,
@@ -2135,110 +2279,127 @@ export default function DashOrb({
 
   const isTutorRole = ['parent', 'student', 'learner'].includes(normalizedRole);
 
-  const buildTutorPrompt = useCallback((basePrompt: string, options?: { topicHint?: string | null; requireDetails?: boolean }) => {
-    const ageYears = ['student', 'learner'].includes(normalizedRole)
-      ? (profile?.date_of_birth ? calculateAge(profile.date_of_birth) : null)
-      : learnerAgeYears;
-    const autoAgeGroup = quickActionAge === 'auto' ? resolveAgeGroupFromYears(ageYears) : null;
-    const effectiveAgeGroup = quickActionAge === 'auto' ? (autoAgeGroup || 'auto') : quickActionAge;
+  const buildTutorPrompt = useCallback(
+    (basePrompt: string, options?: { topicHint?: string | null; requireDetails?: boolean }) => {
+      const ageYears = ['student', 'learner'].includes(normalizedRole)
+        ? profile?.date_of_birth
+          ? calculateAge(profile.date_of_birth)
+          : null
+        : learnerAgeYears;
+      const autoAgeGroup = quickActionAge === 'auto' ? resolveAgeGroupFromYears(ageYears) : null;
+      const effectiveAgeGroup = quickActionAge === 'auto' ? autoAgeGroup || 'auto' : quickActionAge;
 
-    const ageLabel = effectiveAgeGroup === 'adult'
-      ? 'adult learners'
-      : effectiveAgeGroup !== 'auto'
-        ? `ages ${effectiveAgeGroup}`
-        : (ageYears ? `age ${ageYears}` : '');
-    const gradeBand = effectiveAgeGroup !== 'auto' ? resolveGradeBand(effectiveAgeGroup) : null;
-    const learnerHint = gradeBand
-      ? `${gradeBand}${ageLabel ? ` (${ageLabel})` : ''}`
-      : (ageLabel || '');
+      const ageLabel =
+        effectiveAgeGroup === 'adult'
+          ? 'adult learners'
+          : effectiveAgeGroup !== 'auto'
+            ? `ages ${effectiveAgeGroup}`
+            : ageYears
+              ? `age ${ageYears}`
+              : '';
+      const gradeBand = effectiveAgeGroup !== 'auto' ? resolveGradeBand(effectiveAgeGroup) : null;
+      const learnerHint = gradeBand
+        ? `${gradeBand}${ageLabel ? ` (${ageLabel})` : ''}`
+        : ageLabel || '';
 
-    const roleDirective = isTutorRole
-      ? 'Audience: parent/student. Use tutoring mode. Avoid teacher/admin-only sections. If generating a lesson, make it learner-ready with examples and practice plus 2 parent tips.'
-      : normalizedRole
-        ? `Audience: ${normalizedRole}. Provide role-appropriate guidance.`
-        : 'Audience: general.';
+      const roleDirective = isTutorRole
+        ? 'Audience: parent/student. Use tutoring mode. Avoid teacher/admin-only sections. If generating a lesson, make it learner-ready with examples and practice plus 2 parent tips.'
+        : normalizedRole
+          ? `Audience: ${normalizedRole}. Provide role-appropriate guidance.`
+          : 'Audience: general.';
 
-    const interactionRules = isTutorRole
-      ? 'Diagnose → Teach → Practice loop. Start with ONE short diagnostic question and WAIT. Ask one question at a time; do not proceed until the learner answers.'
-      : 'Be concise and practical. Ask 1–2 clarifying questions if needed.';
+      const interactionRules = isTutorRole
+        ? 'Diagnose → Teach → Practice loop. Start with ONE short diagnostic question and WAIT. Ask one question at a time; do not proceed until the learner answers.'
+        : 'Be concise and practical. Ask 1–2 clarifying questions if needed.';
 
-    const detailRule = options?.requireDetails
-      ? 'If topic or grade is missing, ask: "Which grade and topic should I use?" and wait.'
-      : '';
+      const detailRule = options?.requireDetails
+        ? 'If topic or grade is missing, ask: "Which grade and topic should I use?" and wait.'
+        : '';
 
-    return [
-      'Start a NEW topic and ignore earlier context.',
-      basePrompt,
-      roleDirective,
-      learnerHint ? `Learner profile: ${learnerHint}.` : '',
-      learnerGrade ? `Learner grade: ${learnerGrade}.` : '',
-      options?.topicHint ? `Topic: ${options.topicHint}.` : '',
-      interactionRules,
-      detailRule,
-    ].filter(Boolean).join(' ');
-  }, [isTutorRole, learnerAgeYears, learnerGrade, normalizedRole, profile, quickActionAge]);
+      return [
+        'Start a NEW topic and ignore earlier context.',
+        basePrompt,
+        roleDirective,
+        learnerHint ? `Learner profile: ${learnerHint}.` : '',
+        learnerGrade ? `Learner grade: ${learnerGrade}.` : '',
+        options?.topicHint ? `Topic: ${options.topicHint}.` : '',
+        interactionRules,
+        detailRule,
+      ]
+        .filter(Boolean)
+        .join(' ');
+    },
+    [isTutorRole, learnerAgeYears, learnerGrade, normalizedRole, profile, quickActionAge],
+  );
 
-  const handleSend = useCallback(async (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed && pendingAttachments.length === 0) return;
-    const flags = getFeatureFlagsSync();
-    const handoffIntent = flags.dash_tutor_auto_handoff_v1 ? classifyFullChatIntent(trimmed) : null;
+  const handleSend = useCallback(
+    async (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed && pendingAttachments.length === 0) return;
+      const flags = getFeatureFlagsSync();
+      const handoffIntent = flags.dash_tutor_auto_handoff_v1
+        ? classifyFullChatIntent(trimmed)
+        : null;
 
-    if (handoffIntent && !isEditing && !pendingTutorIntent) {
-      trackTutorFullChatHandoff({
-        intent: handoffIntent,
-        source: 'dash_orb',
-        role: normalizedRole,
-      });
-      setIsExpanded(false);
-      router.push({
-        pathname: '/screens/dash-assistant',
-        params: {
+      if (handoffIntent && !isEditing && !pendingTutorIntent) {
+        trackTutorFullChatHandoff({
+          intent: handoffIntent,
           source: 'dash_orb',
-          initialMessage: trimmed,
-          resumePrompt: trimmed,
-          mode: handoffIntent === 'quiz' ? 'tutor' : 'advisor',
-          tutorMode: handoffIntent === 'quiz' ? 'quiz' : undefined,
-          handoffIntent,
-        },
-      } as any);
-      return;
-    }
+          role: normalizedRole,
+        });
+        setIsExpanded(false);
+        router.push({
+          pathname: '/screens/dash-assistant',
+          params: {
+            source: 'dash_orb',
+            initialMessage: trimmed,
+            resumePrompt: trimmed,
+            mode: handoffIntent === 'quiz' ? 'tutor' : 'advisor',
+            tutorMode: handoffIntent === 'quiz' ? 'quiz' : undefined,
+            handoffIntent,
+          },
+        } as any);
+        return;
+      }
 
-    if (isEditing && editingMessageId) {
-      const index = messages.findIndex((m) => m.id === editingMessageId);
-      const baseMessages = index >= 0 ? messages.slice(0, index) : messages;
-      setIsEditing(false);
-      setEditingMessageId(null);
-      await processCommand(trimmed, undefined, {
-        baseMessages,
+      if (isEditing && editingMessageId) {
+        const index = messages.findIndex((m) => m.id === editingMessageId);
+        const baseMessages = index >= 0 ? messages.slice(0, index) : messages;
+        setIsEditing(false);
+        setEditingMessageId(null);
+        await processCommand(trimmed, undefined, {
+          baseMessages,
+          attachments: pendingAttachments,
+        });
+        setPendingAttachments([]);
+        return;
+      }
+      if (pendingTutorIntent) {
+        const mergedPrompt = buildTutorPrompt(pendingTutorIntent.prompt, {
+          topicHint: trimmed,
+          requireDetails: false,
+        });
+        setPendingTutorIntent(null);
+        await processCommand(mergedPrompt, trimmed, { attachments: pendingAttachments });
+        setPendingAttachments([]);
+        return;
+      }
+      await processCommand(trimmed || 'Please analyze this image.', undefined, {
         attachments: pendingAttachments,
       });
       setPendingAttachments([]);
-      return;
-    }
-    if (pendingTutorIntent) {
-      const mergedPrompt = buildTutorPrompt(pendingTutorIntent.prompt, {
-        topicHint: trimmed,
-        requireDetails: false,
-      });
-      setPendingTutorIntent(null);
-      await processCommand(mergedPrompt, trimmed, { attachments: pendingAttachments });
-      setPendingAttachments([]);
-      return;
-    }
-    await processCommand(trimmed || 'Please analyze this image.', undefined, { attachments: pendingAttachments });
-    setPendingAttachments([]);
-  }, [
-    buildTutorPrompt,
-    editingMessageId,
-    isEditing,
-    messages,
-    normalizedRole,
-    pendingAttachments,
-    pendingTutorIntent,
-    processCommand,
-  ]);
+    },
+    [
+      buildTutorPrompt,
+      editingMessageId,
+      isEditing,
+      messages,
+      normalizedRole,
+      pendingAttachments,
+      pendingTutorIntent,
+      processCommand,
+    ],
+  );
 
   useEffect(() => {
     handleSendRef.current = handleSend;
@@ -2260,53 +2421,78 @@ export default function DashOrb({
 
     // Fallback (should be rare): keep a few safe defaults.
     return [
-      { id: 'explain', label: 'Explain', prompt: 'Explain this in simple steps and ask one check question.' },
-      { id: 'practice', label: 'Practice', prompt: 'Give me one practice task and then evaluate my answer.' },
+      {
+        id: 'explain',
+        label: 'Explain',
+        prompt: 'Explain this in simple steps and ask one check question.',
+      },
+      {
+        id: 'practice',
+        label: 'Practice',
+        prompt: 'Give me one practice task and then evaluate my answer.',
+      },
       { id: 'summarize', label: 'Summarize this into key points and one next action.' },
     ];
-  }, [dashPolicy.quickActions, learnerContext]) as Array<{ id: string; label: string; prompt: string }>;
+  }, [dashPolicy.quickActions, learnerContext]) as Array<{
+    id: string;
+    label: string;
+    prompt: string;
+  }>;
 
-  const handleQuickIntent = useCallback((intent: { id: string; label: string; prompt: string }) => {
-    if (isProcessing) return;
+  const handleQuickIntent = useCallback(
+    (intent: { id: string; label: string; prompt: string }) => {
+      if (isProcessing) return;
 
-    if (intent.id === 'summarize') {
-      const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && !msg.isLoading);
-      if (lastAssistant?.content) {
-        void handleSend(`Summarize this response for parent and child:\n${lastAssistant.content}`);
-        return;
+      if (intent.id === 'summarize') {
+        const lastAssistant = [...messages]
+          .reverse()
+          .find((msg) => msg.role === 'assistant' && !msg.isLoading);
+        if (lastAssistant?.content) {
+          void handleSend(
+            `Summarize this response for parent and child:\n${lastAssistant.content}`,
+          );
+          return;
+        }
       }
-    }
 
-    if (intent.id === 'translate') {
-      const lastAssistant = [...messages].reverse().find((msg) => msg.role === 'assistant' && !msg.isLoading);
-      if (lastAssistant?.content) {
-        void handleSend(`Translate this into simpler language for a parent and child:\n${lastAssistant.content}`);
-        return;
+      if (intent.id === 'translate') {
+        const lastAssistant = [...messages]
+          .reverse()
+          .find((msg) => msg.role === 'assistant' && !msg.isLoading);
+        if (lastAssistant?.content) {
+          void handleSend(
+            `Translate this into simpler language for a parent and child:\n${lastAssistant.content}`,
+          );
+          return;
+        }
       }
-    }
 
-    void handleSend(intent.prompt);
-  }, [handleSend, isProcessing, messages]);
+      void handleSend(intent.prompt);
+    },
+    [handleSend, isProcessing, messages],
+  );
 
   const handleQuickAction = (action: QuickAction) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const customHint = quickActionPrompt.trim();
-    const tutorBasePrompt = isTutorRole ? (() => {
-      switch (action.id) {
-        case 'gen-lesson':
-          return 'Create a learner-friendly mini lesson (not a teacher lesson plan).';
-        case 'gen-stem':
-          return 'Design a hands-on STEM activity a parent/student can do at home.';
-        case 'gen-curriculum':
-          return 'Create a 4-week learning path for a learner with weekly goals and simple activities.';
-        case 'gen-worksheet':
-          return 'Create a short student worksheet with worked examples and answers.';
-        case 'gen-digital':
-          return 'Create a digital skills mini lesson for a learner.';
-        default:
-          return action.command;
-      }
-    })() : action.command;
+    const tutorBasePrompt = isTutorRole
+      ? (() => {
+          switch (action.id) {
+            case 'gen-lesson':
+              return 'Create a learner-friendly mini lesson (not a teacher lesson plan).';
+            case 'gen-stem':
+              return 'Design a hands-on STEM activity a parent/student can do at home.';
+            case 'gen-curriculum':
+              return 'Create a 4-week learning path for a learner with weekly goals and simple activities.';
+            case 'gen-worksheet':
+              return 'Create a short student worksheet with worked examples and answers.';
+            case 'gen-digital':
+              return 'Create a digital skills mini lesson for a learner.';
+            default:
+              return action.command;
+          }
+        })()
+      : action.command;
 
     const topicHint = customHint || (!isTutorRole ? action.defaultTopic : null);
     const needsDetails = isTutorRole && !customHint;
@@ -2314,25 +2500,31 @@ export default function DashOrb({
     if (action.category === 'education' && needsDetails) {
       setPendingTutorIntent({ prompt: tutorBasePrompt, label: action.label });
       setShowQuickActions(false);
-      setMessages(prev => [...prev, {
-        id: `clarify-${Date.now()}`,
-        role: 'assistant',
-        content: 'Great — which grade and topic should I use?',
-        timestamp: new Date(),
-      }]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `clarify-${Date.now()}`,
+          role: 'assistant',
+          content: 'Great — which grade and topic should I use?',
+          timestamp: new Date(),
+        },
+      ]);
       return;
     }
 
-    const enhancedCommand = action.category === 'education'
-      ? buildTutorPrompt(tutorBasePrompt, {
-          topicHint: topicHint || undefined,
-          requireDetails: false,
-        })
-      : [
-          'Start a NEW topic and ignore earlier context.',
-          action.command,
-          customHint ? `Additional details: ${customHint}` : '',
-        ].filter(Boolean).join(' ');
+    const enhancedCommand =
+      action.category === 'education'
+        ? buildTutorPrompt(tutorBasePrompt, {
+            topicHint: topicHint || undefined,
+            requireDetails: false,
+          })
+        : [
+            'Start a NEW topic and ignore earlier context.',
+            action.command,
+            customHint ? `Additional details: ${customHint}` : '',
+          ]
+            .filter(Boolean)
+            .join(' ');
 
     processCommand(enhancedCommand, `${action.label}${customHint ? ` · ${customHint}` : ''}`);
   };
@@ -2345,11 +2537,7 @@ export default function DashOrb({
           style={[
             styles.orbContainer,
             {
-              transform: [
-                { translateX: pan.x },
-                { translateY: pan.y },
-                { scale: pulseAnim }
-              ],
+              transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale: pulseAnim }],
               // Remove fixed positioning as we use transform
               bottom: undefined,
               right: undefined,
@@ -2364,9 +2552,7 @@ export default function DashOrb({
               pointerEvents={showUpgradeBubble ? 'auto' : 'none'}
               style={[
                 styles.upgradeBubble,
-                position.includes('right')
-                  ? { right: size + 14 }
-                  : { left: size + 14 },
+                position.includes('right') ? { right: size + 14 } : { left: size + 14 },
                 { top: size * 0.12 },
                 {
                   opacity: upgradeAnim,
@@ -2387,9 +2573,7 @@ export default function DashOrb({
                 },
               ]}
             >
-              <Text style={styles.upgradeBubbleTitle}>
-                {lockedTitle || 'Dash Orb Locked'}
-              </Text>
+              <Text style={styles.upgradeBubbleTitle}>{lockedTitle || 'Dash Orb Locked'}</Text>
               <Text style={styles.upgradeBubbleText}>
                 {lockedMessage || 'Upgrade to Parent Plus to unlock the Dash Orb.'}
               </Text>
@@ -2414,9 +2598,7 @@ export default function DashOrb({
                     }
                   }}
                 >
-                  <Text style={styles.upgradeButtonText}>
-                    {lockedCtaLabel || 'Upgrade'}
-                  </Text>
+                  <Text style={styles.upgradeButtonText}>{lockedCtaLabel || 'Upgrade'}</Text>
                 </TouchableOpacity>
               </View>
             </Animated.View>
@@ -2431,7 +2613,7 @@ export default function DashOrb({
               isProcessing={orbState === 'thinking' || orbState === 'listening'}
               isSpeaking={orbState === 'speaking'}
             />
-            
+
             {/* Center icon */}
             <View
               style={{
@@ -2442,10 +2624,18 @@ export default function DashOrb({
                 justifyContent: 'center',
               }}
             >
-              <Ionicons 
-                name={isSpeaking && isMicMuted ? 'mic-off' : isSpeaking ? 'mic' : isProcessing ? 'sync' : 'sparkles'} 
-                size={size * 0.35} 
-                color={isSpeaking && isMicMuted ? '#ef4444' : '#ffffff'} 
+              <Ionicons
+                name={
+                  isSpeaking && isMicMuted
+                    ? 'mic-off'
+                    : isSpeaking
+                      ? 'mic'
+                      : isProcessing
+                        ? 'sync'
+                        : 'sparkles'
+                }
+                size={size * 0.35}
+                color={isSpeaking && isMicMuted ? '#ef4444' : '#ffffff'}
               />
             </View>
             {locked && (
@@ -2492,12 +2682,15 @@ export default function DashOrb({
           if (needsDetails) {
             setPendingTutorIntent({ prompt, label });
             setShowQuickActions(false);
-            setMessages(prev => [...prev, {
-              id: `clarify-${Date.now()}`,
-              role: 'assistant',
-              content: 'Great — which grade and topic should I use?',
-              timestamp: new Date(),
-            }]);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `clarify-${Date.now()}`,
+                role: 'assistant',
+                content: 'Great — which grade and topic should I use?',
+                timestamp: new Date(),
+              },
+            ]);
             return;
           }
           const enhanced = buildTutorPrompt(prompt, {
@@ -2507,7 +2700,7 @@ export default function DashOrb({
           processCommand(enhanced, label || customHint || 'Quick action');
         }}
         onBackToQuickActions={() => {
-          setShowQuickActions(prev => !prev);
+          setShowQuickActions((prev) => !prev);
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }}
         isSpeaking={isSpeaking}
@@ -2528,12 +2721,16 @@ export default function DashOrb({
         wakeWordEnabled={wakeWordEnabled}
         onToggleWakeWord={() => {
           if (!wakeWordEnabled && !wakeWordAvailable) {
-            setMessages(prev => [...prev, {
-              id: `wakeword-unavailable-${Date.now()}`,
-              role: 'system',
-              content: 'Wake word requires a Picovoice access key. Add EXPO_PUBLIC_PICOVOICE_ACCESS_KEY to enable "Hey Dash".',
-              timestamp: new Date(),
-            }]);
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `wakeword-unavailable-${Date.now()}`,
+                role: 'system',
+                content:
+                  'Wake word requires a Picovoice access key. Add EXPO_PUBLIC_PICOVOICE_ACCESS_KEY to enable "Hey Dash".',
+                timestamp: new Date(),
+              },
+            ]);
             return;
           }
           const newState = !wakeWordEnabled;
@@ -2549,7 +2746,9 @@ export default function DashOrb({
         selectedModelId={selectedModel}
         canSelectModel={canSelectOrbModel}
         onSelectModel={(modelId) => setSelectedModel(modelId)}
-        onLockedModelPress={() => { router.push('/screens/subscription-setup?reason=model_selection&source=dash_orb' as any); }}
+        onLockedModelPress={() => {
+          router.push('/screens/subscription-setup?reason=model_selection&source=dash_orb' as any);
+        }}
         onOpenTools={toolShortcuts.length > 0 ? () => setShowToolsModal(true) : undefined}
         onAttachFile={handleOrbAttach}
         onTakePhoto={handleOrbCamera}
@@ -2563,7 +2762,10 @@ export default function DashOrb({
             const content = message.content || '';
             if (Clipboard?.setStringAsync) {
               await Clipboard.setStringAsync(content);
-            } else if (typeof navigator !== 'undefined' && (navigator as any).clipboard?.writeText) {
+            } else if (
+              typeof navigator !== 'undefined' &&
+              (navigator as any).clipboard?.writeText
+            ) {
               await (navigator as any).clipboard.writeText(content);
             }
             toast.success('Copied to clipboard');
@@ -2601,7 +2803,8 @@ export default function DashOrb({
           if (userIndex === -1) return;
           const lastUserMessage = messages[userIndex];
           const baseMessages = messages.slice(0, userIndex + 1);
-          const historyOverride = messages.slice(0, userIndex)
+          const historyOverride = messages
+            .slice(0, userIndex)
             .filter((m) => m.role === 'user' || m.role === 'assistant')
             .map((m) => ({ role: m.role, content: m.content }));
           processCommand(lastUserMessage.content, undefined, {
@@ -2620,13 +2823,17 @@ export default function DashOrb({
           setIsEditing(false);
           setEditingMessageId(null);
           if (AsyncStorage) {
-      try { await AsyncStorage.removeItem(chatStorageKey); } catch { /* best-effort */ }
+            try {
+              await AsyncStorage.removeItem(chatStorageKey);
+            } catch {
+              /* best-effort */
+            }
           }
         }}
         onExportChat={async () => {
           const transcript = messages
-            .filter(m => m.role === 'user' || m.role === 'assistant')
-            .map(m => `${m.role === 'user' ? 'You' : 'Dash'}: ${m.content}`)
+            .filter((m) => m.role === 'user' || m.role === 'assistant')
+            .map((m) => `${m.role === 'user' ? 'You' : 'Dash'}: ${m.content}`)
             .join('\n\n');
           try {
             await Share.share({ message: transcript || 'No messages yet.' });
@@ -2637,7 +2844,7 @@ export default function DashOrb({
         onOpenHistory={() => router.push('/screens/dash-conversations-history' as any)}
         onContinueFullChat={() => {
           setIsExpanded(false);
-          const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+          const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
           router.push({
             pathname: '/screens/dash-assistant',
             params: {
