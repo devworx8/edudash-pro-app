@@ -31,8 +31,30 @@ const withGoogleServices = (config) => {
       const googleServicesPath = path.join(androidAppDir, 'google-services.json');
       
       try {
-        // Write the google-services.json file from the environment variable
-        fs.writeFileSync(googleServicesPath, googleServicesJson, 'utf8');
+        let content = googleServicesJson;
+
+        // For dev builds, add the .dev package name so processDebugGoogleServices finds a match
+        const appVariant = process.env.APP_VARIANT || '';
+        const buildProfile = process.env.EAS_BUILD_PROFILE || '';
+        const isDevBuild = buildProfile === 'development' || appVariant === 'development';
+
+        if (isDevBuild) {
+          const parsed = JSON.parse(content);
+          const devPkg = 'com.edudashpro.app.dev';
+          const hasDevClient = parsed.client?.some(
+            (c) => c.client_info?.android_client_id?.package_name === devPkg
+          );
+          if (!hasDevClient && parsed.client?.length > 0) {
+            // Clone the first client entry and change its package name to the dev variant
+            const devClient = JSON.parse(JSON.stringify(parsed.client[0]));
+            devClient.client_info.android_client_id.package_name = devPkg;
+            parsed.client.push(devClient);
+            content = JSON.stringify(parsed, null, 2);
+            console.log(`✅ Added ${devPkg} client to google-services.json for dev build`);
+          }
+        }
+
+        fs.writeFileSync(googleServicesPath, content, 'utf8');
         console.log('✅ google-services.json written successfully from EAS secret');
       } catch (error) {
         console.error('❌ Failed to write google-services.json:', error.message);
