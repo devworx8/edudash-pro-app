@@ -104,7 +104,6 @@ export function useDashVoiceSendMessage({
       setConversationHistory(withResponse);
       setStreamingText('');
       setLastResponse(responseText);
-      setIsProcessing(false);
       logDashTrace('instant_response', {
         turnId,
         intent: instantResponse.intent,
@@ -113,6 +112,8 @@ export function useDashVoiceSendMessage({
       });
       void persistOrbMessages(withResponse);
       enqueueSpeech(responseText);
+      // Mark processing complete AFTER speech is enqueued
+      setIsProcessing(false);
       track('dash.turn.completed', buildDashTurnTelemetry({
         ...turnTelemetryBase,
         fallbackReason: 'instant_local_reply',

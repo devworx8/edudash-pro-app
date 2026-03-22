@@ -162,6 +162,11 @@ export function useDashVoiceHandlers(deps: UseDashVoiceHandlersDeps) {
   );
 
   // ── Flush pending voice turn when processing finishes ─────────────
+  // When the AI response is done and a pending voice turn exists, wait for
+  // any in-progress TTS to finish before dispatching the next turn. This
+  // prevents the common "speech stop spam" where cancelSpeech() was called
+  // immediately, cutting the ORB's response short.
+  const flushTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   useEffect(() => {
     if (isProcessing) return;
     const pendingTurn = pendingVoiceTurnRef.current;
@@ -169,14 +174,40 @@ export function useDashVoiceHandlers(deps: UseDashVoiceHandlersDeps) {
     pendingVoiceTurnRef.current = null;
     if (pendingTurn.language && pendingTurn.language !== preferredLanguage)
       setPreferredLanguage(pendingTurn.language);
-    if (isSpeakingRef.current) {
-      cancelSpeech(); isSpeakingRef.current = false; setIsSpeaking(false);
-      logDashTrace('dash_stop', { reason: 'flush_pending_voice_turn' });
+
+    const dispatch = () => {
+      logDashTrace('voice_input_flushed', {
+        language: pendingTurn.language || preferredLanguage, preview: pendingTurn.text.slice(0, 120),
+      });
+      sendMessage(pendingTurn.text, pendingTurn.dictationProbe ? { dictationProbe: pendingTurn.dictationProbe } : undefined);
+    };
+
+    // If not speaking, dispatch immediately
+    if (!isSpeakingRef.current) {
+      dispatch();
+      return;
     }
-    logDashTrace('voice_input_flushed', {
-      language: pendingTurn.language || preferredLanguage, preview: pendingTurn.text.slice(0, 120),
-    });
-    sendMessage(pendingTurn.text, pendingTurn.dictationProbe ? { dictationProbe: pendingTurn.dictationProbe } : undefined);
+
+    // Speech is active — poll until TTS finishes (max ~8s) then dispatch
+    logDashTrace('voice_input_waiting_for_tts', { preview: pendingTurn.text.slice(0, 120) });
+    let elapsed = 0;
+    const POLL_MS = 200;
+    const MAX_WAIT_MS = 8000;
+    flushTimerRef.current = setInterval(() => {
+      elapsed += POLL_MS;
+      if (!isSpeakingRef.current || elapsed >= MAX_WAIT_MS) {
+        if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
+        if (isSpeakingRef.current) {
+          cancelSpeech(); isSpeakingRef.current = false; setIsSpeaking(false);
+          logDashTrace('dash_stop', { reason: 'flush_pending_voice_turn_timeout' });
+        }
+        dispatch();
+      }
+    }, POLL_MS);
+
+    return () => {
+      if (flushTimerRef.current) { clearInterval(flushTimerRef.current); flushTimerRef.current = null; }
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isProcessing, logDashTrace, preferredLanguage, sendMessage, cancelSpeech, setIsSpeaking]);
 

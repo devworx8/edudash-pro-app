@@ -116,7 +116,6 @@ export function useDashVoiceOCR({
     if (wb) setWhiteboardContent(wb);
     setLastResponse(stripWhiteboardFromDisplay(resolvedDisplayText));
     setStreamingText('');
-    setIsProcessing(false);
     if (resolvedDisplayText) {
       const withResponse = [...updatedHistory, { role: 'assistant' as const, content: resolvedDisplayText }];
       conversationHistoryRef.current = withResponse;
@@ -126,6 +125,8 @@ export function useDashVoiceOCR({
       const ttsText = wb ? getWhiteboardTTSContent(wb) : resolvedSpeechText;
       if (ttsText) enqueueSpeech(ttsText);
     }
+    // Mark processing complete AFTER speech is enqueued (same fix as streaming path)
+    setIsProcessing(false);
     if (shouldConsumeScannerQuota) {
       const consumeResult = await consumeAutoScanBudget(activeTier || 'free', 1, autoScanUserId);
       if (!consumeResult.allowed) {

@@ -174,7 +174,6 @@ export function useDashVoiceStreaming({
           if (wb2) setWhiteboardContent(wb2);
           setLastResponse(stripWhiteboardFromDisplay(resolvedDisplayText));
           setStreamingText('');
-          setIsProcessing(false);
           if (resolvedDisplayText && !isSseArtifact) {
             const withResponse = [...updatedHistory, { role: 'assistant' as const, content: resolvedDisplayText }];
             conversationHistoryRef.current = withResponse;
@@ -191,6 +190,10 @@ export function useDashVoiceStreaming({
               }
             }
           }
+          // Mark processing complete AFTER speech is enqueued so that
+          // the flush-pending-voice-turn effect and auto-restart effects
+          // don't fire before TTS has started.
+          setIsProcessing(false);
           track('dash.turn.completed', buildDashTurnTelemetry({ ...turnTelemetryBase, latencyMs: Date.now() - turnStartedAt }));
           activeRequestRef.current = null;
         })().catch((error) => {

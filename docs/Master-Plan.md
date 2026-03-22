@@ -4,6 +4,7 @@
 > Generated 18 March 2026 from a full codebase audit. **Re-verified 18 March 2026** — corrections applied (see Confidence Ratings section at end).
 > **Updated 18 March 2026** — Membership module (46 screens, 66 components, 17 hooks, ~129 files, ~26K LOC) extracted to PulseBoard project.
 > **Updated 19 March 2026** — JS-only fixes sprint completed & OTA deployed (versionCode 47, update group `d225db7b`).
+> **Updated 20 March 2026** — Engineering Super Prompt audit completed. P0 security, P1 bugs, P2 tech debt resolved (3 commits: `fefdaca3`, `0c21c4a3`, `83f6623c`).
 > Metrics: 260+ .md files, 123 TODO/FIXME items, ~299 screens, 71 Edge Functions, 106 npm scripts.
 
 ---
@@ -32,15 +33,15 @@
 
 | #   | Item                                    | File                                                                  | Action                                                                                                                            |
 | --- | --------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | **Payment debug logging in production** | `supabase/functions/payments-create-checkout/index.ts:361`            | Remove `// TEMP DEBUG` console.log that dumps payment IDs and signature data                                                      |
-| 2   | **WhatsApp security stubs**             | `lib/services/WhatsAppSecurityAlert.ts`, `WhatsAppBusinessService.ts` | WhatsApp is fully blocked by temporary stubs. Either restore server-side Edge Function path or document as intentionally disabled |
+| 1   | **Payment debug logging in production** | `supabase/functions/payments-create-checkout/index.ts:361`            | ✅ FIXED — Removed TEMP DEBUG signature dump + 3 other payment logs across 3 EFs; redacted error objects to log only error.code |
+| 2   | **WhatsApp security stubs**             | `lib/services/WhatsAppSecurityAlert.ts`, `WhatsAppBusinessService.ts` | ✅ FIXED — Deleted dead stubs (zero imports); feature flags now env-configurable (default off); server-side `whatsapp-send` EF already exists |
 
 ### P1 — CRITICAL BUGS & DATA INTEGRITY (v48 blockers)
 
 | #   | Item                                                    | File                                                     | Action                                                                                                                                   |
 | --- | ------------------------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | 3   | **CEO Dashboard shows Math.random() data**              | Extracted to PulseBoard                                  | ✅ RESOLVED — entire membership module moved to `/home/edp/Desktop/PulseBoard/`                                                          |
-| 4   | **OrgAdmin metrics hardcoded to 0**                     | `hooks/useOrgAdminMetrics.ts:98,122-126`                 | Implement actual completion tracking or show empty state                                                                                 |
+| 4   | **OrgAdmin metrics hardcoded to 0**                     | `hooks/useOrgAdminMetrics.ts:98,122-126`                 | ✅ FIXED — Now queries real data (enrollments, student_progress, subscriptions+plans). 4 metrics (certPipeline, cohorts, certifications, placements) remain 0 pending DB table creation |
 | 5   | **`.vercelignore` blocks `components/reports/`**        | `.vercelignore:82`                                       | ✅ FIXED — changed `reports/` to `/reports/`                                                                                             |
 | 6   | **DesktopLayout shows "My School" for platform admins** | `components/layout/DesktopLayout.tsx:168`                | ✅ FIXED — now shows "EduDash Pro" for platform staff                                                                                    |
 | 7   | **K12 student screens are empty shells**                | `app/(k12)/student/messages,schedule,classes,grades.tsx` | ✅ FIXED — 4 new hooks (`useStudentClasses`, `useStudentGrades`, `useStudentSchedule`, `useStudentMessages`) wired to real Supabase data |
@@ -49,10 +50,10 @@
 
 | #   | Item                               | Count           | Action                                                                                                                        |
 | --- | ---------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 8   | **DI migration leftovers**         | 13 services     | Remove `// TODO: Remove once all call sites migrated to DI` singleton exports                                                 |
-| 9   | **Deprecated voice providers**     | 3 files         | Remove `openaiWhisperProvider`, `openaiWhisperStreamingProvider`, `claudeProvider` from `lib/voice/`                          |
-| 10  | **Empty shared component barrels** | 8 files         | `components/shared/{ui,media,forms,feedback,audio,celebrations,messaging}/index.ts` + root barrel — either populate or delete |
-| 11  | **Static runtimeVersion 1.0.23**   | `app.config.js` | Evaluate bumping to match release or switching to fingerprint strategy                                                        |
+| 8   | **DI migration leftovers**         | 13 services     | ✅ PARTIAL — 8/13 singleton blocks removed (zero imports). 5 remaining need caller migration (LessonsService, EventBus, DashWhatsApp, MemoryService, DashRealTimeAwareness) |
+| 9   | **Deprecated voice providers**     | 3 files         | ✅ PARTIAL — 2/3 deleted (openaiWhisperProvider, openaiWhisperStreamingProvider). claudeProvider kept (3 active web importers) |
+| 10  | **Empty shared component barrels** | 8 files         | ✅ FIXED — 5/8 deleted (ui, media, forms, feedback, audio). 2 kept (celebrations, messaging have real exports). Root barrel updated |
+| 11  | **Static runtimeVersion 1.0.23**   | `app.config.js` | ✅ FIXED — Switched to `{ "policy": "fingerprint" }` (Expo SDK 54 best practice). Next native build required for OTA targeting |
 
 ### P3 — FEATURE COMPLETENESS (ship with v48 if time allows)
 
@@ -274,14 +275,15 @@ These are the source-of-truth files for the project:
 
 ```
 Pre-build:
-[ ] P0 security items resolved (payment debug logging, WhatsApp stubs)
-[ ] P1 critical bugs fixed (CEO dashboard, OrgAdmin metrics)
+[x] P0 security items resolved (payment debug logging, WhatsApp stubs) (20 March 2026)
+[x] P1 critical bugs fixed (OrgAdmin metrics wired to real data) (20 March 2026)
 [x] K12 student screens wired to real data (Sprint: 19 March 2026)
 [x] PostHog feature flags fixed (Sprint: 19 March 2026)
 [x] AI progress analysis using real data (Sprint: 19 March 2026)
 [x] Assistant teacher class visibility fixed (Sprint: 19 March 2026)
 [x] Web voice enabled (Dash Orb + WebRTC detection) (Sprint: 19 March 2026)
 [ ] npm run verify:prod passes (lint + typecheck + test + audits)
+[x] P2 tech debt reduced: 8 DI singletons, 2 voice stubs, 5 barrels, runtimeVersion (20 March 2026)
 [x] .vercelignore /reports/ fix committed and pushed
 [x] DesktopLayout platform admin branding committed and pushed
 [x] Disabled-Features-Audit.md completed (Sprint: 19 March 2026)
