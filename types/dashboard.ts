@@ -168,7 +168,7 @@ export interface TeacherDashboardData {
     id: string;
     title: string;
     time: string;
-    type: 'meeting' | 'activity' | 'assessment';
+    type: 'meeting' | 'activity' | 'assessment' | 'excursion';
     eventDate?: string | null;
     daysUntil?: number | null;
     reminderOffsetDays?: 7 | 3 | 1 | null;
@@ -221,7 +221,7 @@ export interface ParentDashboardData {
     id: string;
     title: string;
     time: string;
-    type: 'meeting' | 'activity' | 'assessment';
+    type: 'meeting' | 'activity' | 'assessment' | 'excursion';
   }>;
   unreadMessages: number;
 }
