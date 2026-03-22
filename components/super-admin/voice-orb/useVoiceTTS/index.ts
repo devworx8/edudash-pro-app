@@ -505,7 +505,19 @@ export function useVoiceTTS(): UseVoiceTTSReturn {
         }
       }
 
-      if (!anyChunkSucceeded && lastErr) { telemetryError = lastErr; throw lastErr; }
+      if (!anyChunkSucceeded && lastErr) {
+        // Cloud playback failed — fall back to device TTS (Web Speech API on web)
+        const playbackErrMsg = String(lastErr instanceof Error ? lastErr.message : lastErr || '').toLowerCase();
+        const isPlaybackError = playbackErrMsg.includes('audio_player') || playbackErrMsg.includes('playback') || playbackErrMsg.includes('timeout') || playbackErrMsg.includes('stall');
+        if (isPlaybackError && !phonicsMode) {
+          reportTTSError(lastErr);
+          fallbackUsed = 'device';
+          telemetryError = lastErr;
+          await speakWithDeviceTTS(cleanText, language, effectiveOptions);
+        } else {
+          telemetryError = lastErr; throw lastErr;
+        }
+      }
       if (!policy.isPremiumTier && cloudChunkSucceeded) await consumePremiumVoiceActivity(user?.id);
 
       const successDiagnostics = parseTTSDiagnostics(telemetryError);

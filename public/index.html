@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <!-- Allow eval for Metro bundler in development -->
-  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval'; connect-src * blob: data: 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; frame-src *; style-src * 'unsafe-inline';">
+  <!-- Allow eval for Metro bundler + blob: workers for expo-audio on web -->
+  <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval'; script-src * 'unsafe-inline' 'unsafe-eval' blob:; worker-src * blob:; connect-src * blob: data: 'unsafe-inline'; img-src * data: blob: 'unsafe-inline'; media-src * blob: data:; frame-src *; style-src * 'unsafe-inline';">
   <title>EduDash Pro</title>
   <meta name="description" content="Revolutionary AI-powered educational platform for preschools" />
 
