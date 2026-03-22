@@ -5,7 +5,7 @@
     "owner": "dash-ts-organization",
     "version": "1.0.33",
     "runtimeVersion": {
-      "policy": "fingerprint"
+      "policy": "appVersion"
     },
     "orientation": "default",
     "icon": "./assets/icon.png",
