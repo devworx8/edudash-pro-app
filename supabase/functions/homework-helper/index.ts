@@ -187,8 +187,47 @@ serve(async (req: Request) => {
     });
   }
 
+  // ── Authenticate (mirrors generate-exam pattern)
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const token = authHeader.replace('Bearer ', '');
+  const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Invalid session' }), {
+      status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
+  // ── Quota check
+  const quota = await supabase.rpc('check_ai_usage_limit', {
+    p_user_id: user.id,
+    p_request_type: 'homework_help',
+  });
+
+  if (quota.error) {
+    console.error('[homework-helper] quota check failed:', quota.error);
+  } else {
+    const quotaData = quota.data as Record<string, unknown> | null;
+    if (quotaData && typeof quotaData.allowed === 'boolean' && !quotaData.allowed) {
+      return new Response(JSON.stringify({
+        error: 'quota_exceeded',
+        message: "You've reached your AI usage limit for this period.",
+        details: quotaData,
+      }), {
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
   const helperReq = body as unknown as HomeworkHelperRequest;
-  const userId = String(body.userId ?? '');
+  const userId = user.id;
   const preschoolId = String(body.preschoolId ?? '');
 
   const systemPrompt = buildHelperSystemPrompt(helperReq);
@@ -211,9 +250,15 @@ serve(async (req: Request) => {
     `Respond in ${helperReq.language}. Return only the JSON object described in your instructions.`,
   ].join('\n');
 
-  // Build conversation history for multi-turn
+  // Build conversation history for multi-turn — sanitize roles to prevent injection
+  const sanitizedHistory = (helperReq.conversationHistory ?? [])
+    .filter((msg): msg is ConversationMessage =>
+      msg != null && typeof msg === 'object' &&
+      typeof msg.content === 'string' &&
+      (msg.role === 'user' || msg.role === 'assistant')
+    );
   const messages: ConversationMessage[] = [
-    ...(helperReq.conversationHistory ?? []),
+    ...sanitizedHistory,
     { role: 'user', content: userMessage },
   ];
 

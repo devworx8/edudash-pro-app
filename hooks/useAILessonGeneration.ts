@@ -4,7 +4,6 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { navigateToUpgrade } from '@/lib/upgrade/upgradeRoutes';
 import { isAIEnabled } from '@/lib/ai/aiConfig';
@@ -191,10 +190,8 @@ export function useAILessonGeneration(): UseAILessonGenerationReturn {
 
       if (!gate?.allowed) {
         const status = await getQuotaStatus('lesson_generation');
-        Alert.alert('Monthly limit reached', `You have used ${status.used} of ${status.limit} generations.`, [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'See plans', onPress: () => navigateToUpgrade({ source: 'lesson_generation_alert' }) },
-        ]);
+        toast.warn(`Monthly limit reached: ${status.used} of ${status.limit} generations used.`);
+        navigateToUpgrade({ source: 'lesson_generation_alert' });
         return;
       }
 

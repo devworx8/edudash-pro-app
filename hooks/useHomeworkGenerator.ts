@@ -16,6 +16,8 @@ import { logger } from '@/lib/logger';
 import { parseHomeworkResponse } from './utils/homeworkHelpers';
 import type { HomeworkPipelineMode } from '@/lib/homework/pipelineResolver';
 
+export type HelpMode = 'explain' | 'hint' | 'check' | 'step_by_step' | 'vocabulary';
+
 export type HomeworkGenOptions = {
   question: string;
   subject: string;
@@ -25,6 +27,9 @@ export type HomeworkGenOptions = {
   model?: string;
   studentId?: string;  // NEW: for context retrieval and tool usage
   pipelineMode?: HomeworkPipelineMode;
+  helpMode?: HelpMode;
+  language?: string;     // ISO code (e.g. 'en', 'zu') — maps to full name for EF
+  callerRole?: 'parent' | 'student' | 'learner';
 };
 
 export interface HomeworkResult {
@@ -73,17 +78,26 @@ export function useHomeworkGenerator() {
       // Step 2: Call dedicated homework-helper Edge Function
       let data: any = null;
 
+      // Map language codes to full names expected by the homework-helper EF
+      const LANG_MAP: Record<string, string> = {
+        en: 'English', af: 'Afrikaans', zu: 'isiZulu', xh: 'isiXhosa',
+        st: 'Sesotho', tn: 'Setswana', nso: 'Sepedi', ts: 'Xitsonga',
+        ss: 'Siswati', ve: 'Tshivenda', nr: 'isiNdebele',
+      };
+      const fullLanguage = LANG_MAP[opts.language ?? 'en'] || opts.language || 'English';
+
       const response = await client.functions.invoke('homework-helper', {
         body: {
           question: opts.question,
           subject: opts.subject || 'Mathematics',
           grade: opts.gradeLevel,
-          helpMode: 'explain',
-          language: 'en',
+          helpMode: opts.helpMode || 'explain',
+          language: fullLanguage,
+          callerRole: opts.callerRole || 'parent',
           model: opts.model || undefined,
           // Pass child context as conversation history hint if available
           conversationHistory: childContext ? [{
-            role: 'user',
+            role: 'user' as const,
             content: `Learner context: ${JSON.stringify(childContext)}`
           }] : undefined,
         }
