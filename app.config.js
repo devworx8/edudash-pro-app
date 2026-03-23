@@ -130,7 +130,8 @@ module.exports = ({ config }) => {
     android: {
       ...config.android,
       package: 'com.edudashpro.app.dev',
-      googleServicesFile,
+      // Don't set googleServicesFile here — withGoogleServices.js plugin handles it
+      // and adds the .dev package name so processDebugGoogleServices finds a match
     },
     ios: {
       ...config.ios,

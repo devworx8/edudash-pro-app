@@ -10,9 +10,9 @@ const withGoogleServices = (config) => {
   return withDangerousMod(config, [
     'android',
     async (config) => {
-      const googleServicesJson = process.env.GOOGLE_SERVICES_JSON;
+      const googleServicesEnv = process.env.GOOGLE_SERVICES_JSON;
       
-      if (!googleServicesJson) {
+      if (!googleServicesEnv) {
         console.warn(
           '⚠️ GOOGLE_SERVICES_JSON environment variable not set. ' +
           'Firebase/FCM features may not work correctly.'
@@ -31,7 +31,17 @@ const withGoogleServices = (config) => {
       const googleServicesPath = path.join(androidAppDir, 'google-services.json');
       
       try {
-        let content = googleServicesJson;
+        // GOOGLE_SERVICES_JSON can be either:
+        // - A file path (EAS file secret) e.g. "/eas-environment-secrets/abc123"
+        // - Raw JSON content (manual env var)
+        let content;
+        if (fs.existsSync(googleServicesEnv)) {
+          content = fs.readFileSync(googleServicesEnv, 'utf8');
+          console.log('📄 Read google-services.json from file secret path');
+        } else {
+          content = googleServicesEnv;
+          console.log('📄 Using google-services.json from env var content');
+        }
 
         // For dev builds, add the .dev package name so processDebugGoogleServices finds a match
         const appVariant = process.env.APP_VARIANT || '';
@@ -55,7 +65,7 @@ const withGoogleServices = (config) => {
         }
 
         fs.writeFileSync(googleServicesPath, content, 'utf8');
-        console.log('✅ google-services.json written successfully from EAS secret');
+        console.log('✅ google-services.json written successfully');
       } catch (error) {
         console.error('❌ Failed to write google-services.json:', error.message);
       }
