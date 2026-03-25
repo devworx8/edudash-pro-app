@@ -52,12 +52,12 @@ const withGoogleServices = (config) => {
           const parsed = JSON.parse(content);
           const devPkg = 'com.edudashpro.app.dev';
           const hasDevClient = parsed.client?.some(
-            (c) => c.client_info?.android_client_id?.package_name === devPkg
+            (c) => c.client_info?.android_client_info?.package_name === devPkg
           );
           if (!hasDevClient && parsed.client?.length > 0) {
             // Clone the first client entry and change its package name to the dev variant
             const devClient = JSON.parse(JSON.stringify(parsed.client[0]));
-            devClient.client_info.android_client_id.package_name = devPkg;
+            devClient.client_info.android_client_info.package_name = devPkg;
             parsed.client.push(devClient);
             content = JSON.stringify(parsed, null, 2);
             console.log(`✅ Added ${devPkg} client to google-services.json for dev build`);
