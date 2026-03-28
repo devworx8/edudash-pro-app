@@ -189,23 +189,25 @@ export function createAnnouncementStyles(theme: any) {
     },
     detailBackdrop: {
       flex: 1,
-      backgroundColor: 'rgba(15, 23, 42, 0.45)',
-      justifyContent: 'flex-end',
+      backgroundColor: theme.background,
     },
     detailSheet: {
-      maxHeight: '82%',
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
-      overflow: 'hidden',
+      flex: 1,
     },
     detailHeader: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
-      justifyContent: 'space-between',
+      alignItems: 'center',
       paddingHorizontal: 20,
-      paddingVertical: 18,
+      paddingVertical: 16,
       borderBottomWidth: 1,
       gap: 12,
+    },
+    detailCloseButton: {
+      width: 36,
+      height: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 18,
     },
     detailHeaderTextWrap: {
       flex: 1,
@@ -222,7 +224,8 @@ export function createAnnouncementStyles(theme: any) {
     },
     detailContent: {
       paddingHorizontal: 20,
-      paddingVertical: 18,
+      paddingTop: 18,
+      paddingBottom: 32,
       gap: 14,
     },
     detailSchool: {

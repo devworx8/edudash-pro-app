@@ -29,7 +29,9 @@ export default function ParentAnnouncementsScreen() {
   const params = useLocalSearchParams<{ announcementId?: string }>();
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
+  const [lastHandledAnnouncementId, setLastHandledAnnouncementId] = useState<string | null>(null);
   const styles = useMemo(() => createAnnouncementStyles(theme), [theme]);
+  const announcementId = typeof params.announcementId === 'string' ? params.announcementId : '';
 
   // Resolve the correct parent ID (profile.id may differ from auth user.id)
   const parentId = (profile as any)?.id || user?.id;
@@ -86,16 +88,34 @@ export default function ParentAnnouncementsScreen() {
   });
 
   useEffect(() => {
-    const announcementId = typeof params.announcementId === 'string' ? params.announcementId : '';
-    if (!announcementId || announcements.length === 0 || selectedAnnouncement?.id === announcementId) {
+    if (!announcementId) {
+      setLastHandledAnnouncementId(null);
+      return;
+    }
+
+    if (
+      announcements.length === 0 ||
+      selectedAnnouncement?.id === announcementId ||
+      lastHandledAnnouncementId === announcementId
+    ) {
       return;
     }
 
     const matchedAnnouncement = announcements.find((announcement) => announcement.id === announcementId);
     if (matchedAnnouncement) {
       setSelectedAnnouncement(matchedAnnouncement);
+      setLastHandledAnnouncementId(announcementId);
     }
-  }, [announcements, params.announcementId, selectedAnnouncement?.id]);
+  }, [announcementId, announcements, lastHandledAnnouncementId, selectedAnnouncement?.id]);
+
+  const handleCloseAnnouncement = () => {
+    setSelectedAnnouncement(null);
+
+    if (announcementId) {
+      setLastHandledAnnouncementId(announcementId);
+      router.setParams({ announcementId: undefined });
+    }
+  };
 
   const urgentCount = announcements.filter((a) => a.priority === 'urgent').length;
   const highCount = announcements.filter((a) => a.priority === 'high').length;
@@ -245,27 +265,32 @@ export default function ParentAnnouncementsScreen() {
 
         <Modal
           visible={!!selectedAnnouncement}
-          transparent
+          presentationStyle="fullScreen"
           animationType="slide"
-          onRequestClose={() => setSelectedAnnouncement(null)}
+          onRequestClose={handleCloseAnnouncement}
         >
-          <View style={styles.detailBackdrop}>
+          <SafeAreaView style={[styles.detailBackdrop, { backgroundColor: theme.background }]} edges={['top', 'bottom']}>
             <View style={[styles.detailSheet, { backgroundColor: theme.background }]}> 
               <View style={[styles.detailHeader, { borderBottomColor: theme.border }]}> 
+                <TouchableOpacity onPress={handleCloseAnnouncement} hitSlop={12} style={styles.detailCloseButton}>
+                  <Ionicons name="arrow-back" size={24} color={theme.text} />
+                </TouchableOpacity>
+
                 <View style={styles.detailHeaderTextWrap}>
                   <Text style={[styles.detailTitle, { color: theme.text }]}>{selectedAnnouncement?.title}</Text>
-                  <Text style={[styles.detailMeta, { color: theme.textSecondary }]}>
+                  <Text style={[styles.detailMeta, { color: theme.textSecondary }]}> 
                     {selectedAnnouncement ? formatAnnouncementDate(selectedAnnouncement.published_at) : ''}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => setSelectedAnnouncement(null)} hitSlop={12}>
+
+                <TouchableOpacity onPress={handleCloseAnnouncement} hitSlop={12} style={styles.detailCloseButton}>
                   <Ionicons name="close" size={24} color={theme.text} />
                 </TouchableOpacity>
               </View>
 
-              <ScrollView contentContainerStyle={styles.detailContent}>
+              <ScrollView contentContainerStyle={styles.detailContent} showsVerticalScrollIndicator={false}>
                 {selectedAnnouncement?.preschool?.name ? (
-                  <Text style={[styles.detailSchool, { color: theme.textSecondary }]}>
+                  <Text style={[styles.detailSchool, { color: theme.textSecondary }]}> 
                     {selectedAnnouncement.preschool.name}
                   </Text>
                 ) : null}
@@ -285,7 +310,7 @@ export default function ParentAnnouncementsScreen() {
                 ) : null}
               </ScrollView>
             </View>
-          </View>
+          </SafeAreaView>
         </Modal>
       </SafeAreaView>
     </View>
