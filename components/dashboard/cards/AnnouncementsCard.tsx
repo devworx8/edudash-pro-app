@@ -67,7 +67,7 @@ export function AnnouncementsCard() {
             <TouchableOpacity
               key={item.id}
               style={[styles.item, { borderBottomColor: theme.border }]}
-              onPress={() => router.push('/screens/parent-announcements' as any)}
+              onPress={() => router.push({ pathname: '/screens/parent-announcements', params: { announcementId: item.id } } as any)}
               activeOpacity={0.7}
             >
               <Text style={[styles.itemTitle, { color: theme.text }]} numberOfLines={1}>

@@ -7,6 +7,7 @@
 import { logger } from '@/lib/logger';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
 import { trackChartParentStudentExecuted } from '@/lib/ai/trackingEvents';
+import InboxMessagingService from '@/lib/services/inboxMessagingService';
 import type { AgentTool } from '../DashToolRegistry';
 
 const CHART_MAX_POINTS = 20;
@@ -152,12 +153,124 @@ function buildEducationalPrompt(
   return [...prefix, rawPrompt, ...suffix].join(' ');
 }
 
+type CommunicationAudience = 'parents' | 'teachers' | 'students' | 'all';
+type CommunicationPriority = 'low' | 'normal' | 'high' | 'urgent';
+type DirectRecipientRole = 'parent' | 'teacher';
+type BroadcastAudience = 'all_parents' | 'all_teachers' | 'all_staff' | 'everyone';
+type BroadcastChannelMode = 'announcement_channel' | 'parent_group';
+
+function normalizeExecutionRole(role?: unknown): 'principal' | 'teacher' | 'other' {
+  const normalized = String(role || '').trim().toLowerCase();
+  if (!normalized) return 'other';
+  if (['principal', 'principal_admin', 'admin', 'super_admin'].includes(normalized)) {
+    return 'principal';
+  }
+  if (normalized === 'teacher') {
+    return 'teacher';
+  }
+  return 'other';
+}
+
+function normalizeCommunicationAudience(
+  value?: unknown,
+  fallback: CommunicationAudience = 'parents',
+): CommunicationAudience {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === 'parent') return 'parents';
+  if (normalized === 'teacher' || normalized === 'staff' || normalized === 'admin') return 'teachers';
+  if (normalized === 'student' || normalized === 'learner') return 'students';
+  if (['everyone', 'everybody', 'school'].includes(normalized)) return 'all';
+  if (['parents', 'teachers', 'students', 'all'].includes(normalized)) {
+    return normalized as CommunicationAudience;
+  }
+  return fallback;
+}
+
+function normalizeCommunicationPriority(value?: unknown): CommunicationPriority {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['low', 'normal', 'high', 'urgent'].includes(normalized)) {
+    return normalized as CommunicationPriority;
+  }
+  if (normalized === 'medium') return 'normal';
+  return 'normal';
+}
+
+function normalizeDirectRecipientRole(value?: unknown): DirectRecipientRole {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'teacher' || normalized === 'staff') {
+    return 'teacher';
+  }
+  return 'parent';
+}
+
+function normalizeBroadcastAudience(value?: unknown): BroadcastAudience {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'all_teachers') return 'all_teachers';
+  if (normalized === 'all_staff') return 'all_staff';
+  if (normalized === 'everyone' || normalized === 'all') return 'everyone';
+  return 'all_parents';
+}
+
+function normalizeBroadcastChannelMode(value?: unknown): BroadcastChannelMode {
+  return String(value || '').trim().toLowerCase() === 'parent_group'
+    ? 'parent_group'
+    : 'announcement_channel';
+}
+
+function buildAnnouncementAudience(audience: CommunicationAudience): string[] {
+  switch (audience) {
+    case 'teachers':
+      return ['teachers'];
+    case 'students':
+      return ['students'];
+    case 'all':
+      return ['teachers', 'parents', 'students'];
+    case 'parents':
+    default:
+      return ['parents'];
+  }
+}
+
+async function resolveSenderContext(context?: any): Promise<{
+  userId: string | null;
+  organizationId: string | null;
+}> {
+  const supabase =
+    context?.supabaseClient ||
+    context?.supabase ||
+    (await import('@/lib/supabase')).assertSupabase();
+  let userId = String(context?.userId || '').trim() || null;
+  let organizationId = String(context?.organizationId || context?.preschoolId || '').trim() || null;
+
+  if (!userId) {
+    const { data: auth } = await supabase.auth.getUser();
+    userId = auth?.user?.id || null;
+  }
+
+  if (!organizationId && userId) {
+    const { data: profileRow } = await supabase
+      .from('profiles')
+      .select('organization_id, preschool_id')
+      .eq('id', userId)
+      .maybeSingle();
+    organizationId = profileRow?.organization_id || profileRow?.preschool_id || null;
+  }
+
+  return { userId, organizationId };
+}
+
 export function registerCommunicationTools(register: (tool: AgentTool) => void): void {
   
   // Message composition tool
   register({
     name: 'compose_message',
-    description: 'Open message composer with pre-filled content for sending to parents or teachers',
+    description: [
+      'Open the in-app message or announcement composer with drafted content filled in.',
+      'Use this when the user wants to review or edit the communication before sending.',
+      'For confirmed school-wide reminders or announcements, use send_school_announcement instead.',
+      'Do NOT use generate_pdf_from_prompt or export_pdf for sending communications.',
+    ].join(' '),
     parameters: {
       type: 'object',
       properties: {
@@ -172,30 +285,61 @@ export function registerCommunicationTools(register: (tool: AgentTool) => void):
         recipient: { 
           type: 'string', 
           description: 'Recipient type: "parent" or "teacher"'
+        },
+        audience: {
+          type: 'string',
+          description: 'Optional school-wide audience: "parents", "teachers", "students", or "all"'
+        },
+        priority: {
+          type: 'string',
+          description: 'Optional urgency: "low", "normal", "high", or "urgent"'
         }
       },
       required: ['subject', 'body']
     },
     risk: 'low',
-    execute: async (args) => {
+    execute: async (args, context) => {
       try {
-        const router = (await import('expo-router')).router;
-        
-        // Navigate to messages screen with pre-filled content
-        router.push({
-          pathname: '/messages',
-          params: {
-            compose: 'true',
-            subject: args.subject,
-            body: args.body,
-            recipient: args.recipient || ''
-          }
-        } as any);
+        const { safeRouter } = await import('@/lib/navigation/safeRouter');
+        const role = normalizeExecutionRole(context?.role);
+        const audience = normalizeCommunicationAudience(args.audience || args.recipient);
+        const priority = normalizeCommunicationPriority(args.priority);
+        const subject = String(args.subject || '').trim();
+        const body = String(args.body || '').trim();
+
+        const target = role === 'teacher'
+          ? {
+              pathname: '/screens/teacher-new-message',
+              params: {
+                compose: 'true',
+                subject,
+                body,
+                recipient: String(args.recipient || '').trim(),
+                audience,
+              },
+            }
+          : {
+              pathname: '/screens/principal-announcement',
+              params: {
+                compose: 'true',
+                title: subject,
+                content: body,
+                audience,
+                priority,
+              },
+            };
+
+        safeRouter.push(target as any);
         
         return { 
           success: true, 
           opened: true,
-          message: 'Message composer opened'
+          route: target.pathname,
+          audience,
+          message:
+            target.pathname === '/screens/principal-announcement'
+              ? 'Announcement composer opened'
+              : 'Message composer opened'
         };
       } catch (error) {
         logger.error('[compose_message] Error:', error);
@@ -205,6 +349,274 @@ export function registerCommunicationTools(register: (tool: AgentTool) => void):
         };
       }
     }
+  });
+
+  register({
+    name: 'send_school_announcement',
+    description: [
+      'Create and publish a school announcement, reminder, or notice to parents, teachers, students, or everyone.',
+      'Use this ONLY after the user explicitly confirms they want it sent.',
+      'Best for school-wide or audience-wide communication, not one-to-one chats.',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        subject: {
+          type: 'string',
+          description: 'Announcement title or subject line'
+        },
+        body: {
+          type: 'string',
+          description: 'Announcement body content'
+        },
+        audience: {
+          type: 'string',
+          description: 'Audience to receive the announcement: "parents", "teachers", "students", or "all"'
+        },
+        priority: {
+          type: 'string',
+          description: 'Priority level: "low", "normal", "high", or "urgent"'
+        }
+      },
+      required: ['subject', 'body']
+    },
+    risk: 'high',
+    requiresConfirmation: true,
+    execute: async (args, context) => {
+      try {
+        const subject = String(args.subject || '').trim();
+        const body = String(args.body || '').trim();
+        if (!subject) {
+          return { success: false, error: 'A subject is required before sending the announcement.' };
+        }
+        if (!body) {
+          return { success: false, error: 'A message body is required before sending the announcement.' };
+        }
+
+        const audience = normalizeCommunicationAudience(args.audience || args.recipient);
+        const priority = normalizeCommunicationPriority(args.priority);
+        const { userId, organizationId } = await resolveSenderContext(context);
+
+        if (!userId) {
+          return { success: false, error: 'Could not resolve the signed-in user for this send action.' };
+        }
+        if (!organizationId) {
+          return { success: false, error: 'Could not resolve the school or organization for this announcement.' };
+        }
+
+        const AnnouncementService = (await import('@/lib/services/announcementService')).default;
+        const result = await AnnouncementService.createAnnouncement(organizationId, userId, {
+          title: subject,
+          message: body,
+          audience: buildAnnouncementAudience(audience),
+          priority,
+        });
+
+        if (!result.success) {
+          return {
+            success: false,
+            error: result.error || 'Failed to send school announcement.',
+          };
+        }
+
+        return {
+          success: true,
+          announcement_id: result.data?.id,
+          audience,
+          target_audience: result.data?.target_audience || audience,
+          priority,
+          message: `Announcement sent to ${audience}.`,
+        };
+      } catch (error) {
+        logger.error('[send_school_announcement] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to send school announcement',
+        };
+      }
+    }
+  });
+
+  register({
+    name: 'send_inbox_message',
+    description: [
+      'Send a confirmed inbox message to one parent or teacher using the in-app messaging system.',
+      'Creates or reuses the correct thread, stores the message in the inbox, and sends a new-message notification.',
+      'Use this for one-to-one communication rather than school-wide announcements.',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        recipient_name: {
+          type: 'string',
+          description: 'Full or partial name of the parent or teacher who should receive the message.',
+        },
+        recipient_role: {
+          type: 'string',
+          description: 'Recipient type: "parent" or "teacher". Defaults to "parent".',
+        },
+        student_name: {
+          type: 'string',
+          description: 'Optional learner name to disambiguate which parent should receive the message.',
+        },
+        subject: {
+          type: 'string',
+          description: 'Optional subject line used when a new thread must be created.',
+        },
+        body: {
+          type: 'string',
+          description: 'Message body to send into the inbox thread.',
+        },
+      },
+      required: ['recipient_name', 'body'],
+    },
+    risk: 'high',
+    requiresConfirmation: true,
+    execute: async (args, context) => {
+      try {
+        const { userId, organizationId } = await resolveSenderContext(context);
+        if (!userId) {
+          return { success: false, error: 'Could not resolve the signed-in user for this inbox message.' };
+        }
+        if (!organizationId) {
+          return { success: false, error: 'Could not resolve the school or organization for this inbox message.' };
+        }
+
+        return await InboxMessagingService.sendDirectMessage({
+          organizationId,
+          senderId: userId,
+          senderRole: String(context?.role || ''),
+          recipientName: String(args.recipient_name || '').trim(),
+          recipientRole: normalizeDirectRecipientRole(args.recipient_role),
+          studentName: String(args.student_name || '').trim() || undefined,
+          subject: String(args.subject || '').trim() || undefined,
+          body: String(args.body || '').trim(),
+          supabase: context?.supabaseClient || context?.supabase || null,
+        });
+      } catch (error) {
+        logger.error('[send_inbox_message] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to send inbox message',
+        };
+      }
+    },
+  });
+
+  register({
+    name: 'send_broadcast_message',
+    description: [
+      'Send a confirmed inbox broadcast to parents, teachers, staff, or everyone using the thread-based messaging system.',
+      'Uses the existing inbox channels so recipients receive an in-app thread plus a new-message notification.',
+      'When RSVP is requested, it switches to a reply-enabled parent group and adds reaction instructions for attendance tracking.',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        subject: {
+          type: 'string',
+          description: 'Short broadcast title used when naming or reusing the inbox broadcast thread.',
+        },
+        body: {
+          type: 'string',
+          description: 'Broadcast message content.',
+        },
+        audience: {
+          type: 'string',
+          description: 'Audience: "all_parents", "all_teachers", "all_staff", or "everyone".',
+        },
+        channel_mode: {
+          type: 'string',
+          description: 'Delivery mode: "announcement_channel" for one-way updates or "parent_group" for inbox group chat.',
+        },
+        allow_replies: {
+          type: 'boolean',
+          description: 'Whether recipients should be allowed to reply in the broadcast thread.',
+        },
+        require_rsvp: {
+          type: 'boolean',
+          description: 'When true, Dash adds RSVP instructions that use reactions and replies for attendance tracking.',
+        },
+      },
+      required: ['subject', 'body'],
+    },
+    risk: 'high',
+    requiresConfirmation: true,
+    execute: async (args, context) => {
+      try {
+        const { userId, organizationId } = await resolveSenderContext(context);
+        if (!userId) {
+          return { success: false, error: 'Could not resolve the signed-in user for this broadcast.' };
+        }
+        if (!organizationId) {
+          return { success: false, error: 'Could not resolve the school or organization for this broadcast.' };
+        }
+
+        return await InboxMessagingService.sendBroadcastMessage({
+          organizationId,
+          senderId: userId,
+          senderRole: String(context?.role || ''),
+          subject: String(args.subject || '').trim(),
+          body: String(args.body || '').trim(),
+          audience: normalizeBroadcastAudience(args.audience),
+          channelMode: normalizeBroadcastChannelMode(args.channel_mode),
+          allowReplies: Boolean(args.allow_replies),
+          requireRsvp: Boolean(args.require_rsvp),
+          supabase: context?.supabaseClient || context?.supabase || null,
+        });
+      } catch (error) {
+        logger.error('[send_broadcast_message] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to send broadcast inbox message',
+        };
+      }
+    },
+  });
+
+  register({
+    name: 'summarize_broadcast_rsvp',
+    description: [
+      'Summarize RSVP responses for a previously sent inbox RSVP broadcast thread.',
+      'Counts confirmed attendees, declines, maybes, no-responses, and expected guests from thread reactions and replies.',
+      'Use this when a principal asks how many parents or visitors to expect.',
+    ].join(' '),
+    parameters: {
+      type: 'object',
+      properties: {
+        subject: {
+          type: 'string',
+          description: 'Optional RSVP subject or event name to identify the correct RSVP thread.',
+        },
+        thread_name: {
+          type: 'string',
+          description: 'Optional exact inbox thread name if the user refers to a specific RSVP thread.',
+        },
+      },
+    },
+    risk: 'low',
+    execute: async (args, context) => {
+      try {
+        const { userId, organizationId } = await resolveSenderContext(context);
+        if (!organizationId) {
+          return { success: false, error: 'Could not resolve the school or organization for this RSVP summary.' };
+        }
+
+        return await InboxMessagingService.summarizeBroadcastRsvp({
+          organizationId,
+          senderId: userId || undefined,
+          subject: String(args.subject || '').trim() || undefined,
+          threadName: String(args.thread_name || '').trim() || undefined,
+          supabase: context?.supabaseClient || context?.supabase || null,
+        });
+      } catch (error) {
+        logger.error('[summarize_broadcast_rsvp] Error:', error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to summarize RSVP responses',
+        };
+      }
+    },
   });
 
   // PDF export tool
@@ -849,7 +1261,11 @@ export function registerCommunicationTools(register: (tool: AgentTool) => void):
   // ── Generate PDF from prompt (AI-powered) ────────────────────────────
   register({
     name: 'generate_pdf_from_prompt',
-    description: 'Generate a full PDF document from a natural language prompt. The AI interprets your request and produces a formatted PDF (reports, letters, study guides, newsletters, etc.).',
+    description: [
+      'Generate a downloadable PDF document (report, study guide, policy document, or reference sheet) from a natural language prompt.',
+      'Use ONLY for creating documents to download or print — NOT for sending messages, notifications, or announcements to parents/teachers.',
+      'For communication, use compose_message instead.',
+    ].join(' '),
     parameters: {
       type: 'object',
       properties: {

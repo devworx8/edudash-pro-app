@@ -1,12 +1,19 @@
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { makeRedirectUri } from 'expo-auth-session';
 import { assertSupabase } from '@/lib/supabase';
 import { track } from '@/lib/analytics';
 import { logger } from '@/lib/logger';
 import { writeSuperAdminAudit } from '@/lib/audit/superAdminAudit';
+import { getCurrentProfile } from '@/lib/sessionManager';
+import {
+  clearSuperAdminImpersonationSession,
+  setSuperAdminImpersonationSession,
+} from '@/lib/superadmin/impersonation';
 import { getAvailableTiersForRole } from '@/lib/tiers';
 import { formatTierLabel } from '@/lib/screen-styles/super-admin-users.styles';
 import type { UserRecord } from '@/lib/screen-styles/super-admin-users.styles';
+import { EnhancedBiometricAuth } from '@/services/EnhancedBiometricAuth';
 import type { ActionDeps } from './types';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -60,6 +67,24 @@ async function shareToWhatsApp(
   }
 }
 
+function getImpersonationRedirectUrl(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return `${window.location.origin}/auth-callback?impersonation=1`;
+  }
+
+  const base = makeRedirectUri({ scheme: 'edudashpro', path: 'auth-callback' });
+  return base.includes('?') ? `${base}&impersonation=1` : `${base}?impersonation=1`;
+}
+
+async function openImpersonationLink(actionLink: string): Promise<void> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.location.assign(actionLink);
+    return;
+  }
+
+  await Linking.openURL(actionLink);
+}
+
 // ─── User Actions ───────────────────────────────────────────────────────────
 
 export async function impersonateUser(user: UserRecord, deps: ActionDeps): Promise<void> {
@@ -81,15 +106,74 @@ export async function impersonateUser(user: UserRecord, deps: ActionDeps): Promi
         onPress: async () => {
           try {
             setImpersonating(true);
+            const supabase = assertSupabase();
+            const [
+              { data: sessionData },
+              { data: authUserData },
+              currentProfile,
+            ] = await Promise.all([
+              supabase.auth.getSession(),
+              supabase.auth.getUser(),
+              getCurrentProfile().catch(() => null),
+            ]);
+
+            const currentSession = sessionData.session;
+            const currentUser = authUserData.user;
+            if (!currentSession || !currentUser?.id || !currentUser.email) {
+              throw new Error('Your superadmin session is not available. Please sign in again.');
+            }
+
+            await EnhancedBiometricAuth.storeBiometricSession(
+              currentUser.id,
+              currentUser.email,
+              currentProfile || undefined,
+              currentSession.refresh_token,
+            );
+
+            const redirectTo = getImpersonationRedirectUrl();
+            const { data, error } = await supabase.functions.invoke(
+              'superadmin-start-impersonation',
+              {
+                body: {
+                  target_user_id: getAuthUserId(user),
+                  redirect_to: redirectTo,
+                },
+              },
+            );
+
+            if (error) {
+              throw error;
+            }
+
+            const actionLink = String(
+              data?.action_link || data?.actionLink || '',
+            ).trim();
+
+            if (!actionLink) {
+              throw new Error(data?.error || 'Could not create an impersonation session.');
+            }
+
+            await setSuperAdminImpersonationSession({
+              adminUserId: currentUser.id,
+              adminEmail: currentUser.email,
+              adminRole: currentProfile?.role || 'superadmin',
+              targetUserId: user.id,
+              targetEmail: user.email,
+              targetRole: user.role,
+              startedAt: new Date().toISOString(),
+              returnPath: '/screens/super-admin-users',
+            });
+
             track('superadmin_user_impersonation', {
               impersonated_user_id: user.id,
               impersonated_user_email: user.email,
               impersonated_user_role: user.role,
               impersonated_school_id: user.school_id,
+              redirect_to: redirectTo,
             });
 
             await writeSuperAdminAudit({
-              actorProfileId: profileId,
+              actorProfileId: profileId || currentUser.id,
               action: 'user_impersonation_start',
               targetId: user.id,
               targetType: 'user',
@@ -98,32 +182,23 @@ export async function impersonateUser(user: UserRecord, deps: ActionDeps): Promi
                 impersonated_email: user.email,
                 impersonated_role: user.role,
                 impersonated_school: user.school_name,
+                redirect_to: redirectTo,
               },
             });
 
-            showAlert({
-              title: 'Impersonation Started',
-              message: `You are now impersonating ${user.email}. In a production app, you would be redirected to their dashboard with full access.`,
-              type: 'success',
-              buttons: [
-                {
-                  text: 'Return to Admin',
-                  onPress: () => {
-                    writeSuperAdminAudit({
-                      actorProfileId: profileId,
-                      action: 'user_impersonation_end',
-                      targetId: user.id,
-                      targetType: 'user',
-                      description: `Impersonation ended for ${user.email}`,
-                      metadata: { duration: 'immediate_return' },
-                    });
-                  },
-                },
-              ],
-            });
+            deps.closeUserModal();
+            await openImpersonationLink(actionLink);
           } catch (error) {
             logger.error('Impersonation failed:', error);
-            showAlert({ title: 'Error', message: 'Failed to impersonate user', type: 'error' });
+            await clearSuperAdminImpersonationSession().catch(() => {});
+            showAlert({
+              title: 'Error',
+              message:
+                error instanceof Error
+                  ? error.message
+                  : 'Failed to impersonate user',
+              type: 'error',
+            });
           } finally {
             setImpersonating(false);
           }

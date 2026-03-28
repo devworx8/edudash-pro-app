@@ -244,7 +244,7 @@ export function K12AdminDashboard() {
         title: 'Groups',
         icon: 'people-circle-outline',
         color: '#14B8A6',
-        onPress: () => router.push('/screens/group-management'),
+        onPress: () => router.push('/screens/principal-groups'),
       },
       {
         id: 'messages',

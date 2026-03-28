@@ -53,6 +53,10 @@ const TOOL_ACCESS_RULES: Record<string, { roles?: ToolRole[]; minTier?: ToolTier
 
   // Communication + PDF + navigation + visual generation
   compose_message: { roles: ['teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
+  send_school_announcement: { roles: ['teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
+  send_inbox_message: { roles: ['principal_admin', 'super_admin'], minTier: 'starter' },
+  send_broadcast_message: { roles: ['principal_admin', 'super_admin'], minTier: 'starter' },
+  summarize_broadcast_rsvp: { roles: ['principal_admin', 'super_admin'], minTier: 'starter' },
   export_pdf: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
   generate_image: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'starter' },
   generate_worksheet: { roles: ['parent', 'student', 'teacher', 'principal_admin', 'super_admin'], minTier: 'free' },
@@ -109,6 +113,10 @@ const MODULE_CATEGORY_MAP: Record<string, string> = {
   get_assignments: 'data',
   get_organization_stats: 'data',
   compose_message: 'communication',
+  send_school_announcement: 'communication',
+  send_inbox_message: 'communication',
+  send_broadcast_message: 'communication',
+  summarize_broadcast_rsvp: 'communication',
   export_pdf: 'communication',
   generate_image: 'communication',
   generate_worksheet: 'communication',

@@ -66,6 +66,11 @@ import {
   countScannerAttachments,
   isSuccessfulOCRResponse,
 } from '@/lib/dash-ai/retakeFlow';
+import {
+  extractConfirmedToolCall,
+  extractConfirmedToolNames,
+  findReusableRecentAttachments,
+} from '@/lib/dash-ai/conversationGuards';
 import { getCurrentLanguage } from '@/lib/i18n';
 import {
   resolveAutoSpeakPreference,
@@ -230,6 +235,7 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
     const turnId = createDashTurnId('dash_assistant_turn');
     const turnStartedAt = Date.now();
     const normalizedRole = String(profile?.role || '').toLowerCase();
+    const userText = text || '';
 
     // ── Route intent ────────────────────────────────────
     const intentRouterEnabled = getFeatureFlagsSync().dash_intent_router_v1 !== false;
@@ -280,11 +286,10 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
       // ── Attachment handling ────────────────────────────
       let effectiveAttachments = attachments;
       if (effectiveAttachments.length === 0) {
-        const priorMessages = (conversation?.messages || []).slice(-10);
-        for (let mi = priorMessages.length - 1; mi >= 0; mi -= 1) {
-          const priorImg = priorMessages[mi]?.attachments?.find((a: any) => a.kind === 'image');
-          if (priorImg) { effectiveAttachments = [priorImg]; break; }
-        }
+        const recentHistory = Array.isArray(conversation?.messages) && conversation.messages.length > 0
+          ? conversation.messages
+          : messages;
+        effectiveAttachments = findReusableRecentAttachments(recentHistory, userText);
       }
       setLoadingStatus(effectiveAttachments.length > 0 ? 'uploading' : 'thinking');
       setStatusStartTime(Date.now());
@@ -303,8 +308,14 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
         }
       }
 
-      const attachmentsNeedingUpload = effectiveAttachments.filter((a: any) => a.status !== 'uploaded');
-      const alreadyUploaded = effectiveAttachments.filter((a: any) => a.status === 'uploaded');
+      const isPersistedAttachment = (attachment: any) =>
+        attachment?.status === 'uploaded' || Boolean(attachment?.bucket && attachment?.storagePath);
+      const attachmentsNeedingUpload = effectiveAttachments.filter((attachment: any) => !isPersistedAttachment(attachment));
+      const alreadyUploaded = effectiveAttachments
+        .filter((attachment: any) => isPersistedAttachment(attachment))
+        .map((attachment: any) =>
+          attachment?.status === 'uploaded' ? attachment : { ...attachment, status: 'uploaded' }
+        );
       const freshUploaded = attachmentsNeedingUpload.length > 0
         ? await dashAttachments.uploadAttachments(attachmentsNeedingUpload, conversationIdForUpload)
         : [];
@@ -318,8 +329,18 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
       setStatusStartTime(Date.now());
       if (isNearBottomRef.current) scrollToBottom({ animated: true, delay: 120 });
 
+      const authoritativeConversation = conversationIdForUpload
+        ? await dashInstance.getConversation(conversationIdForUpload).catch(() => null)
+        : null;
+      const contextHistoryMessages =
+        Array.isArray(authoritativeConversation?.messages) && authoritativeConversation.messages.length > 0
+          ? authoritativeConversation.messages
+          : Array.isArray(conversation?.messages) && conversation.messages.length > 0
+            ? conversation.messages
+            : messages;
+      const confirmedTools = extractConfirmedToolNames(contextHistoryMessages, userText);
+
       // ── Context building ──────────────────────────────
-      const userText = text || '';
       const languageOverride = detectLanguageOverrideFromText(userText);
       const requestLanguage = resolveResponseLocale({
         explicitOverride: languageOverride,
@@ -331,9 +352,12 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
       });
 
       const learnerContext = learnerContextRef.current;
-      const baseContextOverride = buildDashContextOverride({ learner: learnerContext, messages });
+      const baseContextOverride = buildDashContextOverride({
+        learner: learnerContext,
+        messages: contextHistoryMessages,
+      });
       const attachmentContextOverride = buildAttachmentContextInternal(uploadedAttachments);
-      const messageHistory = messages.map(msg => ({
+      const messageHistory = contextHistoryMessages.map(msg => ({
         role: msg.type === 'task_result' ? 'assistant' : msg.type,
         content: msg.content || '',
       }));
@@ -387,6 +411,140 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
         metadata: { turn_id: turnId },
       };
       setMessages(prev => [...prev, localUserMessage]);
+
+      const confirmedToolCall = extractConfirmedToolCall(contextHistoryMessages, userText);
+
+      if (confirmedToolCall && conversationIdForUpload) {
+        const { toolName, args: confirmedToolArgs } = confirmedToolCall;
+        const directToolLabel = formatDashToolActivityLabel(toolName);
+        let supabaseClient: any = null;
+        try { supabaseClient = assertSupabase(); } catch {}
+
+        await dashInstance.addMessageToConversation(conversationIdForUpload, localUserMessage).catch((persistError) => {
+          console.warn('[useDashAssistant] Failed to persist confirmed user message:', persistError);
+        });
+
+        setActiveToolLabel(directToolLabel);
+        setLoadingStatus('responding');
+        setStatusStartTime(Date.now());
+        beginToolExecution();
+
+        const directExecution = await ToolRegistry.execute(toolName, confirmedToolArgs, {
+          profile,
+          user,
+          supabase: supabaseClient,
+          role: String(profile?.role || 'parent').toLowerCase(),
+          tier: tier || 'free',
+          organizationId: (profile as any)?.organization_id || (profile as any)?.preschool_id || null,
+          hasOrganization: Boolean((profile as any)?.organization_id || (profile as any)?.preschool_id),
+          isGuest: !user?.id,
+          trace_id: `dash_assistant_confirmed_send_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          confirmedTools,
+          tool_plan: {
+            source: 'useDashAssistant.confirmed_followup',
+            tool: toolName,
+          },
+        }).finally(() => endToolExecution());
+        if (!isCurrentRequest()) return;
+
+        const toolContent = formatToolResultMessage(toolName, directExecution);
+        const toolOutcome =
+          directExecution?.success === false
+            ? {
+                status: 'failed' as const,
+                source: 'tool_registry',
+                errorCode: String(directExecution?.error || `${toolName}_failed`),
+              }
+            : {
+                status: 'success' as const,
+                source: 'tool_registry',
+              };
+        const directToolMessage: DashMessage = {
+          id: `tool_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          type: 'assistant',
+          content: toolContent,
+          timestamp: Date.now(),
+          metadata: {
+            turn_id: turnId,
+            tool_name: toolName,
+            tool_args: confirmedToolArgs,
+            tool_result: directExecution,
+            tool_results: [
+              {
+                name: toolName,
+                input: confirmedToolArgs,
+                output: directExecution?.result || directExecution?.error || null,
+                success: directExecution?.success !== false,
+                trace_id: directExecution?.trace_id,
+              },
+            ],
+            tool_origin: 'manual_tool',
+            tool_outcome: toolOutcome,
+            dash_route_intent: routeIntent,
+            response_lifecycle_state: 'committed',
+          },
+        };
+
+        setResponseLifecycleState(requestId, 'committed', toolContent);
+        trackDashTelemetry(DASH_TELEMETRY_EVENTS.RESPONSE_COMMITTED, {
+          turn_id: turnId,
+          route_intent: routeIntent,
+          response_chars: toolContent.length,
+          model: selectedModel,
+          response_mode: 'direct_writing',
+        });
+
+        logDashTrace('assistant_confirmed_tool_response', {
+          tool: toolName,
+          success: directExecution?.success !== false,
+          preview: toolContent.slice(0, 180),
+          announcement_id: (directExecution?.result as any)?.announcement_id || null,
+          thread_id: (directExecution?.result as any)?.thread_id || null,
+          message_id: (directExecution?.result as any)?.message_id || null,
+        });
+
+        setMessages(prev => appendAssistantMessageByTurn(prev, directToolMessage));
+        if (isNearBottomRef.current) scrollToBottom({ animated: true, delay: 120 });
+
+        await dashInstance.addMessageToConversation(conversationIdForUpload, directToolMessage).catch((persistError) => {
+          console.warn('[useDashAssistant] Failed to persist confirmed tool message:', persistError);
+        });
+
+        const updatedConv = await dashInstance.getConversation(conversationIdForUpload).catch(() => null);
+        if (!isCurrentRequest()) return;
+        if (updatedConv && Array.isArray(updatedConv.messages) && updatedConv.messages.length > 0) {
+          const overrideMap = tutorOverridesRef.current;
+          const merged = normalizeMessagesByTurn(updatedConv.messages.map(msg => {
+            const override = overrideMap[msg.id];
+            if (override) return { ...msg, content: override };
+            if (msg.type === 'user') {
+              const { content, sanitized } = sanitizeTutorUserContent(msg.content);
+              return sanitized ? { ...msg, content } : msg;
+            }
+            return msg;
+          }));
+          setMessages(prev => (merged.length >= prev.length ? merged : prev));
+          setConversation(updatedConv);
+          persistConversationSnapshot(updatedConv).catch(() => {});
+        }
+
+        if (shouldAutoSpeak({
+          role: profile?.role || null,
+          voiceEnabled,
+          autoSpeakEnabled: autoSpeakResponses,
+          responseText: toolContent,
+        })) {
+          await speakResponse(directToolMessage);
+        }
+
+        setResponseLifecycleState(requestId, 'finalized');
+        track('dash.turn.completed', buildDashTurnTelemetry({
+          ...baseTurnTelemetry,
+          conversationId: conversationIdForUpload,
+          latencyMs: Date.now() - turnStartedAt,
+        }));
+        return;
+      }
 
       // ── Auto tool execution ───────────────────────────
       let autoToolContext: string | null = null;
@@ -464,7 +622,8 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
 
       const contextWindow = resolveConversationWindowByTier(capabilityTier as import('@/lib/tiers').CapabilityTier);
       const contextSeedMessages: DashMessage[] = [
-        ...messages, localUserMessage,
+        ...contextHistoryMessages,
+        localUserMessage,
         ...(autoToolContext ? [{ id: `ctx_tool_${Date.now()}`, type: 'assistant' as const, content: autoToolContext, timestamp: Date.now() }] : []),
       ];
       const messagesOverride = buildConversationContext(contextSeedMessages, {
@@ -485,6 +644,7 @@ export function useDashAISendMessage(deps: UseDashAISendMessageDeps) {
         planning_intent: guidedPlanModeActive ? plannerIntent : undefined,
         planning_intent_confidence: plannerIntentConfidence ?? undefined,
         plan_mode_stage: guidedPlanModeActive ? 'discover' : undefined,
+        confirmed_tools: confirmedTools.length > 0 ? confirmedTools : undefined,
       };
 
       const streamingSetup = streamingEnabled

@@ -37,7 +37,7 @@ const ROUTE_MAP: Record<string, string> = {
   teachers: '/screens/teacher-management',
   classes: '/screens/class-teacher-management',
   'parent-links': '/screens/principal-parent-requests',
-  groups: '/screens/group-management',
+  groups: '/screens/principal-groups',
   'seat-management': '/screens/principal-seat-management',
   'unpaid-fees': '/screens/finance-control-center?tab=receivables',
   'fee-management': '/screens/finance-control-center?tab=overview',
@@ -139,6 +139,7 @@ export const PrincipalQuickActions: React.FC<PrincipalQuickActionsProps> = ({
   // Core shortcuts — badged/high-urgency items. Each appears ONLY here.
   const coreShortcuts = useMemo<ActionItem[]>(() => [
     { id: 'registrations', title: t('dashboard.review_registrations', { defaultValue: 'Registrations' }), icon: 'person-add', color: '#6366F1', badge: registrationsBadge },
+    { id: 'groups', title: t('dashboard.manage_groups', { defaultValue: 'Groups' }), icon: 'people-circle', color: '#14B8A6' },
     ...(!hideFinancialActions ? [{ id: 'payments', title: t('dashboard.payment_proofs', { defaultValue: 'Proof of Payment' }), icon: 'document-text', color: '#F59E0B', badge: popBadge }] : []),
     { id: 'teacher-approval', title: t('dashboard.approve_teachers', { defaultValue: 'Approve Teachers' }), icon: 'checkmark-circle', color: '#06B6D4', badge: pendingTeacherApprovalsCount },
     { id: 'uniform-orders', title: t('dashboard.uniform_orders', { defaultValue: 'Uniform Orders' }), icon: 'shirt', color: '#0EA5E9' },
@@ -155,7 +156,6 @@ export const PrincipalQuickActions: React.FC<PrincipalQuickActionsProps> = ({
         { id: 'teachers', title: t('dashboard.manage_teachers', { defaultValue: 'Teachers' }), icon: 'people', color: '#06B6D4' },
         { id: 'classes', title: t('dashboard.manage_classes', { defaultValue: 'Classes' }), icon: 'library', color: '#14B8A6' },
         { id: 'parent-links', title: t('dashboard.parent_links', { defaultValue: 'Connect Parents' }), icon: 'link', color: '#14B8A6' },
-        { id: 'groups', title: t('dashboard.manage_groups', { defaultValue: 'Groups' }), icon: 'people-circle', color: '#14B8A6' },
         { id: 'seat-management', title: t('dashboard.seat_management', { defaultValue: 'Seats' }), icon: 'people-circle', color: '#8B5CF6' },
         { id: 'waitlist', title: t('dashboard.waitlist', { defaultValue: 'Waitlist' }), icon: 'list', color: '#3B82F6' },
         { id: 'staff-leave', title: t('dashboard.staff_leave', { defaultValue: 'Staff Leave' }), icon: 'calendar-outline', color: '#F59E0B' },

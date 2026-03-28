@@ -39,7 +39,7 @@ try {
 interface MessageComposerProps {
   onSend: (text: string) => Promise<void>;
   onVoiceRecording?: (uri: string, duration: number) => Promise<void>;
-  onImageAttach?: (uri: string, mimeType: string) => Promise<void>;
+  onImageAttach?: (uri: string, mimeType: string, options?: { name?: string; size?: number; webFile?: Blob }) => Promise<void>;
   sending: boolean;
   replyingTo?: Message | null;
   onCancelReply?: () => void;
@@ -209,7 +209,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = React.memo(({
     }
   }, [onImageAttach, showComposerAlert]);
 
-  // Handle gallery/attachment picker (images and videos)
+  // Handle gallery/attachment picker (images, videos, and documents)
   const handleAttachment = useCallback(async () => {
     if (!onImageAttach) {
       toast.info('Attachments not supported in this chat', 'Attachments');

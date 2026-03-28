@@ -1,8 +1,17 @@
 import { Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { toast } from '@/components/ui/ToastProvider';
 import { ensureImageLibraryPermission } from '@/lib/utils/mediaLibrary';
+
+export interface ComposerAttachmentItem {
+  uri: string;
+  mimeType: string;
+  name?: string;
+  size?: number;
+  webFile?: Blob;
+}
 
 export const COMPOSER_IMAGE_ASPECT: [number, number] = [4, 3];
 
@@ -81,29 +90,52 @@ export const pickAttachmentAssets = async ({
   onPermissionDenied,
 }: {
   onPermissionDenied: () => void;
-}): Promise<Array<{ uri: string; mimeType: string }> | null> => {
-  const hasPermission = await ensureImageLibraryPermission();
-  if (!hasPermission) {
-    onPermissionDenied();
-    return null;
+}): Promise<ComposerAttachmentItem[] | null> => {
+  try {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: '*/*',
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || result.assets.length === 0) {
+      return null;
+    }
+
+    return result.assets.map((asset) => ({
+      uri: asset.uri,
+      mimeType: asset.mimeType || 'application/octet-stream',
+      name: asset.name,
+      size: asset.size,
+      webFile: (asset as any).file,
+    }));
+  } catch {
+    const hasPermission = await ensureImageLibraryPermission();
+    if (!hasPermission) {
+      onPermissionDenied();
+      return null;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      quality: 0.8,
+      allowsEditing: false,
+      allowsMultipleSelection: true,
+      videoMaxDuration: 120,
+    });
+
+    if (result.canceled || result.assets.length === 0) {
+      return null;
+    }
+
+    return result.assets.map((asset) => ({
+      uri: asset.uri,
+      mimeType: asset.mimeType || ((asset as { type?: string }).type === 'video' ? 'video/mp4' : 'image/jpeg'),
+      name: asset.fileName,
+      size: asset.fileSize,
+      webFile: (asset as any).file,
+    }));
   }
-
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.All,
-    quality: 0.8,
-    allowsEditing: false,
-    allowsMultipleSelection: true,
-    videoMaxDuration: 120,
-  });
-
-  if (result.canceled || result.assets.length === 0) {
-    return null;
-  }
-
-  return result.assets.map((asset) => ({
-    uri: asset.uri,
-    mimeType: asset.mimeType || ((asset as { type?: string }).type === 'video' ? 'video/mp4' : 'image/jpeg'),
-  }));
 };
 
 export const sendPickedAssets = async ({
@@ -112,19 +144,20 @@ export const sendPickedAssets = async ({
   onImageSelected,
   setSendingImage,
 }: {
-  items: Array<{ uri: string; mimeType: string }>;
-  onImageAttach: (uri: string, mimeType: string) => Promise<void>;
-  onImageSelected: (item: { uri: string; mimeType: string }) => void;
+  items: ComposerAttachmentItem[];
+  onImageAttach: (uri: string, mimeType: string, options?: { name?: string; size?: number; webFile?: Blob }) => Promise<void>;
+  onImageSelected: (item: ComposerAttachmentItem) => void;
   setSendingImage: (value: boolean) => void;
 }) => {
   const videos = items.filter((item) => item.mimeType.startsWith('video/'));
-  const images = items.filter((item) => !item.mimeType.startsWith('video/'));
+  const images = items.filter((item) => item.mimeType.startsWith('image/'));
+  const files = items.filter((item) => !item.mimeType.startsWith('video/') && !item.mimeType.startsWith('image/'));
 
   if (items.length === 1) {
     if (videos.length === 1) {
       setSendingImage(true);
       try {
-        await onImageAttach(items[0].uri, items[0].mimeType);
+        await onImageAttach(items[0].uri, items[0].mimeType, { name: items[0].name, size: items[0].size, webFile: items[0].webFile });
       } finally {
         setSendingImage(false);
       }
@@ -133,6 +166,16 @@ export const sendPickedAssets = async ({
 
     if (images.length === 1) {
       onImageSelected(items[0]);
+      return;
+    }
+
+    if (files.length === 1) {
+      setSendingImage(true);
+      try {
+        await onImageAttach(items[0].uri, items[0].mimeType, { name: items[0].name, size: items[0].size, webFile: items[0].webFile });
+      } finally {
+        setSendingImage(false);
+      }
     }
     return;
   }
@@ -140,7 +183,7 @@ export const sendPickedAssets = async ({
   setSendingImage(true);
   try {
     for (const item of items) {
-      await onImageAttach(item.uri, item.mimeType);
+      await onImageAttach(item.uri, item.mimeType, { name: item.name, size: item.size, webFile: item.webFile });
     }
     toast.success(`${items.length} items sent`, 'Attachments');
   } finally {

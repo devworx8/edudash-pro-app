@@ -13,7 +13,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -236,13 +236,13 @@ export function DailyActivityFeed({
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={activities}
-          renderItem={renderActivity}
-          keyExtractor={(item) => item.id}
-          scrollEnabled={false}
-          showsVerticalScrollIndicator={false}
-        />
+        <View>
+          {activities.map((item, index) => (
+            <React.Fragment key={item.id}>
+              {renderActivity({ item, index })}
+            </React.Fragment>
+          ))}
+        </View>
       )}
     </View>
   );

@@ -34,6 +34,7 @@ import {
   detectLanguageOverrideFromText,
   resolveResponseLocale,
 } from '@/lib/dash-ai/languageRouting';
+import { sanitizeAssistantReply } from '@/lib/dash-ai/conversationGuards';
 
 // Import facades
 import {
@@ -831,6 +832,14 @@ export class DashAICore {
         response = {
           ...response,
           content: criteriaEnforcement.content,
+        };
+      }
+
+      const sanitizedResponseContent = sanitizeAssistantReply(String(response.content || ''), userInput);
+      if (sanitizedResponseContent && sanitizedResponseContent !== response.content) {
+        response = {
+          ...response,
+          content: sanitizedResponseContent,
         };
       }
 

@@ -77,6 +77,11 @@ export default function CreateGroupScreen() {
 
   const isStaff = ['teacher', 'principal', 'admin', 'principal_admin', 'super_admin'].includes(userRole);
   const isPrincipal = ['principal', 'admin', 'principal_admin', 'super_admin'].includes(userRole);
+  const threadScreenPath = isPrincipal
+    ? '/screens/principal-message-thread'
+    : userRole === 'teacher'
+      ? '/screens/teacher-message-thread'
+      : '/screens/parent-message-thread';
 
   const isCreating = createClassGroup.isPending || createParentGroup.isPending
     || createAnnouncement.isPending || createParentThread.isPending;
@@ -168,7 +173,7 @@ export default function CreateGroupScreen() {
           groupType === 'parent_group' ? 'parent_group' :
           groupType === 'announcement' ? 'announcement' : '';
         router.replace({
-          pathname: '/screens/parent-message-thread',
+          pathname: threadScreenPath,
           params: {
             threadId,
             isGroup: isGroupThread ? '1' : '0',

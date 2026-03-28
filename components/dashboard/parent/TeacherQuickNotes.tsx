@@ -12,7 +12,7 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { assertSupabase } from '@/lib/supabase';
@@ -286,14 +286,14 @@ export function TeacherQuickNotes({
         </View>
       )}
 
-      <FlatList
-        data={notes}
-        renderItem={renderNote}
-        keyExtractor={(item) => item.id}
-        scrollEnabled={false}
-        showsVerticalScrollIndicator={false}
-        ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-      />
+      <View>
+        {notes.map((item, index) => (
+          <React.Fragment key={item.id}>
+            {renderNote({ item })}
+            {index < notes.length - 1 && <View style={{ height: 10 }} />}
+          </React.Fragment>
+        ))}
+      </View>
     </View>
   );
 }

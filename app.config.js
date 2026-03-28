@@ -130,8 +130,10 @@ module.exports = ({ config }) => {
     android: {
       ...config.android,
       package: 'com.edudashpro.app.dev',
-      // Don't set googleServicesFile here — withGoogleServices.js plugin handles it
-      // and adds the .dev package name so processDebugGoogleServices finds a match
+      // googleServicesFile must be set so @react-native-firebase/app plugin doesn't throw.
+      // withGoogleServices.js runs AFTER firebase's copy step (registered earlier in app.json)
+      // and overwrites the file with the .dev package name added.
+      googleServicesFile,
     },
     ios: {
       ...config.ios,

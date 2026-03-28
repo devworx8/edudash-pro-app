@@ -137,12 +137,18 @@ export function DesktopLayout({
   const headerAvatarSize = 44;
   
   // Filter nav items by role
-  const filteredNavItems = NAV_ITEMS.filter(item => 
+  const filteredNavItems = NAV_ITEMS.filter(item =>
     !item.roles || item.roles.includes(userRole)
   ).filter((item) => {
     if (!hideFeesOnDashboards) return true;
     return item.id !== 'financials';
   });
+
+  // Dash ORB route — super_admin gets the full Ops chat, everyone else gets voice orb
+  const dashRoute = userRole === 'super_admin'
+    ? '/screens/dash-ai-chat'
+    : '/screens/dash-voice?mode=orb';
+  const isDashActive = !!(pathname?.includes('dash-voice') || pathname?.includes('dash-ai-chat'));
 
   // Check if current route matches nav item
   const isActive = (route: string) => {
@@ -276,6 +282,27 @@ export function DesktopLayout({
             <Text style={mobileStyles.headerTitle} numberOfLines={1}>{title || tenantSlug}</Text>
           </View>
           <View style={mobileStyles.headerRight}>
+            {/* Dash ORB — always accessible from the header on mobile/tablet */}
+            <TouchableOpacity
+              style={[
+                mobileStyles.iconButton,
+                {
+                  backgroundColor: isDashActive ? theme.primary + '33' : theme.primary + '18',
+                  borderRadius: 20,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 5,
+                },
+              ]}
+              onPress={() => router.push(dashRoute as any)}
+              accessibilityLabel="Open Dash AI"
+              accessibilityRole="button"
+            >
+              <Ionicons name="sparkles" size={18} color={theme.primary} />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: theme.primary }}>Dash</Text>
+            </TouchableOpacity>
             <TouchableOpacity
               style={mobileStyles.iconButton}
               onPress={() => router.push('/screens/notifications' as any)}
@@ -396,6 +423,21 @@ export function DesktopLayout({
           </View>
         </ScrollView>
 
+        {/* Dash ORB — pinned above footer, always discoverable */}
+        <View style={styles.dashButtonContainer}>
+          <TouchableOpacity
+            style={[styles.dashButton, isDashActive && styles.dashButtonActive]}
+            onPress={() => router.push(dashRoute as any)}
+            accessibilityLabel="Open Dash AI"
+            accessibilityRole="button"
+          >
+            <Ionicons name="sparkles" size={20} color="#fff" />
+            {!sidebarCollapsed && (
+              <Text style={styles.dashButtonText}>Ask Dash</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* Powered by (above separator line) */}
         {!sidebarCollapsed && (
           <View style={styles.poweredByBar}>
@@ -443,6 +485,16 @@ export function DesktopLayout({
           <Text style={styles.desktopHeaderTitle} numberOfLines={1}>
             {title || tenantSlug}
           </Text>
+          {/* Dash pill — quick access from any screen on desktop */}
+          <TouchableOpacity
+            style={[styles.desktopDashPill, isDashActive && styles.desktopDashPillActive]}
+            onPress={() => router.push(dashRoute as any)}
+            accessibilityLabel="Open Dash AI"
+            accessibilityRole="button"
+          >
+            <Ionicons name="sparkles" size={16} color="#fff" />
+            <Text style={styles.desktopDashPillText}>Ask Dash</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.desktopHeaderAccountButton}
             onPress={() => router.push('/screens/account' as any)}
@@ -637,5 +689,50 @@ const createStyles = (theme: any, collapsed: boolean, insets: any) =>
     desktopHeaderAccountButton: {
       borderRadius: 999,
       cursor: 'pointer' as any,
+    },
+    // ── Dash ORB access ──────────────────────────────────────────────────────
+    dashButtonContainer: {
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 4,
+    },
+    dashButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: collapsed ? 'center' : 'flex-start',
+      paddingVertical: 11,
+      paddingHorizontal: collapsed ? 0 : 14,
+      borderRadius: 12,
+      gap: 10,
+      backgroundColor: theme.primary,
+      cursor: 'pointer' as any,
+    },
+    dashButtonActive: {
+      opacity: 0.85,
+    },
+    dashButtonText: {
+      flex: 1,
+      fontSize: 15,
+      fontWeight: '700',
+      color: '#fff',
+    },
+    desktopDashPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      backgroundColor: theme.primary,
+      marginRight: 12,
+      cursor: 'pointer' as any,
+    },
+    desktopDashPillActive: {
+      opacity: 0.85,
+    },
+    desktopDashPillText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#fff',
     },
   });

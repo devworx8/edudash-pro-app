@@ -185,6 +185,44 @@ export function MessageBubbleContent({
     );
   }
 
+  if (mediaContent?.mediaType === 'file') {
+    const displayName = mediaContent.name || 'Attachment';
+    const extension = displayName.includes('.') ? displayName.split('.').pop()?.toUpperCase() : undefined;
+    const sizeText = typeof mediaContent.size === 'number' && mediaContent.size > 0
+      ? `${(mediaContent.size / (1024 * 1024)).toFixed(mediaContent.size >= 1024 * 1024 ? 1 : 2)} MB`
+      : null;
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() => Linking.openURL(mediaContent.url).catch(() => {})}
+        style={[
+          styles.mediaVideoContainer,
+          isOwn ? styles.mediaVideoContainerOwn : styles.mediaVideoContainerOther,
+          { minHeight: 0, borderRadius: mediaRadius, paddingVertical: 14, paddingHorizontal: 14 },
+        ]}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <LinearGradient colors={['rgba(59,130,246,0.35)', 'rgba(139,92,246,0.25)']} style={styles.mediaVideoIconWrap}>
+            <Ionicons name="document-text-outline" size={28} color={isOwn ? 'rgba(255,255,255,0.95)' : '#b9c6f9'} />
+          </LinearGradient>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={[styles.mediaVideoLabel, { color: isOwn ? 'rgba(255,255,255,0.92)' : '#d8defd' }]} numberOfLines={1}>
+              {displayName}
+            </Text>
+            <Text style={[styles.text, { color: isOwn ? 'rgba(255,255,255,0.66)' : '#94a3b8' }]} numberOfLines={1}>
+              {[extension, sizeText].filter(Boolean).join(' • ') || 'Tap to open'}
+            </Text>
+          </View>
+          <Ionicons name="download-outline" size={20} color={isOwn ? 'rgba(255,255,255,0.85)' : '#cbd5f5'} />
+        </View>
+        {mediaCaption ? (
+          <Text style={[styles.text, { color: isOwn ? '#ffffff' : '#e2e8f0', marginTop: 10 }]}>{mediaCaption}</Text>
+        ) : null}
+      </TouchableOpacity>
+    );
+  }
+
   return (
     <>
       <LinkedText

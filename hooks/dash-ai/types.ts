@@ -67,6 +67,10 @@ export const TOOL_ACTIVITY_LABELS: Record<string, string> = {
   get_caps_documents: 'Opening CAPS documents',
   get_assignments: 'Checking assignments',
   get_schedule: 'Checking your schedule',
+  send_school_announcement: 'Sending announcement',
+  send_inbox_message: 'Sending inbox message',
+  send_broadcast_message: 'Sending broadcast',
+  summarize_broadcast_rsvp: 'Checking RSVP responses',
   support_check_user_context: 'Checking support context',
   support_create_ticket: 'Creating support ticket',
 };

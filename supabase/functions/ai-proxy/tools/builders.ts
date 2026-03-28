@@ -12,7 +12,7 @@ export function buildOpenAITools(
       type: 'function',
       function: {
         name: 'web_search',
-        description: 'Search the web for up-to-date or external information.',
+        description: 'Search the live web for up-to-date, current, or external information. Use this for latest info, local services, health or safety topics, and questions that need verification.',
         parameters: {
           type: 'object',
           properties: {
@@ -127,7 +127,7 @@ export function buildAnthropicTools(
   const tools: Array<{ name: string; description: string; input_schema: Record<string, unknown> }> = [
     {
       name: 'web_search',
-      description: 'Search the web for up-to-date or external information.',
+      description: 'Search the live web for up-to-date, current, or external information. Use this for latest info, local services, health or safety topics, and questions that need verification.',
       input_schema: {
         type: 'object',
         properties: {

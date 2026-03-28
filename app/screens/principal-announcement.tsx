@@ -58,7 +58,8 @@ export default function PrincipalAnnouncementScreen() {
     message: (params?.content as string) || '',
     audience: (() => {
       const a = String(params?.audience || '').toLowerCase()
-      if (['teachers','parents','students'].includes(a)) return [a]
+      if (a === 'all') return ['teachers', 'parents', 'students']
+      if (['teachers','parents','students', 'admin'].includes(a)) return [a]
       return ['teachers']
     })(),
     priority: (['low','normal','high','urgent'].includes(String(params?.priority || '').toLowerCase())
@@ -76,6 +77,7 @@ export default function PrincipalAnnouncementScreen() {
         visible={visible}
         onClose={onClose}
         onSend={onSend}
+        initialData={prefill}
         onOpenWeeklyMenu={() => {
           setVisible(false)
           router.push('/screens/principal-menu')

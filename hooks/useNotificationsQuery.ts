@@ -187,6 +187,7 @@ async function fetchNotifications(
     if (!inAppError && inAppNotifs?.length) {
       inAppNotifs.forEach((n: any) => {
         const notifId = `in-app-${n.id}`;
+        if (mapNotificationType(n.type) === 'announcement') return;
         if (!isNotificationCleared(notifId, n.created_at, clearedIds, clearedBeforeDate)) {
           notifications.push({
             id: notifId,
@@ -219,6 +220,7 @@ async function fetchNotifications(
         const notifId = `push-${n.id}`;
         // Skip call notifications (they're handled separately)
         if (n.notification_type === 'incoming_call') return;
+        if (mapNotificationType(n.notification_type) === 'announcement') return;
         
         if (!isNotificationCleared(notifId, n.created_at, clearedIds, clearedBeforeDate)) {
           notifications.push({
@@ -251,6 +253,7 @@ async function fetchNotifications(
         const notifId = `notif-${n.id}`;
         // Skip messages (they're handled separately with threading)
         if (n.type === 'message') return;
+        if (mapNotificationType(n.type) === 'announcement') return;
         
         if (!isNotificationCleared(notifId, n.created_at, clearedIds, clearedBeforeDate)) {
           notifications.push({

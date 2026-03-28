@@ -188,9 +188,11 @@ export const parseMessageContent = (rawContent: string): RichMessageContent => {
     return { kind: 'text', text: '' };
   }
 
-  if (rawContent.startsWith(MEDIA_PREFIX)) {
+  const normalizedRawContent = rawContent.trimStart();
+
+  if (normalizedRawContent.startsWith(MEDIA_PREFIX)) {
     try {
-      const parsed = JSON.parse(rawContent.slice(MEDIA_PREFIX.length));
+      const parsed = JSON.parse(normalizedRawContent.slice(MEDIA_PREFIX.length));
       if (parsed && typeof parsed.url === 'string' && typeof parsed.mediaType === 'string') {
         return {
           kind: 'media',

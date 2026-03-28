@@ -31,6 +31,9 @@ import {
   FinanceDocumentService,
   type FinanceDocumentType,
 } from '@/lib/services/finance/FinanceDocumentService';
+import { removeTeacherFromSchool } from '@/lib/services/teacherRemovalService';
+import { PayrollService } from '@/services/PayrollService';
+import { sendReceivablePaymentReminders } from '@/services/finance/paymentReminderService';
 import type { FinancePendingPOPRow, PayrollRosterItem } from '@/types/finance';
 import {
   useFinanceControlCenter,
@@ -98,6 +101,8 @@ export default function FinanceControlCenterScreen() {
   const [showIssueDocumentModal, setShowIssueDocumentModal] = React.useState(false);
   const [issueDocumentDraft, setIssueDocumentDraft] = React.useState<FinanceDocumentDraft | null>(null);
   const [issuingDocument, setIssuingDocument] = React.useState(false);
+  const [sendingReceivableReminders, setSendingReceivableReminders] = React.useState(false);
+  const [archivingPayrollRecipientId, setArchivingPayrollRecipientId] = React.useState<string | null>(null);
   const [issueDocumentResult, setIssueDocumentResult] = React.useState<{
     documentUrl?: string | null;
     notificationError?: string | null;
@@ -332,6 +337,164 @@ export default function FinanceControlCenterScreen() {
     if (issueDocumentDraft.source === 'payroll') return false;
     return Boolean(issueDocumentDraft.parentId || issueDocumentDraft.parentEmail || issueDocumentDraft.studentId);
   }, [issueDocumentDraft]);
+
+  const handleSendReceivableReminders = React.useCallback(() => {
+    if (!orgId || !profile?.id) {
+      showAlert({
+        title: 'Missing School Details',
+        message: 'We could not resolve your school profile for sending reminders.',
+        type: 'error',
+      });
+      return;
+    }
+
+    const unpaidLearnerCount =
+      Number(receivables?.summary?.students_total_unpaid || 0) ||
+      Number(receivables?.students?.length || 0);
+
+    if (!unpaidLearnerCount) {
+      showAlert({
+        title: 'Nothing To Send',
+        message: 'There are no unpaid or overdue learners for the selected month.',
+        type: 'info',
+      });
+      return;
+    }
+
+    showAlert({
+      title: 'Send Payment Reminders',
+      message: `Send payment reminders for all ${unpaidLearnerCount} unpaid learner account${unpaidLearnerCount === 1 ? '' : 's'} in ${monthLabel}? Linked parents and guardians will be notified.`,
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Reminders',
+          onPress: async () => {
+            setSendingReceivableReminders(true);
+            try {
+              const result = await sendReceivablePaymentReminders({
+                orgId,
+                monthIso,
+                monthLabel,
+                createdBy: profile.id,
+              });
+
+              await loadData(true);
+
+              if (result.parentAccounts === 0) {
+                showAlert({
+                  title: 'No Parent Contacts Found',
+                  message: `We found ${result.targetedStudents} learner account${result.targetedStudents === 1 ? '' : 's'} with outstanding fees, but none had linked parent or guardian contacts.`,
+                  type: 'warning',
+                });
+                return;
+              }
+
+              showAlert({
+                title: result.failedRecipients > 0 ? 'Reminders Partially Sent' : 'Reminders Sent',
+                message: [
+                  `Notified ${result.remindersSent} parent account${result.remindersSent === 1 ? '' : 's'} for ${result.targetedStudents} learner account${result.targetedStudents === 1 ? '' : 's'}.`,
+                  result.emailsSent > 0
+                    ? `${result.emailsSent} email reminder${result.emailsSent === 1 ? '' : 's'} were also sent.`
+                    : '',
+                  result.studentsWithoutContacts > 0
+                    ? `${result.studentsWithoutContacts} learner account${result.studentsWithoutContacts === 1 ? '' : 's'} had no linked parent or guardian contact.`
+                    : '',
+                  result.failedRecipients > 0
+                    ? `${result.failedRecipients} parent account${result.failedRecipients === 1 ? '' : 's'} could not be reached automatically.`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join('\n\n'),
+                type: result.failedRecipients > 0 ? 'warning' : 'success',
+              });
+            } catch (error: any) {
+              showAlert({
+                title: 'Reminder Failed',
+                message: error?.message || 'Failed to send payment reminders.',
+                type: 'error',
+              });
+            } finally {
+              setSendingReceivableReminders(false);
+            }
+          },
+        },
+      ],
+    });
+  }, [loadData, monthIso, monthLabel, orgId, profile?.id, receivables?.students?.length, receivables?.summary?.students_total_unpaid, showAlert]);
+
+  const handleArchivePayrollRecipient = React.useCallback((item: PayrollRosterItem) => {
+    if (!orgId) {
+      showAlert({
+        title: 'No School Found',
+        message: 'We could not resolve your school for this payroll action.',
+        type: 'error',
+      });
+      return;
+    }
+
+    if (item.role_type === 'principal') {
+      showAlert({
+        title: 'Principal Locked',
+        message: 'Principal payroll entries cannot be archived from this screen.',
+        type: 'warning',
+      });
+      return;
+    }
+
+    const actionLabel = item.teacher_id ? 'Archive Teacher' : 'Remove From Payroll';
+    const actionMessage = item.teacher_id
+      ? `Archive ${item.display_name} from your school? They will be hidden from payroll and active teacher lists, while payroll history stays intact.`
+      : `Remove ${item.display_name} from the active payroll roster? Existing payment history will be kept.`;
+
+    showAlert({
+      title: actionLabel,
+      message: actionMessage,
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: actionLabel,
+          style: 'destructive',
+          onPress: async () => {
+            setArchivingPayrollRecipientId(item.payroll_recipient_id);
+            try {
+              if (item.teacher_id) {
+                await removeTeacherFromSchool({
+                  teacherRecordId: item.teacher_id,
+                  organizationId: orgId,
+                  teacherUserId: item.profile_id || null,
+                  reason: 'Archived via finance payroll roster',
+                });
+              } else {
+                await PayrollService.deactivateRecipient({
+                  payrollRecipientId: item.payroll_recipient_id,
+                });
+              }
+
+              await loadData(true);
+
+              showAlert({
+                title: 'Payroll Updated',
+                message: item.teacher_id
+                  ? 'Teacher archived and removed from the active payroll roster.'
+                  : 'Payroll recipient removed from the active roster.',
+                type: 'success',
+              });
+            } catch (error: any) {
+              showAlert({
+                title: 'Archive Failed',
+                message: error?.message || 'Failed to update the payroll roster.',
+                type: 'error',
+              });
+            } finally {
+              setArchivingPayrollRecipientId(null);
+            }
+          },
+        },
+      ],
+    });
+  }, [loadData, orgId, showAlert]);
 
   const renderSectionError = (message: string | null) => {
     if (!message) return null;
@@ -630,6 +793,29 @@ export default function FinanceControlCenterScreen() {
                   <Ionicons name="document-text-outline" size={14} color={theme.text} />
                   <Text style={styles.secondaryButtonText}> Document</Text>
                 </TouchableOpacity>
+                {item.role_type === 'teacher' && (
+                  <TouchableOpacity
+                    style={[
+                      styles.secondaryButton,
+                      {
+                        borderColor: theme.error,
+                        backgroundColor: `${theme.error}12`,
+                        opacity: archivingPayrollRecipientId === item.payroll_recipient_id ? 0.8 : 1,
+                      },
+                    ]}
+                    disabled={archivingPayrollRecipientId === item.payroll_recipient_id}
+                    onPress={() => handleArchivePayrollRecipient(item)}
+                  >
+                    {archivingPayrollRecipientId === item.payroll_recipient_id ? (
+                      <EduDashSpinner size="small" color={theme.error} />
+                    ) : (
+                      <Ionicons name="person-remove-outline" size={14} color={theme.error} />
+                    )}
+                    <Text style={[styles.secondaryButtonText, { color: theme.error }]}>
+                      {archivingPayrollRecipientId === item.payroll_recipient_id ? ' Archiving...' : ' Archive'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
           );
@@ -751,6 +937,8 @@ export default function FinanceControlCenterScreen() {
               organizationId={ctrl.orgId || ''}
               theme={theme}
               styles={styles}
+              sendingReminders={sendingReceivableReminders}
+              onSendReminders={handleSendReceivableReminders}
               renderSectionError={renderSectionError}
             />
           )}

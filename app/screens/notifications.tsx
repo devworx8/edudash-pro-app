@@ -271,14 +271,42 @@ export default function NotificationsScreen() {
     const callId = extractCallId(payload);
     const callType = extractCallType(payload);
     const combinedText = `${notification.title} ${notification.body} ${dataType}`.toLowerCase();
+    const announcementId = getString(payload?.announcement_id) || getString(payload?.announcementId);
+    const isAnnouncementLike =
+      notification.type === 'announcement' ||
+      ['announcement', 'new_announcement'].includes(dataType) ||
+      Boolean(announcementId);
     const isCallLike =
       notification.type === 'call' ||
       ['call', 'incoming_call', 'missed_call', 'voice_call', 'video_call'].includes(dataType) ||
       /\b(call|calling|missed call|voice call|video call)\b/.test(combinedText);
     const isMessageLike =
-      notification.type === 'message' ||
+      (notification.type === 'message' && !isAnnouncementLike) ||
       ['message', 'chat', 'new_message'].includes(dataType) ||
-      (threadId ? true : /\bmessage\b/.test(combinedText));
+      (!isAnnouncementLike && threadId ? true : /\bmessage\b/.test(combinedText));
+
+    if (isAnnouncementLike) {
+      if (isTeacher) {
+        const feature = getString(payload?.feature) || '';
+        const navigateTo = getString(payload?.navigate_to) || getString(payload?.route) || '';
+        const looksLikeDailyRoutineShare =
+          feature === 'daily_program_share_teachers' ||
+          navigateTo === '/screens/teacher-daily-program-planner';
+        if (looksLikeDailyRoutineShare) {
+          const weekStartDate = getString(payload?.week_start_date);
+          const classId = getString(payload?.class_id);
+          navigateSafe('/screens/teacher-daily-program-planner', {
+            ...(weekStartDate ? { weekStartDate } : {}),
+            ...(classId ? { classId } : {}),
+          });
+        } else {
+          navigateSafe('/screens/teacher-message-list');
+        }
+      } else {
+        navigateSafe('/screens/parent-announcements', announcementId ? { announcementId } : undefined);
+      }
+      return;
+    }
 
     if (isCallLike) {
       navigateSafe('/screens/calls', {
@@ -352,25 +380,7 @@ export default function NotificationsScreen() {
         navigateSafe('/screens/grades');
         break;
       case 'announcement':
-        if (isTeacher) {
-          const feature = getString(payload?.feature) || '';
-          const navigateTo = getString(payload?.navigate_to) || getString(payload?.route) || '';
-          const looksLikeDailyRoutineShare =
-            feature === 'daily_program_share_teachers' ||
-            navigateTo === '/screens/teacher-daily-program-planner';
-          if (looksLikeDailyRoutineShare) {
-            const weekStartDate = getString(payload?.week_start_date);
-            const classId = getString(payload?.class_id);
-            navigateSafe('/screens/teacher-daily-program-planner', {
-              ...(weekStartDate ? { weekStartDate } : {}),
-              ...(classId ? { classId } : {}),
-            });
-          } else {
-            navigateSafe('/screens/teacher-message-list');
-          }
-        } else {
-          navigateSafe('/screens/parent-announcements');
-        }
+        navigateSafe('/screens/parent-announcements', announcementId ? { announcementId } : undefined);
         break;
       case 'attendance':
         navigateSafe('/screens/parent-progress');

@@ -28,7 +28,7 @@ import { styles } from './DashAIChat.styles';
 import { ChatMessage, ChatMessageData } from './ChatMessage';
 import { ChatInput } from './ChatInput';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DASH_WELCOME_MESSAGE, TOOL_MESSAGES } from '../../../lib/ai/constants';
+import { DASH_WELCOME_MESSAGE, DASH_SYSTEM_PROMPT, TOOL_MESSAGES } from '../../../lib/ai/constants';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import * as Clipboard from 'expo-clipboard';
 import { toast } from '@/components/ui/ToastProvider';
@@ -258,10 +258,11 @@ export default function DashAIChat({
       isStreaming: true,
     }]);
 
-    // Prepare history from previous messages (limit to last 10 for speed)
+    // Prepare history — last 20 messages keeps multi-turn tasks in context.
+    // The welcome message is display-only and should not count as assistant context.
     const history = messages
-      .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-10) // Only last 10 messages for faster response
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && m.id !== 'welcome')
+      .slice(-20)
       .map(m => ({ role: m.role, content: m.content }));
 
     try {
@@ -346,6 +347,7 @@ export default function DashAIChat({
           action: 'chat',
           message: text,
           history: history,
+          system: DASH_SYSTEM_PROMPT,
           max_tokens: 800,
         }),
       });
@@ -378,7 +380,7 @@ export default function DashAIChat({
           service_type: ocrMode ? 'image_analysis' : 'chat_message',
           payload: {
             prompt: text,
-            context: ocrMode ? getOCRPromptForTask(ocrTask) : undefined,
+            context: ocrMode ? getOCRPromptForTask(ocrTask) : DASH_SYSTEM_PROMPT,
             messages: history,
             ocr_mode: ocrMode || undefined,
             ocr_task: ocrMode ? ocrTask : undefined,
@@ -451,6 +453,7 @@ export default function DashAIChat({
           action: 'chat',
           message: text,
           history: history,
+          system: DASH_SYSTEM_PROMPT,
           stream: true, // Request streaming
           max_tokens: 1200, // Balanced: long enough for thorough answers, fast enough for voice
         }),

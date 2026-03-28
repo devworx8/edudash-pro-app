@@ -294,6 +294,66 @@ function normalizeLatexMath(text: string): string {
 }
 
 /**
+ * Convert 24-hour and 12-hour time formats to natural spoken words.
+ * Must run BEFORE normalizeMathExpressions so the colon in "18:00" is never
+ * mistaken for a decimal point, and trailing zeros are never silently dropped.
+ *
+ * Examples (SA 24-hour clock context):
+ *   "18:00" → "eighteen hundred"
+ *   "18:30" → "eighteen thirty"
+ *   "09:15" → "nine fifteen"
+ *   "09:00" → "nine o'clock"
+ *   "12:00" → "twelve o'clock"
+ */
+function normalizeTimeFormats(text: string): string {
+  return text.replace(
+    /\b(\d{1,2}):(\d{2})\b/g,
+    (_match, hourStr: string, minuteStr: string) => {
+      const hour = parseInt(hourStr, 10);
+      const minute = parseInt(minuteStr, 10);
+
+      // Spoken hour — drop leading zero for natural speech
+      const hourWords: Record<number, string> = {
+        0: 'midnight', 1: 'one', 2: 'two', 3: 'three', 4: 'four',
+        5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine',
+        10: 'ten', 11: 'eleven', 12: 'twelve', 13: 'thirteen',
+        14: 'fourteen', 15: 'fifteen', 16: 'sixteen', 17: 'seventeen',
+        18: 'eighteen', 19: 'nineteen', 20: 'twenty', 21: 'twenty one',
+        22: 'twenty two', 23: 'twenty three',
+      };
+      const spokenHour = hourWords[hour] ?? String(hour);
+
+      if (minute === 0) {
+        // 18:00 → "eighteen hundred" (24hr), 9:00 → "nine o'clock" (12hr)
+        return hour >= 13 || hour === 0 ? `${spokenHour} hundred` : `${spokenHour} o'clock`;
+      }
+
+      // Spoken minute — leading zero becomes "oh" (e.g. 09:05 → "nine oh five")
+      const minuteWords: Record<number, string> = {
+        1: 'oh one', 2: 'oh two', 3: 'oh three', 4: 'oh four', 5: 'oh five',
+        6: 'oh six', 7: 'oh seven', 8: 'oh eight', 9: 'oh nine',
+        10: 'ten', 11: 'eleven', 12: 'twelve', 13: 'thirteen', 14: 'fourteen',
+        15: 'fifteen', 16: 'sixteen', 17: 'seventeen', 18: 'eighteen',
+        19: 'nineteen', 20: 'twenty', 21: 'twenty one', 22: 'twenty two',
+        23: 'twenty three', 24: 'twenty four', 25: 'twenty five',
+        26: 'twenty six', 27: 'twenty seven', 28: 'twenty eight',
+        29: 'twenty nine', 30: 'thirty', 31: 'thirty one', 32: 'thirty two',
+        33: 'thirty three', 34: 'thirty four', 35: 'thirty five',
+        36: 'thirty six', 37: 'thirty seven', 38: 'thirty eight',
+        39: 'thirty nine', 40: 'forty', 41: 'forty one', 42: 'forty two',
+        43: 'forty three', 44: 'forty four', 45: 'forty five',
+        46: 'forty six', 47: 'forty seven', 48: 'forty eight',
+        49: 'forty nine', 50: 'fifty', 51: 'fifty one', 52: 'fifty two',
+        53: 'fifty three', 54: 'fifty four', 55: 'fifty five',
+        56: 'fifty six', 57: 'fifty seven', 58: 'fifty eight', 59: 'fifty nine',
+      };
+      const spokenMinute = minuteWords[minute] ?? String(minute);
+      return `${spokenHour} ${spokenMinute}`;
+    }
+  );
+}
+
+/**
  * Convert inline math symbols to spoken words so TTS engines don't guess.
  * Azure TTS reads "9-1" as "9 to 1" (a range) and may drop decimal points.
  * Must run AFTER currency normalization so "R 1.50" is already handled.
@@ -446,6 +506,7 @@ export function normalizeForTTS(input: string, options: TTSNormalizeOptions = {}
   text = normalizeChoiceLabels(text);
   text = normalizeEduDashBrandForms(text);
   text = normalizeSouthAfricanCurrency(text);
+  text = normalizeTimeFormats(text);
   text = normalizeLatexMath(text);
   text = normalizeMathExpressions(text, phonicsMode);
 
@@ -472,8 +533,13 @@ export function normalizeForTTS(input: string, options: TTSNormalizeOptions = {}
     .replace(/\bHint:\s*/gi, 'Hint. ')
     .replace(/^\s*User:\s*/gmi, '')
     .replace(/^\s*Assistant:\s*/gmi, '')
-    .replace(/\n+/g, '. ')
+    // Double (or more) newlines mark list-item boundaries — convert to a
+    // noticeable pause. Azure TTS treats "..." as a longer prosodic break.
+    .replace(/\n{2,}/g, ' ... ')
+    // Single newlines are sentence/phrase breaks — a period is sufficient.
+    .replace(/\n/g, '. ')
     .replace(/\s{2,}/g, ' ')
+    .replace(/\.\s*\.\s*\./g, ' ... ')  // collapse "..." runs
     .replace(/\.\s*\./g, '. ')
     .trim();
   setCachedNormalized(cacheKey, normalized);

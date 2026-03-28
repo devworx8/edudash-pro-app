@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
+import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { assertSupabase } from '@/lib/supabase';
 import { isTuitionFee } from '@/lib/utils/feeUtils';
 import { shouldExcludeStudentFeeFromMonthScopedViews } from '@/lib/utils/studentFeeMonth';
@@ -16,6 +17,8 @@ interface FinanceReceivablesTabProps {
   organizationId?: string;
   theme: any;
   styles: any;
+  sendingReminders?: boolean;
+  onSendReminders?: () => void;
   renderSectionError: (message: string | null) => React.ReactNode;
 }
 
@@ -26,6 +29,8 @@ export function FinanceReceivablesTab({
   organizationId,
   theme,
   styles,
+  sendingReminders = false,
+  onSendReminders,
   renderSectionError,
 }: FinanceReceivablesTabProps) {
   const router = useRouter();
@@ -206,13 +211,39 @@ export function FinanceReceivablesTab({
       {/* Unpaid summary */}
       {receivables && receivables.students.length > 0 && (
         <View style={[styles.calloutCard, { marginBottom: 16 }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-            <Text style={styles.calloutTitle}>Unpaid Total</Text>
-            <Text style={[styles.calloutTitle, { color: theme.error }]}>{formatCurrency(totalOutstanding)}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4, gap: 12 }}>
+                <Text style={styles.calloutTitle}>Unpaid Total</Text>
+                <Text style={[styles.calloutTitle, { color: theme.error }]}>{formatCurrency(totalOutstanding)}</Text>
+              </View>
+              <Text style={styles.calloutText}>
+                {overdueStudents.length} overdue · {pendingStudents.length} pending
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                {
+                  minWidth: 148,
+                  flexDirection: 'row',
+                  gap: 8,
+                  opacity: sendingReminders ? 0.8 : 1,
+                },
+              ]}
+              onPress={onSendReminders}
+              disabled={sendingReminders || !onSendReminders}
+            >
+              {sendingReminders ? (
+                <EduDashSpinner color="#fff" size="small" />
+              ) : (
+                <Ionicons name="mail-unread-outline" size={14} color="#fff" />
+              )}
+              <Text style={styles.primaryButtonText}>
+                {sendingReminders ? 'Sending...' : 'Send Reminders'}
+              </Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.calloutText}>
-            {overdueStudents.length} overdue · {pendingStudents.length} pending
-          </Text>
         </View>
       )}
 

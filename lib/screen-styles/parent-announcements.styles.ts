@@ -187,5 +187,57 @@ export function createAnnouncementStyles(theme: any) {
       fontSize: 14,
       color: theme.textSecondary,
     },
+    detailBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(15, 23, 42, 0.45)',
+      justifyContent: 'flex-end',
+    },
+    detailSheet: {
+      maxHeight: '82%',
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      overflow: 'hidden',
+    },
+    detailHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingVertical: 18,
+      borderBottomWidth: 1,
+      gap: 12,
+    },
+    detailHeaderTextWrap: {
+      flex: 1,
+      gap: 4,
+    },
+    detailTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      lineHeight: 28,
+    },
+    detailMeta: {
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    detailContent: {
+      paddingHorizontal: 20,
+      paddingVertical: 18,
+      gap: 14,
+    },
+    detailSchool: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    detailPriorityBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 999,
+      alignSelf: 'flex-start',
+    },
+    detailBody: {
+      fontSize: 16,
+      lineHeight: 24,
+    },
   });
 }

@@ -38,7 +38,19 @@ export async function webSearchTool(args: z.infer<typeof WebSearchArgsSchema>): 
     }
   }
 
-  return duckDuckGoSearch(args);
+  try {
+    return await duckDuckGoSearch(args);
+  } catch (err) {
+    console.error('[webSearch] DuckDuckGo fallback failed:', err);
+    return {
+      success: false,
+      query: args.query,
+      results: [],
+      count: 0,
+      provider: 'duckduckgo',
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export function filterResultsByDomains(
@@ -52,6 +64,49 @@ export function filterResultsByDomains(
     const urlStr = String(result.url || '').toLowerCase();
     return normalizedDomains.some((domain) => urlStr.includes(domain));
   });
+}
+
+function dedupeResults(results: Array<JsonRecord>): Array<JsonRecord> {
+  const seen = new Set<string>();
+  const deduped: Array<JsonRecord> = [];
+  for (const result of results) {
+    const url = String(result.url || '').trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    deduped.push(result);
+  }
+  return deduped;
+}
+
+function decodeHtmlEntities(value: string): string {
+  return String(value || '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#x2F;/g, '/')
+    .replace(/&#(\d+);/g, (_, code) => {
+      const parsed = Number(code);
+      return Number.isFinite(parsed) ? String.fromCharCode(parsed) : _;
+    });
+}
+
+function stripHtmlTags(value: string): string {
+  return decodeHtmlEntities(String(value || '').replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function decodeDuckDuckGoRedirectUrl(rawUrl: string): string {
+  try {
+    const resolved = new URL(rawUrl, 'https://duckduckgo.com');
+    const uddg = resolved.searchParams.get('uddg');
+    return uddg ? decodeURIComponent(uddg) : resolved.toString();
+  } catch {
+    return rawUrl;
+  }
 }
 
 export async function braveSearch(
@@ -92,12 +147,19 @@ export async function braveSearch(
       source: 'brave',
     }));
 
-    const filtered = filterResultsByDomains(results, args.domains);
+    const filtered = dedupeResults(filterResultsByDomains(results, args.domains));
 
     const infobox = (data as any).infobox?.results?.[0];
     const abstract = infobox?.long_desc || infobox?.description || undefined;
 
-    return { query: args.query, results: filtered, abstract, provider: 'brave' };
+    return {
+      success: true,
+      query: args.query,
+      results: filtered,
+      count: filtered.length,
+      abstract,
+      provider: 'brave',
+    };
   } catch (err) {
     throw err instanceof Error ? err : new Error(String(err));
   }
@@ -139,9 +201,13 @@ export async function bingSearch(
     source: 'bing',
   }));
 
+  const filtered = dedupeResults(filterResultsByDomains(results, args.domains));
+
   return {
+    success: true,
     query: args.query,
-    results: filterResultsByDomains(results, args.domains),
+    results: filtered,
+    count: filtered.length,
     provider: 'bing',
   };
 }
@@ -179,9 +245,13 @@ export async function googleCustomSearch(
     source: 'google',
   }));
 
+  const filtered = dedupeResults(filterResultsByDomains(results, args.domains));
+
   return {
+    success: true,
     query: args.query,
-    results: filterResultsByDomains(results, args.domains),
+    results: filtered,
+    count: filtered.length,
     provider: 'google',
   };
 }
@@ -224,12 +294,55 @@ export async function duckDuckGoSearch(args: z.infer<typeof WebSearchArgsSchema>
     }
   }
 
-  const filtered = filterResultsByDomains(results, args.domains);
+  let filtered = dedupeResults(filterResultsByDomains(results, args.domains));
+  if (filtered.length === 0) {
+    filtered = await duckDuckGoHtmlSearch(args);
+  }
 
   return {
+    success: true,
     query: args.query,
     results: filtered.slice(0, 5),
+    count: filtered.slice(0, 5).length,
     abstract: typeof data.AbstractText === 'string' ? data.AbstractText : undefined,
     provider: 'duckduckgo',
   };
+}
+
+export async function duckDuckGoHtmlSearch(
+  args: z.infer<typeof WebSearchArgsSchema>
+): Promise<Array<JsonRecord>> {
+  const query = encodeURIComponent(args.query);
+  const response = await fetch(`https://html.duckduckgo.com/html/?q=${query}`, {
+    headers: {
+      'Accept': 'text/html,application/xhtml+xml',
+      'User-Agent': 'Mozilla/5.0 (compatible; DashAI/1.0; +https://edudashpro.com)',
+    },
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    throw new Error(`DuckDuckGo HTML error ${response.status}: ${errText.slice(0, 180)}`);
+  }
+
+  const html = await response.text();
+  const matches = Array.from(
+    html.matchAll(/<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi)
+  );
+
+  const results: Array<JsonRecord> = [];
+  for (const match of matches) {
+    const href = decodeDuckDuckGoRedirectUrl(String(match[1] || '').trim());
+    const title = stripHtmlTags(String(match[2] || ''));
+    if (!href || !title) continue;
+    results.push({
+      title,
+      url: href,
+      snippet: title,
+      source: 'duckduckgo_html',
+    });
+    if (results.length >= 5) break;
+  }
+
+  return dedupeResults(filterResultsByDomains(results, args.domains));
 }

@@ -416,7 +416,7 @@ export default function PrincipalMessagesScreen() {
   }, []);
 
   const handleGroups = useCallback(() => {
-    router.push('/screens/create-group');
+    router.push('/screens/principal-groups');
   }, []);
 
   const filteredThreads = useMemo(() => {

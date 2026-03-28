@@ -249,7 +249,12 @@ export function chunkText(text: string, maxLen = 120): string[] {
 }
 
 export function summarizeServerToolResult(toolName: string, output: JsonRecord): string | null {
-  const success = Boolean(output?.success);
+  const inferredCount = Number(output?.count || 0);
+  const success = output?.success === true
+    || (Array.isArray(output?.results) && output.results.length > 0)
+    || (Array.isArray(output?.documents) && output.documents.length > 0)
+    || (Array.isArray(output?.subjects) && output.subjects.length > 0)
+    || (Number.isFinite(inferredCount) && inferredCount > 0);
   if (!success) return null;
 
   if (toolName === 'web_search') {
@@ -261,9 +266,8 @@ export function summarizeServerToolResult(toolName: string, output: JsonRecord):
     if (top.length > 0) {
       return `\n\nI checked the web and found: ${top.join(' | ')}.`;
     }
-    const count = Number(output?.count || 0);
-    if (Number.isFinite(count) && count > 0) {
-      return `\n\nI checked the web and found ${count} relevant source${count === 1 ? '' : 's'}.`;
+    if (Number.isFinite(inferredCount) && inferredCount > 0) {
+      return `\n\nI checked the web and found ${inferredCount} relevant source${inferredCount === 1 ? '' : 's'}.`;
     }
     return null;
   }
@@ -277,9 +281,8 @@ export function summarizeServerToolResult(toolName: string, output: JsonRecord):
     if (topDocs.length > 0) {
       return `\n\nI found CAPS documents: ${topDocs.join(' | ')}.`;
     }
-    const count = Number(output?.count || 0);
-    if (Number.isFinite(count) && count > 0) {
-      return `\n\nI found ${count} CAPS document${count === 1 ? '' : 's'} relevant to this request.`;
+    if (Number.isFinite(inferredCount) && inferredCount > 0) {
+      return `\n\nI found ${inferredCount} CAPS document${inferredCount === 1 ? '' : 's'} relevant to this request.`;
     }
     return null;
   }

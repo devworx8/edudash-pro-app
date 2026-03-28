@@ -6,6 +6,7 @@ import { useTypingIndicator } from '@/hooks/useTypingIndicator';
 import { logger } from '@/lib/logger';
 import type { Message } from '@/components/messaging';
 import { getDateKey, getDateSeparatorLabel } from '@/components/messaging';
+import { encodeMediaContent } from '@/lib/utils/messageContent';
 import { COMPOSER_OVERLAY_HEIGHT, COMPOSER_FLOAT_GAP, WALLPAPER_ACCENTS } from '@/lib/screen-styles/parent-message-thread.styles';
 let useThreadMessages: (id: string | null) => { data: any[]; isLoading: boolean; error: any; refetch: () => void };
 let useSendMessage: () => { mutateAsync: (args: any) => Promise<any>; isLoading: boolean };
@@ -24,6 +25,35 @@ let FileSystem: typeof import('expo-file-system/legacy') | null = null;
 let base64ToUint8Array: (b: string) => Uint8Array = () => new Uint8Array(0);
 try { FileSystem = require('expo-file-system/legacy'); } catch {}
 try { base64ToUint8Array = require('@/lib/utils/base64').base64ToUint8Array; } catch {}
+
+const inferFileExtension = (mimeType: string, fileName?: string) => {
+  const namedExtension = fileName?.split('.').pop()?.trim().toLowerCase();
+  if (namedExtension) return namedExtension;
+
+  const knownExtensions: Record<string, string> = {
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+    'application/vnd.ms-powerpoint': 'ppt',
+    'application/pdf': 'pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+    'application/msword': 'doc',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+    'application/vnd.ms-excel': 'xls',
+    'text/plain': 'txt',
+  };
+
+  if (knownExtensions[mimeType]) return knownExtensions[mimeType];
+  return mimeType.split('/')[1]?.replace(/\+.*$/, '') || 'bin';
+};
+
+const normalizeAttachmentName = (fileName: string | undefined, mimeType: string, fallbackExt: string) => {
+  if (fileName?.trim()) return fileName.trim();
+  const baseName = mimeType.startsWith('video/')
+    ? 'video'
+    : mimeType.startsWith('image/')
+      ? 'image'
+      : 'attachment';
+  return `${baseName}.${fallbackExt}`;
+};
 export type ChatRow = { type: 'date'; key: string; label: string } | { type: 'message'; key: string; msg: Message; isFirstInGroup: boolean; isLastInGroup: boolean };
 export type ThreadParticipant = {
   user_id: string;
@@ -264,17 +294,21 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
     } catch (err) { logger.error('ParentThread', 'Voice send failed:', err); toast.error('Failed to send voice message.'); }
   }, [threadId, sendMessage, scrollToLatest]);
 
-  const handleImageAttach = useCallback(async (uri: string, mimeType: string) => {
+  const handleImageAttach = useCallback(async (uri: string, mimeType: string, options?: { name?: string; size?: number; webFile?: Blob }) => {
     if (!threadId || !userId) return;
     Vibration.vibrate([0, 30, 50, 30]);
     try {
       const supabase = assertSupabase();
-      const ext = mimeType.split('/')[1]?.replace(/\+.*$/, '') || 'jpg';
+      const ext = inferFileExtension(mimeType, options?.name);
       const fileName = `${userId}/${threadId}/${Date.now()}.${ext}`;
       let fileData: Blob | Uint8Array;
       if (Platform.OS === 'web') {
-        const response = await fetch(uri);
-        fileData = await response.blob();
+        if (options?.webFile instanceof Blob) {
+          fileData = options.webFile;
+        } else {
+          const response = await fetch(uri);
+          fileData = await response.blob();
+        }
       } else if (FileSystem && uri) {
         const base64Data = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' });
         fileData = base64ToUint8Array(base64Data);
@@ -285,13 +319,23 @@ export function useParentMessageThread(threadId: string, userId: string | undefi
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from('message-attachments').getPublicUrl(fileName);
       const isVideo = mimeType.startsWith('video/');
-      const content = isVideo
-        ? `🎬 Video\n[video](${urlData.publicUrl})`
-        : `📷 Photo\n[image](${urlData.publicUrl})`;
+      const isImage = mimeType.startsWith('image/');
+      const isGif = mimeType === 'image/gif';
+      const normalizedName = normalizeAttachmentName(options?.name, mimeType, ext);
+      const content = encodeMediaContent({
+        mediaType: isGif ? 'gif' : isVideo ? 'video' : isImage ? 'image' : 'file',
+        url: urlData.publicUrl,
+        name: isImage || isVideo ? undefined : normalizedName,
+        mimeType,
+        size: options?.size,
+      });
       await sendMessage({ threadId, content });
-      toast.success(isVideo ? 'Video sent' : 'Photo sent');
+      toast.success(isVideo ? 'Video sent' : isImage ? 'Photo sent' : 'File sent');
       scrollToLatest(true, 50);
-    } catch (err) { logger.error('ParentThread', 'Image send failed:', err); toast.error('Failed to send photo.'); }
+    } catch (err) {
+      logger.error('ParentThread', 'Attachment send failed:', err);
+      toast.error(mimeType.startsWith('image/') ? 'Failed to send photo.' : 'Failed to send attachment.');
+    }
   }, [threadId, userId, sendMessage, scrollToLatest]);
 
   const handleMessageLongPress = useCallback((msg: Message) => {

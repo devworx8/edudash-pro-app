@@ -5,9 +5,9 @@
  * Shows announcements from all preschools where the parent has children enrolled.
  */
 
-import React, { useState, useMemo } from 'react';
-import { View, Text, FlatList, TouchableOpacity, RefreshControl, ScrollView } from 'react-native';
-import { Stack, router } from 'expo-router';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, TouchableOpacity, RefreshControl, ScrollView, Modal } from 'react-native';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { SubPageHeader } from '@/components/SubPageHeader';
@@ -26,7 +26,9 @@ import {
 export default function ParentAnnouncementsScreen() {
   const { theme } = useTheme();
   const { user, profile } = useAuth();
+  const params = useLocalSearchParams<{ announcementId?: string }>();
   const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null);
   const styles = useMemo(() => createAnnouncementStyles(theme), [theme]);
 
   // Resolve the correct parent ID (profile.id may differ from auth user.id)
@@ -83,6 +85,18 @@ export default function ParentAnnouncementsScreen() {
     return a.priority === priorityFilter;
   });
 
+  useEffect(() => {
+    const announcementId = typeof params.announcementId === 'string' ? params.announcementId : '';
+    if (!announcementId || announcements.length === 0 || selectedAnnouncement?.id === announcementId) {
+      return;
+    }
+
+    const matchedAnnouncement = announcements.find((announcement) => announcement.id === announcementId);
+    if (matchedAnnouncement) {
+      setSelectedAnnouncement(matchedAnnouncement);
+    }
+  }, [announcements, params.announcementId, selectedAnnouncement?.id]);
+
   const urgentCount = announcements.filter((a) => a.priority === 'urgent').length;
   const highCount = announcements.filter((a) => a.priority === 'high').length;
   const mediumCount = announcements.filter((a) => a.priority === 'medium').length;
@@ -92,11 +106,13 @@ export default function ParentAnnouncementsScreen() {
     const priorityColor = getPriorityColor(item.priority, theme);
 
     return (
-      <View
+      <TouchableOpacity
         style={[
           styles.announcementCard,
           { backgroundColor: theme.surface, borderLeftColor: priorityColor, borderLeftWidth: 4 },
         ]}
+        onPress={() => setSelectedAnnouncement(item)}
+        activeOpacity={0.85}
       >
         {/* Header */}
         <View style={styles.announcementHeader}>
@@ -121,6 +137,8 @@ export default function ParentAnnouncementsScreen() {
           {item.content}
         </Text>
 
+        <Text style={[styles.footerText, { color: theme.primary, fontWeight: '600', marginBottom: 12 }]}>Tap to open</Text>
+
         {/* Footer */}
         <View style={[styles.announcementFooter, { borderTopColor: theme.border }]}>
           <View style={styles.footerLeft}>
@@ -135,7 +153,7 @@ export default function ParentAnnouncementsScreen() {
             </Text>
           )}
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -206,10 +224,7 @@ export default function ParentAnnouncementsScreen() {
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={filteredAnnouncements}
-            renderItem={renderAnnouncement}
-            keyExtractor={(item) => item.id}
+          <ScrollView
             contentContainerStyle={styles.listContent}
             refreshControl={
               <RefreshControl
@@ -219,8 +234,59 @@ export default function ParentAnnouncementsScreen() {
               />
             }
             showsVerticalScrollIndicator={false}
-          />
+          >
+            {filteredAnnouncements.map((item) => (
+              <React.Fragment key={item.id}>
+                {renderAnnouncement({ item })}
+              </React.Fragment>
+            ))}
+          </ScrollView>
         )}
+
+        <Modal
+          visible={!!selectedAnnouncement}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSelectedAnnouncement(null)}
+        >
+          <View style={styles.detailBackdrop}>
+            <View style={[styles.detailSheet, { backgroundColor: theme.background }]}> 
+              <View style={[styles.detailHeader, { borderBottomColor: theme.border }]}> 
+                <View style={styles.detailHeaderTextWrap}>
+                  <Text style={[styles.detailTitle, { color: theme.text }]}>{selectedAnnouncement?.title}</Text>
+                  <Text style={[styles.detailMeta, { color: theme.textSecondary }]}>
+                    {selectedAnnouncement ? formatAnnouncementDate(selectedAnnouncement.published_at) : ''}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setSelectedAnnouncement(null)} hitSlop={12}>
+                  <Ionicons name="close" size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={styles.detailContent}>
+                {selectedAnnouncement?.preschool?.name ? (
+                  <Text style={[styles.detailSchool, { color: theme.textSecondary }]}>
+                    {selectedAnnouncement.preschool.name}
+                  </Text>
+                ) : null}
+
+                {selectedAnnouncement ? (
+                  <View style={[styles.detailPriorityBadge, { backgroundColor: getPriorityColor(selectedAnnouncement.priority, theme) }]}> 
+                    <Text style={styles.priorityBadgeText}>{getPriorityLabel(selectedAnnouncement.priority)}</Text>
+                  </View>
+                ) : null}
+
+                <Text style={[styles.detailBody, { color: theme.text }]}>{selectedAnnouncement?.content}</Text>
+
+                {selectedAnnouncement?.expires_at ? (
+                  <Text style={[styles.detailMeta, { color: theme.textSecondary }]}> 
+                    Expires: {new Date(selectedAnnouncement.expires_at).toLocaleDateString('en-ZA')}
+                  </Text>
+                ) : null}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </SafeAreaView>
     </View>
   );

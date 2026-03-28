@@ -29,6 +29,7 @@ interface AnnouncementModalProps {
   onClose: () => void;
   onSend: (announcement: AnnouncementData) => void;
   onOpenWeeklyMenu?: () => void;
+  initialData?: Partial<AnnouncementData> | null;
 }
 
 export interface AnnouncementData {
@@ -45,6 +46,7 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
   onClose,
   onSend,
   onOpenWeeklyMenu,
+  initialData,
 }) => {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
@@ -55,6 +57,24 @@ export const AnnouncementModal: React.FC<AnnouncementModalProps> = ({
   const [priority, setPriority] = useState<'low' | 'normal' | 'high' | 'urgent'>('normal');
   const [requiresResponse, setRequiresResponse] = useState(false);
   const [isScheduled, setIsScheduled] = useState(false);
+
+  React.useEffect(() => {
+    if (!visible) return;
+
+    const nextAudience = Array.isArray(initialData?.audience) && initialData.audience.length > 0
+      ? initialData.audience.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : ['teachers'];
+    const nextPriority = ['low', 'normal', 'high', 'urgent'].includes(String(initialData?.priority || '').toLowerCase())
+      ? initialData?.priority || 'normal'
+      : 'normal';
+
+    setTitle(String(initialData?.title || ''));
+    setMessage(String(initialData?.message || ''));
+    setSelectedAudience(nextAudience);
+    setPriority(nextPriority as 'low' | 'normal' | 'high' | 'urgent');
+    setRequiresResponse(Boolean(initialData?.requiresResponse));
+    setIsScheduled(Boolean(initialData?.scheduled));
+  }, [initialData, visible]);
 
   const audiences = [
     { id: 'teachers', label: t('announcement.teachers'), icon: 'school', color: '#4F46E5' },

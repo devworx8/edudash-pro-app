@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, TouchableOpacity, FlatList, Alert, StyleSheet, RefreshControl } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, StyleSheet, RefreshControl } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { assertSupabase } from '@/lib/supabase';
 import { VideoCallInterface } from './VideoCallInterface';
@@ -286,19 +286,13 @@ export function JoinLiveLesson({
         </Text>
       </View>
 
-      <FlatList
-        data={liveLessons}
-        keyExtractor={(item) => item.id}
-        renderItem={renderLesson}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => fetchLiveLessons(true)}
-            tintColor="#3b82f6"
-          />
-        }
-      />
+      <View style={styles.listContent}>
+        {(liveLessons ?? []).map((item, index) => (
+          <React.Fragment key={item.id}>
+            {renderLesson({ item })}
+          </React.Fragment>
+        ))}
+      </View>
 
       {/* Video Call Interface - Shows when joining a lesson */}
       {activeLesson && (

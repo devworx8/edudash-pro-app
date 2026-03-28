@@ -383,6 +383,18 @@ export class DashAIClient {
       return 'I checked assignments and added the result to the tool card below.';
     }
 
+    if (toolName === 'send_school_announcement') {
+      const audience = String(
+        outputObj?.audience ||
+        outputObj?.target_audience ||
+        ''
+      ).trim().toLowerCase();
+      if (audience) {
+        return `Your announcement has been sent to ${audience}.`;
+      }
+      return 'Your announcement has been sent successfully.';
+    }
+
     return 'I completed the requested tool action. Check the tool card below for details.';
   }
 
@@ -405,7 +417,7 @@ export class DashAIClient {
       source.includes('voice') ||
       source.includes('orb') ||
       source.includes('speech');
-    const toolIntentPattern = /\b(export[_\s-]*pdf|generate[_\s-]*(pdf|worksheet|chart)|open\s+\w+|navigate|lookup|look up|web\s*search|search\b|latest\b|today\b|weather\b|price\b|send email|email\b)\b/i;
+    const toolIntentPattern = /\b(export[_\s-]*pdf|generate[_\s-]*(pdf|worksheet|chart)|open\s+\w+|navigate|lookup|look up|web\s*search|search\b|latest\b|today\b|weather\b|price\b|send email|email\b|send\s+(a\s+)?(message|notification|reminder|notice|announcement|alert)|notify\s+parents?|remind\s+parents?|broadcast|message\s+(all\s+)?parents?)\b/i;
     const shouldUseToolsForPrompt = toolIntentPattern.test(prompt);
 
     if (explicitEnable) return true;
@@ -582,6 +594,10 @@ export class DashAIClient {
           return await this.callAIServiceStreaming(
             {
               promptText,
+              // Forward the full message history so ai-proxy has conversation context.
+              // The comment "sent separately as structured messages" was aspirational —
+              // this is where it actually gets sent.
+              messages: messagesArr.length > 0 ? messagesArr : undefined,
               context: params.context || undefined,
               model: normalizedModel,
               serviceType: params.serviceType,
@@ -782,6 +798,16 @@ export class DashAIClient {
           });
         }
 
+        const confirmedTools = Array.isArray((params.metadata as any)?.confirmed_tools)
+          ? ((params.metadata as any).confirmed_tools as unknown[])
+              .map((value) => String(value || '').trim())
+              .filter(Boolean)
+          : Array.isArray((params.metadata as any)?.confirmedTools)
+            ? ((params.metadata as any).confirmedTools as unknown[])
+                .map((value) => String(value || '').trim())
+                .filter(Boolean)
+            : [];
+
         const executionContext = {
           userId: profile?.id || '',
           role: role,
@@ -791,6 +817,7 @@ export class DashAIClient {
           isGuest: !profile?.id,
           supabaseClient: this.supabaseClient,
           trace_id: traceId,
+          confirmedTools,
           tool_plan: {
             source: 'ai-proxy.pending_tool_calls',
             continuation_pass: continuationPass,
@@ -1216,8 +1243,15 @@ export class DashAIClient {
       if (sawPendingToolCalls) {
         throw this.createStreamContinuationError(Array.from(pendingToolNames));
       }
+      if (!accumulatedText) {
+        // Empty stream with no error or tool calls — treat as a transient failure so
+        // the caller's non-streaming fallback path retries the request with full context.
+        const emptyStreamErr = new Error('Empty stream response — no content or tool calls received');
+        (emptyStreamErr as Error & { code?: string }).code = 'stream_empty_response';
+        throw emptyStreamErr;
+      }
       return {
-        content: accumulatedText || 'No content extracted from stream',
+        content: accumulatedText,
         metadata: {},
       };
     };
@@ -1257,11 +1291,19 @@ export class DashAIClient {
         });
       }
 
+      // Follow the same pattern as the non-streaming path: when a messages array is
+      // provided use it as the structured history and leave prompt undefined (avoids
+      // the duplicate-message guard in normalizeMessages); otherwise fall back to prompt.
+      const streamMessages = Array.isArray(params.messages) && params.messages.length > 0
+        ? params.messages
+        : undefined;
+
       const requestBody = JSON.stringify({
         scope: scope,
         service_type: params.serviceType || (params.ocrMode ? 'image_analysis' : 'chat_message'),
         payload: {
-          prompt: params.promptText,
+          prompt: streamMessages ? undefined : params.promptText,
+          messages: streamMessages,
           context: params.context || undefined,
           images: streamImages.length > 0 ? streamImages : undefined,
           ocr_mode: params.ocrMode || undefined,

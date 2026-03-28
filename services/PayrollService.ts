@@ -339,6 +339,29 @@ export class PayrollService {
     };
   }
 
+  static async deactivateRecipient(params: {
+    payrollRecipientId: string;
+  }): Promise<void> {
+    const supabase = assertSupabase();
+    const payrollRecipientId = String(params.payrollRecipientId || '').trim();
+    if (!payrollRecipientId) {
+      throw new Error('Payroll recipient is required');
+    }
+
+    const { error } = await supabase
+      .from('payroll_recipients')
+      .update({
+        active: false,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', payrollRecipientId);
+
+    if (error) {
+      console.error('[PayrollService] deactivateRecipient failed:', error);
+      throw new Error(error.message || 'Failed to remove payroll recipient');
+    }
+  }
+
   // ── Delegated to PayrollExtensions (WARP split) ─────────────
 
   static getPaymentHistory = PayrollExt.getPaymentHistory;

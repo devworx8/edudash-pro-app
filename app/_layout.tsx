@@ -61,6 +61,7 @@ import { AnimatedSplash } from '../components/ui/AnimatedSplash';
 import { CallProvider } from '../components/calls/CallProvider';
 import { NotificationProvider } from '../contexts/NotificationContext';
 import { GlobalUpdateBanner } from '../components/GlobalUpdateBanner';
+import { SuperAdminImpersonationBanner } from '../components/super-admin/SuperAdminImpersonationBanner';
 import { AppPreferencesProvider, useAppPreferencesSafe } from '../contexts/AppPreferencesContext';
 import { ActiveChildProvider } from '../contexts/ActiveChildContext';
 import { OrganizationBrandingProvider } from '../contexts/OrganizationBrandingContext';
@@ -228,6 +229,8 @@ function LayoutContent() {
       {Platform.OS !== 'web' && <PlayStoreUpdateChecker />}
 
       {Platform.OS !== 'web' && <DashWakeWordListener />}
+
+      <SuperAdminImpersonationBanner />
 
       {/* Main content area - leave space for bottom nav */}
       <View
