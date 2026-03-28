@@ -3,7 +3,7 @@
     "name": "EduDashPro",
     "slug": "comedudashproapp",
     "owner": "dash-ts-organization",
-    "version": "1.0.33",
+    "version": "1.0.34",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -93,7 +93,7 @@
       "blockedPermissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED"
       ],
-      "versionCode": 47,
+      "versionCode": 48,
       "intentFilters": [
         {
           "action": "VIEW",
