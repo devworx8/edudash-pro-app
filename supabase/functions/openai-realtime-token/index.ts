@@ -4,13 +4,20 @@
  * Returns an ephemeral token for OpenAI Realtime API (voice/speech).
  * Never exposes the API key client-side.
  * 
+ * Now accepts optional voice context hints to customise the session
+ * with Dash specialist instructions, role-specific personality, and
+ * optimal voice selection.
+ * 
  * Auth: Bearer token required
- * Returns: { token: string, url: string, expiresIn: number }
+ * Body (optional): { role, activeScreen, grade, subject, language, userName, schoolName }
+ * Returns: { token, url, expiresIn, instructions, voice }
  */
 
 import { serve } from 'https://deno.land/std@0.214.0/http/server.ts';
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { getCorsHeaders, handleCorsOptions } from '../_shared/cors.ts';
+import { buildVoiceSessionInstructions, selectVoice } from '../ai-proxy/specialists/voice-orchestrator.ts';
+import type { VoiceContextHint } from '../ai-proxy/specialists/voice-orchestrator.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -53,6 +60,31 @@ serve(async (req: Request) => {
       );
     }
 
+    // Parse optional voice context from request body
+    let voiceContext: VoiceContextHint | null = null;
+    try {
+      if (req.method === 'POST') {
+        const body = await req.json().catch(() => null);
+        if (body && typeof body === 'object') {
+          voiceContext = {
+            role: body.role || 'student',
+            activeScreen: body.activeScreen,
+            grade: body.grade,
+            subject: body.subject,
+            language: body.language,
+            userName: body.userName,
+            schoolName: body.schoolName,
+          };
+        }
+      }
+    } catch {
+      // No body or invalid JSON — use defaults
+    }
+
+    // Build context-aware session instructions
+    const instructions = buildVoiceSessionInstructions(voiceContext);
+    const voice = selectVoice(voiceContext);
+
     // Request an ephemeral token from OpenAI Realtime API
     const ephemeralResp = await fetch('https://api.openai.com/v1/realtime/sessions', {
       method: 'POST',
@@ -62,7 +94,10 @@ serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: 'gpt-4o-realtime-preview',
-        voice: 'alloy',
+        voice,
+        instructions,
+        input_audio_transcription: { model: 'whisper-1' },
+        turn_detection: { type: 'server_vad', threshold: 0.5, silence_duration_ms: 600 },
       }),
     });
 
@@ -78,6 +113,8 @@ serve(async (req: Request) => {
             token: OPENAI_API_KEY,
             url: 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview',
             expiresIn: 3600,
+            instructions,
+            voice,
             fallback: true,
           }),
           { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -94,6 +131,8 @@ serve(async (req: Request) => {
         token: sessionData.client_secret?.value || sessionData.token || OPENAI_API_KEY,
         url: `wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`,
         expiresIn: sessionData.expires_in || 3600,
+        instructions,
+        voice,
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );

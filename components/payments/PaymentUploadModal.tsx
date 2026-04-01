@@ -185,7 +185,8 @@ export function PaymentUploadModal({
       uri: normalizeMediaUri(asset.uri),
       name: asset.fileName || `payment_proof_${Date.now()}.jpg`,
       size: asset.fileSize,
-      type: 'image/jpeg',
+      type: asset.mimeType || 'image/jpeg',
+      webFile: (asset as any).file,
     });
   }, []);
 
@@ -262,6 +263,7 @@ export function PaymentUploadModal({
           name: asset.name,
           size: asset.size,
           type: asset.mimeType,
+          webFile: (asset as any).file,
         });
       }
     } catch (error) {
@@ -368,7 +370,8 @@ export function PaymentUploadModal({
         'proof_of_payment',
         userId,
         selectedChildId,
-        selectedFile.name
+        selectedFile.name,
+        { webFile: selectedFile.webFile }
       );
 
       if (!uploadResult.success || !uploadResult.filePath) {

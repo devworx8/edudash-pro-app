@@ -36,6 +36,18 @@ export const MAX_TOKENS_BY_SERVICE: Record<string, number> = {
   smart_reply: 256,
   message_translation: 512,
   agent_remediation: 4096,
+  // Specialist service types
+  caps_curriculum_query: 3072,
+  caps_lesson_alignment: 3072,
+  progress_report_generation: 4096,
+  progress_report_comment: 2048,
+  parent_notification: 1024,
+  parent_message_draft: 1024,
+  sms_template: 256,
+  whatsapp_message: 512,
+  quiz_generation: 3072,
+  homework_help: 2048,
+  explain_concept: 2048,
 };
 
 export const DEFAULT_MAX_TOKENS = 2048;

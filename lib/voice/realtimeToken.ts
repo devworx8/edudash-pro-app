@@ -4,6 +4,19 @@ export interface RealtimeTokenResponse {
   token: string;
   url: string;
   expiresIn?: number;
+  instructions?: string;
+  voice?: string;
+}
+
+/** Optional context to personalise the realtime voice session. */
+export interface VoiceContextHint {
+  role?: 'teacher' | 'principal' | 'parent' | 'student' | 'admin';
+  activeScreen?: string;
+  grade?: number;
+  subject?: string;
+  language?: string;
+  userName?: string;
+  schoolName?: string;
 }
 
 /**
@@ -43,11 +56,14 @@ export interface AzureSpeechTokenResponse {
 /**
  * Fetch an ephemeral realtime provider token and WS URL from Edge Function.
  * Never exposes provider secrets client-side.
+ * Pass optional context to get Dash-specialist voice instructions.
  */
-export async function getRealtimeToken(): Promise<RealtimeTokenResponse | null> {
+export async function getRealtimeToken(ctx?: VoiceContextHint): Promise<RealtimeTokenResponse | null> {
   try {
     const supabase = assertSupabase();
-    const { data, error } = await (supabase as any).functions.invoke('openai-realtime-token');
+    const { data, error } = await (supabase as any).functions.invoke('openai-realtime-token', {
+      body: ctx || {},
+    });
     if (error) {
       console.warn('[RealtimeToken] Failed to fetch token:', error);
       return null;
@@ -56,7 +72,13 @@ export async function getRealtimeToken(): Promise<RealtimeTokenResponse | null> 
       console.warn('[RealtimeToken] Missing token/url in response');
       return null;
     }
-    return { token: data.token, url: data.url, expiresIn: data.expiresIn };
+    return {
+      token: data.token,
+      url: data.url,
+      expiresIn: data.expiresIn,
+      instructions: data.instructions,
+      voice: data.voice,
+    };
   } catch (e) {
     console.warn('[RealtimeToken] invoke error:', e);
     return null;

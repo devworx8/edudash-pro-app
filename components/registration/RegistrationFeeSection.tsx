@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, Alert, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +12,20 @@ import type { PromoApplied, RegistrationFormErrors } from '@/hooks/useChildRegis
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { ImageConfirmModal } from '@/components/ui/ImageConfirmModal';
 
-function inferImageExtAndMime(uri: string): { ext: 'jpg' | 'png' | 'webp'; mime: string } {
+type PendingPopSelection = {
+  uri: string;
+  mimeType?: string | null;
+  webFile?: Blob | null;
+};
+
+function inferImageExtAndMime(uri: string, fallbackMimeType?: string | null): { ext: 'jpg' | 'png' | 'webp'; mime: string } {
+  const normalizedMime = String(fallbackMimeType || '').toLowerCase();
+  if (normalizedMime === 'image/png') return { ext: 'png', mime: 'image/png' };
+  if (normalizedMime === 'image/webp') return { ext: 'webp', mime: 'image/webp' };
+  if (normalizedMime === 'image/jpeg' || normalizedMime === 'image/jpg') {
+    return { ext: 'jpg', mime: 'image/jpeg' };
+  }
+
   const clean = (uri || '').split('?')[0].toLowerCase();
   if (clean.endsWith('.png')) return { ext: 'png', mime: 'image/png' };
   if (clean.endsWith('.webp')) return { ext: 'webp', mime: 'image/webp' };
@@ -60,7 +73,7 @@ export function RegistrationFeeSection({
 }: RegistrationFeeSectionProps) {
   const { theme } = useTheme();
   const styles = createRegistrationStyles(theme);
-  const [pendingPopUri, setPendingPopUri] = React.useState<string | null>(null);
+  const [pendingPopSelection, setPendingPopSelection] = React.useState<PendingPopSelection | null>(null);
 
   const handlePopUpload = async () => {
     try {
@@ -77,8 +90,13 @@ export function RegistrationFeeSection({
       });
       
       if (result.canceled || !result.assets?.[0]?.uri) return;
-      
-      setPendingPopUri(result.assets[0].uri);
+
+      const asset = result.assets[0];
+      setPendingPopSelection({
+        uri: asset.uri,
+        mimeType: asset.mimeType || null,
+        webFile: (asset as any).file,
+      });
     } catch (error: any) {
       console.error('POP picker error:', error);
       Alert.alert('Error', 'Failed to select image.');
@@ -89,9 +107,16 @@ export function RegistrationFeeSection({
     setUploadingPop(true);
     try {
       const supabase = assertSupabase();
-      const normalizedUri =
-        uri.startsWith('file://') || uri.startsWith('content://') ? uri : `file://${uri}`;
-      const { ext, mime } = inferImageExtAndMime(uri);
+      const pendingSelection = pendingPopSelection?.uri === uri
+        ? pendingPopSelection
+        : { uri };
+      const normalizedUri = Platform.OS === 'web'
+        ? pendingSelection.uri
+        : uri.startsWith('file://') || uri.startsWith('content://')
+          ? uri
+          : `file://${uri}`;
+      const webMimeType = pendingSelection.webFile?.type || pendingSelection.mimeType;
+      const { ext, mime } = inferImageExtAndMime(uri, webMimeType);
       const fileName = `pop_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
       const { data: sessionData } = await supabase.auth.getSession();
@@ -107,23 +132,45 @@ export function RegistrationFeeSection({
       // Bucket policy requires the first folder segment to equal auth.uid()
       const storagePath = `${authUserId}/registration/${fileName}`;
 
-      // Mobile-safe direct binary upload (avoids empty multipart body failures on Android)
-      const uploadEndpoint = `${supabaseUrl}/storage/v1/object/proof-of-payments/${storagePath}`;
-      const uploadResponse = await FileSystem.uploadAsync(uploadEndpoint, normalizedUri, {
-        httpMethod: 'POST',
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          apikey: supabaseAnonKey,
-          'content-type': mime,
-          'x-upsert': 'false',
-        },
-      });
-      if (uploadResponse.status < 200 || uploadResponse.status >= 300) {
-        const bodyPreview = (uploadResponse.body || '').slice(0, 220);
-        throw new Error(
-          `Failed to upload proof of payment (status ${uploadResponse.status})${bodyPreview ? `: ${bodyPreview}` : ''}.`,
-        );
+      if (Platform.OS === 'web') {
+        const blob =
+          pendingSelection.webFile instanceof Blob
+            ? pendingSelection.webFile
+            : await fetch(normalizedUri).then(async (response) => {
+                if (!response.ok) {
+                  throw new Error(`Failed to read selected proof of payment (${response.status} ${response.statusText}).`);
+                }
+                return response.blob();
+              });
+        const { error: uploadError } = await supabase.storage
+          .from('proof-of-payments')
+          .upload(storagePath, await blob.arrayBuffer(), {
+            contentType: blob.type || mime,
+            upsert: false,
+          });
+
+        if (uploadError) {
+          throw new Error(`Failed to upload proof of payment: ${uploadError.message}`);
+        }
+      } else {
+        // Mobile-safe direct binary upload (avoids empty multipart body failures on Android)
+        const uploadEndpoint = `${supabaseUrl}/storage/v1/object/proof-of-payments/${storagePath}`;
+        const uploadResponse = await FileSystem.uploadAsync(uploadEndpoint, normalizedUri, {
+          httpMethod: 'POST',
+          uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            apikey: supabaseAnonKey,
+            'content-type': mime,
+            'x-upsert': 'false',
+          },
+        });
+        if (uploadResponse.status < 200 || uploadResponse.status >= 300) {
+          const bodyPreview = (uploadResponse.body || '').slice(0, 220);
+          throw new Error(
+            `Failed to upload proof of payment (status ${uploadResponse.status})${bodyPreview ? `: ${bodyPreview}` : ''}.`,
+          );
+        }
       }
 
       const { data: urlData } = assertSupabase()
@@ -138,7 +185,7 @@ export function RegistrationFeeSection({
     } finally {
       setUploadingPop(false);
     }
-    setPendingPopUri(null);
+    setPendingPopSelection(null);
   };
 
   const paymentMethods = [
@@ -268,10 +315,10 @@ export function RegistrationFeeSection({
 
       {/* POP confirm modal */}
       <ImageConfirmModal
-        visible={!!pendingPopUri}
-        imageUri={pendingPopUri}
+        visible={!!pendingPopSelection?.uri}
+        imageUri={pendingPopSelection?.uri || null}
         onConfirm={confirmPopUpload}
-        onCancel={() => setPendingPopUri(null)}
+        onCancel={() => setPendingPopSelection(null)}
         title="Proof of Payment"
         confirmLabel="Upload"
         confirmIcon="cloud-upload-outline"

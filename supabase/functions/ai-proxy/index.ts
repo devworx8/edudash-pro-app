@@ -9,6 +9,8 @@ import { extractRetryAfterSeconds, mapAiProxyErrorCode } from './errorContract.t
 
 import { RequestSchema } from './schemas.ts';
 import { getBooleanFlag, getAnthropicApiKey, getOpenAIApiKey, extractBearerToken, inferJwtRole, redactMessagesForProvider, getEnv } from './auth.ts';
+import { hasSpecialistRoute, resolveSpecialistRoute } from './specialists/router.ts';
+import { executeSpecialist } from './specialists/handler.ts';
 import { normalizeServiceType, getMaxTokensForService, getModelQuotaWeight } from './config.ts';
 import { normalizeTierName, getDefaultModelIdForTierProxy, isPremiumTier } from './images/policy.ts';
 import { buildSystemPrompt } from './prompts/system.ts';
@@ -278,6 +280,99 @@ serve(async (req) => {
         hasImagen,
         corsHeaders,
       });
+    }
+
+    // ── SPECIALIST ROUTING ────────────────────────────────────────────────────
+    // Route domain-specific tasks to optimal provider + specialist prompt.
+    // Falls through to default Dash (Claude) path if no specialist or if disabled.
+    const specialistEnabled = getBooleanFlag('SPECIALIST_ROUTING_ENABLED', true);
+    if (specialistEnabled && hasSpecialistRoute(serviceType)) {
+      const specialistRoute = resolveSpecialistRoute(serviceType);
+      if (specialistRoute) {
+        try {
+          console.info('[ai-proxy] Specialist route:', {
+            service_type: serviceType,
+            specialist: specialistRoute.specialistId,
+            provider: specialistRoute.provider,
+            model: specialistRoute.model,
+          });
+
+          const userMessages = providerConversationMessages.filter(
+            (m: any) => m.role !== 'system'
+          );
+          const specialistResponse = await executeSpecialist(
+            specialistRoute,
+            userMessages,
+            mergedContext,
+            supabase,
+            requestMetadata,
+          );
+
+          // Record usage
+          try {
+            await supabase.rpc('record_ai_usage', {
+              p_user_id: userData.user.id,
+              p_feature_used: normalizeServiceType(payload.service_type),
+              p_model_used: specialistResponse.model || specialistRoute.model || specialistRoute.provider,
+              p_tokens_used: (specialistResponse.usage?.tokens_in || 0) + (specialistResponse.usage?.tokens_out || 0),
+              p_request_tokens: specialistResponse.usage?.tokens_in || 0,
+              p_response_tokens: specialistResponse.usage?.tokens_out || 0,
+              p_success: true,
+              p_metadata: {
+                scope: payload.scope,
+                organization_id: profile.organization_id || profile.preschool_id || null,
+                specialist_id: specialistResponse.specialist_id,
+                routed_provider: specialistResponse.routed_provider,
+                request_metadata: payload.metadata || {},
+              },
+            });
+            await supabase.rpc('increment_ai_usage', {
+              p_user_id: userData.user.id,
+              p_request_type: normalizeServiceType(payload.service_type),
+              p_status: 'success',
+              p_metadata: {
+                scope: payload.scope,
+                organization_id: profile.organization_id || profile.preschool_id || null,
+                specialist_id: specialistResponse.specialist_id,
+              },
+              p_weight: getModelQuotaWeight(specialistResponse.model || specialistRoute.model),
+            });
+          } catch (usageErr) {
+            console.warn('[ai-proxy] Specialist usage recording failed (non-fatal):', usageErr);
+          }
+
+          if (wantsStream) {
+            return new Response(buildSseStream(specialistResponse.content || ''), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache, no-store, must-revalidate', Connection: 'keep-alive', 'X-Accel-Buffering': 'no', 'Transfer-Encoding': 'chunked' },
+            });
+          }
+
+          return new Response(JSON.stringify({
+            success: true,
+            content: specialistResponse.content || '',
+            usage: specialistResponse.usage,
+            model: specialistResponse.model,
+            specialist_id: specialistResponse.specialist_id,
+            routed_provider: specialistResponse.routed_provider,
+            generated_images: [],
+            tool_results: [],
+            pending_tool_calls: [],
+            suggested_actions: [],
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        } catch (specialistError) {
+          // Specialist failed — fall through to default Dash path
+          const specialistMessage = specialistError instanceof Error ? specialistError.message : String(specialistError);
+          console.warn('[ai-proxy] Specialist failed, falling back to default:', {
+            specialist: specialistRoute.specialistId,
+            provider: specialistRoute.provider,
+            error: specialistMessage,
+          });
+        }
+      }
     }
 
     // ── TRUE STREAMING (Anthropic) ────────────────────────────────────────────

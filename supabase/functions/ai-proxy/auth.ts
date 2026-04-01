@@ -64,6 +64,14 @@ export function getOpenAIApiKey(): string | null {
   );
 }
 
+export function getDeepSeekApiKey(): string | null {
+  return getEnv('DEEPSEEK_API_KEY') || getEnv('SERVER_DEEPSEEK_API_KEY');
+}
+
+export function getGeminiApiKey(): string | null {
+  return getEnv('GOOGLE_GEMINI_API_KEY') || getEnv('GOOGLE_AI_API_KEY') || getEnv('GEMINI_API_KEY');
+}
+
 export function redactPII(text: string): string {
   if (!text || typeof text !== 'string') return text;
   let redacted = text;

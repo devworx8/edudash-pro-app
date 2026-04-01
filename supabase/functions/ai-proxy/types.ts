@@ -33,7 +33,7 @@ export type ProviderResponse = {
   model?: string;
   tool_results?: ToolResult[];
   generated_images?: GeneratedImage[];
-  provider?: 'openai' | 'google';
+  provider?: 'openai' | 'google' | 'deepseek' | 'gemini';
   fallback_used?: boolean;
   fallback_reason?: string;
   /** Client-side tool calls that the AI requested but the server cannot execute */

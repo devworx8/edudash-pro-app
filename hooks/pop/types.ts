@@ -78,6 +78,7 @@ export interface CreatePOPUploadData {
   tags?: string[];
   file_uri: string;
   file_name: string;
+  web_file?: Blob | null;
   
   // Payment specific
   payment_amount?: number;

@@ -27,6 +27,7 @@ export interface SelectedFile {
   name: string;
   size?: number;
   type?: string;
+  webFile?: Blob | null;
 }
 type ShowAlert = (cfg: {
   title: string;
@@ -103,7 +104,8 @@ export function usePictureOfProgress(showAlert: ShowAlert, t: (k: string) => str
       uri: normalizeMediaUri(asset.uri),
       name: asset.fileName || `progress_${Date.now()}.jpg`,
       size: asset.fileSize,
-      type: asset.type || 'image/jpeg',
+      type: asset.mimeType || 'image/jpeg',
+      webFile: (asset as any).file,
     });
   }, []);
 
@@ -220,6 +222,7 @@ export function usePictureOfProgress(showAlert: ShowAlert, t: (k: string) => str
       const data: CreatePOPUploadData = {
         student_id: params.studentId, upload_type: 'picture_of_progress',
         title: title.trim(), description: description.trim(), file_uri: selectedFile.uri, file_name: selectedFile.name,
+        web_file: selectedFile.webFile,
         subject, achievement_level: achievementLevel || undefined, learning_area: learningArea.trim() || undefined,
         tags: tags.length > 0 ? tags : undefined, is_milestone: m.detected, milestone_type: m.milestone?.name,
       };

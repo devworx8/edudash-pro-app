@@ -35,6 +35,7 @@ export interface SelectedFile {
   name: string;
   size?: number;
   type?: string;
+  webFile?: Blob | null;
 }
 
 interface Params {
@@ -89,7 +90,8 @@ export function useProofOfPayment(showAlert: ShowAlert, t: (k: string, o?: any) 
       uri: normalizeMediaUri(asset.uri),
       name: asset.fileName || `payment_receipt_${Date.now()}.jpg`,
       size: asset.fileSize,
-      type: asset.type || 'image/jpeg',
+      type: asset.mimeType || 'image/jpeg',
+      webFile: (asset as any).file,
     });
   }, []);
 
@@ -152,7 +154,13 @@ export function useProofOfPayment(showAlert: ShowAlert, t: (k: string, o?: any) 
       const result = await DocumentPicker.getDocumentAsync({ type: ['image/*', 'application/pdf'], copyToCacheDirectory: true });
       if (!result.canceled && result.assets[0]) {
         const asset = result.assets[0];
-        setSelectedFile({ uri: asset.uri, name: asset.name, size: asset.size || undefined, type: asset.mimeType || undefined });
+        setSelectedFile({
+          uri: asset.uri,
+          name: asset.name,
+          size: asset.size || undefined,
+          type: asset.mimeType || undefined,
+          webFile: (asset as any).file,
+        });
       }
     } catch {
       showAlert({ title: t('common.error'), message: 'Failed to select document' });
@@ -186,6 +194,7 @@ export function useProofOfPayment(showAlert: ShowAlert, t: (k: string, o?: any) 
         description: description.trim() || undefined,
         file_uri: selectedFile.uri,
         file_name: selectedFile.name,
+        web_file: selectedFile.webFile,
         payment_amount: parseFloat(amount),
         payment_method: paymentMethod,
         category_code: categoryCode,
