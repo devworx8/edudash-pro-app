@@ -185,7 +185,7 @@ export function PaymentUploadModal({
       uri: normalizeMediaUri(asset.uri),
       name: asset.fileName || `payment_proof_${Date.now()}.jpg`,
       size: asset.fileSize,
-      type: asset.mimeType || 'image/jpeg',
+      type: 'image/jpeg',
       webFile: (asset as any).file,
     });
   }, []);
@@ -371,7 +371,7 @@ export function PaymentUploadModal({
         userId,
         selectedChildId,
         selectedFile.name,
-        { webFile: selectedFile.webFile }
+        selectedFile.webFile
       );
 
       if (!uploadResult.success || !uploadResult.filePath) {

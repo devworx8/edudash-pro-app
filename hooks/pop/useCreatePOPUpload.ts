@@ -67,7 +67,7 @@ export const useCreatePOPUpload = () => {
         user.id,
         data.student_id,
         data.file_name,
-        { webFile: data.web_file }
+        data.web_file
       );
       
       if (!uploadResult.success || !uploadResult.filePath) {

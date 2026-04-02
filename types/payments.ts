@@ -100,7 +100,7 @@ export interface SelectedFile {
   name: string;
   size?: number;
   type?: string;
-  webFile?: Blob | null;
+  webFile?: Blob;
 }
 
 export type PaymentTabType = 'upcoming' | 'history' | 'upload';

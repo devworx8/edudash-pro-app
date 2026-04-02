@@ -59,21 +59,21 @@ export interface CompressionResult {
   fileSize: number;
 }
 
-interface WebUploadMetadata {
-  fileSize: number;
-  fileType: string;
-}
+const readWebBlob = async (fileUri: string, webFile?: Blob): Promise<Blob> => {
+  if (typeof Blob !== 'undefined' && webFile instanceof Blob) {
+    return webFile;
+  }
 
-export interface WebUploadSource {
-  webFile?: Blob | null;
-}
+  const response = await fetch(fileUri);
+  if (!response.ok) {
+    throw new Error(`Failed to read selected browser file (${response.status})`);
+  }
 
-const isWebBlob = (value: unknown): value is Blob =>
-  typeof Blob !== 'undefined' && value instanceof Blob;
+  return response.blob();
+};
 
 const inferMimeType = (fileNameOrUri?: string): string => {
-  const cleaned = (fileNameOrUri || '').split('?')[0].toLowerCase();
-  const extension = cleaned.split('.').pop()?.toLowerCase();
+  const extension = getFileExtension(fileNameOrUri);
 
   switch (extension) {
     case 'jpg':
@@ -86,50 +86,11 @@ const inferMimeType = (fileNameOrUri?: string): string => {
     case 'pdf':
       return 'application/pdf';
     default:
-      if (cleaned.includes('.pdf') || cleaned.includes('pdf')) {
+      if ((fileNameOrUri || '').toLowerCase().includes('pdf')) {
         return 'application/pdf';
       }
       return 'unknown';
   }
-};
-
-const getUploadFileType = (fileUri: string, fallbackName?: string): string => {
-  const inferred = inferMimeType(fallbackName || fileUri);
-  if (inferred !== 'unknown') {
-    return inferred;
-  }
-
-  return inferMimeType(fileUri);
-};
-
-const getWebUploadBlob = async (
-  fileUri: string,
-  options: WebUploadSource = {},
-): Promise<Blob> => {
-  if (isWebBlob(options.webFile)) {
-    return options.webFile;
-  }
-
-  const response = await fetch(fileUri);
-  if (!response.ok) {
-    throw new Error(`Failed to read selected file: ${response.status} ${response.statusText}`);
-  }
-
-  return response.blob();
-};
-
-const getWebUploadMetadata = async (
-  fileUri: string,
-  fallbackName?: string,
-  options: WebUploadSource = {},
-): Promise<WebUploadMetadata> => {
-  const blob = await getWebUploadBlob(fileUri, options);
-  const fileType = blob.type || getUploadFileType(fileUri, fallbackName);
-
-  return {
-    fileSize: blob.size || 0,
-    fileType,
-  };
 };
 
 /**
@@ -139,33 +100,29 @@ export const validatePOPFile = async (
   fileUri: string,
   uploadType: POPUploadType,
   originalFileName?: string,
-  options: WebUploadSource = {},
+  webFile?: Blob
 ): Promise<FileValidationResult> => {
   try {
+    const typeSource = originalFileName || fileUri;
+    let fileType = inferMimeType(typeSource);
     let fileSize = 0;
-    let fileType = getUploadFileType(fileUri, originalFileName);
 
     if (Platform.OS === 'web') {
-      const webMeta = await getWebUploadMetadata(fileUri, originalFileName, options);
-      fileSize = webMeta.fileSize;
-      if (webMeta.fileType) {
-        fileType = webMeta.fileType;
+      const blob = await readWebBlob(fileUri, webFile);
+      fileSize = blob.size || 0;
+      if (blob.type) {
+        fileType = blob.type.toLowerCase();
       }
     } else {
-      // Handle Android content:// URIs - they should already be copied to cache
-      // when using copyToCacheDirectory: true in DocumentPicker
-      const uri = fileUri.startsWith('content://')
-        ? fileUri
-        : fileUri.startsWith('file://')
-          ? fileUri
-          : `file://${fileUri}`;
+      const uri = normalizeMediaUri(fileUri);
 
+      // Get file info
       const fileInfo = await FileSystem.getInfoAsync(uri);
 
       if (!fileInfo.exists) {
         // For content:// URIs, we may not be able to check existence
         // but the file should be valid if DocumentPicker returned it
-        if (fileUri.startsWith('content://')) {
+        if (uri.startsWith('content://')) {
           console.log('Content URI detected, skipping existence check');
         } else {
           return {
@@ -176,25 +133,20 @@ export const validatePOPFile = async (
       }
 
       fileSize = (fileInfo as any).size || 0;
-      fileType = getUploadFileType(fileUri, originalFileName);
     }
-
-    if (!fileType || fileType === 'unknown') {
-      fileType = getUploadFileType(fileUri, originalFileName);
-    }
-
+    
     const errors: string[] = [];
-
+    
     // Check file size
     if (fileSize > FILE_VALIDATION.maxSizeBytes) {
       errors.push(`File size must be less than ${FILE_VALIDATION.maxSizeBytes / (1024 * 1024)}MB`);
     }
-
+    
     // Check file type based on upload type
-    const allowedTypes = uploadType === 'proof_of_payment'
-      ? FILE_VALIDATION.allowedDocumentTypes
+    const allowedTypes = uploadType === 'proof_of_payment' 
+      ? FILE_VALIDATION.allowedDocumentTypes 
       : FILE_VALIDATION.allowedImageTypes;
-
+    
     if (!allowedTypes.includes(fileType)) {
       if (uploadType === 'proof_of_payment') {
         errors.push('Only PDF and image files (JPG, PNG) are allowed for payment receipts');
@@ -217,9 +169,8 @@ export const validatePOPFile = async (
     console.error('File validation error:', error);
     // If validation fails but we have a file from DocumentPicker, try to continue
     // The upload will fail at the Supabase level if the file is truly invalid
-    const extension = (originalFileName || fileUri).split('.').pop()?.toLowerCase();
-    const compareName = `${fileUri} ${originalFileName || ''}`.toLowerCase();
-    const isPdf = extension === 'pdf' || compareName.includes('pdf');
+    const extension = getFileExtension(originalFileName || fileUri);
+    const isPdf = extension === 'pdf' || fileUri.toLowerCase().includes('pdf');
     const isImage = ['jpg', 'jpeg', 'png', 'webp'].includes(extension || '');
     
     if (isPdf || isImage) {
@@ -340,7 +291,7 @@ export const uploadPOPFile = async (
   userId: string,
   studentId: string,
   originalFileName: string,
-  options: WebUploadSource = {},
+  webFile?: Blob
 ): Promise<UploadResult> => {
   try {
     console.log('Starting POP file upload:', { uploadType, fileUri, originalFileName });
@@ -348,12 +299,7 @@ export const uploadPOPFile = async (
     const normalizedInputUri = await normalizeUploadUri(fileUri, originalFileName);
     
     // Validate file
-    const validation = await validatePOPFile(
-      normalizedInputUri,
-      uploadType,
-      originalFileName,
-      options
-    );
+    const validation = await validatePOPFile(normalizedInputUri, uploadType, originalFileName, webFile);
     if (!validation.isValid) {
       return {
         success: false,
@@ -379,6 +325,40 @@ export const uploadPOPFile = async (
     // Generate storage path
     const storagePath = generateStorageFilePath(uploadType, userId, studentId, originalFileName);
     const bucket = STORAGE_BUCKETS[uploadType];
+
+    if (Platform.OS === 'web') {
+      const blob = await readWebBlob(uploadUri, webFile);
+      finalFileSize = blob.size || finalFileSize;
+      if (finalFileType === 'unknown') {
+        finalFileType = blob.type?.toLowerCase() || inferMimeType(originalFileName);
+      }
+
+      const arrayBuffer = await blob.arrayBuffer();
+      const { data, error } = await supabase.storage
+        .from(bucket)
+        .upload(storagePath, arrayBuffer, {
+          contentType: finalFileType,
+          upsert: false,
+        });
+
+      if (error) {
+        console.error('Supabase storage upload error:', error);
+        return {
+          success: false,
+          error: `Upload failed: ${error.message}`,
+        };
+      }
+
+      console.log('POP file uploaded successfully:', data?.path);
+
+      return {
+        success: true,
+        filePath: data?.path || storagePath,
+        fileName: originalFileName,
+        fileSize: finalFileSize,
+        fileType: finalFileType,
+      };
+    }
 
     // Prefer direct binary upload using FileSystem for mobile stability.
     if (Platform.OS !== 'web' && supabaseUrl && supabaseAnonKey) {
@@ -431,86 +411,69 @@ export const uploadPOPFile = async (
       }
     }
 
-    let uploadBody: ArrayBuffer | Uint8Array;
-
-    if (Platform.OS === 'web') {
-      const blob = await getWebUploadBlob(uploadUri, options);
-      const resolvedFileSize = blob.size || finalFileSize;
-      if (resolvedFileSize > 0) {
-        finalFileSize = resolvedFileSize;
-      }
-
-      if (!finalFileType || finalFileType === 'unknown') {
-        finalFileType = blob.type || getUploadFileType(uploadUri, originalFileName);
-      }
-
-      uploadBody = await blob.arrayBuffer();
-    } else {
-      const fileInfo = await FileSystem.getInfoAsync(uploadUri);
-      const fallbackFileSize = (fileInfo as any)?.size || finalFileSize;
-      let base64: string;
-
-      if (fallbackFileSize > MAX_BASE64_FALLBACK_SIZE_BYTES) {
-        if (FILE_VALIDATION.allowedImageTypes.includes(finalFileType)) {
-          try {
-            // Keep large images uploadable even when binary upload path fails.
-            const compressed = await compressImageForAI(
-              uploadUri,
-              Math.floor(MAX_BASE64_FALLBACK_SIZE_BYTES * 0.9)
-            );
-            base64 = compressed.base64;
-            uploadUri = compressed.uri;
-            finalFileType = 'image/jpeg';
-            finalFileSize = Math.floor(base64.length * 0.75);
-            console.log('[upload_fallback_compressed] POP upload compressed for base64 fallback', {
-              uploadType,
-              storagePath,
-              originalSize: fallbackFileSize,
-              compressedBytes: finalFileSize,
-            });
-          } catch (compressionError) {
-            console.warn('[upload_oom_guard] POP fallback compression failed', {
-              uploadType,
-              storagePath,
-              fileSize: fallbackFileSize,
-              max: MAX_BASE64_FALLBACK_SIZE_BYTES,
-              compressionError,
-            });
-            return {
-              success: false,
-              error: `Image is still too large to upload. Try a clearer JPG/PNG under ${Math.round(FILE_VALIDATION.maxSizeBytesCompressed / (1024 * 1024))}MB.`,
-            };
-          }
-        } else {
-          console.warn('[upload_oom_guard] Blocking POP base64 fallback due file size', {
+    const fileInfo = await FileSystem.getInfoAsync(uploadUri);
+    const fallbackFileSize = (fileInfo as any)?.size || finalFileSize;
+    let base64: string;
+    if (Platform.OS !== 'web' && fallbackFileSize > MAX_BASE64_FALLBACK_SIZE_BYTES) {
+      if (FILE_VALIDATION.allowedImageTypes.includes(finalFileType)) {
+        try {
+          // Keep large images uploadable even when binary upload path fails.
+          const compressed = await compressImageForAI(
+            uploadUri,
+            Math.floor(MAX_BASE64_FALLBACK_SIZE_BYTES * 0.9)
+          );
+          base64 = compressed.base64;
+          uploadUri = compressed.uri;
+          finalFileType = 'image/jpeg';
+          finalFileSize = Math.floor(base64.length * 0.75);
+          console.log('[upload_fallback_compressed] POP upload compressed for base64 fallback', {
+            uploadType,
+            storagePath,
+            originalSize: fallbackFileSize,
+            compressedBytes: finalFileSize,
+          });
+        } catch (compressionError) {
+          console.warn('[upload_oom_guard] POP fallback compression failed', {
             uploadType,
             storagePath,
             fileSize: fallbackFileSize,
             max: MAX_BASE64_FALLBACK_SIZE_BYTES,
+            compressionError,
           });
           return {
             success: false,
-            error: `File is too large to upload right now. Try a smaller file (about ${Math.round(MAX_BASE64_FALLBACK_SIZE_BYTES / (1024 * 1024))}MB or less) or retry on a stable network.`,
+            error: `Image is still too large to upload. Try a clearer JPG/PNG under ${Math.round(FILE_VALIDATION.maxSizeBytesCompressed / (1024 * 1024))}MB.`,
           };
         }
       } else {
-        // Read file as base64 for upload
-        // Note: Using 'base64' string literal instead of FileSystem.EncodingType.Base64
-        // to avoid "Cannot read property 'Base64' of undefined" errors in some Expo versions
-        base64 = await FileSystem.readAsStringAsync(uploadUri, {
-          encoding: 'base64',
+        console.warn('[upload_oom_guard] Blocking POP base64 fallback due file size', {
+          uploadType,
+          storagePath,
+          fileSize: fallbackFileSize,
+          max: MAX_BASE64_FALLBACK_SIZE_BYTES,
         });
+        return {
+          success: false,
+          error: `File is too large to upload right now. Try a smaller file (about ${Math.round(MAX_BASE64_FALLBACK_SIZE_BYTES / (1024 * 1024))}MB or less) or retry on a stable network.`,
+        };
       }
-
-      // Convert base64 to ArrayBuffer using base64-arraybuffer
-      // Note: React Native doesn't support new Blob([Uint8Array]), so we upload ArrayBuffer directly
-      uploadBody = decode(base64);
+    } else {
+      // Read file as base64 for upload
+      // Note: Using 'base64' string literal instead of FileSystem.EncodingType.Base64
+      // to avoid "Cannot read property 'Base64' of undefined" errors in some Expo versions
+      base64 = await FileSystem.readAsStringAsync(uploadUri, {
+        encoding: 'base64',
+      });
     }
-
+    
+    // Convert base64 to ArrayBuffer using base64-arraybuffer
+    // Note: React Native doesn't support new Blob([Uint8Array]), so we upload ArrayBuffer directly
+    const arrayBuffer = decode(base64);
+    
     // Upload to Supabase Storage (Supabase accepts ArrayBuffer directly)
     const { data, error } = await supabase.storage
       .from(bucket)
-      .upload(storagePath, uploadBody, {
+      .upload(storagePath, arrayBuffer, {
         contentType: finalFileType,
         upsert: false,
       });

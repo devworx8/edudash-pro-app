@@ -35,7 +35,7 @@ export interface SelectedFile {
   name: string;
   size?: number;
   type?: string;
-  webFile?: Blob | null;
+  webFile?: Blob;
 }
 
 interface Params {
@@ -90,7 +90,7 @@ export function useProofOfPayment(showAlert: ShowAlert, t: (k: string, o?: any) 
       uri: normalizeMediaUri(asset.uri),
       name: asset.fileName || `payment_receipt_${Date.now()}.jpg`,
       size: asset.fileSize,
-      type: asset.mimeType || 'image/jpeg',
+      type: asset.type || 'image/jpeg',
       webFile: (asset as any).file,
     });
   }, []);
