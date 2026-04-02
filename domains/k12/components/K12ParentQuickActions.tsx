@@ -1,88 +1,43 @@
 /**
  * K12ParentQuickActions
  *
- * Reduced quick-action grid with the 6 most-used parent actions:
- * Homework, Messages, My Children, Payments, Attendance, Progress.
- * Ordered by parent priority.
- * Cards that need attention (e.g. payments due) get glow, pulse, and badge.
+ * K-12 parents route to a dedicated dashboard path, so this component needs
+ * to carry the hierarchy change directly instead of relying on the non-K12
+ * Mission Control section.
  */
 
-import React, { useMemo, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, Animated, StyleSheet, useWindowDimensions } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import type { ThemeColors } from '@/contexts/ThemeContext';
-import type { K12ParentActionId } from '@/lib/navigation/k12ParentActionMap';
 import { GlassCard } from '@/components/nextgen/GlassCard';
 import { styles } from './K12ParentDashboard.styles';
+import {
+  K12MissionActionCard,
+  type K12MissionAction,
+} from './K12MissionActionCard';
+import {
+  getK12MissionSectionLayout,
+  getMissionCellWidth,
+  getMissionTrackWidth,
+} from './K12MissionLayout';
+import { missionControlStyles } from './K12ParentQuickActions.styles';
 
 interface K12ParentQuickActionsProps {
-  onActionPress: (actionId: K12ParentActionId) => void;
+  onActionPress: (actionId: K12MissionAction['actionId']) => void;
   theme: ThemeColors;
   quickWinsEnabled: boolean;
   /** When true, the Payments card shows glow, pulse, and attention badge */
   paymentsNeedAttention?: boolean;
 }
 
-interface QuickAction {
+interface QuickActionGroup {
   id: string;
-  actionId: K12ParentActionId;
-  icon: string;
-  label: string;
-  color: string;
-}
-
-function AttentionCard({
-  children,
-  color,
-}: {
-  children: React.ReactNode;
-  color: string;
-}) {
-  const glowAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const glowLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1, duration: 1200, useNativeDriver: false }),
-        Animated.timing(glowAnim, { toValue: 0, duration: 1200, useNativeDriver: false }),
-      ])
-    );
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: false }),
-        Animated.timing(pulseAnim, { toValue: 0, duration: 1000, useNativeDriver: false }),
-      ])
-    );
-    glowLoop.start();
-    pulseLoop.start();
-    return () => {
-      glowLoop.stop();
-      pulseLoop.stop();
-    };
-  }, [glowAnim, pulseAnim]);
-
-  const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.5] });
-  const shadowRadius = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 24] });
-  const pulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
-
-  return (
-    <Animated.View
-      style={{
-        width: '100%',
-        shadowColor: color,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: glowOpacity,
-        shadowRadius,
-        elevation: 10,
-        transform: [{ scale: pulseScale }],
-      }}
-    >
-      {children}
-    </Animated.View>
-  );
+  eyebrow: string;
+  title: string;
+  description: string;
+  actions: K12MissionAction[];
 }
 
 export function K12ParentQuickActions({
@@ -94,95 +49,240 @@ export function K12ParentQuickActions({
   const { t } = useTranslation();
   const { width } = useWindowDimensions();
   const compactLayout = width < 360;
+  const stackFeaturedCards = width < 560;
 
-  const quickActions: QuickAction[] = useMemo(() => [
-    { id: 'homework', actionId: 'homework', icon: 'document-text', label: t('dashboard.parent.nav.homework', { defaultValue: 'Homework' }), color: '#06B6D4' },
-    { id: 'calculator', actionId: 'calculator', icon: 'calculator', label: t('dashboard.parent.nav.calculator', { defaultValue: 'Calculator' }), color: '#34D399' },
-    { id: 'messages', actionId: 'messages', icon: 'chatbubbles', label: t('navigation.messages', { defaultValue: 'Messages' }), color: '#38BDF8' },
-    { id: 'children', actionId: 'children', icon: 'people', label: t('dashboard.parent.nav.my_children', { defaultValue: 'My Children' }), color: '#7C3AED' },
-    { id: 'payments', actionId: 'payments', icon: 'card', label: t('dashboard.parent.nav.payments', { defaultValue: 'Payments' }), color: '#8B5CF6' },
-    { id: 'attendance', actionId: 'attendance', icon: 'calendar-outline', label: t('dashboard.parent.nav.attendance', { defaultValue: 'Attendance' }), color: '#F8CA59' },
-    { id: 'progress', actionId: 'progress', icon: 'ribbon', label: t('dashboard.progress', { defaultValue: 'Progress' }), color: '#10B981' },
+  const quickActions = useMemo<K12MissionAction[]>(() => [
+    {
+      id: 'homework',
+      actionId: 'homework',
+      icon: 'document-text',
+      label: t('dashboard.parent.nav.homework', { defaultValue: 'Homework' }),
+      subtitle: t('dashboard.parent.k12.homework_hint', { defaultValue: 'Assignments, due dates, and study tasks.' }),
+      color: '#06B6D4',
+    },
+    {
+      id: 'messages',
+      actionId: 'messages',
+      icon: 'chatbubbles',
+      label: t('navigation.messages', { defaultValue: 'Messages' }),
+      subtitle: t('dashboard.parent.k12.messages_hint', { defaultValue: 'Teacher updates and quick replies.' }),
+      color: '#38BDF8',
+    },
+    {
+      id: 'children',
+      actionId: 'children',
+      icon: 'people',
+      label: t('dashboard.parent.nav.my_children', { defaultValue: 'My Children' }),
+      subtitle: t('dashboard.parent.k12.children_hint', { defaultValue: 'Switch profiles and view learner details.' }),
+      color: '#7C3AED',
+    },
+    {
+      id: 'attendance',
+      actionId: 'attendance',
+      icon: 'calendar-outline',
+      label: t('dashboard.parent.nav.attendance', { defaultValue: 'Attendance' }),
+      subtitle: t('dashboard.parent.k12.attendance_hint', { defaultValue: 'Track today and weekly attendance.' }),
+      color: '#F8CA59',
+    },
+    {
+      id: 'progress',
+      actionId: 'progress',
+      icon: 'ribbon',
+      label: t('dashboard.progress', { defaultValue: 'Progress' }),
+      subtitle: t('dashboard.parent.k12.progress_hint', { defaultValue: 'Marks, trends, and school reports.' }),
+      color: '#10B981',
+    },
+    {
+      id: 'payments',
+      actionId: 'payments',
+      icon: 'card',
+      label: t('dashboard.parent.nav.payments', { defaultValue: 'Payments' }),
+      subtitle: t('dashboard.parent.k12.payments_hint', { defaultValue: 'Fees, invoices, and proof of payment.' }),
+      color: '#8B5CF6',
+    },
+    {
+      id: 'calculator',
+      actionId: 'calculator',
+      icon: 'calculator',
+      label: t('dashboard.parent.nav.calculator', { defaultValue: 'Calculator' }),
+      subtitle: t('dashboard.parent.k12.calculator_hint', { defaultValue: 'Fast maths support during homework.' }),
+      color: '#34D399',
+    },
   ], [t]);
+
+  const featuredActions = useMemo(
+    () => quickActions.filter((action) => action.id === 'homework' || action.id === 'messages'),
+    [quickActions],
+  );
+
+  const groupedSections = useMemo<QuickActionGroup[]>(
+    () => [
+      {
+        id: 'family',
+        eyebrow: t('dashboard.parent.k12.family_lane_eyebrow', { defaultValue: 'Stay synced' }),
+        title: t('dashboard.parent.k12.family_lane', { defaultValue: 'Family lane' }),
+        description: t('dashboard.parent.k12.family_lane_hint', {
+          defaultValue: 'Move between children, attendance, and progress without hunting through the menu.',
+        }),
+        actions: quickActions.filter((action) => (
+          action.id === 'children' || action.id === 'attendance' || action.id === 'progress'
+        )),
+      },
+      {
+        id: 'admin',
+        eyebrow: t('dashboard.parent.k12.admin_lane_eyebrow', { defaultValue: 'School admin' }),
+        title: t('dashboard.parent.k12.admin_lane', { defaultValue: 'Payments & tools' }),
+        description: t('dashboard.parent.k12.admin_lane_hint', {
+          defaultValue: 'Handle fees quickly and keep a calculator close during homework support.',
+        }),
+        actions: quickActions.filter((action) => action.id === 'payments' || action.id === 'calculator'),
+      },
+    ],
+    [quickActions, t],
+  );
+  const groupedSectionLayout = useMemo(
+    () => getK12MissionSectionLayout(width, groupedSections.length, groupedSections[0]?.actions.length ?? 1),
+    [groupedSections.length, groupedSections, width],
+  );
+  const groupSectionWidth = getMissionTrackWidth(groupedSectionLayout.sectionTracks);
 
   return (
     <View style={styles.section}>
-      <GlassCard style={styles.sectionHeaderCard} padding={14}>
+      <GlassCard style={[styles.sectionHeaderCard, missionControlStyles.headerCard]} padding={16}>
+        <Text
+          style={[
+            missionControlStyles.headerEyebrow,
+            { color: quickWinsEnabled ? '#93C5FD' : (theme.primary || '#38BDF8') },
+          ]}
+        >
+          {t('dashboard.parent.k12.mission_control_eyebrow', { defaultValue: 'Top priority' })}
+        </Text>
         <View style={styles.sectionHeaderRow}>
-          <Text style={[styles.sectionHeaderTitle, { color: theme.text }]}>
-            {t('dashboard.quick_actions', { defaultValue: 'Quick Actions' })}
+          <Text style={[styles.sectionHeaderTitle, missionControlStyles.headerTitle, { color: theme.text }]}>
+            {t('dashboard.parent.k12.mission_control', { defaultValue: 'Mission Control' })}
           </Text>
+          <View
+            style={[
+              missionControlStyles.headerCountPill,
+              {
+                backgroundColor: quickWinsEnabled ? 'rgba(56, 189, 248, 0.16)' : 'rgba(59, 130, 246, 0.14)',
+                borderColor: quickWinsEnabled ? 'rgba(56, 189, 248, 0.3)' : (theme.border || 'rgba(255,255,255,0.08)'),
+              },
+            ]}
+          >
+            <Ionicons
+              name="sparkles-outline"
+              size={12}
+              color={quickWinsEnabled ? '#E0F2FE' : (theme.primary || '#38BDF8')}
+            />
+            <Text
+              style={[
+                missionControlStyles.headerCountText,
+                { color: quickWinsEnabled ? '#E0F2FE' : (theme.primary || '#38BDF8') },
+              ]}
+            >
+              {quickActions.length}
+            </Text>
+          </View>
         </View>
-        <Text style={[styles.sectionHeaderHint, { color: theme.textSecondary }]}>
-          {t('dashboard.quick_actions_hint', { defaultValue: 'Quick access to homework, messages, payments, attendance, and progress.' })}
+        <Text style={[styles.sectionHeaderHint, missionControlStyles.headerHint, { color: theme.textSecondary }]}>
+          {t('dashboard.parent.k12.mission_control_hint', {
+            defaultValue: 'Start with homework and messages first, then use the grouped school tools below.',
+          })}
         </Text>
       </GlassCard>
-      <View style={styles.quickActionsGrid}>
-        {quickActions.map((action) => {
-          const needsAttention = action.id === 'payments' && paymentsNeedAttention;
-          const cardColor = action.color;
-          const isMessagesCard = action.id === 'messages';
-          const cardContent = (
-            <TouchableOpacity
-              style={[
-                styles.quickActionCard,
-                compactLayout ? styles.quickActionCardCompact : styles.quickActionCardRegular,
-                {
-                  backgroundColor: isMessagesCard ? 'rgba(17, 30, 62, 0.92)' : (quickWinsEnabled ? 'rgba(255,255,255,0.06)' : theme.surfaceVariant),
-                  borderColor: needsAttention
-                    ? cardColor + '80'
-                    : isMessagesCard
-                      ? 'rgba(56, 189, 248, 0.32)'
-                      : (quickWinsEnabled ? 'rgba(255,255,255,0.08)' : theme.border),
-                  borderWidth: needsAttention ? 1.5 : 1,
-                  shadowColor: isMessagesCard ? '#38BDF8' : '#000',
-                  shadowOpacity: isMessagesCard ? 0.18 : 0,
-                  shadowRadius: isMessagesCard ? 16 : 0,
-                  shadowOffset: { width: 0, height: 8 },
-                  elevation: isMessagesCard ? 6 : 0,
-                },
-              ]}
-              onPress={() => onActionPress(action.actionId)}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={action.label}
-            >
-              <LinearGradient
-                colors={
-                  isMessagesCard
-                    ? ['rgba(56, 189, 248, 0.32)', 'rgba(124, 58, 237, 0.22)']
-                    : [cardColor + '28', 'rgba(255,255,255,0.04)']
-                }
-                style={[
-                  styles.quickActionIcon,
-                  { backgroundColor: 'transparent', borderWidth: 1, borderColor: isMessagesCard ? 'rgba(56, 189, 248, 0.28)' : 'rgba(255,255,255,0.05)' },
-                ]}
-              >
-                <Ionicons name={action.icon as keyof typeof Ionicons.glyphMap} size={24} color={cardColor} />
-                {needsAttention && (
-                  <View style={[attentionBadgeStyles.badge, { backgroundColor: theme.warning || '#F59E0B' }]}>
-                    <Ionicons name="alert-circle" size={12} color="#fff" />
-                  </View>
-                )}
-              </LinearGradient>
-              <Text style={[styles.quickActionLabel, { color: theme.text }]} numberOfLines={2}>
-                {action.label}
-              </Text>
-            </TouchableOpacity>
-          );
+
+      <View style={[missionControlStyles.featuredRow, stackFeaturedCards && missionControlStyles.featuredRowStacked]}>
+        {featuredActions.map((action) => (
+          <View
+            key={action.id}
+            style={[
+              missionControlStyles.featuredItem,
+              { width: stackFeaturedCards ? '100%' : '48.5%' },
+            ]}
+          >
+            <K12MissionActionCard
+              action={action}
+              onPress={onActionPress}
+              theme={theme}
+              quickWinsEnabled={quickWinsEnabled}
+              compactLayout={compactLayout}
+              featured
+            />
+          </View>
+        ))}
+      </View>
+
+      <View
+        style={[
+          missionControlStyles.groupSections,
+          groupedSectionLayout.isWide && missionControlStyles.groupSectionsWide,
+        ]}
+      >
+        {groupedSections.map((section) => {
+          const sectionLayout = getK12MissionSectionLayout(width, groupedSections.length, section.actions.length);
+
           return (
             <View
-              key={action.id}
+              key={section.id}
               style={[
-                styles.quickActionItem,
-                compactLayout ? styles.quickActionItemCompact : styles.quickActionItemRegular,
+                missionControlStyles.groupSectionShell,
+                groupedSectionLayout.isWide && { width: groupSectionWidth },
               ]}
             >
-              {needsAttention ? (
-                <AttentionCard color={cardColor}>{cardContent}</AttentionCard>
-              ) : (
-                cardContent
-              )}
+              <GlassCard
+                style={[
+                  missionControlStyles.groupCard,
+                  groupedSectionLayout.isWide && missionControlStyles.groupCardWide,
+                ]}
+                padding={14}
+              >
+                <View style={missionControlStyles.groupHeader}>
+                  <View style={missionControlStyles.groupTitleBlock}>
+                    <Text style={[missionControlStyles.groupEyebrow, { color: theme.textSecondary }]}>
+                      {section.eyebrow}
+                    </Text>
+                    <Text style={[missionControlStyles.groupTitle, { color: theme.text }]}>
+                      {section.title}
+                    </Text>
+                  </View>
+                  <View
+                    style={[
+                      missionControlStyles.groupCountPill,
+                      { borderColor: theme.border || 'rgba(255,255,255,0.08)' },
+                    ]}
+                  >
+                    <Text style={[missionControlStyles.groupCountText, { color: theme.textSecondary }]}>
+                      {section.actions.length}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[missionControlStyles.groupDescription, { color: theme.textSecondary }]}>
+                  {section.description}
+                </Text>
+                <View style={missionControlStyles.groupGrid}>
+                  {section.actions.map((action, index) => (
+                    <View
+                      key={action.id}
+                      style={[
+                        missionControlStyles.groupItem,
+                        {
+                          width: getMissionCellWidth(index, section.actions.length, sectionLayout.actionTracks),
+                        },
+                      ]}
+                    >
+                      <K12MissionActionCard
+                        action={action}
+                        onPress={onActionPress}
+                        theme={theme}
+                        quickWinsEnabled={quickWinsEnabled}
+                        compactLayout={compactLayout}
+                        needsAttention={action.id === 'payments' && paymentsNeedAttention}
+                      />
+                    </View>
+                  ))}
+                </View>
+              </GlassCard>
             </View>
           );
         })}
@@ -190,18 +290,3 @@ export function K12ParentQuickActions({
     </View>
   );
 }
-
-const attentionBadgeStyles = StyleSheet.create({
-  badge: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-});

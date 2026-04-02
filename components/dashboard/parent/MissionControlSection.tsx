@@ -2,9 +2,9 @@
  * MissionControlSection — Responsive action grid with grouped sub-sections.
  *
  * Layout tiers:
- *   < 768px   →  3 cols, sections stacked vertically  (mobile)
- *   768–1023px →  4 cols, sections in 2-column pairs   (tablet)
- *   ≥ 1024px  →  5 cols, sections in 2-column pairs   (desktop)
+ *   < 768px    → sections stacked vertically, 3 cols each
+ *   768–1023px → Missions gets a primary 4-col row, secondary groups pair below
+ *   ≥ 1024px   → Missions stays primary, secondary groups use roomier 3-col grids
  *
  * Uses percentage-based cell widths + inner padding (negative-margin grid
  * pattern) so layout is always correct regardless of ancestor padding —
@@ -16,6 +16,12 @@ import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { MetricCard } from '../shared';
+import {
+  getMissionControlLayout,
+  splitMissionControlSections,
+  splitSecondaryMissionSections,
+  splitMissionSectionActions,
+} from './missionControlLayout';
 
 export interface QuickAction {
   id: string;
@@ -31,6 +37,8 @@ export interface ActionSection {
   id: string;
   title: string;
   icon: string;
+  description?: string;
+  eyebrow?: string;
 }
 
 interface MissionControlSectionProps {
@@ -38,18 +46,6 @@ interface MissionControlSectionProps {
   groupedActions: Record<string, QuickAction[]>;
   onAction: (actionId: string) => void;
   onUpgrade: () => void;
-}
-
-// ─── Layout helpers ───────────────────────────────────────────────────────────
-
-function getLayout(windowWidth: number): {
-  cols: number;
-  innerPad: number;
-  isWide: boolean;
-} {
-  if (windowWidth >= 1024) return { cols: 5, innerPad: 5, isWide: true };
-  if (windowWidth >= 768)  return { cols: 4, innerPad: 5, isWide: true };
-  return { cols: 3, innerPad: 4, isWide: false };
 }
 
 function getCellWidth(index: number, total: number, cols: number): `${number}%` {
@@ -71,63 +67,177 @@ interface SectionGridProps {
   actions: QuickAction[];
   cols: number;
   innerPad: number;
+  variant?: 'primary' | 'secondary';
   onAction: (id: string) => void;
   onUpgrade: () => void;
 }
 
 const SectionGrid: React.FC<SectionGridProps> = ({
-  section, actions, cols, innerPad, onAction, onUpgrade,
+  section, actions, cols, innerPad, variant = 'secondary', onAction, onUpgrade,
 }) => {
   const { theme } = useTheme();
+  const isPrimary = variant === 'primary';
+  const { featuredActions, remainingActions } = isPrimary
+    ? splitMissionSectionActions(actions)
+    : { featuredActions: [] as QuickAction[], remainingActions: actions };
+  const remainderLabel = section.title.trim();
+
   if (actions.length === 0) return null;
 
   return (
-    <View style={styles.actionSection}>
-      {/* Section header */}
+    <View
+      style={[
+        styles.actionSection,
+        isPrimary ? styles.primaryActionSection : styles.secondaryActionSection,
+        {
+          backgroundColor: isPrimary
+            ? theme.surface ?? theme.cardBackground ?? 'rgba(255,255,255,0.04)'
+            : theme.surfaceVariant ?? theme.surface ?? 'rgba(255,255,255,0.03)',
+          borderColor: isPrimary
+            ? `${theme.primary ?? '#0EA5E9'}33`
+            : theme.borderLight ?? 'rgba(255,255,255,0.08)',
+          shadowColor: isPrimary ? theme.shadow ?? '#000000' : 'transparent',
+        },
+      ]}
+    >
       <View style={styles.sectionHeader}>
-        <View style={[styles.sectionIconBadge, {
-          backgroundColor: theme.surfaceVariant ?? 'rgba(255,255,255,0.06)',
-          borderColor: theme.borderLight ?? 'rgba(255,255,255,0.08)',
-        }]}>
-          <Ionicons name={section.icon as any} size={12} color={theme.textSecondary} />
-        </View>
-        <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>
-          {section.title}
-        </Text>
-      </View>
-
-      {/* Card grid — negative margin neutralises the outer cell padding */}
-      <View style={[styles.grid, { marginHorizontal: -innerPad }]}>
-        {actions.map((action, index) => (
-          <View
-            key={action.id}
-            style={[
-              styles.gridCell,
-              {
-                width: getCellWidth(index, actions.length, cols),
-                paddingHorizontal: innerPad,
-                paddingBottom: innerPad * 2,
-              },
-              action.disabled && styles.disabled,
-            ]}
-          >
-            <MetricCard
-              title={action.disabled ? `${action.title} 🔒` : action.title}
-              subtitle={action.subtitle}
-              value=""
-              icon={action.icon}
-              color={action.disabled ? theme.textSecondary : action.color}
-              size="small"
-              // Pass a truthy sentinel so MetricCard uses width:'100%' inside its cell.
-              // The actual width is owned by gridCell above.
-              cardWidth={1}
-              glow={Boolean(action.glow)}
-              attentionBadge={Boolean(action.glow)}
-              onPress={() => action.disabled ? onUpgrade() : onAction(action.id)}
+        <View style={styles.sectionHeaderMain}>
+          <View style={[styles.sectionIconBadge, {
+            width: isPrimary ? 28 : 22,
+            height: isPrimary ? 28 : 22,
+            borderRadius: isPrimary ? 9 : 6,
+            backgroundColor: isPrimary
+              ? `${theme.primary ?? '#0EA5E9'}18`
+              : theme.surfaceVariant ?? 'rgba(255,255,255,0.06)',
+            borderColor: isPrimary
+              ? `${theme.primary ?? '#0EA5E9'}30`
+              : theme.borderLight ?? 'rgba(255,255,255,0.08)',
+          }]}>
+            <Ionicons
+              name={section.icon as any}
+              size={isPrimary ? 14 : 12}
+              color={isPrimary ? theme.primary : theme.textSecondary}
             />
           </View>
-        ))}
+          <View style={styles.sectionTitleBlock}>
+            {section.eyebrow ? (
+              <Text style={[styles.sectionEyebrow, { color: isPrimary ? theme.primary : theme.textSecondary }]}>
+                {section.eyebrow}
+              </Text>
+            ) : null}
+            <Text style={[
+              styles.sectionTitle,
+              isPrimary && styles.primarySectionTitle,
+              { color: isPrimary ? theme.text : theme.textSecondary },
+            ]}>
+              {section.title}
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.sectionCountPill, {
+          backgroundColor: isPrimary
+            ? `${theme.primary ?? '#0EA5E9'}16`
+            : theme.surfaceVariant ?? 'rgba(255,255,255,0.06)',
+          borderColor: isPrimary
+            ? `${theme.primary ?? '#0EA5E9'}30`
+            : theme.borderLight ?? 'rgba(255,255,255,0.08)',
+        }]}>
+          <Ionicons
+            name="grid-outline"
+            size={11}
+            color={isPrimary ? theme.primary : theme.textSecondary}
+          />
+          <Text style={[styles.sectionCountText, { color: isPrimary ? theme.primary : theme.textSecondary }]}>
+            {actions.length}
+          </Text>
+        </View>
       </View>
+
+      {section.description ? (
+        <Text style={[
+          styles.sectionDescription,
+          isPrimary && styles.primarySectionDescription,
+          { color: theme.textSecondary },
+        ]}>
+          {section.description}
+        </Text>
+      ) : null}
+
+      {featuredActions.length > 0 ? (
+        <View style={[styles.featuredGrid, { marginHorizontal: -innerPad }]}>
+          {featuredActions.map((action) => (
+            <View
+              key={action.id}
+              style={[
+                styles.featuredCell,
+                {
+                  width: featuredActions.length === 1 ? '100%' : '50%',
+                  paddingHorizontal: innerPad,
+                  paddingBottom: innerPad * 2,
+                },
+                action.disabled && styles.disabled,
+              ]}
+            >
+              <MetricCard
+                title={action.disabled ? `${action.title} 🔒` : action.title}
+                subtitle={action.subtitle}
+                value=""
+                icon={action.icon}
+                color={action.disabled ? theme.textSecondary : action.color}
+                size="medium"
+                cardWidth={1}
+                glow={Boolean(action.glow)}
+                attentionBadge={Boolean(action.glow)}
+                onPress={() => action.disabled ? onUpgrade() : onAction(action.id)}
+              />
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {isPrimary && featuredActions.length > 0 && remainingActions.length > 0 ? (
+        <View style={styles.primaryDivider}>
+          <View style={[styles.primaryDividerLine, { backgroundColor: theme.borderLight ?? 'rgba(255,255,255,0.08)' }]} />
+          <Text style={[styles.primaryDividerText, { color: theme.textSecondary }]}>
+            {remainderLabel}
+          </Text>
+          <View style={[styles.primaryDividerLine, { backgroundColor: theme.borderLight ?? 'rgba(255,255,255,0.08)' }]} />
+        </View>
+      ) : null}
+
+      {remainingActions.length > 0 ? (
+        <View style={[styles.grid, styles.sectionGrid, { marginHorizontal: -innerPad }]}>
+          {remainingActions.map((action, index) => (
+            <View
+              key={action.id}
+              style={[
+                styles.gridCell,
+                {
+                  width: getCellWidth(index, remainingActions.length, cols),
+                  paddingHorizontal: innerPad,
+                  paddingBottom: innerPad * 2,
+                },
+                action.disabled && styles.disabled,
+              ]}
+            >
+              <MetricCard
+                title={action.disabled ? `${action.title} 🔒` : action.title}
+                subtitle={action.subtitle}
+                value=""
+                icon={action.icon}
+                color={action.disabled ? theme.textSecondary : action.color}
+                size="small"
+                // Pass a truthy sentinel so MetricCard uses width:'100%' inside its cell.
+                // The actual width is owned by gridCell above.
+                cardWidth={1}
+                glow={Boolean(action.glow)}
+                attentionBadge={Boolean(action.glow)}
+                onPress={() => action.disabled ? onUpgrade() : onAction(action.id)}
+              />
+            </View>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -137,63 +247,118 @@ const SectionGrid: React.FC<SectionGridProps> = ({
 export const MissionControlSection: React.FC<MissionControlSectionProps> = ({
   sections, groupedActions, onAction, onUpgrade,
 }) => {
-  const { theme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
-  const { cols, innerPad, isWide } = useMemo(() => getLayout(windowWidth), [windowWidth]);
+  const {
+    primaryCols,
+    secondaryRowCols,
+    secondarySectionsPerRow,
+    innerPad,
+    isWide,
+  } = useMemo(
+    () => getMissionControlLayout(windowWidth),
+    [windowWidth],
+  );
 
   const activeSections = useMemo(
     () => sections.filter((s) => (groupedActions[s.id] ?? []).length > 0),
     [sections, groupedActions],
   );
 
+  const { primarySection, secondarySections } = useMemo(
+    () => splitMissionControlSections(activeSections),
+    [activeSections],
+  );
+  const { leadSection, trailingSections } = useMemo(
+    () => splitSecondaryMissionSections(secondarySections),
+    [secondarySections],
+  );
+  const stackedSections = useMemo(
+    () => primarySection ? [primarySection, ...secondarySections] : secondarySections,
+    [primarySection, secondarySections],
+  );
+  const trailingSectionsPerRow = useMemo(
+    () => leadSection ? Math.min(2, secondarySectionsPerRow) : secondarySectionsPerRow,
+    [leadSection, secondarySectionsPerRow],
+  );
+  const trailingRows = useMemo(
+    () => Array.from(
+      { length: Math.ceil(trailingSections.length / trailingSectionsPerRow) },
+      (_, rowIdx) => trailingSections.slice(
+        rowIdx * trailingSectionsPerRow,
+        (rowIdx + 1) * trailingSectionsPerRow,
+      ),
+    ),
+    [trailingSections, trailingSectionsPerRow],
+  );
+
   return (
     <View style={styles.root}>
       {isWide ? (
-        // ── Tablet / Desktop: 2-column section pairs ─────────────────────────
+        // ── Tablet / Desktop: primary Missions lane gets its own hierarchy ───
         <>
-          {Array.from({ length: Math.ceil(activeSections.length / 2) }, (_, rowIdx) => {
-            const left  = activeSections[rowIdx * 2];
-            const right = activeSections[rowIdx * 2 + 1];
+          {primarySection ? (
+            <View style={styles.primarySection}>
+              <SectionGrid
+                section={primarySection}
+                actions={groupedActions[primarySection.id] ?? []}
+                cols={primaryCols}
+                innerPad={innerPad}
+                variant="primary"
+                onAction={onAction}
+                onUpgrade={onUpgrade}
+              />
+            </View>
+          ) : null}
+
+          {leadSection ? (
+            <View style={styles.secondaryLeadRow}>
+              <SectionGrid
+                section={leadSection}
+                actions={groupedActions[leadSection.id] ?? []}
+                cols={secondaryRowCols}
+                innerPad={innerPad}
+                variant="secondary"
+                onAction={onAction}
+                onUpgrade={onUpgrade}
+              />
+            </View>
+          ) : null}
+
+          {trailingRows.map((row, rowIdx) => {
+            if (row.length === 0) return null;
+
             return (
-              <View key={left.id} style={styles.wideRow}>
-                <View style={styles.wideCell}>
-                  <SectionGrid
-                    section={left}
-                    actions={groupedActions[left.id] ?? []}
-                    cols={cols}
-                    innerPad={innerPad}
-                    onAction={onAction}
-                    onUpgrade={onUpgrade}
-                  />
-                </View>
-                {right && (
-                  <>
-                    <View style={[styles.wideDivider, { backgroundColor: theme.borderLight ?? 'rgba(255,255,255,0.08)' }]} />
-                    <View style={styles.wideCell}>
-                      <SectionGrid
-                        section={right}
-                        actions={groupedActions[right.id] ?? []}
-                        cols={cols}
-                        innerPad={innerPad}
-                        onAction={onAction}
-                        onUpgrade={onUpgrade}
-                      />
-                    </View>
-                  </>
-                )}
+              <View key={`${row[0]?.id ?? 'secondary'}-${rowIdx}`} style={styles.wideRow}>
+                {row.map((section) => (
+                  <View
+                    key={section.id}
+                    style={[styles.wideCell, row.length === 1 && styles.wideCellSolo]}
+                  >
+                    <SectionGrid
+                      section={section}
+                      actions={groupedActions[section.id] ?? []}
+                      cols={secondaryRowCols}
+                      innerPad={innerPad}
+                      variant="secondary"
+                      onAction={onAction}
+                      onUpgrade={onUpgrade}
+                    />
+                  </View>
+                ))}
               </View>
             );
           })}
         </>
       ) : (
         // ── Mobile: sections stacked vertically ──────────────────────────────
-        activeSections.map((section) => (
+        stackedSections.map((section) => (
           <SectionGrid
             key={section.id}
             section={section}
             actions={groupedActions[section.id] ?? []}
-            cols={cols}
+            cols={primaryCols}
             innerPad={innerPad}
+            variant={section.id === primarySection?.id ? 'primary' : 'secondary'}
             onAction={onAction}
             onUpgrade={onUpgrade}
           />
@@ -211,13 +376,50 @@ const styles = StyleSheet.create({
   },
   // Section
   actionSection: {
-    marginBottom: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+  },
+  primaryActionSection: {
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  secondaryActionSection: {
+    borderRadius: 16,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    marginBottom: 10,
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 6,
+  },
+  sectionHeaderMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 9,
+  },
+  sectionCountPill: {
+    minWidth: 34,
+    height: 26,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 4,
+  },
+  sectionCountText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   sectionIconBadge: {
     width: 22,
@@ -227,16 +429,69 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
   },
+  sectionTitleBlock: {
+    flex: 1,
+  },
+  sectionEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
   sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.8,
   },
+  primarySectionTitle: {
+    fontSize: 14,
+    letterSpacing: 0.2,
+  },
+  sectionDescription: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 10,
+  },
+  primarySectionDescription: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
   // Percentage grid
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+  },
+  featuredGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 2,
+  },
+  primaryDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  primaryDividerLine: {
+    flex: 1,
+    height: 1,
+    opacity: 0.8,
+  },
+  primaryDividerText: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  featuredCell: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  sectionGrid: {
+    marginTop: 2,
   },
   gridCell: {
     // width set inline as percentage
@@ -247,19 +502,23 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   // Wide layout (tablet / desktop)
+  primarySection: {
+    marginBottom: 10,
+  },
+  secondaryLeadRow: {
+    marginBottom: 2,
+  },
   wideRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 8,
+    gap: 12,
   },
   wideCell: {
     flex: 1,
   },
-  wideDivider: {
-    width: 1,
-    alignSelf: 'stretch',
-    marginHorizontal: 12,
-    opacity: 0.35,
+  wideCellSolo: {
+    flex: 0,
+    width: '100%',
   },
 });
 

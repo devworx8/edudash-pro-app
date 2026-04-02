@@ -336,6 +336,7 @@ export default function ParentPaymentsScreen() {
                   setSelectedFeeReference('');
                   setSelectedPaymentPurpose('');
                   setSelectedFeeId(undefined);
+                  setSelectedFeeDueDate(undefined);
                   setShowUploadModal(true);
                 }}
                 theme={theme}

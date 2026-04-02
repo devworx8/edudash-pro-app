@@ -25,6 +25,8 @@ export type ActionSection = {
   id: string;
   title: string;
   icon: string;
+  description?: string;
+  eyebrow?: string;
 };
 interface UseParentQuickActionsOptions {
   resolvedSchoolType: ResolvedSchoolType;
@@ -136,10 +138,39 @@ export function useParentQuickActions(options: UseParentQuickActionsOptions) {
   // ─── Sub-section headings (Mission Control groups) ─────
   const missionControlSections = useMemo<ActionSection[]>(
     () => [
-      { id: 'learning', title: t('parent.actions_missions', { defaultValue: 'Missions' }), icon: 'book-outline' },
-      { id: 'communication', title: t('parent.actions_comms', { defaultValue: 'Comms' }), icon: 'chatbubbles-outline' },
-      { id: 'payments', title: t('parent.actions_payments', { defaultValue: 'Payments' }), icon: 'card-outline' },
-      { id: 'ai', title: t('parent.actions_ai', { defaultValue: 'Dash Intelligence' }), icon: 'sparkles-outline' },
+      {
+        id: 'learning',
+        title: t('parent.actions_missions', { defaultValue: 'Missions' }),
+        icon: 'book-outline',
+        eyebrow: t('parent.actions_primary_lane', { defaultValue: 'Primary lane' }),
+        description: t('parent.actions_missions_description', {
+          defaultValue: 'Homework, routines, lessons, and the day-to-day actions parents use most.',
+        }),
+      },
+      {
+        id: 'communication',
+        title: t('parent.actions_comms', { defaultValue: 'Comms' }),
+        icon: 'chatbubbles-outline',
+        description: t('parent.actions_comms_description', {
+          defaultValue: 'Messages, calls, events, and live school updates.',
+        }),
+      },
+      {
+        id: 'payments',
+        title: t('parent.actions_payments', { defaultValue: 'Payments' }),
+        icon: 'card-outline',
+        description: t('parent.actions_payments_description', {
+          defaultValue: 'Fees, invoices, proof of payment, and plan changes.',
+        }),
+      },
+      {
+        id: 'ai',
+        title: t('parent.actions_ai', { defaultValue: 'Dash Intelligence' }),
+        icon: 'sparkles-outline',
+        description: t('parent.actions_ai_description', {
+          defaultValue: 'Dash tutor tools, smart helpers, and study support.',
+        }),
+      },
     ],
     [t],
   );

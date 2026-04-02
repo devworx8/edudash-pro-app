@@ -71,6 +71,30 @@ const parsePaymentAmountInput = (value: string): number => {
   return Number.isFinite(amount) ? amount : Number.NaN;
 };
 
+const padDatePart = (value: number): string => String(value).padStart(2, '0');
+
+const formatDateInputValue = (value: Date): string =>
+  `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}-${padDatePart(value.getDate())}`;
+
+const formatMonthInputValue = (value: Date): string =>
+  `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}`;
+
+const parseDateInputValue = (value: string): Date | null => {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const parseMonthInputValue = (value: string): Date | null => {
+  const [year, month] = value.split('-').map(Number);
+  if (!year || !month) return null;
+
+  const parsed = new Date(year, month - 1, 1);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const mapPopUploadInsertError = (error: unknown): string => {
   const message = String((error as any)?.message || '');
   const details = String((error as any)?.details || '');
@@ -138,6 +162,7 @@ export function PaymentUploadModal({
   const styles = createStyles(theme, insets);
   const today = new Date();
   const paymentDateLabel = paymentDate.toLocaleDateString('en-ZA');
+  const paymentDateInputValue = formatDateInputValue(paymentDate);
   const lowerPurpose = (paymentPurpose || '').toLowerCase();
   const isUniformPayment = (feeId || '').startsWith('uniform:') || lowerPurpose.includes('uniform');
   const autoCategoryCode = React.useMemo<FeeCategoryCode>(() => {
@@ -153,6 +178,7 @@ export function PaymentUploadModal({
   const paymentForLabel = paymentForMonth
     ? paymentForMonth.toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
     : null;
+  const paymentForInputValue = paymentForMonth ? formatMonthInputValue(paymentForMonth) : '';
   const paymentAmountValue = parsePaymentAmountInput(paymentAmount);
   const hasValidAmount = Number.isFinite(paymentAmountValue) && paymentAmountValue > 0;
   const hasSuggestedPaymentForMonth = Boolean(paymentForDate);
@@ -495,6 +521,27 @@ export function PaymentUploadModal({
     onClose();
   };
 
+  const handleWebPaymentDateChange = (value: string) => {
+    const nextDate = parseDateInputValue(value);
+    if (!nextDate) return;
+
+    setPaymentDate(nextDate);
+    if (isUniformPayment) {
+      setPaymentForMonth(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    }
+  };
+
+  const handleWebPaymentForMonthChange = (value: string) => {
+    if (!value) {
+      setPaymentForMonth(null);
+      return;
+    }
+
+    const nextMonth = parseMonthInputValue(value);
+    if (!nextMonth) return;
+    setPaymentForMonth(nextMonth);
+  };
+
   return (
     <Modal
       visible={visible}
@@ -560,28 +607,71 @@ export function PaymentUploadModal({
           </Text>
 
           <Text style={styles.modalLabel}>Payment Date *</Text>
-          <TouchableOpacity
-            style={styles.datePickerButton}
-            onPress={() => setShowPaymentDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={20} color={theme.primary} />
-            <Text style={styles.datePickerText}>{paymentDateLabel}</Text>
-            <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
-          </TouchableOpacity>
+          {Platform.OS === 'web' ? (
+            <View style={styles.datePickerButton}>
+              <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+              <input
+                aria-label="Payment date"
+                type="date"
+                max={formatDateInputValue(today)}
+                value={paymentDateInputValue}
+                onChange={(event: any) => handleWebPaymentDateChange(event.target.value)}
+                style={{
+                  flex: 1,
+                  background: 'transparent',
+                  border: 'none',
+                  color: theme.text,
+                  fontSize: 16,
+                  outline: 'none',
+                  minWidth: 0,
+                } as any}
+              />
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.datePickerButton}
+              onPress={() => setShowPaymentDatePicker(true)}
+            >
+              <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+              <Text style={styles.datePickerText}>{paymentDateLabel}</Text>
+              <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
+            </TouchableOpacity>
+          )}
 
           {showPaymentForField ? (
             <>
               <Text style={styles.modalLabel}>Payment For Month *</Text>
-              <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowPaymentForPicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={20} color={theme.primary} />
-                <Text style={styles.datePickerText}>
-                  {paymentForLabel || 'Select month'}
-                </Text>
-                <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
-              </TouchableOpacity>
+              {Platform.OS === 'web' ? (
+                <View style={styles.datePickerButton}>
+                  <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+                  <input
+                    aria-label="Payment month"
+                    type="month"
+                    value={paymentForInputValue}
+                    onChange={(event: any) => handleWebPaymentForMonthChange(event.target.value)}
+                    style={{
+                      flex: 1,
+                      background: 'transparent',
+                      border: 'none',
+                      color: theme.text,
+                      fontSize: 16,
+                      outline: 'none',
+                      minWidth: 0,
+                    } as any}
+                  />
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowPaymentForPicker(true)}
+                >
+                  <Ionicons name="calendar-outline" size={20} color={theme.primary} />
+                  <Text style={styles.datePickerText}>
+                    {paymentForLabel || 'Select month'}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color={theme.textSecondary} />
+                </TouchableOpacity>
+              )}
               <Text style={styles.referenceHint}>
                 {hasSuggestedPaymentForMonth
                   ? 'Prefilled from the fee due date. Tap to adjust if needed.'
@@ -644,46 +734,80 @@ export function PaymentUploadModal({
           </View>
         </ScrollView>
 
-        {showPaymentForField && showPaymentForPicker && (
-          <DateTimePicker
-            value={paymentForMonth || new Date()}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            onChange={(event, selectedDate) => {
-              if (Platform.OS !== 'ios') setShowPaymentForPicker(false);
-              if (event.type === 'dismissed') return;
-              if (selectedDate) {
-                setPaymentForMonth(
-                  new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
-                );
-              }
-              if (Platform.OS === 'ios') setShowPaymentForPicker(false);
-            }}
-          />
-        )}
-        {showPaymentDatePicker && (
-          <DateTimePicker
-            value={paymentDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-            maximumDate={new Date()}
-            onChange={(event, selectedDate) => {
-              if (Platform.OS !== 'ios') setShowPaymentDatePicker(false);
-              if (event.type === 'dismissed') return;
-              if (selectedDate) {
-                const normalizedDate = new Date(
-                  selectedDate.getFullYear(),
-                  selectedDate.getMonth(),
-                  selectedDate.getDate(),
-                );
-                setPaymentDate(normalizedDate);
-                if (isUniformPayment) {
-                  setPaymentForMonth(new Date(normalizedDate.getFullYear(), normalizedDate.getMonth(), 1));
+        {Platform.OS !== 'web' && showPaymentForField && showPaymentForPicker && (
+          <View style={Platform.OS === 'ios' ? styles.iosPickerSheet : undefined}>
+            <DateTimePicker
+              value={paymentForMonth || new Date()}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              onChange={(event, selectedDate) => {
+                if (Platform.OS === 'android') {
+                  setShowPaymentForPicker(false);
+                  if (event.type === 'dismissed' || !selectedDate) return;
+                  setPaymentForMonth(
+                    new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+                  );
+                  return;
                 }
-              }
-              if (Platform.OS === 'ios') setShowPaymentDatePicker(false);
-            }}
-          />
+
+                if (selectedDate) {
+                  setPaymentForMonth(
+                    new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+                  );
+                }
+              }}
+            />
+            {Platform.OS === 'ios' ? (
+              <View style={styles.iosPickerActions}>
+                <TouchableOpacity
+                  style={styles.iosPickerButton}
+                  onPress={() => setShowPaymentForPicker(false)}
+                >
+                  <Text style={styles.iosPickerButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        )}
+        {Platform.OS !== 'web' && showPaymentDatePicker && (
+          <View style={Platform.OS === 'ios' ? styles.iosPickerSheet : undefined}>
+            <DateTimePicker
+              value={paymentDate}
+              mode="date"
+              display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+              maximumDate={new Date()}
+              onChange={(event, selectedDate) => {
+                if (Platform.OS === 'android') {
+                  setShowPaymentDatePicker(false);
+                  if (event.type === 'dismissed' || !selectedDate) return;
+                } else if (!selectedDate) {
+                  return;
+                }
+
+                if (selectedDate) {
+                  const normalizedDate = new Date(
+                    selectedDate.getFullYear(),
+                    selectedDate.getMonth(),
+                    selectedDate.getDate(),
+                  );
+                  setPaymentDate(normalizedDate);
+                  if (isUniformPayment) {
+                    setPaymentForMonth(new Date(normalizedDate.getFullYear(), normalizedDate.getMonth(), 1));
+                  }
+                }
+              }}
+            />
+            {Platform.OS === 'ios' ? (
+              <View style={styles.iosPickerActions}>
+                <TouchableOpacity
+                  style={styles.iosPickerButton}
+                  onPress={() => setShowPaymentDatePicker(false)}
+                >
+                  <Text style={styles.iosPickerButtonText}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
         )}
 
         <View style={styles.modalFooter}>
@@ -825,6 +949,31 @@ const createStyles = (theme: any, insets: { top: number; bottom: number }) => St
     flex: 1,
     fontSize: 16,
     color: theme.text,
+  },
+  iosPickerSheet: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 16,
+    backgroundColor: theme.surface,
+    overflow: 'hidden',
+  },
+  iosPickerActions: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  iosPickerButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: theme.primary + '18',
+  },
+  iosPickerButtonText: {
+    color: theme.primary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   currencyPrefix: { fontSize: 16, color: theme.textSecondary, marginRight: 4 },
   textInput: { flex: 1, paddingVertical: 14, fontSize: 16, color: theme.text },

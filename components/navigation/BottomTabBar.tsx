@@ -9,14 +9,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFinancePrivacyMode } from '@/hooks/useFinancePrivacyMode';
 import { useNotifications } from '@/hooks/useNotifications';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
+import { usesWebSidebarLayout } from '@/lib/navigation/webLayout';
 import { uiTokens } from '@/lib/ui/tokens';
 import { BottomTabButton } from './bottom-tabs/BottomTabButton';
 import { CenterTabButton } from './bottom-tabs/CenterTabButton';
 import { buildVisibleTabs, getBottomTabVariant, isBottomTabActive, shouldHideBottomTabBar, sortBottomTabs } from './bottom-tabs/helpers';
 import { createBottomTabBarStyles } from './bottom-tabs/styles';
 import { DASH_SEARCH_ROUTE, MESSAGE_TAB_IDS, ROLES_WITH_CENTER_TAB } from './bottom-tabs/tabs';
-
-const WEB_DESKTOP_BREAKPOINT = 1024;
 
 export { ROLES_WITH_CENTER_TAB };
 
@@ -34,14 +33,9 @@ export function BottomTabBar() {
   const isShortScreen = screenHeight < 700;
   const isCompact = isSmallScreen || isShortScreen;
   const isWeb = Platform.OS === 'web';
-  const isCoarsePointer =
-    isWeb && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
-  const hasTouchPoints =
-    isWeb && typeof navigator !== 'undefined' && (navigator.maxTouchPoints || 0) > 0;
-  const isTouchDevice = isCoarsePointer || hasTouchPoints;
-  const isWebDesktop = isWeb && screenWidth >= WEB_DESKTOP_BREAKPOINT && !isTouchDevice;
+  const isWebWideLayout = isWeb && usesWebSidebarLayout(screenWidth);
 
-  if (!user || !profile || shouldHideBottomTabBar(pathname) || isWebDesktop) {
+  if (!user || !profile || shouldHideBottomTabBar(pathname) || isWebWideLayout) {
     return null;
   }
 

@@ -89,6 +89,7 @@ import { resolveExplicitSchoolTypeFromProfile, resolveSchoolTypeFromProfile } fr
 import { initPerformanceMonitoring } from '../lib/perf';
 import { installThemedNativeAlert } from '@/lib/ui/installThemedNativeAlert';
 import { getFeatureFlagsSync } from '@/lib/featureFlags';
+import { usesWebSidebarLayout } from '@/lib/navigation/webLayout';
 import { uiTokens } from '@/lib/ui/tokens';
 import { useFinancePrivacyMode } from '@/hooks/useFinancePrivacyMode';
 
@@ -102,7 +103,6 @@ const STACK_SCREEN_OPTIONS = {
   animationTypeForReplace: 'push' as const,
   contentStyle: { backgroundColor: 'transparent' },
 };
-const WEB_DESKTOP_BREAKPOINT = 1024;
 
 /** Bridge that reads user role from AuthContext and passes to SpotlightTourProvider */
 function SpotlightTourBridge({ children }: { children: React.ReactNode }) {
@@ -192,12 +192,7 @@ function LayoutContent() {
     featureFlags,
   );
   const isWeb = Platform.OS === 'web';
-  const isCoarsePointer =
-    isWeb && typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)')?.matches;
-  const hasTouchPoints =
-    isWeb && typeof navigator !== 'undefined' && (navigator.maxTouchPoints || 0) > 0;
-  const isTouchDevice = isCoarsePointer || hasTouchPoints;
-  const isWebDesktop = isWeb && windowWidth >= WEB_DESKTOP_BREAKPOINT && !isTouchDevice;
+  const isWebWideLayout = isWeb && usesWebSidebarLayout(windowWidth);
   const isCompactWeb = windowWidth < 360 || windowHeight < 700;
   const navBottomPadding = Math.max(insets.bottom, uiTokens.spacing.xs);
   const webBottomNavClearance = getBottomTabBarHeight({
@@ -209,7 +204,7 @@ function LayoutContent() {
   const hasVisibleBottomTabs = visibleTabs.length > 0;
   const shouldReserveBottomNavSpace =
     isWeb &&
-    !isWebDesktop &&
+    !isWebWideLayout &&
     Boolean(user) &&
     Boolean(profile) &&
     hasVisibleBottomTabs &&

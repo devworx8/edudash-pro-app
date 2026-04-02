@@ -11,6 +11,7 @@ import { MobileNavDrawer } from '@/components/navigation/MobileNavDrawer';
 import { useNotificationBadgeCount } from '@/hooks/useNotificationCount';
 import { useFinancePrivacyMode } from '@/hooks/useFinancePrivacyMode';
 import { signOutAndRedirect } from '@/lib/authActions';
+import { WEB_SIDEBAR_BREAKPOINT } from '@/lib/navigation/webLayout';
 import { isPlatformStaff } from '@/lib/roleUtils';
 
 interface DesktopLayoutProps {
@@ -129,7 +130,7 @@ export function DesktopLayout({
   
   // Use window dimensions for responsive behavior on web
   const { width: windowWidth } = useWindowDimensions();
-  const isMobileWidth = windowWidth < 768; // Mobile breakpoint
+  const isMobileWidth = windowWidth < WEB_SIDEBAR_BREAKPOINT;
 
   // Determine user role from profile if not provided
   const userRole = role || (profile?.role as string) || 'parent';

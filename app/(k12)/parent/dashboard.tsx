@@ -112,6 +112,10 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
   const canShowExamPrep = hasExamEligibleChild;
   const canUseExamPrep = hasCapability(tierForCaps, 'exam.practice') && canShowExamPrep;
   const requiredExamTier = getRequiredTier('exam.practice');
+  const paymentsNeedAttention = useMemo(
+    () => urgentItems.some((item) => item.type === 'fee_overdue'),
+    [urgentItems],
+  );
 
   // ── Effects ──
   useEffect(() => {
@@ -341,7 +345,12 @@ function K12ParentDashboardContent({ quickWinsEnabled }: { quickWinsEnabled: boo
           )}
         </View>
 
-        <K12ParentQuickActions onActionPress={handleQuickAction} theme={theme} quickWinsEnabled={quickWinsEnabled} />
+        <K12ParentQuickActions
+          onActionPress={handleQuickAction}
+          theme={theme}
+          quickWinsEnabled={quickWinsEnabled}
+          paymentsNeedAttention={paymentsNeedAttention}
+        />
 
         {/* Timetable Card */}
         <TouchableOpacity
