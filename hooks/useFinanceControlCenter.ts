@@ -6,7 +6,7 @@
  */
 
 import React from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAlertModal } from '@/components/ui/AlertModal';
@@ -322,6 +322,13 @@ export function useFinanceControlCenter() {
   React.useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (financeAccess.needsPassword) return;
+      void loadData(true);
+    }, [financeAccess.needsPassword, loadData]),
+  );
 
   useFinanceRealtimeRefresh({
     organizationId: orgId,
