@@ -48,9 +48,7 @@ export async function fetchParentDashboardData(
   let parentUser = await fetchParentProfile(supabase, userId);
   if (!parentUser) return { data: createEmptyParentData(), fromCache: false };
 
-  const schoolId = (parentUser as any).preschool_id || (parentUser as any).organization_id;
-  const schoolName = await resolveSchoolName(supabase, schoolId);
-
+  const parentSchoolId = (parentUser as any).preschool_id || (parentUser as any).organization_id;
 
   // Fetch children ----------------------------------------------------------------
   const parentIds = new Set<string>([parentUser.id, userId].filter(Boolean));
@@ -61,9 +59,21 @@ export async function fetchParentDashboardData(
     .select('id, first_name, last_name, student_id, preschool_id, date_of_birth, grade_level, avatar_url, classes!students_class_id_fkey(id, name, teacher_id)')
     .or(parentFilters.join(','));
 
+  const childSchoolIds = Array.from(new Set(
+    (childrenData || [])
+      .map((c: any) => c.preschool_id)
+      .filter(Boolean),
+  ));
+  const fallbackSchoolId = parentSchoolId || childSchoolIds[0] || null;
+  const schoolName = await resolveSchoolName(supabase, fallbackSchoolId);
+
   const teacherMap = await buildTeacherMap(supabase, childrenData || []);
-  const children = (childrenData || []).map((c: any) => mapChild(c, schoolId, teacherMap));
+  const children = (childrenData || []).map((c: any) => mapChild(c, fallbackSchoolId, teacherMap));
   const childIds = children.map(c => c.id);
+  const eventSchoolIds = Array.from(new Set([
+    ...childSchoolIds,
+    ...(parentSchoolId ? [parentSchoolId] : []),
+  ]));
 
   // Parallel fetches ---------------------------------------------------------------
   const today = new Date().toISOString().split('T')[0];
@@ -71,7 +81,7 @@ export async function fetchParentDashboardData(
     fetchFeesDueSoon(supabase, childIds, today),
     fetchTodayAttendance(supabase, childIds, today),
     fetchAssignments(supabase),
-    fetchEvents(supabase, schoolId),
+    fetchEvents(supabase, eventSchoolIds),
   ]);
 
   // Process results ----------------------------------------------------------------
@@ -100,7 +110,7 @@ export async function fetchParentDashboardData(
     recentHomework, upcomingEvents, unreadMessages,
   };
 
-  if (schoolId) {
+  if (fallbackSchoolId) {
     await offlineCacheService.cacheParentDashboard(userId, dashboardData);
     log('💾 Parent dashboard data cached for offline use');
   }
@@ -200,14 +210,15 @@ async function fetchAssignments(supabase: any) {
   return data || [];
 }
 
-async function fetchEvents(supabase: any, schoolId: string | null) {
-  if (!schoolId) return [];
+async function fetchEvents(supabase: any, schoolIds: string[]) {
+  const uniqueIds = Array.from(new Set((schoolIds || []).filter(Boolean)));
+  if (!uniqueIds.length) return [];
   const today = new Date().toISOString().slice(0, 10);
 
   const schoolEventsQuery = await supabase
     .from('school_events')
     .select('id, title, start_date, end_date, event_type, description')
-    .eq('preschool_id', schoolId)
+    .in('preschool_id', uniqueIds)
     .gte('start_date', today)
     .order('start_date', { ascending: true })
     .limit(10);
@@ -225,8 +236,8 @@ async function fetchEvents(supabase: any, schoolId: string | null) {
     const legacyEventsQuery = await supabase
       .from('events')
       .select('id, title, event_date, event_type, description')
-      .eq('preschool_id', schoolId)
-      .gte('event_date', new Date().toISOString())
+      .in('preschool_id', uniqueIds)
+      .gte('event_date', today)
       .order('event_date', { ascending: true })
       .limit(10);
 
@@ -240,7 +251,7 @@ async function fetchEvents(supabase: any, schoolId: string | null) {
   const { data: excursionRows } = await supabase
     .from('school_excursions')
     .select('id, title, destination, excursion_date, departure_time, estimated_cost_per_child, status, consent_required, consent_deadline, items_to_bring')
-    .eq('preschool_id', schoolId)
+    .in('preschool_id', uniqueIds)
     .in('status', ['approved', 'pending_approval'])
     .gte('excursion_date', today)
     .order('excursion_date', { ascending: true })

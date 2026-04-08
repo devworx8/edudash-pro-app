@@ -29,6 +29,8 @@ const EXCURSION_REMINDER_THRESHOLDS = [
   { offsetDays: 3, label: '3 days' },
   { offsetDays: 1, label: 'Tomorrow' },
 ]
+// Twice weekly (weekdays only). Adjust if the school prefers different days.
+const EXCURSION_WEEKLY_DAYS = new Set(['Mon', 'Thu'])
 
 interface SchoolMeeting {
   id: string;
@@ -50,6 +52,13 @@ function formatDateInTimezone(value: Date, timeZone: string): string {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+  }).format(value)
+}
+
+function formatWeekdayInTimezone(value: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    weekday: 'short',
   }).format(value)
 }
 
@@ -111,6 +120,7 @@ serve(async (req: Request): Promise<Response> => {
     const today = formatDateInTimezone(new Date(), DEFAULT_TIMEZONE)
     const maxWindowDate = addDays(today, 8)
     const excursionMaxWindowDate = addDays(today, 29) // 28 days + buffer for excursion weekly reminders
+    const todayWeekday = formatWeekdayInTimezone(new Date(), DEFAULT_TIMEZONE)
 
     const results = {
       thresholds: {
@@ -120,6 +130,7 @@ serve(async (req: Request): Promise<Response> => {
         sevenDay: { sent: 0, skipped: 0, failed: 0 },
         threeDay: { sent: 0, skipped: 0, failed: 0 },
         oneDay: { sent: 0, skipped: 0, failed: 0 },
+        weekly: { sent: 0, skipped: 0, failed: 0 },
       },
       meetingsProcessed: 0,
       excursionsProcessed: 0,
@@ -172,17 +183,34 @@ serve(async (req: Request): Promise<Response> => {
       logTable: string,
       idColumn: string,
       thresholds = REMINDER_THRESHOLDS,
+      weeklyDays?: Set<string>,
     ) => {
       const itemDate = normalizeDateOnly(dateStr)
       if (!itemDate) return
       const daysUntil = diffDays(today, itemDate)
-      const threshold = thresholds.find((t) => t.offsetDays === daysUntil)
+      if (!Number.isFinite(daysUntil) || daysUntil < 0) return
+
+      const baseThreshold = thresholds.find((t) => t.offsetDays === daysUntil)
+      const shouldSendWeekly = !baseThreshold
+        && !!weeklyDays
+        && daysUntil > 0
+        && weeklyDays.has(todayWeekday)
+
+      const threshold = baseThreshold || (shouldSendWeekly ? {
+        offsetDays: daysUntil,
+        label: `${todayWeekday} reminder`,
+      } : null)
+
       if (!threshold || targetAudience.length === 0) return
 
       const { data: existing } = await supabase.from(logTable).select('id').eq(idColumn, id).eq('reminder_offset_days', threshold.offsetDays).eq('target_role', 'all').maybeSingle()
       if (existing?.id) {
         const key = thresholdKey(threshold.offsetDays)
-        if (key && (results.thresholds as any)[key]) (results.thresholds as any)[key].skipped += 1
+        if (key && (results.thresholds as any)[key]) {
+          (results.thresholds as any)[key].skipped += 1
+        } else if (shouldSendWeekly) {
+          results.thresholds.weekly.skipped += 1
+        }
         results.remindersSkipped += 1
         return
       }
@@ -199,7 +227,11 @@ serve(async (req: Request): Promise<Response> => {
 
       if (notifyErr) {
         const key = thresholdKey(threshold.offsetDays)
-        if (key && (results.thresholds as any)[key]) (results.thresholds as any)[key].failed += 1
+        if (key && (results.thresholds as any)[key]) {
+          (results.thresholds as any)[key].failed += 1
+        } else if (shouldSendWeekly) {
+          results.thresholds.weekly.failed += 1
+        }
         results.remindersFailed += 1
         return
       }
@@ -214,7 +246,11 @@ serve(async (req: Request): Promise<Response> => {
       })
 
       const sentKey = thresholdKey(threshold.offsetDays)
-      if (sentKey && (results.thresholds as any)[sentKey]) (results.thresholds as any)[sentKey].sent += 1
+      if (sentKey && (results.thresholds as any)[sentKey]) {
+        (results.thresholds as any)[sentKey].sent += 1
+      } else if (shouldSendWeekly) {
+        results.thresholds.weekly.sent += 1
+      }
       results.remindersSent += 1
       await new Promise((r) => setTimeout(r, 120))
     }
@@ -228,7 +264,7 @@ serve(async (req: Request): Promise<Response> => {
       results.excursionsProcessed += 1
       await processItem(x.id, x.title, x.excursion_date, x.preschool_id, 'school_excursion_reminder',
         excursionTargetAudience(), 'school_excursion_reminder_logs', 'excursion_id',
-        EXCURSION_REMINDER_THRESHOLDS)
+        EXCURSION_REMINDER_THRESHOLDS, EXCURSION_WEEKLY_DAYS)
     }
 
     return new Response(
