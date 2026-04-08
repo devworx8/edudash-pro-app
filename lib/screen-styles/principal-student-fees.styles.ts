@@ -21,6 +21,34 @@ export const createStyles = (theme: any, isDark: boolean, insets: any) => StyleS
     padding: 16,
     paddingBottom: insets.bottom + 24,
   },
+  pageHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  pageHeaderBack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: theme.primary + '15',
+  },
+  pageHeaderBackText: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  pageHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  pageHeaderSpacer: {
+    width: 24,
+  },
   loadingText: {
     marginTop: 12,
     fontSize: 16,

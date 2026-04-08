@@ -180,6 +180,22 @@ export default function StudentFeeManagementScreen() {
     }
   }, [actions, batchMarkingPaid, overdueFees]);
 
+  const handleBack = useCallback(() => {
+    if (data.source === 'receivables') {
+      try {
+        router.replace('/screens/finance-control-center?tab=receivables' as any);
+        return;
+      } catch {
+        // fall through to router.back
+      }
+    }
+    try {
+      router.back();
+    } catch {
+      router.replace('/screens/finance-control-center?tab=receivables' as any);
+    }
+  }, [data.source, router]);
+
   const renderFeeCard = (fee: StudentFee) => {
     const isMarkPaidBusy =
       actions.processingFeeId === fee.id && actions.processingFeeAction === 'mark_paid';
@@ -460,6 +476,17 @@ export default function StudentFeeManagementScreen() {
           />
         }
       >
+        <View style={styles.pageHeader}>
+          <TouchableOpacity style={styles.pageHeaderBack} onPress={handleBack}>
+            <Ionicons name="arrow-back" size={18} color={theme.text} />
+            <Text style={styles.pageHeaderBackText}>
+              {data.source === 'receivables' ? 'Back to Receivables' : 'Back'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={styles.pageHeaderTitle}>Student Fees</Text>
+          <View style={styles.pageHeaderSpacer} />
+        </View>
+
         {/* Student Info Card */}
         <View style={styles.studentCard}>
           <View style={styles.studentInfo}>
