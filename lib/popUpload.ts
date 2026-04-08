@@ -361,7 +361,7 @@ export const uploadPOPFile = async (
     }
 
     // Prefer direct binary upload using FileSystem for mobile stability.
-    if (Platform.OS !== 'web' && supabaseUrl && supabaseAnonKey) {
+    if (supabaseUrl && supabaseAnonKey) {
       try {
         const session = await supabase.auth.getSession();
         const accessToken = session?.data?.session?.access_token;
@@ -414,7 +414,7 @@ export const uploadPOPFile = async (
     const fileInfo = await FileSystem.getInfoAsync(uploadUri);
     const fallbackFileSize = (fileInfo as any)?.size || finalFileSize;
     let base64: string;
-    if (Platform.OS !== 'web' && fallbackFileSize > MAX_BASE64_FALLBACK_SIZE_BYTES) {
+    if (fallbackFileSize > MAX_BASE64_FALLBACK_SIZE_BYTES) {
       if (FILE_VALIDATION.allowedImageTypes.includes(finalFileType)) {
         try {
           // Keep large images uploadable even when binary upload path fails.

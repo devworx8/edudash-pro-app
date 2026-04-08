@@ -29,7 +29,6 @@ import { setupNotificationRouter } from '../lib/NotificationRouter';
 import '../lib/NotificationService';
 // Initialize agentic tool registry on startup
 import { initializeTools } from '../services/dash-ai/tools';
-initializeTools();
 import { StatusBar } from 'expo-status-bar';
 import { Stack, router, usePathname } from 'expo-router';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
@@ -269,8 +268,9 @@ function LayoutContent() {
 
 export default function RootLayout() {
   const [resetKey, setResetKey] = useState(0);
-
   if (__DEV__) logger.debug(TAG, 'Rendering...');
+
+  useEffect(() => { initializeTools(); }, []);
 
   // Setup PWA meta tags on web
   useEffect(() => {

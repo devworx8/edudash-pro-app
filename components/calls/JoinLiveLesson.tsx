@@ -289,7 +289,7 @@ export function JoinLiveLesson({
       <View style={styles.listContent}>
         {(liveLessons ?? []).map((item, index) => (
           <React.Fragment key={item.id}>
-            {renderLesson({ item })}
+            {renderLesson({ item, index })}
           </React.Fragment>
         ))}
       </View>

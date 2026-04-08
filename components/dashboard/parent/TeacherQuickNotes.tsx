@@ -289,7 +289,7 @@ export function TeacherQuickNotes({
       <View>
         {notes.map((item, index) => (
           <React.Fragment key={item.id}>
-            {renderNote({ item })}
+            {renderNote({ item, index })}
             {index < notes.length - 1 && <View style={{ height: 10 }} />}
           </React.Fragment>
         ))}

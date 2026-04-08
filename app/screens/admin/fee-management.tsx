@@ -114,6 +114,7 @@ export default function FeeManagementScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isGeneratingMonthlyFees, setIsGeneratingMonthlyFees] = useState(false);
+  const [isBackfillingMonthlyFees, setIsBackfillingMonthlyFees] = useState(false);
   
   // Modal state
   const [showFeeModal, setShowFeeModal] = useState(false);
@@ -334,6 +335,88 @@ export default function FeeManagementScreen() {
               showAlert({ title: 'Generation Failed', message: err.message || 'Failed to generate monthly fees', type: 'error' });
             } finally {
               setIsGeneratingMonthlyFees(false);
+            }
+          },
+        },
+      ],
+    });
+  };
+
+  const handleBackfillThisMonthFees = () => {
+    if (!organizationId) {
+      showAlert({ title: 'Error', message: 'Organization not found. Please re-login.', type: 'error' });
+      return;
+    }
+
+    const now = new Date();
+    const currentMonthIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const monthLabel = new Date(currentMonthIso).toLocaleDateString('en-ZA', {
+      month: 'long',
+      year: 'numeric',
+    });
+
+    showAlert({
+      title: 'Backfill Billing Month',
+      message:
+        `Backfill missing billing_month values for ${monthLabel} fee rows using their due dates? ` +
+        'This does not create new fees — it fixes existing rows that are missing the month.',
+      type: 'warning',
+      buttons: [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Backfill',
+          onPress: async () => {
+            setIsBackfillingMonthlyFees(true);
+            try {
+              const supabase = assertSupabase();
+              const { data, error } = await supabase.functions.invoke('generate-monthly-fees', {
+                body: {
+                  target_month: currentMonthIso,
+                  preschool_id: schoolId || organizationId,
+                  backfill_only: true,
+                },
+              });
+
+              if (error) throw error;
+              if (!data?.success) throw new Error(data?.error || 'Failed to backfill billing month');
+
+              const backfilledRows = Number(data.total_backfilled_rows || 0);
+              const schoolsProcessed = Number(data.schools_processed || 0);
+              const totalErrors = Number(data.total_errors || 0);
+              const rowLabel = backfilledRows === 1 ? 'row' : 'rows';
+              const warningDetails = Array.isArray((data as any)?.results)
+                ? ((data as any).results as Array<{ errors?: string[] }>)
+                    .flatMap((result) => Array.isArray(result?.errors) ? result.errors : [])
+                    .filter((msg) => typeof msg === 'string' && msg.trim().length > 0)
+                : [];
+              const firstWarning = warningDetails[0] || null;
+
+              if (totalErrors > 0) {
+                showAlert({
+                  title: 'Backfill Completed With Warnings',
+                  message:
+                    `Backfilled ${backfilledRows} ${rowLabel} for ${monthLabel} across ${schoolsProcessed} school(s). ` +
+                    `${totalErrors} warning(s) were reported.` +
+                    (firstWarning ? ` First warning: ${firstWarning}` : ' Check edge logs if needed.'),
+                  type: 'warning',
+                });
+              } else {
+                showAlert({
+                  title: backfilledRows > 0 ? 'Backfill Complete' : 'No Rows To Backfill',
+                  message:
+                    backfilledRows > 0
+                      ? `Backfilled ${backfilledRows} ${rowLabel} for ${monthLabel} across ${schoolsProcessed} school(s).`
+                      : `No ${monthLabel} fee rows were missing billing_month.`,
+                  type: 'success',
+                });
+              }
+
+              await fetchData();
+            } catch (err: any) {
+              console.error('Backfill billing month error:', err);
+              showAlert({ title: 'Backfill Failed', message: err.message || 'Failed to backfill billing month', type: 'error' });
+            } finally {
+              setIsBackfillingMonthlyFees(false);
             }
           },
         },
@@ -778,6 +861,27 @@ export default function FeeManagementScreen() {
           </TouchableOpacity>
           <Text style={[styles.generateNowHint, { color: theme.textSecondary }]}>
             Creates missing monthly tuition fees immediately without duplicating existing fee rows.
+          </Text>
+
+          <TouchableOpacity
+            style={[
+              styles.generateNowButton,
+              { backgroundColor: theme.warning || '#f59e0b', opacity: isBackfillingMonthlyFees ? 0.7 : 1 },
+            ]}
+            onPress={handleBackfillThisMonthFees}
+            disabled={isBackfillingMonthlyFees}
+          >
+            {isBackfillingMonthlyFees ? (
+              <EduDashSpinner size="small" color={theme.onPrimary} />
+            ) : (
+              <Ionicons name="construct-outline" size={18} color={theme.onPrimary} />
+            )}
+            <Text style={[styles.generateNowButtonText, { color: theme.onPrimary }]}>
+              {isBackfillingMonthlyFees ? 'Backfilling Billing Month...' : 'Backfill This Month Billing Month'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={[styles.generateNowHint, { color: theme.textSecondary }]}>
+            Fixes fee rows that are missing a billing month by using their due dates.
           </Text>
           
           {fees.length === 0 ? (

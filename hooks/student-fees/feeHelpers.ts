@@ -152,7 +152,34 @@ export async function bootstrapFeesIfMissing(
       amount_outstanding: selectedFee.amount,
     }));
 
-    await supabase.from('student_fees').insert(feesToInsert);
+    const { error: insertError } = await supabase.from('student_fees').insert(feesToInsert);
+    if (insertError) {
+      const errorCode = (insertError as { code?: string }).code;
+      const errorStatus = (insertError as { status?: number }).status;
+      const message = String((insertError as { message?: string }).message || '');
+      const isConflict =
+        errorCode === '23505' ||
+        errorStatus === 409 ||
+        message.toLowerCase().includes('duplicate');
+
+      if (isConflict) {
+        await Promise.all(
+          feesToInsert.map((fee) =>
+            supabase
+              .from('student_fees')
+              .update({ billing_month: fee.billing_month })
+              .eq('student_id', fee.student_id)
+              .eq('fee_structure_id', fee.fee_structure_id)
+              .eq('due_date', fee.due_date)
+              .is('billing_month', null),
+          ),
+        );
+        return 'ready';
+      }
+
+      throw insertError;
+    }
+
     return 'ready';
   } catch (error) {
     console.warn('[StudentFeeManagement] Fee bootstrap failed (non-fatal):', error);

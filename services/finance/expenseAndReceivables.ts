@@ -189,6 +189,26 @@ export async function getReceivablesSnapshot(
     throw new Error(monthScopedQuery.error.message || 'Failed to load receivables');
   } else {
     feesData = monthScopedQuery.data || [];
+
+    const dueDateFallback = await assertSupabase()
+      .from('student_fees')
+      .select(
+        `id, student_id, status, due_date, billing_month, amount, final_amount, amount_paid, amount_outstanding, students!inner(id, first_name, last_name, is_active, status, enrollment_date, preschool_id, organization_id)`,
+      )
+      .or(`preschool_id.eq.${orgId},organization_id.eq.${orgId}`, { foreignTable: 'students' })
+      .is('billing_month', null)
+      .gte('due_date', month)
+      .lt('due_date', next)
+      .in('status', unpaidStatuses)
+      .limit(QUERY_LIMIT);
+
+    if (dueDateFallback.error) {
+      throw new Error(dueDateFallback.error.message || 'Failed to load receivables (due date fallback)');
+    }
+
+    if (dueDateFallback.data && dueDateFallback.data.length > 0) {
+      feesData = [...feesData, ...dueDateFallback.data];
+    }
   }
 
   const studentMap = new Map<string, FinanceReceivableStudentRow>();

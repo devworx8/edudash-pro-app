@@ -1,9 +1,22 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
-// Collect all tracked files
-const files = execSync('git ls-files', { encoding: 'utf8' }).split('\n').filter(Boolean);
+function runGit(args) {
+  return execFileSync('git', args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+}
+
+let files = [];
+try {
+  files = runGit(['ls-files']).split('\n').filter(Boolean);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`Failed to enumerate tracked files via git: ${message}`);
+  process.exit(1);
+}
 
 // Exclusions (auto-generated or known large types)
 const exclude = [

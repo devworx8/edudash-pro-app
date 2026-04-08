@@ -6,7 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import EduDashSpinner from '@/components/ui/EduDashSpinner';
 import { assertSupabase } from '@/lib/supabase';
 import { isTuitionFee } from '@/lib/utils/feeUtils';
-import { shouldExcludeStudentFeeFromMonthScopedViews } from '@/lib/utils/studentFeeMonth';
+import { getMonthStartISO } from '@/lib/utils/dateUtils';
+import { isStudentFeeInMonth, shouldExcludeStudentFeeFromMonthScopedViews } from '@/lib/utils/studentFeeMonth';
 import { formatCurrency, pickSectionError } from '@/hooks/useFinanceControlCenter';
 import type { FinanceControlCenterBundle } from '@/types/finance';
 
@@ -52,11 +53,22 @@ export function FinanceReceivablesTab({
       if (!students || students.length === 0) return null;
 
       const studentIds = students.map((s: any) => s.id);
-      const { data: fees } = await supabase
+      const monthStartIso = getMonthStartISO(monthIso);
+      const nextMonthDate = monthStartIso ? new Date(monthStartIso) : new Date(monthIso);
+      nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+      const nextMonthIso = getMonthStartISO(nextMonthDate);
+
+      const feeQuery = supabase
         .from('student_fees')
         .select('student_id, status, final_amount, amount, amount_paid, amount_outstanding, due_date, billing_month')
-        .eq('billing_month', monthIso)
         .in('student_id', studentIds);
+
+      const { data: fees } =
+        monthStartIso && nextMonthIso
+          ? await feeQuery.or(
+              `billing_month.eq.${monthStartIso},and(billing_month.is.null,due_date.gte.${monthStartIso},due_date.lt.${nextMonthIso})`,
+            )
+          : await feeQuery.eq('billing_month', monthIso);
 
       const feesByStudent = new Map<string, any[]>();
       for (const f of (fees || []) as any[]) {
@@ -81,6 +93,7 @@ export function FinanceReceivablesTab({
 
       const list = students.map((s: any) => {
         const studentFees = (feesByStudent.get(s.id) || []).filter((fee) =>
+          isStudentFeeInMonth(fee, monthStartIso || monthIso) &&
           !shouldExcludeStudentFeeFromMonthScopedViews(fee, s.enrollment_date),
         );
         const hasFees = studentFees.length > 0;

@@ -472,6 +472,7 @@ serve(async (req: Request): Promise<Response> => {
 
     const body = await req.json().catch(() => ({} as Record<string, unknown>));
     const targetMonthInput = typeof body.target_month === 'string' ? body.target_month : null;
+    const backfillOnly = Boolean((body as Record<string, unknown>).backfill_only || (body as Record<string, unknown>).backfill_billing_month);
     const requestedSchoolIdRaw =
       typeof body.preschool_id === 'string'
         ? body.preschool_id
@@ -498,7 +499,9 @@ serve(async (req: Request): Promise<Response> => {
 
     // Billing month = 1st of the current month
     const billingMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1);
+    const nextBillingMonth = new Date(targetMonth.getFullYear(), targetMonth.getMonth() + 1, 1);
     const billingMonthStr = billingMonth.toISOString().split('T')[0];
+    const nextBillingMonthStr = nextBillingMonth.toISOString().split('T')[0];
 
     // ── Fetch target schools ───────────────────────────────────────────
     const schoolsQuery = supabase
@@ -529,6 +532,7 @@ serve(async (req: Request): Promise<Response> => {
       school_id: string;
       school_name: string;
       fees_created: number;
+      fees_backfilled: number;
       students_processed: number;
       credits_applied: number;
       errors: string[];
@@ -539,6 +543,7 @@ serve(async (req: Request): Promise<Response> => {
         school_id: school.id,
         school_name: school.name || 'Unknown',
         fees_created: 0,
+        fees_backfilled: 0,
         students_processed: 0,
         credits_applied: 0,
         errors: [] as string[],
@@ -643,6 +648,41 @@ serve(async (req: Request): Promise<Response> => {
           .eq('billing_month', billingMonthStr);
 
         const studentsWithFees = new Set((existingFees || []).map((f) => f.student_id));
+
+        const { data: existingDueFees, error: dueFeeError } = await supabase
+          .from('student_fees')
+          .select('id, student_id')
+          .in('student_id', studentIds)
+          .is('billing_month', null)
+          .gte('due_date', billingMonthStr)
+          .lt('due_date', nextBillingMonthStr);
+
+        if (dueFeeError) {
+          schoolResult.errors.push(`Existing due-date fee lookup error: ${dueFeeError.message}`);
+        } else if (existingDueFees?.length) {
+          for (const fee of existingDueFees) {
+            if (fee?.student_id) studentsWithFees.add(fee.student_id);
+          }
+
+          const dueFeeIds = existingDueFees.map((fee) => fee.id).filter(Boolean);
+          if (dueFeeIds.length > 0) {
+            const { error: backfillErr } = await supabase
+              .from('student_fees')
+              .update({ billing_month: billingMonthStr })
+              .in('id', dueFeeIds)
+              .is('billing_month', null);
+            if (backfillErr) {
+              schoolResult.errors.push(`Fee billing month backfill error: ${backfillErr.message}`);
+            } else {
+              schoolResult.fees_backfilled += dueFeeIds.length;
+            }
+          }
+        }
+
+        if (backfillOnly) {
+          results.push(schoolResult);
+          continue;
+        }
 
         // ── Generate fees for students without one ─────────────────────
         const feesToInsert: {
@@ -770,6 +810,7 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     const totalFeesCreated = results.reduce((s, r) => s + r.fees_created, 0);
+    const totalBackfilled = results.reduce((s, r) => s + r.fees_backfilled, 0);
     const totalCreditsApplied = results.reduce((s, r) => s + r.credits_applied, 0);
     const totalErrors = results.reduce((s, r) => s + r.errors.length, 0);
 
@@ -777,11 +818,13 @@ serve(async (req: Request): Promise<Response> => {
       {
         success: true,
         billing_month: billingMonthStr,
+        backfill_only: backfillOnly,
         scoped_school_id: schoolFilter,
         requested_by_role: auth.actorRole,
         cutoff_day: FINANCE_MONTH_CUTOFF_DAY,
         schools_processed: results.length,
         total_fees_created: totalFeesCreated,
+        total_backfilled_rows: totalBackfilled,
         total_credits_applied: totalCreditsApplied,
         total_errors: totalErrors,
         results,

@@ -1,22 +1,22 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 
-function run(cmd) {
+function runGit(args) {
   try {
-    return execSync(cmd, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return execFileSync('git', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
   } catch {
     return '';
   }
 }
 
 function resolveTouchedFilesAndBase() {
-  const workingTree = run('git diff --name-only --diff-filter=ACMR HEAD')
+  const workingTree = runGit(['diff', '--name-only', '--diff-filter=ACMR', 'HEAD'])
     .split('\n')
     .map((f) => f.trim())
     .filter(Boolean);
 
-  const untracked = run('git ls-files --others --exclude-standard')
+  const untracked = runGit(['ls-files', '--others', '--exclude-standard'])
     .split('\n')
     .map((f) => f.trim())
     .filter(Boolean);
@@ -29,12 +29,12 @@ function resolveTouchedFilesAndBase() {
     };
   }
 
-  const latestCommitFiles = run('git show --name-only --pretty= --diff-filter=ACMR HEAD')
+  const latestCommitFiles = runGit(['show', '--name-only', '--pretty=', '--diff-filter=ACMR', 'HEAD'])
     .split('\n')
     .map((f) => f.trim())
     .filter(Boolean);
 
-  const baselineRef = run('git rev-parse HEAD~1') || 'HEAD';
+  const baselineRef = runGit(['rev-parse', 'HEAD~1']) || 'HEAD';
   return {
     touchedFiles: Array.from(new Set(latestCommitFiles)),
     baselineRef,
@@ -68,7 +68,10 @@ function countLinesInWorkingTree(filePath) {
 
 function countLinesAtBase(base, filePath) {
   try {
-    const blob = execSync(`git show ${base}:${filePath}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const blob = execFileSync('git', ['show', `${base}:${filePath}`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
     return blob.split('\n').length;
   } catch {
     return null;

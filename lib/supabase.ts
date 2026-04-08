@@ -4,44 +4,70 @@ import Constants from 'expo-constants';
 import { logger } from './logger';
 import { storage } from './storage';
 
+const TAG = 'Supabase';
+
 // Get environment variables from Expo Constants (works across all platforms)
 const expoConfig = Constants.expoConfig?.extra || {};
 const url = expoConfig.EXPO_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
 const anon = expoConfig.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 export const supabaseUrl = url;
 export const supabaseAnonKey = anon;
+const isTestEnvironment = process.env.NODE_ENV === 'test';
+const isDevelopment = typeof __DEV__ !== 'undefined' && __DEV__ && !isTestEnvironment;
+const enableSupabaseDebug = isDevelopment && process.env.EXPO_PUBLIC_DEBUG_SUPABASE === 'true';
+const envName = process.env.EXPO_PUBLIC_ENVIRONMENT || process.env.NODE_ENV || 'unknown';
+
+function buildSupabaseEnvMeta() {
+  return {
+    env: envName,
+    hasExpoConfigUrl: Boolean(expoConfig.EXPO_PUBLIC_SUPABASE_URL),
+    hasExpoConfigAnon: Boolean(expoConfig.EXPO_PUBLIC_SUPABASE_ANON_KEY),
+    hasProcessEnvUrl: Boolean(process.env.EXPO_PUBLIC_SUPABASE_URL),
+    hasProcessEnvAnon: Boolean(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
+    hasUrl: Boolean(url),
+    hasAnon: Boolean(anon),
+    urlLength: url.length,
+    anonLength: anon.length,
+    urlPreview: url ? `${url.substring(0, 25)}...` : 'MISSING',
+  };
+}
+
+function shouldSuppressSupabaseDebug(message: string): boolean {
+  return (
+    message.includes('GoTrueClient@') &&
+    (
+      message.includes('#_acquireLock') ||
+      message.includes('#__loadSession()') ||
+      message.includes('#_useSession') ||
+      message.includes('#getSession() session from storage')
+    )
+  );
+}
+
+function logSupabaseDebug(message: string, ...args: any[]) {
+  if (shouldSuppressSupabaseDebug(message)) {
+    return;
+  }
+  logger.debug(TAG, message, ...args);
+}
 
 // Debug logging to diagnose environment variable loading
-if (typeof __DEV__ !== 'undefined' && __DEV__) {
-  console.log('[Supabase Init] Environment variable sources:');
-  console.log('  - Constants.expoConfig.extra:', expoConfig);
-  console.log('  - process.env.EXPO_PUBLIC_SUPABASE_URL:', process.env.EXPO_PUBLIC_SUPABASE_URL ? 'SET' : 'NOT SET');
-  console.log('  - Final URL:', url ? url.substring(0, 30) + '...' : 'MISSING');
-  console.log('  - Final Key:', anon ? 'SET (' + anon.length + ' chars)' : 'MISSING');
+if (isDevelopment) {
+  logger.debug(TAG, 'Init environment sources', buildSupabaseEnvMeta());
 }
 
 // Enhanced debugging for environment variable loading
-const isDevelopment = typeof __DEV__ !== 'undefined' && __DEV__;
-const envName = process.env.EXPO_PUBLIC_ENVIRONMENT || process.env.NODE_ENV || 'unknown';
 try {
-  const meta = { 
-    hasUrl: !!url, 
-    hasAnon: !!anon,
-    urlLength: url ? url.length : 0,
-    anonLength: anon ? anon.length : 0,
-    urlStart: url ? url.substring(0, 25) + '...' : 'MISSING',
-    anonStart: anon ? anon.substring(0, 20) + '...' : 'MISSING',
-    env: envName,
-  };
   if (isDevelopment) {
-    logger.debug('Supabase env check', meta);
-  } else if (envName === 'preview') {
-    // Log minimally in preview to help diagnose missing env in release builds (no secrets)
-    console.log('[Supabase] Env summary', meta);
+    logger.debug(TAG, 'Env summary', buildSupabaseEnvMeta());
   }
-  } catch (e) {
-    try { logger.error('Supabase debug error:', e); } catch { /* Logger unavailable */ }
+} catch (error) {
+  try {
+    logger.error(TAG, 'Debug bootstrap failed', error);
+  } catch {
+    /* Logger unavailable */
   }
+}
 
 // Use unified storage adapter (handles web/native automatically)
 // Web: localStorage, Native: AsyncStorage
@@ -65,32 +91,12 @@ if (url && anon) {
       detectSessionInUrl: isWeb, // Allow URL detection on web for OAuth callbacks
       storageKey: 'edudash-auth-session',
       flowType: 'pkce', // Use PKCE flow for better security
-      debug: process.env.EXPO_PUBLIC_DEBUG_SUPABASE === 'true',
+      debug: enableSupabaseDebug ? logSupabaseDebug : false,
     },
   });
-  
-  // Suppress excessive GoTrueClient debug logs in development
-  if (isDevelopment && typeof global !== 'undefined') {
-    const originalConsoleLog = console.log;
-    console.log = (...args: any[]) => {
-      // Filter out GoTrueClient session management spam
-      const msg = args[0];
-      if (typeof msg === 'string' && (
-        msg.includes('GoTrueClient@') && (
-          msg.includes('#_acquireLock') ||
-          msg.includes('#__loadSession()') ||
-          msg.includes('#_useSession') ||
-          msg.includes('#getSession() session from storage')
-        )
-      )) {
-        return; // Suppress
-      }
-      originalConsoleLog.apply(console, args);
-    };
-  }
 
   if (client && isDevelopment) {
-    logger.info('Supabase client initialized successfully');
+    logger.info(TAG, 'Client initialized successfully');
   }
 
   // NOTE: Module-level onAuthStateChange listener was removed.
@@ -107,22 +113,22 @@ export function assertSupabase(): SupabaseClient {
     
     if (isDev || isTest) {
       // Development/test environment - show detailed debugging info
-      const url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-      const anon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+      const resolvedUrl = url;
+      const resolvedAnon = anon;
       
       let errorMsg = 'Supabase client not initialized.\n';
       
-      if (!url && !anon) {
+      if (!resolvedUrl && !resolvedAnon) {
         errorMsg += 'BOTH environment variables are missing:\n';
         errorMsg += '- EXPO_PUBLIC_SUPABASE_URL\n';
         errorMsg += '- EXPO_PUBLIC_SUPABASE_ANON_KEY\n';
-      } else if (!url) {
+      } else if (!resolvedUrl) {
         errorMsg += 'Missing: EXPO_PUBLIC_SUPABASE_URL\n';
-      } else if (!anon) {
+      } else if (!resolvedAnon) {
         errorMsg += 'Missing: EXPO_PUBLIC_SUPABASE_ANON_KEY\n';
       } else {
         errorMsg += 'Environment variables are present but client failed to initialize.\n';
-        errorMsg += `URL length: ${url.length}, Key length: ${anon.length}\n`;
+        errorMsg += `URL length: ${resolvedUrl.length}, Key length: ${resolvedAnon.length}\n`;
       }
       
       errorMsg += '\nTo fix:\n';

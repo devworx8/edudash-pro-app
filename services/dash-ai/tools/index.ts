@@ -14,6 +14,7 @@
  */
 
 import { DashToolRegistry } from '../DashToolRegistry';
+import { logger } from '@/lib/logger';
 import { DatabaseQueryTool } from './DatabaseQueryTool';
 import { CAPSCurriculumTool } from './CAPSCurriculumTool';
 import { UserContextTool } from './UserContextTool';
@@ -30,7 +31,13 @@ import { GetChildAcademicSnapshotTool, GenerateStudyPlanTool } from './ChildAcad
  * Call this once on app startup.
  */
 export function initializeTools(): void {
-  console.log('[Tools] Initializing agentic tools...');
+  const stats = DashToolRegistry.getStats();
+  if (stats.totalTools > 0) {
+    logger.debug('Tools', 'Tool registry already initialized', { totalTools: stats.totalTools });
+    return;
+  }
+
+  logger.info('Tools', 'Initializing agentic tools...');
 
   // Register Database Tools
   DashToolRegistry.registerTool(DatabaseQueryTool);
@@ -60,10 +67,10 @@ export function initializeTools(): void {
   // DashToolRegistry.registerTool(ReportGenerationTool);
   // DashToolRegistry.registerTool(NotificationTool);
 
-  const stats = DashToolRegistry.getStats();
-  console.log(`[Tools] Initialized ${stats.totalTools} tools`);
-  console.log(`[Tools] By category:`, stats.toolsByCategory);
-  console.log(`[Tools] By risk:`, stats.toolsByRisk);
+  const initializedStats = DashToolRegistry.getStats();
+  logger.info('Tools', `Initialized ${initializedStats.totalTools} tools`);
+  logger.debug('Tools', 'By category', initializedStats.toolsByCategory);
+  logger.debug('Tools', 'By risk', initializedStats.toolsByRisk);
 }
 
 /**
