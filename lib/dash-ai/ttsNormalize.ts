@@ -534,8 +534,8 @@ export function normalizeForTTS(input: string, options: TTSNormalizeOptions = {}
     .replace(/^\s*User:\s*/gmi, '')
     .replace(/^\s*Assistant:\s*/gmi, '')
     // Double (or more) newlines mark list-item boundaries — convert to a
-    // noticeable pause. Azure TTS treats "..." as a longer prosodic break.
-    .replace(/\n{2,}/g, ' ... ')
+    // clear sentence boundary for TTS list separation.
+    .replace(/\n{2,}/g, '. ')
     // Single newlines are sentence/phrase breaks — a period is sufficient.
     .replace(/\n/g, '. ')
     .replace(/\s{2,}/g, ' ')

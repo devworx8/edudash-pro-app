@@ -119,7 +119,7 @@ describe('popUpload web handling', () => {
       'user-1',
       'student-1',
       'receipt.pdf',
-      { webFile }
+      webFile
     );
 
     expect(result).toEqual({

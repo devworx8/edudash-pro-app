@@ -200,7 +200,7 @@ export function PaymentUploadModal({
       setPaymentAmount(initialAmount);
       setPaymentDate(new Date());
       const resolvedMonth = resolveMonthStart(paymentForDate);
-      setPaymentForMonth(resolvedMonth ?? null);
+      setPaymentForMonth(resolvedMonth ?? autoPaymentForMonth);
       setCategoryCode(autoCategoryCode);
     }
     prevVisibleRef.current = visible;
